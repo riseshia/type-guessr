@@ -30,11 +30,14 @@ module RubyLsp
         )
 
         assert_equal 1, signatures.size
-        assert_equal 1, signatures.first[:params].size
-        assert_equal "id", signatures.first[:params][0][:name]
-        assert_equal "Integer", signatures.first[:params][0][:type]
-        assert_equal :required, signatures.first[:params][0][:kind]
-        assert_equal "User", signatures.first[:return_type]
+
+        sig = signatures.first
+        assert_instance_of RubyLsp::Guesser::MethodSignature, sig
+        assert_equal 1, sig.params.size
+        assert_equal "id", sig.params[0].name
+        assert_equal "Integer", sig.params[0].type
+        assert_equal :required, sig.params[0].kind
+        assert_equal "User", sig.return_type
       end
 
       def test_multiple_signatures_for_overloads
@@ -57,11 +60,11 @@ module RubyLsp
         )
 
         assert_equal 2, signatures.size
-        assert_equal 1, signatures[0][:params].size
-        assert_equal :block, signatures[0][:params][0][:kind]
-        assert_equal "Array[U]", signatures[0][:return_type]
-        assert_equal 0, signatures[1][:params].size
-        assert_equal "Enumerator[T]", signatures[1][:return_type]
+        assert_equal 1, signatures[0].params.size
+        assert_equal :block, signatures[0].params[0].kind
+        assert_equal "Array[U]", signatures[0].return_type
+        assert_equal 0, signatures[1].params.size
+        assert_equal "Enumerator[T]", signatures[1].return_type
       end
 
       def test_get_return_types
@@ -114,10 +117,10 @@ module RubyLsp
         )
 
         assert_equal 1, class_sigs.size
-        assert_equal "User", class_sigs.first[:return_type]
+        assert_equal "User", class_sigs.first.return_type
 
         assert_equal 1, instance_sigs.size
-        assert_equal "String", instance_sigs.first[:return_type]
+        assert_equal "String", instance_sigs.first.return_type
       end
 
       def test_get_nonexistent_method

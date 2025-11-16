@@ -1,31 +1,16 @@
 # frozen_string_literal: true
 
 require "singleton"
+require_relative "method_signature"
+require_relative "parameter"
 
 module RubyLsp
   module Guesser
     # Thread-safe singleton index to store method signatures from RBS
     # Structure:
     # {
-    #   "ClassName#method_name" => [
-    #     {
-    #       params: [
-    #         { name: "id", type: "Integer", kind: :required },
-    #         { name: "name", type: "String", kind: :optional }
-    #       ],
-    #       return_type: "User"
-    #     }
-    #   ]
+    #   "ClassName#method_name" => [MethodSignature, MethodSignature, ...]
     # }
-    #
-    # Parameter kinds:
-    # - :required (positional required)
-    # - :optional (positional optional)
-    # - :rest (*args)
-    # - :keyword (keyword:)
-    # - :optional_keyword (?keyword:)
-    # - :keyword_rest (**kwargs)
-    # - :block (&block)
     class MethodSignatureIndex
       include Singleton
 
@@ -37,7 +22,7 @@ module RubyLsp
       # Add a method signature
       # @param class_name [String] the class/module name (e.g., "Array", "User")
       # @param method_name [String] the method name (e.g., "map", "find_user")
-      # @param params [Array<Hash>] array of parameter hashes with :name, :type, :kind keys
+      # @param params [Array<Hash>, Array<Parameter>] array of parameter hashes or Parameter objects
       # @param return_type [String] the return type as a string (e.g., "Array[U]", "User")
       # @param singleton [Boolean] whether this is a singleton method (class method)
       def add_signature(class_name:, method_name:, params:, return_type:, singleton: false)
@@ -45,7 +30,12 @@ module RubyLsp
           key = method_key(class_name, method_name, singleton)
           @index[key] ||= []
 
-          signature = { params: params, return_type: return_type }
+          # Convert params to Parameter objects if they're hashes
+          param_objects = params.map do |p|
+            p.is_a?(Parameter) ? p : Parameter.new(**p.slice(:name, :type, :kind, :required))
+          end
+
+          signature = MethodSignature.new(params: param_objects, return_type: return_type)
           @index[key] << signature unless @index[key].include?(signature)
         end
       end
@@ -54,7 +44,7 @@ module RubyLsp
       # @param class_name [String] the class/module name
       # @param method_name [String] the method name
       # @param singleton [Boolean] whether this is a singleton method
-      # @return [Array<Hash>] array of signature hashes with :params and :return_type keys
+      # @return [Array<MethodSignature>] array of MethodSignature objects
       def get_signatures(class_name:, method_name:, singleton: false)
         @mutex.synchronize do
           key = method_key(class_name, method_name, singleton)
@@ -62,14 +52,14 @@ module RubyLsp
         end
       end
 
-      # Get only return types for a method (for backward compatibility)
+      # Get only return types for a method
       # @param class_name [String] the class/module name
       # @param method_name [String] the method name
       # @param singleton [Boolean] whether this is a singleton method
       # @return [Array<String>] array of return type strings
       def get_return_types(class_name:, method_name:, singleton: false)
         get_signatures(class_name: class_name, method_name: method_name, singleton: singleton)
-          .map { |sig| sig[:return_type] }
+          .map(&:return_type)
           .uniq
       end
 

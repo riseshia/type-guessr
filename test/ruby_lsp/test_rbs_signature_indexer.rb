@@ -36,7 +36,7 @@ module RubyLsp
         refute_empty signatures, "Enumerable#map should have signatures"
 
         # Check that we have both return types (with and without block)
-        return_types = signatures.map { |sig| sig[:return_type] }.uniq
+        return_types = signatures.map(&:return_type).uniq
         assert return_types.size > 0, "Should have at least one return type"
       end
 
@@ -51,7 +51,7 @@ module RubyLsp
         refute_empty signatures, "String#upcase should have signatures"
 
         # At least one signature should return String
-        return_types = signatures.map { |sig| sig[:return_type] }
+        return_types = signatures.map(&:return_type)
         assert return_types.any? { |t| t.include?("String") }, "Should return String"
       end
 
@@ -68,7 +68,7 @@ module RubyLsp
         refute_empty signatures, "Array.[] should have signatures"
 
         # Check that it returns an Array
-        return_types = signatures.map { |sig| sig[:return_type] }
+        return_types = signatures.map(&:return_type)
         assert return_types.any? { |t| t.include?("Array") }, "Should return Array"
       end
 
