@@ -55,18 +55,21 @@ module RubyLsp
       end
 
       # Handle class or module declarations
+      # Note: Following ruby-lsp's approach, we only process top-level classes/modules
+      # and do not recursively process nested classes.
       def handle_class_or_module(declaration, namespace)
         class_name = declaration.name.name.to_s
         full_class_name = (namespace + [class_name]).join("::")
 
-        # Process members (methods, nested classes, etc.)
+        # Skip RBS internal types (e.g., RBS::Unnamed::ARGFClass)
+        return if full_class_name.start_with?("RBS::Unnamed::")
+
+        # Process only method members (not nested classes/modules)
+        # This matches ruby-lsp's behavior
         declaration.members.each do |member|
           case member
           when RBS::AST::Members::MethodDefinition
             handle_method(member, full_class_name)
-          when RBS::AST::Declarations::Class, RBS::AST::Declarations::Module
-            # Recursively process nested classes/modules
-            process_declaration(member, namespace + [class_name])
           end
         end
       end
