@@ -8,10 +8,24 @@ module RubyLsp
     # Structure:
     # {
     #   "ClassName#method_name" => [
-    #     { params: "(Integer id)", return_type: "User" },
-    #     { params: "(String email)", return_type: "User" }
+    #     {
+    #       params: [
+    #         { name: "id", type: "Integer", kind: :required },
+    #         { name: "name", type: "String", kind: :optional }
+    #       ],
+    #       return_type: "User"
+    #     }
     #   ]
     # }
+    #
+    # Parameter kinds:
+    # - :required (positional required)
+    # - :optional (positional optional)
+    # - :rest (*args)
+    # - :keyword (keyword:)
+    # - :optional_keyword (?keyword:)
+    # - :keyword_rest (**kwargs)
+    # - :block (&block)
     class MethodSignatureIndex
       include Singleton
 
@@ -23,7 +37,7 @@ module RubyLsp
       # Add a method signature
       # @param class_name [String] the class/module name (e.g., "Array", "User")
       # @param method_name [String] the method name (e.g., "map", "find_user")
-      # @param params [String] the parameter signature as a string (e.g., "(Integer id)", "()")
+      # @param params [Array<Hash>] array of parameter hashes with :name, :type, :kind keys
       # @param return_type [String] the return type as a string (e.g., "Array[U]", "User")
       # @param singleton [Boolean] whether this is a singleton method (class method)
       def add_signature(class_name:, method_name:, params:, return_type:, singleton: false)

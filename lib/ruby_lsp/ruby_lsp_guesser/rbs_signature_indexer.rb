@@ -81,83 +81,103 @@ module RubyLsp
 
         # Process each overload (RBS supports multiple signatures)
         member.overloads.each do |overload|
-          params_string = format_parameters(overload.method_type)
+          params_array = parse_parameters(overload.method_type)
           return_type_string = type_to_string(overload.method_type.type.return_type)
 
           @index.add_signature(
             class_name: class_name,
             method_name: method_name,
-            params: params_string,
+            params: params_array,
             return_type: return_type_string,
             singleton: is_singleton
           )
         end
       end
 
-      # Format method parameters as a string
-      def format_parameters(method_type)
+      # Parse method parameters into structured array
+      # Returns: Array<Hash> with keys :name, :type, :kind
+      def parse_parameters(method_type)
         function = method_type.type
-        return "()" unless function.is_a?(RBS::Types::Function)
+        return [] unless function.is_a?(RBS::Types::Function)
 
         params = []
 
         # Required positional
         function.required_positionals.each do |param|
-          type_str = type_to_string(param.type)
-          name = param.name || "_"
-          params << "#{type_str} #{name}"
+          params << {
+            name: (param.name || "_").to_s,
+            type: type_to_string(param.type),
+            kind: :required
+          }
         end
 
         # Optional positional
         function.optional_positionals.each do |param|
-          type_str = type_to_string(param.type)
-          name = param.name || "_"
-          params << "?#{type_str} #{name}"
+          params << {
+            name: (param.name || "_").to_s,
+            type: type_to_string(param.type),
+            kind: :optional
+          }
         end
 
         # Rest positional
         if function.rest_positionals
           param = function.rest_positionals
-          type_str = type_to_string(param.type)
-          name = param.name || "args"
-          params << "*#{type_str} #{name}"
+          params << {
+            name: (param.name || "args").to_s,
+            type: type_to_string(param.type),
+            kind: :rest
+          }
         end
 
-        # Trailing positionals
+        # Trailing positionals (treated as required)
         function.trailing_positionals&.each do |param|
-          type_str = type_to_string(param.type)
-          name = param.name || "_"
-          params << "#{type_str} #{name}"
+          params << {
+            name: (param.name || "_").to_s,
+            type: type_to_string(param.type),
+            kind: :required
+          }
         end
 
         # Required keywords
         function.required_keywords&.each do |name, param|
-          type_str = type_to_string(param.type)
-          params << "#{name}: #{type_str}"
+          params << {
+            name: name.to_s,
+            type: type_to_string(param.type),
+            kind: :keyword
+          }
         end
 
         # Optional keywords
         function.optional_keywords&.each do |name, param|
-          type_str = type_to_string(param.type)
-          params << "?#{name}: #{type_str}"
+          params << {
+            name: name.to_s,
+            type: type_to_string(param.type),
+            kind: :optional_keyword
+          }
         end
 
         # Rest keywords
         if function.rest_keywords
           param = function.rest_keywords
-          type_str = type_to_string(param.type)
-          name = param.name || "kwargs"
-          params << "**#{type_str} #{name}"
+          params << {
+            name: (param.name || "kwargs").to_s,
+            type: type_to_string(param.type),
+            kind: :keyword_rest
+          }
         end
 
         # Block
         if method_type.block
-          block = method_type.block
-          required = block.required ? "" : "?"
-          params << "#{required}{ ... }"
+          params << {
+            name: "block",
+            type: "Proc",
+            kind: :block,
+            required: method_type.block.required
+          }
         end
 
-        "(#{params.join(", ")})"
+        params
       end
 
       # Convert RBS::Types to a readable string
