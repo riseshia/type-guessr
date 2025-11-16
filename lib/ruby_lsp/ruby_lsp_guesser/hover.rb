@@ -11,22 +11,22 @@ module RubyLsp
     # Delegates content generation to HoverContentBuilder
     class Hover
       # Define all node types that should trigger hover content
-      HOVER_NODE_TYPES = [
-        :local_variable_read,
-        :local_variable_write,
-        :local_variable_target,
-        :instance_variable_read,
-        :class_variable_read,
-        :global_variable_read,
-        :self,
-        :required_parameter,
-        :optional_parameter,
-        :rest_parameter,
-        :required_keyword_parameter,
-        :optional_keyword_parameter,
-        :keyword_rest_parameter,
-        :block_parameter,
-        :forwarding_parameter
+      HOVER_NODE_TYPES = %i[
+        local_variable_read
+        local_variable_write
+        local_variable_target
+        instance_variable_read
+        class_variable_read
+        global_variable_read
+        self
+        required_parameter
+        optional_parameter
+        rest_parameter
+        required_keyword_parameter
+        optional_keyword_parameter
+        keyword_rest_parameter
+        block_parameter
+        forwarding_parameter
       ].freeze
 
       def initialize(response_builder, node_context, dispatcher, global_state = nil)
