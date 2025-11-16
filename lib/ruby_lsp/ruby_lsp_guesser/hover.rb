@@ -259,13 +259,7 @@ module RubyLsp
 
       # Determine the scope type based on variable name
       def determine_scope_type(var_name)
-        if var_name.start_with?("@@")
-          :class_variables
-        elsif var_name.start_with?("@")
-          :instance_variables
-        else
-          :local_variables
-        end
+        ScopeResolver.determine_scope_type(var_name)
       end
 
       # Generate scope ID from node context
@@ -276,23 +270,14 @@ module RubyLsp
         # nesting may contain strings or objects with name method
         class_path = nesting.map { |n| n.is_a?(String) ? n : n.name }.join("::")
 
-        if scope_type == :local_variables
-          # Try to find enclosing method name
-          enclosing_method = @node_context.call_node&.name&.to_s
-          if enclosing_method && !class_path.empty?
-            "#{class_path}##{enclosing_method}"
-          elsif enclosing_method
-            enclosing_method
-          elsif !class_path.empty?
-            class_path
-          else
-            "(top-level)"
-          end
-        elsif !class_path.empty?
-          class_path
-        else
-          "(top-level)"
-        end
+        # Try to find enclosing method name for local variables
+        method_name = scope_type == :local_variables ? @node_context.call_node&.name&.to_s : nil
+
+        ScopeResolver.generate_scope_id(
+          scope_type,
+          class_path: class_path,
+          method_name: method_name
+        )
       end
 
       def build_hover_content(variable_name, method_calls, direct_type = nil)
