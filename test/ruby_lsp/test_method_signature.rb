@@ -49,7 +49,7 @@ module RubyLsp
         ]
         sig = MethodSignature.new(params: params, return_type: "Array[U]")
 
-        assert sig.has_block?
+        assert sig.block?
         assert sig.block_required?
         assert_equal "block", sig.block_param.name
       end
@@ -58,7 +58,7 @@ module RubyLsp
         params = [Parameter.new(name: "id", type: "Integer", kind: :required)]
         sig = MethodSignature.new(params: params, return_type: "User")
 
-        refute sig.has_block?
+        refute sig.block?
         refute sig.block_required?
         assert_nil sig.block_param
       end

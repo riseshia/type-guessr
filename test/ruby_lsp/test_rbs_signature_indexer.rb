@@ -21,7 +21,7 @@ module RubyLsp
         @indexer.index_ruby_core
 
         # Just check that we indexed something
-        assert @sig_index.size > 0, "Should have indexed some core methods"
+        assert @sig_index.size.positive?, "Should have indexed some core methods"
       end
 
       def test_enumerable_map_signatures
@@ -37,7 +37,7 @@ module RubyLsp
 
         # Check that we have both return types (with and without block)
         return_types = signatures.map(&:return_type).uniq
-        assert return_types.size > 0, "Should have at least one return type"
+        assert return_types.size.positive?, "Should have at least one return type"
       end
 
       def test_string_upcase_signature

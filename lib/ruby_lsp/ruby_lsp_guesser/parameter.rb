@@ -8,7 +8,8 @@ module RubyLsp
 
       # @param name [String] parameter name
       # @param type [String] parameter type (e.g., "Integer", "String")
-      # @param kind [Symbol] parameter kind (:required, :optional, :rest, :keyword, :optional_keyword, :keyword_rest, :block)
+      # @param kind [Symbol] parameter kind (:required, :optional, :rest, :keyword,
+      #   :optional_keyword, :keyword_rest, :block)
       # @param required [Boolean, nil] whether block is required (only for :block kind)
       def initialize(name:, type:, kind:, required: nil)
         @name = name
@@ -19,12 +20,12 @@ module RubyLsp
 
       # Check if this is a positional parameter
       def positional?
-        [:required, :optional, :rest].include?(kind)
+        %i[required optional rest].include?(kind)
       end
 
       # Check if this is a keyword parameter
       def keyword?
-        [:keyword, :optional_keyword, :keyword_rest].include?(kind)
+        %i[keyword optional_keyword keyword_rest].include?(kind)
       end
 
       # Check if this is a block parameter

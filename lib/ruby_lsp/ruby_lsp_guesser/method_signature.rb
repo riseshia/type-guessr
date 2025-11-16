@@ -35,7 +35,7 @@ module RubyLsp
 
       # Check if this signature has a block parameter
       # @return [Boolean]
-      def has_block?
+      def block?
         !block_param.nil?
       end
 
