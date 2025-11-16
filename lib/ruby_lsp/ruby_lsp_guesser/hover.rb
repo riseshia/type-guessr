@@ -190,46 +190,13 @@ module RubyLsp
       def find_direct_type_from_index(variable_name, scope_type, scope_id, hover_line)
         index = VariableIndex.instance
 
-        # Access the types hash directly (this is a workaround until we add a proper API)
-        types_hash = index.instance_variable_get(:@types)
-        scope_types = types_hash[scope_type]
-        return nil unless scope_types
-
-        # Search through all files and scopes
-        best_type = nil
-        best_line = 0
-
-        scope_types.each_value do |scopes|
-          # First try exact scope match
-          if scopes.key?(scope_id) && scopes[scope_id].key?(variable_name)
-            scopes[scope_id][variable_name].each do |def_key, type|
-              line, _column = def_key.split(":").map(&:to_i)
-              # Find closest definition before hover line
-              if line <= hover_line && line > best_line
-                best_type = type
-                best_line = line
-              end
-            end
-          end
-
-          # If no exact match, try all scopes
-          next unless best_type.nil?
-
-          scopes.each_value do |vars|
-            next unless vars.key?(variable_name)
-
-            vars[variable_name].each do |def_key, type|
-              line, _column = def_key.split(":").map(&:to_i)
-              # Find closest definition before hover line
-              if line <= hover_line && line > best_line
-                best_type = type
-                best_line = line
-              end
-            end
-          end
-        end
-
-        best_type
+        # Use the public API to find variable type at location
+        index.find_variable_type_at_location(
+          var_name: variable_name,
+          scope_type: scope_type,
+          max_line: hover_line,
+          scope_id: scope_id
+        )
       end
 
       def collect_method_calls(variable_name, node)

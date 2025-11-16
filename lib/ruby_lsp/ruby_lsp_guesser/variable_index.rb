@@ -176,6 +176,55 @@ module RubyLsp
         end
       end
 
+      # Find the variable type at a specific location (line number)
+      # Searches for the closest type definition before the specified line
+      # @param var_name [String] the variable name
+      # @param scope_type [Symbol] :instance_variable, :local_variable, or :class_variable
+      # @param max_line [Integer] the maximum line number (finds closest definition before this line)
+      # @param scope_id [String] the scope identifier (optional for broader search)
+      # @return [String, nil] the inferred type or nil if not found
+      def find_variable_type_at_location(var_name:, scope_type:, max_line:, scope_id: nil)
+        @mutex.synchronize do
+          scope_types = @types[scope_type]
+          return nil unless scope_types
+
+          best_type = nil
+          best_line = 0
+
+          scope_types.each_value do |scopes|
+            # First try exact scope match if scope_id is provided
+            if scope_id && scopes.key?(scope_id) && scopes[scope_id].key?(var_name)
+              scopes[scope_id][var_name].each do |def_key, type|
+                line, _column = def_key.split(":").map(&:to_i)
+                # Find closest definition before max_line
+                if line <= max_line && line > best_line
+                  best_type = type
+                  best_line = line
+                end
+              end
+            end
+
+            # If no exact match, try all scopes
+            next unless best_type.nil?
+
+            scopes.each_value do |vars|
+              next unless vars.key?(var_name)
+
+              vars[var_name].each do |def_key, type|
+                line, _column = def_key.split(":").map(&:to_i)
+                # Find closest definition before max_line
+                if line <= max_line && line > best_line
+                  best_type = type
+                  best_line = line
+                end
+              end
+            end
+          end
+
+          best_type
+        end
+      end
+
       # Clear all index entries for a specific file
       # @param file_path [String] the file path to clear
       def clear_file(file_path)

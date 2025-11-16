@@ -390,6 +390,124 @@ module RubyLsp
         assert_equal 1, file1_defs.size
         assert_equal "/test/file1.rb", file1_defs[0][:file_path]
       end
+
+      def test_find_variable_type_at_location_with_exact_scope
+        # Add type information for a variable
+        @index.add_variable_type(
+          file_path: "/test/file.rb",
+          scope_type: :local_variables,
+          scope_id: "Recipe#cook",
+          var_name: "user",
+          def_line: 5,
+          def_column: 2,
+          type: "User"
+        )
+
+        # Find type at location after definition
+        type = @index.find_variable_type_at_location(
+          var_name: "user",
+          scope_type: :local_variables,
+          max_line: 10,
+          scope_id: "Recipe#cook"
+        )
+
+        assert_equal "User", type
+      end
+
+      def test_find_variable_type_at_location_before_definition_returns_nil
+        @index.add_variable_type(
+          file_path: "/test/file.rb",
+          scope_type: :local_variables,
+          scope_id: "Recipe#cook",
+          var_name: "user",
+          def_line: 5,
+          def_column: 2,
+          type: "User"
+        )
+
+        # Try to find type before definition line
+        type = @index.find_variable_type_at_location(
+          var_name: "user",
+          scope_type: :local_variables,
+          max_line: 3,
+          scope_id: "Recipe#cook"
+        )
+
+        assert_nil type
+      end
+
+      def test_find_variable_type_at_location_finds_closest_definition
+        # Add multiple definitions at different lines
+        @index.add_variable_type(
+          file_path: "/test/file.rb",
+          scope_type: :local_variables,
+          scope_id: "Recipe#cook",
+          var_name: "item",
+          def_line: 5,
+          def_column: 2,
+          type: "String"
+        )
+
+        @index.add_variable_type(
+          file_path: "/test/file.rb",
+          scope_type: :local_variables,
+          scope_id: "Recipe#cook",
+          var_name: "item",
+          def_line: 10,
+          def_column: 2,
+          type: "Integer"
+        )
+
+        # At line 8, should find the first definition (String)
+        type1 = @index.find_variable_type_at_location(
+          var_name: "item",
+          scope_type: :local_variables,
+          max_line: 8,
+          scope_id: "Recipe#cook"
+        )
+        assert_equal "String", type1
+
+        # At line 15, should find the second definition (Integer)
+        type2 = @index.find_variable_type_at_location(
+          var_name: "item",
+          scope_type: :local_variables,
+          max_line: 15,
+          scope_id: "Recipe#cook"
+        )
+        assert_equal "Integer", type2
+      end
+
+      def test_find_variable_type_at_location_without_scope_id_searches_broadly
+        @index.add_variable_type(
+          file_path: "/test/file.rb",
+          scope_type: :local_variables,
+          scope_id: "Recipe#cook",
+          var_name: "user",
+          def_line: 5,
+          def_column: 2,
+          type: "User"
+        )
+
+        # Search without specifying scope_id - should still find it
+        type = @index.find_variable_type_at_location(
+          var_name: "user",
+          scope_type: :local_variables,
+          max_line: 10
+        )
+
+        assert_equal "User", type
+      end
+
+      def test_find_variable_type_at_location_nonexistent_returns_nil
+        type = @index.find_variable_type_at_location(
+          var_name: "nonexistent",
+          scope_type: :local_variables,
+          max_line: 10,
+          scope_id: "Recipe#cook"
+        )
+
+        assert_nil type
+      end
     end
   end
 end
