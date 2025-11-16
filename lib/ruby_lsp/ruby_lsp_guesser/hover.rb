@@ -103,9 +103,11 @@ module RubyLsp
         variable_name = extract_variable_name(node)
         return unless variable_name
 
+        # Try to get direct type first
+        direct_type = get_direct_type(variable_name, node)
         method_calls = collect_method_calls(variable_name, node)
 
-        content = build_hover_content(variable_name, method_calls)
+        content = build_hover_content(variable_name, method_calls, direct_type)
         @response_builder.push(content, category: :documentation) if content
       end
 
@@ -136,6 +138,98 @@ module RubyLsp
         when ::Prism::ForwardingParameterNode
           "..."
         end
+      end
+
+      # Get the direct type for a variable (from literal assignment or .new call)
+      def get_direct_type(variable_name, node)
+        location = node.location
+        hover_line = location.start_line
+
+        index = VariableIndex.instance
+        scope_type = determine_scope_type(variable_name)
+        scope_id = generate_scope_id(scope_type)
+
+        # First, try to find definitions from method call index
+        definitions = index.find_definitions(
+          var_name: variable_name,
+          scope_type: scope_type,
+          scope_id: scope_id
+        )
+
+        # If no exact match, try broader search
+        if definitions.empty?
+          definitions = index.find_definitions(
+            var_name: variable_name,
+            scope_type: scope_type
+          )
+        end
+
+        # Find the closest definition before the hover line
+        best_match = definitions
+                     .select { |def_info| def_info[:def_line] <= hover_line }
+                     .max_by { |def_info| def_info[:def_line] }
+
+        if best_match
+          # Get the type for this definition
+          type = index.get_variable_type(
+            file_path: best_match[:file_path],
+            scope_type: best_match[:scope_type],
+            scope_id: best_match[:scope_id],
+            var_name: variable_name,
+            def_line: best_match[:def_line],
+            def_column: best_match[:def_column]
+          )
+          return type if type
+        end
+
+        # Fallback: search type index directly (for variables with type but no method calls)
+        find_direct_type_from_index(variable_name, scope_type, scope_id, hover_line)
+      end
+
+      # Search type index directly for variables that have types but no method calls
+      def find_direct_type_from_index(variable_name, scope_type, scope_id, hover_line)
+        index = VariableIndex.instance
+
+        # Access the types hash directly (this is a workaround until we add a proper API)
+        types_hash = index.instance_variable_get(:@types)
+        scope_types = types_hash[scope_type]
+        return nil unless scope_types
+
+        # Search through all files and scopes
+        best_type = nil
+        best_line = 0
+
+        scope_types.each_value do |scopes|
+          # First try exact scope match
+          if scopes.key?(scope_id) && scopes[scope_id].key?(variable_name)
+            scopes[scope_id][variable_name].each do |def_key, type|
+              line, _column = def_key.split(":").map(&:to_i)
+              # Find closest definition before hover line
+              if line <= hover_line && line > best_line
+                best_type = type
+                best_line = line
+              end
+            end
+          end
+
+          # If no exact match, try all scopes
+          next unless best_type.nil?
+
+          scopes.each_value do |vars|
+            next unless vars.key?(variable_name)
+
+            vars[variable_name].each do |def_key, type|
+              line, _column = def_key.split(":").map(&:to_i)
+              # Find closest definition before hover line
+              if line <= hover_line && line > best_line
+                best_type = type
+                best_line = line
+              end
+            end
+          end
+        end
+
+        best_type
       end
 
       def collect_method_calls(variable_name, node)
@@ -234,8 +328,11 @@ module RubyLsp
         end
       end
 
-      def build_hover_content(variable_name, method_calls)
-        # Try to infer type if we have method calls and global_state is available
+      def build_hover_content(variable_name, method_calls, direct_type = nil)
+        # Priority 1: Use direct type inference (from literal or .new call)
+        return "**Inferred type:** `#{direct_type}`" if direct_type
+
+        # Priority 2: Try to infer type if we have method calls and global_state is available
         if !method_calls.empty? && @global_state
           inferred_type = infer_type_from_methods(method_calls)
 

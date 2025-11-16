@@ -21,6 +21,11 @@ module RubyLsp
           local_variables: {},
           class_variables: {}
         }
+        @types = {
+          instance_variables: {},
+          local_variables: {},
+          class_variables: {}
+        }
         @mutex = Mutex.new
       end
 
@@ -111,10 +116,46 @@ module RubyLsp
         end
       end
 
+      # Add a variable type for a variable definition
+      # @param file_path [String] the file path
+      # @param scope_type [Symbol] :instance_variable, :local_variable, or :class_variable
+      # @param scope_id [String] the scope identifier
+      # @param var_name [String] the variable name
+      # @param def_line [Integer] the line where the variable is defined
+      # @param def_column [Integer] the column where the variable is defined
+      # @param type [String] the inferred type (e.g., "String", "Integer", "User")
+      def add_variable_type(file_path:, scope_type:, scope_id:, var_name:, def_line:, def_column:, type:)
+        @mutex.synchronize do
+          scope_types = @types[scope_type]
+          scope_types[file_path] ||= {}
+          scope_types[file_path][scope_id] ||= {}
+          scope_types[file_path][scope_id][var_name] ||= {}
+
+          def_key = "#{def_line}:#{def_column}"
+          scope_types[file_path][scope_id][var_name][def_key] = type
+        end
+      end
+
+      # Get the type for a variable definition
+      # @param file_path [String] the file path
+      # @param scope_type [Symbol] :instance_variable, :local_variable, or :class_variable
+      # @param scope_id [String] the scope identifier
+      # @param var_name [String] the variable name
+      # @param def_line [Integer] the line where the variable is defined
+      # @param def_column [Integer] the column where the variable is defined
+      # @return [String, nil] the inferred type or nil if not found
+      def get_variable_type(file_path:, scope_type:, scope_id:, var_name:, def_line:, def_column:)
+        @mutex.synchronize do
+          def_key = "#{def_line}:#{def_column}"
+          @types.dig(scope_type, file_path, scope_id, var_name, def_key)
+        end
+      end
+
       # Clear all index data (useful for testing)
       def clear
         @mutex.synchronize do
           @index.each_value(&:clear)
+          @types.each_value(&:clear)
         end
       end
 
@@ -141,6 +182,9 @@ module RubyLsp
         @mutex.synchronize do
           @index.each_value do |scope_index|
             scope_index.delete(file_path)
+          end
+          @types.each_value do |scope_types|
+            scope_types.delete(file_path)
           end
         end
       end

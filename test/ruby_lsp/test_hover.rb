@@ -657,6 +657,288 @@ module RubyLsp
         end
       end
 
+      def test_hover_shows_string_type_for_string_literal
+        source = <<~RUBY
+          def foo
+            name = "John"
+            name
+          end
+        RUBY
+
+        with_server(source, stub_no_typechecker: true) do |server, uri|
+          # Clear and manually add type information
+          index = RubyLsp::Guesser::VariableIndex.instance
+          index.clear
+
+          # Add variable type for 'name' variable
+          # line 1, column 2 is where 'name' is defined
+          index.add_variable_type(
+            file_path: uri.to_s,
+            scope_type: :local_variables,
+            scope_id: "foo",
+            var_name: "name",
+            def_line: 2,
+            def_column: 4,
+            type: "String"
+          )
+
+          server.process_message(
+            id: 1,
+            method: "textDocument/hover",
+            params: { textDocument: { uri: uri }, position: { line: 2, character: 2 } }
+          )
+
+          result = pop_result(server)
+          response = result.response
+          content = response.contents.value
+
+          assert_match(/Inferred type:.*String/, content, "Should infer String type for string literal")
+        end
+      end
+
+      def test_hover_shows_integer_type_for_number_literal
+        source = <<~RUBY
+          def foo
+            count = 42
+            count
+          end
+        RUBY
+
+        with_server(source, stub_no_typechecker: true) do |server, uri|
+          index = RubyLsp::Guesser::VariableIndex.instance
+          index.clear
+
+          index.add_variable_type(
+            file_path: uri.to_s,
+            scope_type: :local_variables,
+            scope_id: "foo",
+            var_name: "count",
+            def_line: 2,
+            def_column: 4,
+            type: "Integer"
+          )
+
+          server.process_message(
+            id: 1,
+            method: "textDocument/hover",
+            params: { textDocument: { uri: uri }, position: { line: 2, character: 2 } }
+          )
+
+          result = pop_result(server)
+          response = result.response
+          content = response.contents.value
+
+          assert_match(/Inferred type:.*Integer/, content, "Should infer Integer type for number literal")
+        end
+      end
+
+      def test_hover_shows_class_type_for_new_call
+        source = <<~RUBY
+          class User
+          end
+
+          def foo
+            user = User.new
+            user
+          end
+        RUBY
+
+        with_server(source, stub_no_typechecker: true) do |server, uri|
+          index = RubyLsp::Guesser::VariableIndex.instance
+          index.clear
+
+          index.add_variable_type(
+            file_path: uri.to_s,
+            scope_type: :local_variables,
+            scope_id: "foo",
+            var_name: "user",
+            def_line: 5,
+            def_column: 4,
+            type: "User"
+          )
+
+          server.process_message(
+            id: 1,
+            method: "textDocument/hover",
+            params: { textDocument: { uri: uri }, position: { line: 5, character: 2 } }
+          )
+
+          result = pop_result(server)
+          response = result.response
+          content = response.contents.value
+
+          assert_match(/Inferred type:.*User/, content, "Should infer User type for User.new")
+        end
+      end
+
+      def test_hover_shows_float_type_for_float_literal
+        source = <<~RUBY
+          def foo
+            price = 19.99
+            price
+          end
+        RUBY
+
+        with_server(source, stub_no_typechecker: true) do |server, uri|
+          index = RubyLsp::Guesser::VariableIndex.instance
+          index.clear
+
+          index.add_variable_type(
+            file_path: uri.to_s,
+            scope_type: :local_variables,
+            scope_id: "foo",
+            var_name: "price",
+            def_line: 2,
+            def_column: 4,
+            type: "Float"
+          )
+
+          server.process_message(
+            id: 1,
+            method: "textDocument/hover",
+            params: { textDocument: { uri: uri }, position: { line: 2, character: 2 } }
+          )
+
+          result = pop_result(server)
+          response = result.response
+          content = response.contents.value
+
+          assert_match(/Inferred type:.*Float/, content, "Should infer Float type for float literal")
+        end
+      end
+
+      def test_hover_shows_array_type_for_array_literal
+        source = <<~RUBY
+          def foo
+            items = []
+            items
+          end
+        RUBY
+
+        with_server(source, stub_no_typechecker: true) do |server, uri|
+          index = RubyLsp::Guesser::VariableIndex.instance
+          index.clear
+
+          index.add_variable_type(
+            file_path: uri.to_s,
+            scope_type: :local_variables,
+            scope_id: "foo",
+            var_name: "items",
+            def_line: 2,
+            def_column: 4,
+            type: "Array"
+          )
+
+          server.process_message(
+            id: 1,
+            method: "textDocument/hover",
+            params: { textDocument: { uri: uri }, position: { line: 2, character: 2 } }
+          )
+
+          result = pop_result(server)
+          response = result.response
+          content = response.contents.value
+
+          assert_match(/Inferred type:.*Array/, content, "Should infer Array type for array literal")
+        end
+      end
+
+      def test_hover_shows_hash_type_for_hash_literal
+        source = <<~RUBY
+          def foo
+            data = {}
+            data
+          end
+        RUBY
+
+        with_server(source, stub_no_typechecker: true) do |server, uri|
+          index = RubyLsp::Guesser::VariableIndex.instance
+          index.clear
+
+          index.add_variable_type(
+            file_path: uri.to_s,
+            scope_type: :local_variables,
+            scope_id: "foo",
+            var_name: "data",
+            def_line: 2,
+            def_column: 4,
+            type: "Hash"
+          )
+
+          server.process_message(
+            id: 1,
+            method: "textDocument/hover",
+            params: { textDocument: { uri: uri }, position: { line: 2, character: 2 } }
+          )
+
+          result = pop_result(server)
+          response = result.response
+          content = response.contents.value
+
+          assert_match(/Inferred type:.*Hash/, content, "Should infer Hash type for hash literal")
+        end
+      end
+
+      def test_hover_direct_type_takes_priority_over_method_based
+        # Direct type inference should take priority over method-based inference
+        source = <<~RUBY
+          class User
+            def save
+            end
+          end
+
+          def process
+            user = User.new
+            user.save
+            user
+          end
+        RUBY
+
+        with_server(source, stub_no_typechecker: true) do |server, uri|
+          index = RubyLsp::Guesser::VariableIndex.instance
+          index.clear
+
+          # Add direct type for user variable
+          index.add_variable_type(
+            file_path: uri.to_s,
+            scope_type: :local_variables,
+            scope_id: "process",
+            var_name: "user",
+            def_line: 7,
+            def_column: 4,
+            type: "User"
+          )
+
+          # Also add method call (to test that direct type takes priority)
+          index.add_method_call(
+            file_path: uri.to_s,
+            scope_type: :local_variables,
+            scope_id: "process",
+            var_name: "user",
+            def_line: 7,
+            def_column: 4,
+            method_name: "save",
+            call_line: 8,
+            call_column: 4
+          )
+
+          server.process_message(
+            id: 1,
+            method: "textDocument/hover",
+            params: { textDocument: { uri: uri }, position: { line: 8, character: 4 } }
+          )
+
+          result = pop_result(server)
+          response = result.response
+          content = response.contents.value
+
+          # Should show direct type "User" from User.new, not method-based inference
+          assert_match(/Inferred type:.*User/, content, "Should infer User type from User.new")
+          # Should not show "Ambiguous" or method list
+          refute_match(/Ambiguous/, content, "Should not show ambiguous message when direct type is available")
+        end
+      end
+
       private
 
       def hover_on_source(source, position)

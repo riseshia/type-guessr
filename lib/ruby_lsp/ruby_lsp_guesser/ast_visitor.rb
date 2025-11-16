@@ -26,7 +26,28 @@ module RubyLsp
       def visit_local_variable_write_node(node)
         var_name = node.name.to_s
         location = node.name_loc
-        register_variable(var_name, location.start_line, location.start_column)
+        line = location.start_line
+        column = location.start_column
+        register_variable(var_name, line, column)
+
+        # Analyze and store the type of the assigned value
+        if node.value
+          type = analyze_value_type(node.value)
+          if type
+            scope_type = determine_scope_type(var_name)
+            scope_id = generate_scope_id(scope_type)
+            @index.add_variable_type(
+              file_path: @file_path,
+              scope_type: scope_type,
+              scope_id: scope_id,
+              var_name: var_name,
+              def_line: line,
+              def_column: column,
+              type: type
+            )
+          end
+        end
+
         super
       end
 
@@ -42,7 +63,28 @@ module RubyLsp
       def visit_instance_variable_write_node(node)
         var_name = node.name.to_s
         location = node.name_loc
-        register_variable(var_name, location.start_line, location.start_column)
+        line = location.start_line
+        column = location.start_column
+        register_variable(var_name, line, column)
+
+        # Analyze and store the type of the assigned value
+        if node.value
+          type = analyze_value_type(node.value)
+          if type
+            scope_type = determine_scope_type(var_name)
+            scope_id = generate_scope_id(scope_type)
+            @index.add_variable_type(
+              file_path: @file_path,
+              scope_type: scope_type,
+              scope_id: scope_id,
+              var_name: var_name,
+              def_line: line,
+              def_column: column,
+              type: type
+            )
+          end
+        end
+
         super
       end
 
@@ -50,7 +92,28 @@ module RubyLsp
       def visit_class_variable_write_node(node)
         var_name = node.name.to_s
         location = node.name_loc
-        register_variable(var_name, location.start_line, location.start_column)
+        line = location.start_line
+        column = location.start_column
+        register_variable(var_name, line, column)
+
+        # Analyze and store the type of the assigned value
+        if node.value
+          type = analyze_value_type(node.value)
+          if type
+            scope_type = determine_scope_type(var_name)
+            scope_id = generate_scope_id(scope_type)
+            @index.add_variable_type(
+              file_path: @file_path,
+              scope_type: scope_type,
+              scope_id: scope_id,
+              var_name: var_name,
+              def_line: line,
+              def_column: column,
+              type: type
+            )
+          end
+        end
+
         super
       end
 
@@ -195,6 +258,53 @@ module RubyLsp
       end
 
       private
+
+      # Analyze a value node and return its inferred type
+      # @param node [Prism::Node] the value node to analyze
+      # @return [String, nil] the inferred type or nil if cannot be determined
+      def analyze_value_type(node)
+        case node
+        when Prism::IntegerNode
+          "Integer"
+        when Prism::FloatNode
+          "Float"
+        when Prism::StringNode
+          "String"
+        when Prism::InterpolatedStringNode
+          "String"
+        when Prism::SymbolNode
+          "Symbol"
+        when Prism::TrueNode
+          "TrueClass"
+        when Prism::FalseNode
+          "FalseClass"
+        when Prism::NilNode
+          "NilClass"
+        when Prism::ArrayNode
+          "Array"
+        when Prism::HashNode
+          "Hash"
+        when Prism::RangeNode
+          "Range"
+        when Prism::RegularExpressionNode
+          "Regexp"
+        when Prism::CallNode
+          # Check if it's a .new call
+          extract_class_name_from_receiver(node.receiver) if node.name == :new && node.receiver
+        end
+      end
+
+      # Extract class name from a receiver node (for .new calls)
+      # @param receiver [Prism::Node] the receiver node
+      # @return [String, nil] the class name or nil
+      def extract_class_name_from_receiver(receiver)
+        case receiver
+        when Prism::ConstantReadNode
+          receiver.name.to_s
+        when Prism::ConstantPathNode
+          receiver.slice
+        end
+      end
 
       def register_variable(var_name, line, column)
         if var_name.start_with?("@@")
