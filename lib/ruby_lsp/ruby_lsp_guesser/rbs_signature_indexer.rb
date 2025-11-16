@@ -13,7 +13,6 @@ module RubyLsp
       # Index Ruby core library's RBS signatures
       def index_ruby_core
         loader = RBS::EnvironmentLoader.new
-        env = RBS::Environment.from_loader(loader).resolve_type_names
 
         loader.each_signature do |_source, _pathname, _buffer, declarations, _directives|
           process_declarations(declarations)
@@ -28,7 +27,6 @@ module RubyLsp
 
         loader = RBS::EnvironmentLoader.new
         loader.add(path: Pathname(dir_path))
-        env = RBS::Environment.from_loader(loader).resolve_type_names
 
         loader.each_signature do |_source, _pathname, _buffer, declarations, _directives|
           process_declarations(declarations)
@@ -103,13 +101,13 @@ module RubyLsp
         params = []
 
         # Required positional
-        function.required_positionals.each do |param|
-          params << {
+        params.concat(function.required_positionals.map do |param|
+          {
             name: (param.name || "_").to_s,
             type: type_to_string(param.type),
             kind: :required
           }
-        end
+        end)
 
         # Optional positional
         function.optional_positionals.each do |param|
