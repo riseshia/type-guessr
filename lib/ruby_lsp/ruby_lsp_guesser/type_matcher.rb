@@ -1,11 +1,13 @@
 # frozen_string_literal: true
 
+require_relative "ruby_index_adapter"
+
 module RubyLsp
   module Guesser
     # TypeMatcher finds classes/modules that have all the specified methods
     class TypeMatcher
       def initialize(index)
-        @index = index
+        @adapter = RubyIndexAdapter.new(index)
       end
 
       # Given a set of method names, find all classes that have ALL those methods
@@ -14,21 +16,15 @@ module RubyLsp
       def find_matching_types(method_names)
         return [] if method_names.empty?
 
-        # Get all class/module entries from the index
-        all_entries = []
-        @index.instance_variable_get(:@entries).each_value do |entries_list|
-          entries_list.each do |entry|
-            all_entries << entry if entry.is_a?(RubyIndexer::Entry::Class) ||
-                                    entry.is_a?(RubyIndexer::Entry::Module)
-          end
-        end
+        # Get all class/module entries from the index through the adapter
+        all_entries = @adapter.all_class_and_module_entries
 
         # Find classes that have all the specified methods
         matching_classes = []
         all_entries.each do |class_entry|
           class_name = class_entry.name
           has_all_methods = method_names.all? do |method_name|
-            method_entries = @index.resolve_method(method_name, class_name)
+            method_entries = @adapter.resolve_method(method_name, class_name)
             !method_entries.nil? && !method_entries.empty?
           end
 
