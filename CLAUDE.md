@@ -43,12 +43,16 @@ ruby-lsp-guesser/
 │           ├── addon.rb                         # LSP addon registration
 │           ├── ast_visitor.rb                   # AST traversal for method call tracking
 │           ├── hover.rb                         # Hover provider implementation
+│           ├── hover_content_builder.rb         # Hover content formatting and debug mode
 │           ├── method_signature.rb              # Method signature representation
 │           ├── method_signature_index.rb        # Index of method signatures from RBS
 │           ├── parameter.rb                     # Method parameter representation
 │           ├── rbs_signature_indexer.rb         # RBS file parser and indexer
+│           ├── ruby_index_adapter.rb            # Adapter for RubyIndexer access
+│           ├── scope_resolver.rb                # Scope type and ID resolution
 │           ├── type_matcher.rb                  # Type matching logic
 │           ├── variable_index.rb                # Variable type information storage
+│           ├── variable_type_resolver.rb        # Variable type inference logic
 │           └── version.rb                       # Version constant
 ├── test/
 │   ├── test_helper.rb
@@ -60,6 +64,7 @@ ruby-lsp-guesser/
 │       ├── test_method_signature_index.rb
 │       ├── test_parameter.rb
 │       ├── test_rbs_signature_indexer.rb
+│       ├── test_scope_resolver.rb
 │       ├── test_type_matcher.rb
 │       └── test_variable_index.rb
 ├── .rubocop.yml                                 # RuboCop configuration
@@ -81,47 +86,72 @@ ruby-lsp-guesser/
 ### 2. Hover (lib/ruby_lsp/ruby_lsp_guesser/hover.rb)
 - **Purpose:** Provides type information on hover
 - Listens to AST node events for variables and constants
-- Integrates with VariableIndex to retrieve inferred types
+- Delegates type resolution to VariableTypeResolver
+- Delegates content formatting to HoverContentBuilder
 - Returns formatted hover content with type information
 
-### 3. AST Visitor (lib/ruby_lsp/ruby_lsp_guesser/ast_visitor.rb)
+### 3. Hover Content Builder (lib/ruby_lsp/ruby_lsp_guesser/hover_content_builder.rb)
+- **Purpose:** Formats hover content from type information
+- Handles debug mode configuration (ENV variable or config file)
+- Formats inferred types, ambiguous types, and debug content
+- Separates presentation logic from type inference logic
+
+### 4. Variable Type Resolver (lib/ruby_lsp/ruby_lsp_guesser/variable_type_resolver.rb)
+- **Purpose:** Resolves variable types by analyzing definitions and method calls
+- Extracts variable names from various node types (local, instance, class variables, parameters)
+- Retrieves direct types from literal assignments or `.new` calls
+- Collects method calls for variables using VariableIndex
+- Integrates with TypeMatcher for method-based type inference
+
+### 5. AST Visitor (lib/ruby_lsp/ruby_lsp_guesser/ast_visitor.rb)
 - **Purpose:** Traverses AST to collect method call patterns
 - Inherits from Prism::Visitor
 - Tracks method calls on variables throughout the document
 - Feeds data to VariableIndex for type inference
 
-### 4. RBS Signature Indexer (lib/ruby_lsp/ruby_lsp_guesser/rbs_signature_indexer.rb)
+### 6. RBS Signature Indexer (lib/ruby_lsp/ruby_lsp_guesser/rbs_signature_indexer.rb)
 - **Purpose:** Parses and indexes RBS type definitions
 - Searches for RBS files in project and gem dependencies
 - Extracts method signatures from RBS definitions
 - Populates MethodSignatureIndex with type information
 
-### 5. Method Signature Index (lib/ruby_lsp/ruby_lsp_guesser/method_signature_index.rb)
+### 7. Method Signature Index (lib/ruby_lsp/ruby_lsp_guesser/method_signature_index.rb)
 - **Purpose:** Central storage for method signatures
 - Maps class names to their method signatures
 - Enables reverse lookup: method name → possible classes
 - Used for method-based type inference
 
-### 6. Variable Index (lib/ruby_lsp/ruby_lsp_guesser/variable_index.rb)
+### 8. Variable Index (lib/ruby_lsp/ruby_lsp_guesser/variable_index.rb)
 - **Purpose:** Stores inferred types for variables
 - Tracks variable assignments and method calls
-- Performs heuristic type inference based on:
-  - Method call patterns
-  - Variable naming conventions
-  - RBS signature matching
+- Stores type information from literal assignments and `.new` calls
+- Provides public API for querying variable types and method calls
+- Encapsulates internal data structures for better maintainability
 
-### 7. Type Matcher (lib/ruby_lsp/ruby_lsp_guesser/type_matcher.rb)
+### 9. Type Matcher (lib/ruby_lsp/ruby_lsp_guesser/type_matcher.rb)
 - **Purpose:** Matches method calls to type signatures
-- Compares observed method calls with RBS signatures
+- Compares observed method calls with Ruby LSP's index
 - Determines compatible types based on available methods
 - Core of the heuristic type inference logic
 
-### 8. Method Signature (lib/ruby_lsp/ruby_lsp_guesser/method_signature.rb)
+### 10. Ruby Index Adapter (lib/ruby_lsp/ruby_lsp_guesser/ruby_index_adapter.rb)
+- **Purpose:** Adapter for accessing RubyIndexer internals
+- Provides stable interface isolating TypeMatcher from implementation details
+- Encapsulates access to Ruby LSP's index entries
+- Retrieves class/module entries and resolves methods
+
+### 11. Scope Resolver (lib/ruby_lsp/ruby_lsp_guesser/scope_resolver.rb)
+- **Purpose:** Provides common scope resolution logic
+- Determines scope type based on variable name (local/instance/class)
+- Generates scope IDs for different contexts (class, method, top-level)
+- Shared utility module used by both ASTVisitor and VariableTypeResolver
+
+### 12. Method Signature (lib/ruby_lsp/ruby_lsp_guesser/method_signature.rb)
 - **Purpose:** Represents a method's type signature
 - Stores method name, parameters, and return type
 - Extracted from RBS definitions
 
-### 9. Parameter (lib/ruby_lsp/ruby_lsp_guesser/parameter.rb)
+### 13. Parameter (lib/ruby_lsp/ruby_lsp_guesser/parameter.rb)
 - **Purpose:** Represents a method parameter
 - Stores parameter name, type, and metadata (required/optional, keyword/positional)
 - Used in method signature matching
