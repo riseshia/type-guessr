@@ -10,6 +10,25 @@ module RubyLsp
     # Delegates type resolution to VariableTypeResolver
     # Delegates content generation to HoverContentBuilder
     class Hover
+      # Define all node types that should trigger hover content
+      HOVER_NODE_TYPES = [
+        :local_variable_read,
+        :local_variable_write,
+        :local_variable_target,
+        :instance_variable_read,
+        :class_variable_read,
+        :global_variable_read,
+        :self,
+        :required_parameter,
+        :optional_parameter,
+        :rest_parameter,
+        :required_keyword_parameter,
+        :optional_keyword_parameter,
+        :keyword_rest_parameter,
+        :block_parameter,
+        :forwarding_parameter
+      ].freeze
+
       def initialize(response_builder, node_context, dispatcher, global_state = nil)
         @response_builder = response_builder
         @type_resolver = VariableTypeResolver.new(node_context, global_state)
@@ -18,87 +37,19 @@ module RubyLsp
         register_listeners(dispatcher)
       end
 
-      def on_local_variable_read_node_enter(node)
-        add_hover_content(node)
-      end
-
-      def on_local_variable_write_node_enter(node)
-        add_hover_content(node)
-      end
-
-      def on_local_variable_target_node_enter(node)
-        add_hover_content(node)
-      end
-
-      def on_instance_variable_read_node_enter(node)
-        add_hover_content(node)
-      end
-
-      def on_class_variable_read_node_enter(node)
-        add_hover_content(node)
-      end
-
-      def on_global_variable_read_node_enter(node)
-        add_hover_content(node)
-      end
-
-      def on_self_node_enter(node)
-        add_hover_content(node)
-      end
-
-      def on_required_parameter_node_enter(node)
-        add_hover_content(node)
-      end
-
-      def on_optional_parameter_node_enter(node)
-        add_hover_content(node)
-      end
-
-      def on_rest_parameter_node_enter(node)
-        add_hover_content(node)
-      end
-
-      def on_required_keyword_parameter_node_enter(node)
-        add_hover_content(node)
-      end
-
-      def on_optional_keyword_parameter_node_enter(node)
-        add_hover_content(node)
-      end
-
-      def on_keyword_rest_parameter_node_enter(node)
-        add_hover_content(node)
-      end
-
-      def on_block_parameter_node_enter(node)
-        add_hover_content(node)
-      end
-
-      def on_forwarding_parameter_node_enter(node)
-        add_hover_content(node)
+      # Dynamically define listener methods for each node type
+      HOVER_NODE_TYPES.each do |node_type|
+        define_method(:"on_#{node_type}_node_enter") do |node|
+          add_hover_content(node)
+        end
       end
 
       private
 
       def register_listeners(dispatcher)
-        dispatcher.register(
-          self,
-          :on_local_variable_read_node_enter,
-          :on_local_variable_write_node_enter,
-          :on_local_variable_target_node_enter,
-          :on_instance_variable_read_node_enter,
-          :on_class_variable_read_node_enter,
-          :on_global_variable_read_node_enter,
-          :on_self_node_enter,
-          :on_required_parameter_node_enter,
-          :on_optional_parameter_node_enter,
-          :on_rest_parameter_node_enter,
-          :on_required_keyword_parameter_node_enter,
-          :on_optional_keyword_parameter_node_enter,
-          :on_keyword_rest_parameter_node_enter,
-          :on_block_parameter_node_enter,
-          :on_forwarding_parameter_node_enter
-        )
+        # Dynamically generate listener method names from HOVER_NODE_TYPES
+        listener_methods = HOVER_NODE_TYPES.map { |node_type| :"on_#{node_type}_node_enter" }
+        dispatcher.register(self, *listener_methods)
       end
 
       def add_hover_content(node)
