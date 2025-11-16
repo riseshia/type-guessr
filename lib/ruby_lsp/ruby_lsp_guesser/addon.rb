@@ -86,30 +86,58 @@ module RubyLsp
 
       def start_ast_traversal(global_state)
         Thread.new do
-          warn("[RubyLspGuesser] Starting AST traversal in background thread.")
+          warn("[RubyLspGuesser] Starting AST traversal with parallel processing.")
           index = global_state.index
 
           # Get indexable URIs from RubyIndexer configuration
           indexable_uris = index.configuration.indexable_uris
           warn("[RubyLspGuesser] Found #{indexable_uris.size} indexed files to traverse.")
 
-          # Calculate progress step (10% of total files)
+          # Use 8 worker threads for parallel processing
+          worker_count = 8
+          warn("[RubyLspGuesser] Using #{worker_count} worker threads.")
+
+          # Thread-safe progress tracking
+          progress_mutex = Mutex.new
+          processed_count = 0
           progress_step = (indexable_uris.size / 10.0).ceil
 
-          # Traverse each file's AST
-          indexable_uris.each_with_index do |uri, idx|
-            traverse_file_ast(uri)
+          # Create a thread pool with work queue
+          queue = Thread::Queue.new
+          indexable_uris.each { |uri| queue << uri }
+          worker_count.times { queue << :stop } # Sentinel values to stop workers
 
-            # Log progress every 10%
-            if progress_step.positive? && ((idx + 1) % progress_step).zero?
-              progress = ((idx + 1) / progress_step.to_f * 10).to_i
-              warn("[RubyLspGuesser] Progress: #{progress}% (#{idx + 1}/#{indexable_uris.size} files)")
+          # Start worker threads
+          workers = worker_count.times.map do
+            Thread.new do
+              loop do
+                uri = queue.pop
+                break if uri == :stop
+
+                begin
+                  traverse_file_ast(uri)
+
+                  # Update progress in thread-safe manner
+                  progress_mutex.synchronize do
+                    processed_count += 1
+
+                    # Log progress every 10%
+                    if progress_step.positive? && (processed_count % progress_step).zero?
+                      progress = (processed_count / progress_step.to_f * 10).to_i
+                      warn("[RubyLspGuesser] Progress: #{progress}% (#{processed_count}/#{indexable_uris.size} files)")
+                    end
+                  end
+                rescue StandardError => e
+                  warn("[RubyLspGuesser] Error processing #{uri}: #{e.message}")
+                end
+              end
             end
-          rescue StandardError => e
-            warn("[RubyLspGuesser] Error processing #{uri}: #{e.message}")
           end
 
-          warn("[RubyLspGuesser] AST traversal completed.")
+          # Wait for all workers to complete
+          workers.each(&:join)
+
+          warn("[RubyLspGuesser] AST traversal completed. Processed #{processed_count} files.")
         rescue StandardError => e
           warn("[RubyLspGuesser] Error during AST traversal: #{e.message}")
           warn(e.backtrace.join("\n"))
