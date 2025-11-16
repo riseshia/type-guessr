@@ -85,6 +85,8 @@ ruby-lsp-guesser/
 
 ### 2. Hover (lib/ruby_lsp/ruby_lsp_guesser/hover.rb)
 - **Purpose:** Provides type information on hover
+- Uses metaprogramming to dynamically create listener methods for all supported node types
+- Defines supported node types in HOVER_NODE_TYPES constant (14 types including variables, parameters, self)
 - Listens to AST node events for variables and constants
 - Delegates type resolution to VariableTypeResolver
 - Delegates content formatting to HoverContentBuilder
@@ -135,8 +137,9 @@ ruby-lsp-guesser/
 - Core of the heuristic type inference logic
 
 ### 10. Ruby Index Adapter (lib/ruby_lsp/ruby_lsp_guesser/ruby_index_adapter.rb)
-- **Purpose:** Adapter for accessing RubyIndexer internals
+- **Purpose:** Adapter for accessing RubyIndexer using public APIs
 - Provides stable interface isolating TypeMatcher from implementation details
+- Uses only public APIs (fuzzy_search, resolve_method) for better compatibility with ruby-lsp updates
 - Encapsulates access to Ruby LSP's index entries
 - Retrieves class/module entries and resolves methods
 
