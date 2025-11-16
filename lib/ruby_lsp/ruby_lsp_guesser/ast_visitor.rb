@@ -356,13 +356,7 @@ module RubyLsp
 
       # Determine the scope type based on variable name
       def determine_scope_type(var_name)
-        if var_name.start_with?("@@")
-          :class_variables
-        elsif var_name.start_with?("@")
-          :instance_variables
-        else
-          :local_variables
-        end
+        ScopeResolver.determine_scope_type(var_name)
       end
 
       # Generate scope ID for the current context
@@ -370,18 +364,13 @@ module RubyLsp
       # - For local variables: "ClassName#method_name"
       def generate_scope_id(scope_type)
         class_path = @class_stack.join("::")
+        method_name = @method_stack.empty? ? nil : @method_stack.last
 
-        if scope_type == :local_variables && !@method_stack.empty?
-          # Local variable: "ClassName#method_name"
-          method_name = @method_stack.last
-          class_path.empty? ? method_name : "#{class_path}##{method_name}"
-        elsif !class_path.empty?
-          # Instance/class variable: "ClassName"
-          class_path
-        else
-          # Top-level scope
-          "(top-level)"
-        end
+        ScopeResolver.generate_scope_id(
+          scope_type,
+          class_path: class_path,
+          method_name: method_name
+        )
       end
 
       # Extract class/module name from constant path node
