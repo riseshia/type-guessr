@@ -12,17 +12,10 @@ module RubyLsp
       # Get all class and module entries from the index
       # @return [Array<RubyIndexer::Entry::Class, RubyIndexer::Entry::Module>]
       def all_class_and_module_entries
-        entries = []
-
-        # Access the internal entries structure
-        # This is the only place that knows about the internal implementation
-        @index.instance_variable_get(:@entries).each_value do |entries_list|
-          entries_list.each do |entry|
-            entries << entry if class_or_module_entry?(entry)
-          end
+        # Use fuzzy_search with nil query to get all entries, filtered by condition block
+        @index.fuzzy_search(nil) do |entry|
+          class_or_module_entry?(entry)
         end
-
-        entries
       end
 
       # Resolve a method for a specific class/module name
