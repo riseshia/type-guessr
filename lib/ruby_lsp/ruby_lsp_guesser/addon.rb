@@ -6,6 +6,8 @@ require_relative "version"
 require_relative "hover"
 require_relative "variable_index"
 require_relative "ast_visitor"
+require_relative "rbs_signature_indexer"
+require_relative "method_signature_index"
 
 module RubyLsp
   module Guesser
@@ -48,6 +50,9 @@ module RubyLsp
           targets << target unless targets.include?(target)
         end
 
+        # Start background thread to index RBS signatures
+        start_rbs_indexing
+
         # Start background thread to traverse AST for indexed files
         start_ast_traversal(global_state)
       end
@@ -83,6 +88,27 @@ module RubyLsp
       end
 
       private
+
+      def start_rbs_indexing
+        Thread.new do
+          warn("[RubyLspGuesser] Starting RBS signature indexing.")
+          indexer = RBSSignatureIndexer.new
+
+          # Index Ruby core library
+          warn("[RubyLspGuesser] Indexing Ruby core library signatures...")
+          indexer.index_ruby_core
+
+          # Index project RBS files from sig/ directory
+          warn("[RubyLspGuesser] Indexing project RBS signatures...")
+          indexer.index_project_rbs
+
+          total_signatures = MethodSignatureIndex.instance.size
+          warn("[RubyLspGuesser] RBS indexing completed. Total signatures: #{total_signatures}")
+        rescue StandardError => e
+          warn("[RubyLspGuesser] Error during RBS indexing: #{e.message}")
+          warn(e.backtrace.join("\n"))
+        end
+      end
 
       def start_ast_traversal(global_state)
         Thread.new do
