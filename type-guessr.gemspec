@@ -9,7 +9,7 @@ Gem::Specification.new do |spec|
   spec.email = [""]
 
   spec.summary = "A heuristic type inference tool for Ruby"
-  spec.description = "TypeGuessr provides heuristic type inference for Ruby code based on method call patterns and variable naming conventions"
+  spec.description = "TypeGuessr provides heuristic type inference"
   spec.homepage = "https://github.com/riseshia/type-guessr"
   spec.required_ruby_version = ">= 3.3.0"
 
