@@ -12,6 +12,9 @@ Style/StringLiteralsInInterpolation:
 Naming/FileName:
   Enabled: false
 
+Layout/LineLength:
+  Max: 160
+
 Lint/DuplicateBranch:
   Enabled: false
 
