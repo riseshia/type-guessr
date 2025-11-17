@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 module RubyLsp
-  module Guesser
+  module TypeGuessr
     # Builds hover content from type information
     # Handles debug mode settings and content formatting
     class HoverContentBuilder
@@ -74,23 +74,23 @@ module RubyLsp
       # @return [Boolean] true if debug mode is enabled
       def debug_mode?
         # First check environment variable
-        return true if %w[1 true].include?(ENV["RUBY_LSP_GUESSER_DEBUG"])
+        return true if %w[1 true].include?(ENV["TYPE_GUESSR_DEBUG"])
 
         # Then check config file
         @debug_mode ||= load_debug_mode_from_config
       end
 
-      # Load debug mode setting from .ruby-lsp-guesser.yml
+      # Load debug mode setting from .type-guessr.yml
       # @return [Boolean] true if debug mode is enabled in config
       def load_debug_mode_from_config
-        config_path = File.join(Dir.pwd, ".ruby-lsp-guesser.yml")
+        config_path = File.join(Dir.pwd, ".type-guessr.yml")
         return false unless File.exist?(config_path)
 
         require "yaml"
         config = YAML.load_file(config_path)
         config["debug"] == true
       rescue StandardError => e
-        warn("[RubyLspGuesser] Error loading config file: #{e.message}")
+        warn("[TypeGuessr] Error loading config file: #{e.message}")
         false
       end
     end

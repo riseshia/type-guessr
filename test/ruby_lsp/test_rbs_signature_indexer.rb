@@ -3,7 +3,7 @@
 require "test_helper"
 
 module RubyLsp
-  module Guesser
+  module TypeGuessr
     class TestRBSSignatureIndexer < Minitest::Test
       def setup
         @sig_index = MethodSignatureIndex.instance

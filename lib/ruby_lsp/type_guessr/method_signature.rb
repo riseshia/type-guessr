@@ -3,7 +3,7 @@
 require_relative "parameter"
 
 module RubyLsp
-  module Guesser
+  module TypeGuessr
     # Represents a method signature with parameters and return type
     class MethodSignature
       attr_reader :params, :return_type

@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 module RubyLsp
-  module Guesser
+  module TypeGuessr
     # Adapter to encapsulate access to RubyIndexer::Index internals
     # Provides a stable interface that isolates TypeMatcher from RubyIndexer's implementation details
     class RubyIndexAdapter

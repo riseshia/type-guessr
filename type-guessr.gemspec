@@ -1,21 +1,21 @@
 # frozen_string_literal: true
 
-require_relative "lib/ruby_lsp/ruby_lsp_guesser/version"
+require_relative "lib/ruby_lsp/type_guessr/version"
 
 Gem::Specification.new do |spec|
-  spec.name = "ruby-lsp-guesser"
-  spec.version = RubyLsp::Guesser::VERSION
+  spec.name = "type-guessr"
+  spec.version = RubyLsp::TypeGuessr::VERSION
   spec.authors = ["riseshia"]
   spec.email = [""]
 
-  spec.summary = "A Ruby LSP guesser tool"
-  spec.description = "A tool to help guess and analyze Ruby LSP functionality"
-  spec.homepage = "https://github.com/riseshia/ruby-lsp-guesser"
+  spec.summary = "A heuristic type inference tool for Ruby"
+  spec.description = "TypeGuessr provides heuristic type inference"
+  spec.homepage = "https://github.com/riseshia/type-guessr"
   spec.required_ruby_version = ">= 3.3.0"
 
   spec.metadata["homepage_uri"] = spec.homepage
-  spec.metadata["source_code_uri"] = "https://github.com/riseshia/ruby-lsp-guesser"
-  spec.metadata["changelog_uri"] = "https://github.com/riseshia/ruby-lsp-guesser/blob/main/CHANGELOG.md"
+  spec.metadata["source_code_uri"] = "https://github.com/riseshia/type-guessr"
+  spec.metadata["changelog_uri"] = "https://github.com/riseshia/type-guessr/blob/main/CHANGELOG.md"
   spec.metadata["rubygems_mfa_required"] = "true"
 
   # Specify which files should be added to the gem when it is released.

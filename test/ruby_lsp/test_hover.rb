@@ -4,7 +4,7 @@ require "test_helper"
 require "ruby_lsp/internal"
 
 module RubyLsp
-  module Guesser
+  module TypeGuessr
     class TestHover < Minitest::Test
       include RubyLsp::TestHelper
 
@@ -248,7 +248,7 @@ module RubyLsp
 
         with_server(source, stub_no_typechecker: true) do |server, uri|
           # Clear the index and add test data
-          index = RubyLsp::Guesser::VariableIndex.instance
+          index = RubyLsp::TypeGuessr::VariableIndex.instance
           index.clear
 
           # Simulate duplicate method calls being indexed
@@ -338,7 +338,7 @@ module RubyLsp
 
         with_server(source, stub_no_typechecker: true) do |server, uri|
           # Clear index and manually add the method calls to avoid interference from background indexing
-          index = RubyLsp::Guesser::VariableIndex.instance
+          index = RubyLsp::TypeGuessr::VariableIndex.instance
           index.clear
 
           # Manually index the method calls
@@ -432,7 +432,7 @@ module RubyLsp
 
         with_server(source, stub_no_typechecker: true) do |server, uri|
           # Clear and setup index
-          index = RubyLsp::Guesser::VariableIndex.instance
+          index = RubyLsp::TypeGuessr::VariableIndex.instance
           index.clear
 
           # Add method calls for 'item' variable
@@ -488,7 +488,7 @@ module RubyLsp
 
         with_server(source, stub_no_typechecker: true) do |server, uri|
           # Clear and setup index
-          index = RubyLsp::Guesser::VariableIndex.instance
+          index = RubyLsp::TypeGuessr::VariableIndex.instance
           index.clear
 
           # Add a method call that won't match any indexed class
@@ -550,7 +550,7 @@ module RubyLsp
 
         with_server(source, stub_no_typechecker: true) do |server, uri|
           # Clear and setup index
-          index = RubyLsp::Guesser::VariableIndex.instance
+          index = RubyLsp::TypeGuessr::VariableIndex.instance
           index.clear
 
           # Manually add method calls for 'recipe' variable
@@ -614,7 +614,7 @@ module RubyLsp
 
         with_server(source, stub_no_typechecker: true) do |server, uri|
           # Clear and setup index
-          index = RubyLsp::Guesser::VariableIndex.instance
+          index = RubyLsp::TypeGuessr::VariableIndex.instance
           index.clear
 
           # Add method calls for 'user' parameter
@@ -667,7 +667,7 @@ module RubyLsp
 
         with_server(source, stub_no_typechecker: true) do |server, uri|
           # Clear and manually add type information
-          index = RubyLsp::Guesser::VariableIndex.instance
+          index = RubyLsp::TypeGuessr::VariableIndex.instance
           index.clear
 
           # Add variable type for 'name' variable
@@ -705,7 +705,7 @@ module RubyLsp
         RUBY
 
         with_server(source, stub_no_typechecker: true) do |server, uri|
-          index = RubyLsp::Guesser::VariableIndex.instance
+          index = RubyLsp::TypeGuessr::VariableIndex.instance
           index.clear
 
           index.add_variable_type(
@@ -744,7 +744,7 @@ module RubyLsp
         RUBY
 
         with_server(source, stub_no_typechecker: true) do |server, uri|
-          index = RubyLsp::Guesser::VariableIndex.instance
+          index = RubyLsp::TypeGuessr::VariableIndex.instance
           index.clear
 
           index.add_variable_type(
@@ -780,7 +780,7 @@ module RubyLsp
         RUBY
 
         with_server(source, stub_no_typechecker: true) do |server, uri|
-          index = RubyLsp::Guesser::VariableIndex.instance
+          index = RubyLsp::TypeGuessr::VariableIndex.instance
           index.clear
 
           index.add_variable_type(
@@ -816,7 +816,7 @@ module RubyLsp
         RUBY
 
         with_server(source, stub_no_typechecker: true) do |server, uri|
-          index = RubyLsp::Guesser::VariableIndex.instance
+          index = RubyLsp::TypeGuessr::VariableIndex.instance
           index.clear
 
           index.add_variable_type(
@@ -852,7 +852,7 @@ module RubyLsp
         RUBY
 
         with_server(source, stub_no_typechecker: true) do |server, uri|
-          index = RubyLsp::Guesser::VariableIndex.instance
+          index = RubyLsp::TypeGuessr::VariableIndex.instance
           index.clear
 
           index.add_variable_type(
@@ -895,7 +895,7 @@ module RubyLsp
         RUBY
 
         with_server(source, stub_no_typechecker: true) do |server, uri|
-          index = RubyLsp::Guesser::VariableIndex.instance
+          index = RubyLsp::TypeGuessr::VariableIndex.instance
           index.clear
 
           # Add direct type for user variable

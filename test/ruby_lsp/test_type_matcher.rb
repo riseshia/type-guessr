@@ -4,7 +4,7 @@ require "test_helper"
 require "ruby_lsp/internal"
 
 module RubyLsp
-  module Guesser
+  module TypeGuessr
     class TestTypeMatcher < Minitest::Test
       def setup
         @index = RubyIndexer::Index.new
@@ -58,7 +58,7 @@ module RubyLsp
         @index.index_single(URI::Generic.from_path(path: "/fake.rb"), source)
 
         # Create a TypeMatcher instance
-        matcher = RubyLsp::Guesser::TypeMatcher.new(@index)
+        matcher = RubyLsp::TypeGuessr::TypeMatcher.new(@index)
 
         # Find classes that have both 'ingredients' and 'comments' methods
         # Only Recipe should match
@@ -94,7 +94,7 @@ module RubyLsp
 
         @index.index_single(URI::Generic.from_path(path: "/fake2.rb"), source)
 
-        matcher = RubyLsp::Guesser::TypeMatcher.new(@index)
+        matcher = RubyLsp::TypeGuessr::TypeMatcher.new(@index)
 
         # No class has both 'ingredients' and 'comments'
         matches = matcher.find_matching_types(%w[ingredients comments])
@@ -124,7 +124,7 @@ module RubyLsp
 
         @index.index_single(URI::Generic.from_path(path: "/fake3.rb"), source)
 
-        matcher = RubyLsp::Guesser::TypeMatcher.new(@index)
+        matcher = RubyLsp::TypeGuessr::TypeMatcher.new(@index)
 
         # Only UniqueClass has both methods
         matches = matcher.find_matching_types(%w[unique_method_alpha unique_method_beta])
@@ -161,7 +161,7 @@ module RubyLsp
 
         @index.index_single(URI::Generic.from_path(path: "/fake4.rb"), source)
 
-        matcher = RubyLsp::Guesser::TypeMatcher.new(@index)
+        matcher = RubyLsp::TypeGuessr::TypeMatcher.new(@index)
 
         # Both Persisted and Cached have 'save' and 'destroy'
         matches = matcher.find_matching_types(%w[save destroy])

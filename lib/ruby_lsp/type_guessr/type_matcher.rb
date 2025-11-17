@@ -3,7 +3,7 @@
 require_relative "ruby_index_adapter"
 
 module RubyLsp
-  module Guesser
+  module TypeGuessr
     # TypeMatcher finds classes/modules that have all the specified methods
     class TypeMatcher
       def initialize(index)

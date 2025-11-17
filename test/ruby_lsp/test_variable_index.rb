@@ -3,7 +3,7 @@
 require "test_helper"
 
 module RubyLsp
-  module Guesser
+  module TypeGuessr
     class TestVariableIndex < Minitest::Test
       def setup
         @index = VariableIndex.instance

@@ -3,7 +3,7 @@
 require "rbs"
 
 module RubyLsp
-  module Guesser
+  module TypeGuessr
     # Parses RBS files to extract method signature information
     class RBSSignatureIndexer
       def initialize(index = MethodSignatureIndex.instance)

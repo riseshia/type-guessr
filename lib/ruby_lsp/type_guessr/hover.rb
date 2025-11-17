@@ -5,7 +5,7 @@ require_relative "variable_type_resolver"
 require_relative "hover_content_builder"
 
 module RubyLsp
-  module Guesser
+  module TypeGuessr
     # Hover provider that coordinates type resolution and content generation
     # Delegates type resolution to VariableTypeResolver
     # Delegates content generation to HoverContentBuilder
