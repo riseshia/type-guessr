@@ -3,6 +3,13 @@
 require "prism"
 require_relative "type_matcher"
 
+# Explicitly require core dependencies to ensure they're loaded
+# even when this file is loaded independently (e.g., by Ruby LSP)
+# Load version first to ensure TypeGuessr module exists
+require_relative "../../type_guessr/version" unless defined?(::TypeGuessr::VERSION)
+require_relative "../../type_guessr/core/variable_index"
+require_relative "../../type_guessr/core/scope_resolver"
+
 module RubyLsp
   module TypeGuessr
     # Resolves variable types by analyzing definitions and method calls
