@@ -5,7 +5,7 @@ require_relative "method_signature"
 require_relative "parameter"
 
 module RubyLsp
-  module Guesser
+  module TypeGuessr
     # Thread-safe singleton index to store method signatures from RBS
     # Structure:
     # {

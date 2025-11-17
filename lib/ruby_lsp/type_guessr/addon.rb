@@ -10,12 +10,12 @@ require_relative "rbs_signature_indexer"
 require_relative "method_signature_index"
 
 module RubyLsp
-  module Guesser
-    # Ruby LSP addon for the Guesser gem
+  module TypeGuessr
+    # Ruby LSP addon for TypeGuessr
     # Provides hover tooltip functionality for Ruby code
     class Addon < ::RubyLsp::Addon
       def name
-        "RubyLsp::Guesser"
+        "TypeGuessr"
       end
 
       def version
@@ -23,7 +23,7 @@ module RubyLsp
       end
 
       def activate(global_state, _message_queue)
-        warn("[RubyLspGuesser] Activating RubyLspGuesser LSP addon #{VERSION}.")
+        warn("[TypeGuessr] Activating TypeGuessr LSP addon #{VERSION}.")
 
         @global_state = global_state
 
@@ -79,7 +79,7 @@ module RubyLsp
             clear_file_index(file_path)
           end
         rescue StandardError => e
-          warn("[RubyLspGuesser] Error processing file change #{uri}: #{e.message}")
+          warn("[TypeGuessr] Error processing file change #{uri}: #{e.message}")
         end
       end
 
@@ -91,37 +91,37 @@ module RubyLsp
 
       def start_rbs_indexing
         Thread.new do
-          warn("[RubyLspGuesser] Starting RBS signature indexing.")
+          warn("[TypeGuessr] Starting RBS signature indexing.")
           indexer = RBSSignatureIndexer.new
 
           # Index Ruby core library
-          warn("[RubyLspGuesser] Indexing Ruby core library signatures...")
+          warn("[TypeGuessr] Indexing Ruby core library signatures...")
           indexer.index_ruby_core
 
           # Index project RBS files from sig/ directory
-          warn("[RubyLspGuesser] Indexing project RBS signatures...")
+          warn("[TypeGuessr] Indexing project RBS signatures...")
           indexer.index_project_rbs
 
           total_signatures = MethodSignatureIndex.instance.size
-          warn("[RubyLspGuesser] RBS indexing completed. Total signatures: #{total_signatures}")
+          warn("[TypeGuessr] RBS indexing completed. Total signatures: #{total_signatures}")
         rescue StandardError => e
-          warn("[RubyLspGuesser] Error during RBS indexing: #{e.message}")
+          warn("[TypeGuessr] Error during RBS indexing: #{e.message}")
           warn(e.backtrace.join("\n"))
         end
       end
 
       def start_ast_traversal(global_state)
         Thread.new do
-          warn("[RubyLspGuesser] Starting AST traversal with parallel processing.")
+          warn("[TypeGuessr] Starting AST traversal with parallel processing.")
           index = global_state.index
 
           # Get indexable URIs from RubyIndexer configuration
           indexable_uris = index.configuration.indexable_uris
-          warn("[RubyLspGuesser] Found #{indexable_uris.size} indexed files to traverse.")
+          warn("[TypeGuessr] Found #{indexable_uris.size} indexed files to traverse.")
 
           # Use 8 worker threads for parallel processing
           worker_count = 8
-          warn("[RubyLspGuesser] Using #{worker_count} worker threads.")
+          warn("[TypeGuessr] Using #{worker_count} worker threads.")
 
           # Thread-safe progress tracking
           progress_mutex = Mutex.new
@@ -150,11 +150,11 @@ module RubyLsp
                     # Log progress every 10%
                     if progress_step.positive? && (processed_count % progress_step).zero?
                       progress = (processed_count / progress_step.to_f * 10).to_i
-                      warn("[RubyLspGuesser] Progress: #{progress}% (#{processed_count}/#{indexable_uris.size} files)")
+                      warn("[TypeGuessr] Progress: #{progress}% (#{processed_count}/#{indexable_uris.size} files)")
                     end
                   end
                 rescue StandardError => e
-                  warn("[RubyLspGuesser] Error processing #{uri}: #{e.message}")
+                  warn("[TypeGuessr] Error processing #{uri}: #{e.message}")
                 end
               end
             end
@@ -163,9 +163,9 @@ module RubyLsp
           # Wait for all workers to complete
           workers.each(&:join)
 
-          warn("[RubyLspGuesser] AST traversal completed. Processed #{processed_count} files.")
+          warn("[TypeGuessr] AST traversal completed. Processed #{processed_count} files.")
         rescue StandardError => e
-          warn("[RubyLspGuesser] Error during AST traversal: #{e.message}")
+          warn("[TypeGuessr] Error during AST traversal: #{e.message}")
           warn(e.backtrace.join("\n"))
         end
       end
@@ -181,7 +181,7 @@ module RubyLsp
         visitor = ASTVisitor.new(file_path)
         result.value.accept(visitor)
       rescue StandardError => e
-        warn("[RubyLspGuesser] Error parsing #{uri}: #{e.message}")
+        warn("[TypeGuessr] Error parsing #{uri}: #{e.message}")
       end
 
       # Re-index a single file by traversing its AST
@@ -198,17 +198,17 @@ module RubyLsp
         visitor = ASTVisitor.new(file_path)
         result.value.accept(visitor)
 
-        warn("[RubyLspGuesser] Re-indexed file: #{file_path}")
+        warn("[TypeGuessr] Re-indexed file: #{file_path}")
       rescue StandardError => e
-        warn("[RubyLspGuesser] Error re-indexing #{file_path}: #{e.message}")
+        warn("[TypeGuessr] Error re-indexing #{file_path}: #{e.message}")
       end
 
       # Clear all index entries for a specific file
       def clear_file_index(file_path)
         VariableIndex.instance.clear_file(file_path)
-        warn("[RubyLspGuesser] Cleared index for file: #{file_path}")
+        warn("[TypeGuessr] Cleared index for file: #{file_path}")
       rescue StandardError => e
-        warn("[RubyLspGuesser] Error clearing index for #{file_path}: #{e.message}")
+        warn("[TypeGuessr] Error clearing index for #{file_path}: #{e.message}")
       end
     end
   end

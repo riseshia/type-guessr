@@ -3,7 +3,7 @@
 require "test_helper"
 
 module RubyLsp
-  module Guesser
+  module TypeGuessr
     class TestParameter < Minitest::Test
       def test_positional_parameter
         param = Parameter.new(name: "id", type: "Integer", kind: :required)

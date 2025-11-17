@@ -3,7 +3,7 @@
 require "test_helper"
 
 module RubyLsp
-  module Guesser
+  module TypeGuessr
     class TestMethodSignature < Minitest::Test
       def test_create_signature
         params = [

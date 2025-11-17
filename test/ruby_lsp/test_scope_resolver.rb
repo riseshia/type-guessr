@@ -3,7 +3,7 @@
 require "test_helper"
 
 module RubyLsp
-  module Guesser
+  module TypeGuessr
     class TestScopeResolver < Minitest::Test
       def test_determine_scope_type_for_local_variables
         assert_equal :local_variables, ScopeResolver.determine_scope_type("user")

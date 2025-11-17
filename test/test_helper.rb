@@ -1,11 +1,11 @@
 # frozen_string_literal: true
 
 $LOAD_PATH.unshift File.expand_path("../lib", __dir__)
-require "ruby-lsp-guesser"
+require "type-guessr"
 require "ruby_lsp/test_helper"
 require "uri"
 
 require "minitest/autorun"
 
 # Enable debug mode for tests
-ENV["RUBY_LSP_GUESSER_DEBUG"] = "1"
+ENV["TYPE_GUESSR_DEBUG"] = "1"

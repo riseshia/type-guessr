@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 module RubyLsp
-  module Guesser
+  module TypeGuessr
     # Provides common scope resolution logic for determining scope types and IDs
     # Used by both ASTVisitor and Hover to maintain consistency
     module ScopeResolver

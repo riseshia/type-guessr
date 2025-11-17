@@ -3,7 +3,7 @@
 require "test_helper"
 
 module RubyLsp
-  module Guesser
+  module TypeGuessr
     class TestMethodSignatureIndex < Minitest::Test
       def setup
         @index = MethodSignatureIndex.instance
@@ -32,7 +32,7 @@ module RubyLsp
         assert_equal 1, signatures.size
 
         sig = signatures.first
-        assert_instance_of RubyLsp::Guesser::MethodSignature, sig
+        assert_instance_of RubyLsp::TypeGuessr::MethodSignature, sig
         assert_equal 1, sig.params.size
         assert_equal "id", sig.params[0].name
         assert_equal "Integer", sig.params[0].type

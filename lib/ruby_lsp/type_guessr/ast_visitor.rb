@@ -4,7 +4,7 @@ require "prism"
 require_relative "variable_index"
 
 module RubyLsp
-  module Guesser
+  module TypeGuessr
     # AST visitor for collecting variable definitions and method calls
     # Tracks local variables, parameters, and their method call patterns
     # Maintains scope awareness for accurate type inference
