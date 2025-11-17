@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "prism"
+require_relative "scope_resolver"
 require_relative "variable_index"
 
 module RubyLsp
