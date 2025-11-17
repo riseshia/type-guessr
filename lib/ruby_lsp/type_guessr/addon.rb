@@ -2,12 +2,7 @@
 
 require "ruby_lsp/addon"
 require "prism"
-require_relative "version"
 require_relative "hover"
-require_relative "variable_index"
-require_relative "ast_visitor"
-require_relative "rbs_signature_indexer"
-require_relative "method_signature_index"
 
 module RubyLsp
   module TypeGuessr
@@ -19,11 +14,11 @@ module RubyLsp
       end
 
       def version
-        VERSION
+        ::TypeGuessr::VERSION
       end
 
       def activate(global_state, _message_queue)
-        warn("[TypeGuessr] Activating TypeGuessr LSP addon #{VERSION}.")
+        warn("[TypeGuessr] Activating TypeGuessr LSP addon #{::TypeGuessr::VERSION}.")
 
         @global_state = global_state
 
@@ -92,7 +87,7 @@ module RubyLsp
       def start_rbs_indexing
         Thread.new do
           warn("[TypeGuessr] Starting RBS signature indexing.")
-          indexer = RBSSignatureIndexer.new
+          indexer = ::TypeGuessr::Core::RBSIndexer.new
 
           # Index Ruby core library
           warn("[TypeGuessr] Indexing Ruby core library signatures...")
@@ -102,7 +97,7 @@ module RubyLsp
           warn("[TypeGuessr] Indexing project RBS signatures...")
           indexer.index_project_rbs
 
-          total_signatures = MethodSignatureIndex.instance.size
+          total_signatures = ::TypeGuessr::Core::MethodSignatureIndex.instance.size
           warn("[TypeGuessr] RBS indexing completed. Total signatures: #{total_signatures}")
         rescue StandardError => e
           warn("[TypeGuessr] Error during RBS indexing: #{e.message}")
@@ -178,7 +173,7 @@ module RubyLsp
         result = Prism.parse(source)
 
         # Use a visitor to traverse the AST
-        visitor = ASTVisitor.new(file_path)
+        visitor = ::TypeGuessr::Core::ASTAnalyzer.new(file_path)
         result.value.accept(visitor)
       rescue StandardError => e
         warn("[TypeGuessr] Error parsing #{uri}: #{e.message}")
@@ -195,7 +190,7 @@ module RubyLsp
         source = File.read(file_path)
         result = Prism.parse(source)
 
-        visitor = ASTVisitor.new(file_path)
+        visitor = ::TypeGuessr::Core::ASTAnalyzer.new(file_path)
         result.value.accept(visitor)
 
         warn("[TypeGuessr] Re-indexed file: #{file_path}")
@@ -205,7 +200,7 @@ module RubyLsp
 
       # Clear all index entries for a specific file
       def clear_file_index(file_path)
-        VariableIndex.instance.clear_file(file_path)
+        ::TypeGuessr::Core::VariableIndex.instance.clear_file(file_path)
         warn("[TypeGuessr] Cleared index for file: #{file_path}")
       rescue StandardError => e
         warn("[TypeGuessr] Error clearing index for #{file_path}: #{e.message}")

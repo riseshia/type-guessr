@@ -1,17 +1,40 @@
 # frozen_string_literal: true
 
-require_relative "ruby_lsp/type_guessr/version"
-require_relative "ruby_lsp/type_guessr/scope_resolver"
-require_relative "ruby_lsp/type_guessr/parameter"
-require_relative "ruby_lsp/type_guessr/method_signature"
-require_relative "ruby_lsp/type_guessr/method_signature_index"
-require_relative "ruby_lsp/type_guessr/rbs_signature_indexer"
+# Main module for TypeGuessr
+module TypeGuessr
+  class Error < StandardError; end
+end
+
+# Load core components
+require_relative "type_guessr/version"
+require_relative "type_guessr/core/scope_resolver"
+require_relative "type_guessr/core/models/parameter"
+require_relative "type_guessr/core/models/method_signature"
+require_relative "type_guessr/core/method_signature_index"
+require_relative "type_guessr/core/rbs_indexer"
+require_relative "type_guessr/core/variable_index"
+require_relative "type_guessr/core/ast_analyzer"
+
+# Load Ruby LSP integration
 require_relative "ruby_lsp/type_guessr/type_matcher"
 require_relative "ruby_lsp/type_guessr/hover"
 require_relative "ruby_lsp/type_guessr/addon"
 
+# Backward compatibility: Create aliases in old namespace
 module RubyLsp
   module TypeGuessr
-    class Error < StandardError; end
+    # Version
+    VERSION = ::TypeGuessr::VERSION
+
+    # Core models
+    Parameter = ::TypeGuessr::Core::Parameter
+    MethodSignature = ::TypeGuessr::Core::MethodSignature
+
+    # Core components
+    ScopeResolver = ::TypeGuessr::Core::ScopeResolver
+    MethodSignatureIndex = ::TypeGuessr::Core::MethodSignatureIndex
+    VariableIndex = ::TypeGuessr::Core::VariableIndex
+    RBSSignatureIndexer = ::TypeGuessr::Core::RBSIndexer
+    ASTVisitor = ::TypeGuessr::Core::ASTAnalyzer
   end
 end

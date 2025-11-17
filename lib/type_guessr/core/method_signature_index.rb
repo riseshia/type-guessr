@@ -1,11 +1,11 @@
 # frozen_string_literal: true
 
 require "singleton"
-require_relative "method_signature"
-require_relative "parameter"
+require_relative "models/method_signature"
+require_relative "models/parameter"
 
-module RubyLsp
-  module TypeGuessr
+module TypeGuessr
+  module Core
     # Thread-safe singleton index to store method signatures from RBS
     # Structure:
     # {

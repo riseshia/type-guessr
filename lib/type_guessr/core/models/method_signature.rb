@@ -2,8 +2,8 @@
 
 require_relative "parameter"
 
-module RubyLsp
-  module TypeGuessr
+module TypeGuessr
+  module Core
     # Represents a method signature with parameters and return type
     class MethodSignature
       attr_reader :params, :return_type
