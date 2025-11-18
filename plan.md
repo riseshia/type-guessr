@@ -96,9 +96,9 @@ Refactor the gem architecture to separate core type inference functionality from
   - [x] Use `TypeGuessr::Core::ASTAnalyzer`
 
 ### Phase 3: Create Main TypeGuessr API and Facade
-- [ ] Create main module API
-  - [ ] Add `TypeGuessr.analyze_file(file_path)` method
-  - [ ] Add `TypeGuessr.create_project(root_path)` method
+- [x] Create main module API
+  - [x] Add `TypeGuessr.analyze_file(file_path)` method
+  - [x] Add `TypeGuessr.create_project(root_path)` method
 
 - [ ] Create Project class
   - [ ] `lib/type_guessr/project.rb`
