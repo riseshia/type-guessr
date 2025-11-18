@@ -61,9 +61,9 @@ module TypeGuessr
       # @param hover_line [Integer] the hover line number
       # @param scope_type [Symbol] the scope type
       # @param scope_id [String] the scope identifier
-      # @param file_path [String, nil] optional file path
+      # @param _file_path [String, nil] optional file path (reserved for future use)
       # @return [String, nil] the inferred type or nil
-      def get_direct_type(variable_name:, hover_line:, scope_type:, scope_id:, file_path: nil)
+      def get_direct_type(variable_name:, hover_line:, scope_type:, scope_id:, _file_path: nil)
         # First, try to find definitions from method call index
         definitions = @index.find_definitions(
           var_name: variable_name,
@@ -127,9 +127,9 @@ module TypeGuessr
       # @param hover_line [Integer] the hover line number
       # @param scope_type [Symbol] the scope type
       # @param scope_id [String] the scope identifier
-      # @param file_path [String, nil] optional file path
+      # @param _file_path [String, nil] optional file path (reserved for future use)
       # @return [Array<String>] array of method names
-      def collect_method_calls(variable_name:, hover_line:, scope_type:, scope_id:, file_path: nil)
+      def collect_method_calls(variable_name:, hover_line:, scope_type:, scope_id:, _file_path: nil)
         # Try to find definitions matching the exact scope
         definitions = @index.find_definitions(
           var_name: variable_name,
