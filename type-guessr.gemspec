@@ -1,10 +1,10 @@
 # frozen_string_literal: true
 
-require_relative "lib/ruby_lsp/type_guessr/version"
+require_relative "lib/type_guessr/version"
 
 Gem::Specification.new do |spec|
   spec.name = "type-guessr"
-  spec.version = RubyLsp::TypeGuessr::VERSION
+  spec.version = TypeGuessr::VERSION
   spec.authors = ["riseshia"]
   spec.email = [""]
 

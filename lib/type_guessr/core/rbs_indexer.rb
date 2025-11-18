@@ -1,11 +1,12 @@
 # frozen_string_literal: true
 
 require "rbs"
+require_relative "method_signature_index"
 
-module RubyLsp
-  module TypeGuessr
+module TypeGuessr
+  module Core
     # Parses RBS files to extract method signature information
-    class RBSSignatureIndexer
+    class RBSIndexer
       def initialize(index = MethodSignatureIndex.instance)
         @index = index
       end
@@ -18,7 +19,7 @@ module RubyLsp
           process_declarations(declarations)
         end
       rescue StandardError => e
-        warn("[RubyLspGuesser] Error indexing RBS core: #{e.message}")
+        warn("[TypeGuessr] Error indexing RBS core: #{e.message}")
       end
 
       # Index project's RBS files from sig/ directory
@@ -32,7 +33,7 @@ module RubyLsp
           process_declarations(declarations)
         end
       rescue StandardError => e
-        warn("[RubyLspGuesser] Error indexing project RBS: #{e.message}")
+        warn("[TypeGuessr] Error indexing project RBS: #{e.message}")
       end
 
       private

@@ -1,9 +1,14 @@
 # frozen_string_literal: true
 
 require "prism"
-require_relative "scope_resolver"
-require_relative "variable_index"
 require_relative "type_matcher"
+
+# Explicitly require core dependencies to ensure they're loaded
+# even when this file is loaded independently (e.g., by Ruby LSP)
+# Load version first to ensure TypeGuessr module exists
+require_relative "../../type_guessr/version" unless defined?(TypeGuessr::VERSION)
+require_relative "../../type_guessr/core/variable_index"
+require_relative "../../type_guessr/core/scope_resolver"
 
 module RubyLsp
   module TypeGuessr
@@ -13,7 +18,7 @@ module RubyLsp
       def initialize(node_context, global_state = nil)
         @node_context = node_context
         @global_state = global_state
-        @index = VariableIndex.instance
+        @index = ::TypeGuessr::Core::VariableIndex.instance
       end
 
       # Resolve type information for a variable node
@@ -207,7 +212,7 @@ module RubyLsp
       # @param var_name [String] the variable name
       # @return [Symbol] the scope type
       def determine_scope_type(var_name)
-        ScopeResolver.determine_scope_type(var_name)
+        ::TypeGuessr::Core::ScopeResolver.determine_scope_type(var_name)
       end
 
       # Generate scope ID from node context
@@ -223,7 +228,7 @@ module RubyLsp
         # Try to find enclosing method name for local variables
         method_name = scope_type == :local_variables ? @node_context.call_node&.name&.to_s : nil
 
-        ScopeResolver.generate_scope_id(
+        ::TypeGuessr::Core::ScopeResolver.generate_scope_id(
           scope_type,
           class_path: class_path,
           method_name: method_name

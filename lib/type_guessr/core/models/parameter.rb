@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
-module RubyLsp
-  module TypeGuessr
+module TypeGuessr
+  module Core
     # Represents a method parameter with type information
     class Parameter
       attr_reader :name, :type, :kind, :required

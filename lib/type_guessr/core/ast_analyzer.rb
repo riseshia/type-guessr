@@ -4,12 +4,12 @@ require "prism"
 require_relative "scope_resolver"
 require_relative "variable_index"
 
-module RubyLsp
-  module TypeGuessr
-    # AST visitor for collecting variable definitions and method calls
+module TypeGuessr
+  module Core
+    # AST analyzer for collecting variable definitions and method calls
     # Tracks local variables, parameters, and their method call patterns
     # Maintains scope awareness for accurate type inference
-    class ASTVisitor < ::Prism::Visitor
+    class ASTAnalyzer < ::Prism::Visitor
       def initialize(file_path)
         super()
         @file_path = file_path

@@ -2,8 +2,8 @@
 
 require "singleton"
 
-module RubyLsp
-  module TypeGuessr
+module TypeGuessr
+  module Core
     # Thread-safe singleton index to store variable definitions and their method calls
     # Organized by scope type (instance/local/class variables) and scope ID
     # Structure:

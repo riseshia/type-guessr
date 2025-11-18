@@ -1,9 +1,9 @@
 # frozen_string_literal: true
 
-module RubyLsp
-  module TypeGuessr
+module TypeGuessr
+  module Core
     # Provides common scope resolution logic for determining scope types and IDs
-    # Used by both ASTVisitor and Hover to maintain consistency
+    # Used by both ASTAnalyzer and type resolution to maintain consistency
     module ScopeResolver
       # Determine the scope type based on variable name
       # @param var_name [String] the variable name
