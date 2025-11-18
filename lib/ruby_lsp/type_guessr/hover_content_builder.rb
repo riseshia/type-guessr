@@ -24,9 +24,7 @@ module RubyLsp
         # Priority 2: Try to infer type if we have method calls and matching types
         unless matching_types.empty?
           # Debug logging for method calls
-          if debug_mode? && !method_calls.empty?
-            warn("[RubyLspGuesser] Variable '#{variable_name}' method calls: #{method_calls.inspect}")
-          end
+          warn("[RubyLspGuesser] Variable '#{variable_name}' method calls: #{method_calls.inspect}") if debug_mode? && !method_calls.empty?
 
           return format_inferred_types(matching_types)
         end
