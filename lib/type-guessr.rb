@@ -19,9 +19,11 @@ require_relative "type_guessr/core/type_resolver"
 
 # Load Ruby LSP integration
 require_relative "type_guessr/integrations/ruby_lsp/index_adapter"
-require_relative "ruby_lsp/type_guessr/type_matcher"
-require_relative "ruby_lsp/type_guessr/hover"
-require_relative "ruby_lsp/type_guessr/addon"
+require_relative "type_guessr/integrations/ruby_lsp/type_matcher"
+require_relative "type_guessr/integrations/ruby_lsp/variable_type_resolver"
+require_relative "type_guessr/integrations/ruby_lsp/hover_content_builder"
+require_relative "type_guessr/integrations/ruby_lsp/hover_provider"
+require_relative "type_guessr/integrations/ruby_lsp/addon"
 
 # Backward compatibility: Create aliases in old namespace
 module RubyLsp
@@ -39,5 +41,13 @@ module RubyLsp
     VariableIndex = ::TypeGuessr::Core::VariableIndex
     RBSSignatureIndexer = ::TypeGuessr::Core::RBSIndexer
     ASTVisitor = ::TypeGuessr::Core::ASTAnalyzer
+
+    # Integration components (for backward compatibility)
+    RubyIndexAdapter = ::TypeGuessr::Integrations::RubyLsp::IndexAdapter
+    TypeMatcher = ::TypeGuessr::Integrations::RubyLsp::TypeMatcher
+    VariableTypeResolver = ::TypeGuessr::Integrations::RubyLsp::VariableTypeResolver
+    HoverContentBuilder = ::TypeGuessr::Integrations::RubyLsp::HoverContentBuilder
+    Hover = ::TypeGuessr::Integrations::RubyLsp::HoverProvider
+    Addon = ::TypeGuessr::Integrations::RubyLsp::Addon
   end
 end

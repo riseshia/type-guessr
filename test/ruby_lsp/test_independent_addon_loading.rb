@@ -16,10 +16,10 @@ module RubyLsp
         # If the addon doesn't have explicit requires for its core dependencies,
         # this will raise NameError: uninitialized constant
 
-        require "ruby_lsp/type_guessr/addon"
+        require "type_guessr/integrations/ruby_lsp/addon"
 
-        # Verify the addon class is defined
-        assert defined?(RubyLsp::TypeGuessr::Addon), "Addon class should be defined"
+        # Verify the addon class is defined in new namespace
+        assert defined?(::TypeGuessr::Integrations::RubyLsp::Addon), "Addon class should be defined in new namespace"
 
         # Verify core dependencies are accessible
         assert defined?(::TypeGuessr::Core::ASTAnalyzer), "ASTAnalyzer should be loaded"
@@ -29,10 +29,10 @@ module RubyLsp
 
       def test_variable_type_resolver_can_load_independently
         # Same for VariableTypeResolver
-        require "ruby_lsp/type_guessr/variable_type_resolver"
+        require "type_guessr/integrations/ruby_lsp/variable_type_resolver"
 
-        assert defined?(RubyLsp::TypeGuessr::VariableTypeResolver),
-               "VariableTypeResolver should be defined"
+        assert defined?(::TypeGuessr::Integrations::RubyLsp::VariableTypeResolver),
+               "VariableTypeResolver should be defined in new namespace"
 
         # Verify it can access core dependencies
         assert defined?(::TypeGuessr::Core::VariableIndex), "VariableIndex should be loaded"
@@ -40,10 +40,11 @@ module RubyLsp
       end
 
       def test_hover_can_load_independently
-        # And for Hover
-        require "ruby_lsp/type_guessr/hover"
+        # And for HoverProvider
+        require "type_guessr/integrations/ruby_lsp/hover_provider"
 
-        assert defined?(RubyLsp::TypeGuessr::Hover), "Hover class should be defined"
+        assert defined?(::TypeGuessr::Integrations::RubyLsp::HoverProvider),
+               "HoverProvider class should be defined in new namespace"
       end
     end
   end
