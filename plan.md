@@ -69,11 +69,11 @@ Refactor the gem architecture to separate core type inference functionality from
     - [x] LSP adapter → `integrations/ruby_lsp/index_adapter.rb`
   - [x] Change namespace: `RubyLsp::TypeGuessr::TypeMatcher` → `TypeGuessr::Core::TypeMatcher`
 
-- [ ] Refactor VariableTypeResolver
-  - [ ] Core logic → `core/type_resolver.rb`
-  - [ ] Remove LSP dependencies (node_context)
-  - [ ] Change to pure functional interface
-  - [ ] Change namespace: `RubyLsp::TypeGuessr::TypeResolver` → `TypeGuessr::Core::TypeResolver`
+- [x] Refactor VariableTypeResolver
+  - [x] Core logic → `core/type_resolver.rb`
+  - [x] Remove LSP dependencies (node_context)
+  - [x] Change to pure functional interface
+  - [x] Change namespace: `RubyLsp::TypeGuessr::TypeResolver` → `TypeGuessr::Core::TypeResolver`
 
 - [ ] Move LSP integration components
   - [ ] `addon.rb` → `integrations/ruby_lsp/addon.rb`
