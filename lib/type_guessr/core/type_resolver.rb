@@ -25,7 +25,7 @@ module TypeGuessr
           hover_line: hover_line,
           scope_type: scope_type,
           scope_id: scope_id,
-          file_path: file_path
+          _file_path: file_path
         )
 
         method_calls = collect_method_calls(
@@ -33,7 +33,7 @@ module TypeGuessr
           hover_line: hover_line,
           scope_type: scope_type,
           scope_id: scope_id,
-          file_path: file_path
+          _file_path: file_path
         )
 
         {
