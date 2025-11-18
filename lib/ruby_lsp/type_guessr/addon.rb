@@ -4,6 +4,13 @@ require "ruby_lsp/addon"
 require "prism"
 require_relative "hover"
 
+# Explicitly require core dependencies used by this addon
+require_relative "../../type_guessr/version" unless defined?(TypeGuessr::VERSION)
+require_relative "../../type_guessr/core/ast_analyzer"
+require_relative "../../type_guessr/core/rbs_indexer"
+require_relative "../../type_guessr/core/variable_index"
+require_relative "../../type_guessr/core/method_signature_index"
+
 module RubyLsp
   module TypeGuessr
     # Ruby LSP addon for TypeGuessr
