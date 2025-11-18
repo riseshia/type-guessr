@@ -75,21 +75,25 @@ Refactor the gem architecture to separate core type inference functionality from
   - [x] Change to pure functional interface
   - [x] Change namespace: `RubyLsp::TypeGuessr::TypeResolver` → `TypeGuessr::Core::TypeResolver`
 
-- [ ] Move LSP integration components
-  - [ ] `addon.rb` → `integrations/ruby_lsp/addon.rb`
+- [x] Move LSP integration components
+  - [x] `addon.rb` → `integrations/ruby_lsp/addon.rb`
     - Change namespace: `RubyLsp::TypeGuessr::Addon` → `TypeGuessr::Integrations::RubyLsp::Addon`
     - Update to use core API
-  - [ ] `hover.rb` → `integrations/ruby_lsp/hover_provider.rb`
+  - [x] `hover.rb` → `integrations/ruby_lsp/hover_provider.rb`
     - Rename: `Hover` → `HoverProvider`
     - Change namespace: `RubyLsp::TypeGuessr::HoverProvider` → `TypeGuessr::Integrations::RubyLsp::HoverProvider`
-  - [ ] `hover_content_builder.rb` → `integrations/ruby_lsp/hover_content_builder.rb`
+  - [x] `hover_content_builder.rb` → `integrations/ruby_lsp/hover_content_builder.rb`
     - Change namespace: `RubyLsp::TypeGuessr::HoverContentBuilder` → `TypeGuessr::Integrations::RubyLsp::HoverContentBuilder`
-  - [ ] `ruby_index_adapter.rb` → `integrations/ruby_lsp/index_adapter.rb`
+  - [x] `ruby_index_adapter.rb` → `integrations/ruby_lsp/index_adapter.rb`
     - Change namespace: `RubyLsp::TypeGuessr::RubyIndexAdapter` → `TypeGuessr::Integrations::RubyLsp::IndexAdapter`
+  - [x] `variable_type_resolver.rb` → `integrations/ruby_lsp/variable_type_resolver.rb`
+    - Change namespace: `RubyLsp::TypeGuessr::VariableTypeResolver` → `TypeGuessr::Integrations::RubyLsp::VariableTypeResolver`
+  - [x] `type_matcher.rb` → `integrations/ruby_lsp/type_matcher.rb` (wrapper)
+    - Change namespace: `RubyLsp::TypeGuessr::TypeMatcher` → `TypeGuessr::Integrations::RubyLsp::TypeMatcher`
 
-- [ ] Update Addon to use core API
-  - [ ] Use `TypeGuessr::Core::RBSIndexer`
-  - [ ] Use `TypeGuessr::Core::ASTAnalyzer`
+- [x] Update Addon to use core API
+  - [x] Use `TypeGuessr::Core::RBSIndexer`
+  - [x] Use `TypeGuessr::Core::ASTAnalyzer`
 
 ### Phase 3: Create Main TypeGuessr API and Facade
 - [ ] Create main module API

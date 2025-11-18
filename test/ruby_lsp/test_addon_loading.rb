@@ -18,7 +18,7 @@ module RubyLsp
       def test_variable_type_resolver_has_explicit_requires
         # VariableTypeResolver should explicitly require or reference
         # its dependencies using absolute paths
-        resolver_file = File.read("lib/ruby_lsp/type_guessr/variable_type_resolver.rb")
+        resolver_file = File.read("lib/type_guessr/integrations/ruby_lsp/variable_type_resolver.rb")
 
         # Check that it uses absolute paths for core references
         assert_match(/::TypeGuessr::Core::TypeResolver/, resolver_file,
@@ -28,12 +28,12 @@ module RubyLsp
       end
 
       def test_hover_has_explicit_requires
-        # Hover should have explicit requires for its dependencies
-        hover_file = File.read("lib/ruby_lsp/type_guessr/hover.rb")
+        # HoverProvider should have explicit requires for its dependencies
+        hover_file = File.read("lib/type_guessr/integrations/ruby_lsp/hover_provider.rb")
 
         # Check that it requires variable_type_resolver
         assert_match(/require_relative.*variable_type_resolver/, hover_file,
-                     "Hover should explicitly require VariableTypeResolver")
+                     "HoverProvider should explicitly require VariableTypeResolver")
       end
     end
   end
