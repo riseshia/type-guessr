@@ -14,8 +14,10 @@ require_relative "type_guessr/core/method_signature_index"
 require_relative "type_guessr/core/rbs_indexer"
 require_relative "type_guessr/core/variable_index"
 require_relative "type_guessr/core/ast_analyzer"
+require_relative "type_guessr/core/type_matcher"
 
 # Load Ruby LSP integration
+require_relative "type_guessr/integrations/ruby_lsp/index_adapter"
 require_relative "ruby_lsp/type_guessr/type_matcher"
 require_relative "ruby_lsp/type_guessr/hover"
 require_relative "ruby_lsp/type_guessr/addon"
