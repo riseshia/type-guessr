@@ -27,53 +27,53 @@ Refactor the gem architecture to separate core type inference functionality from
 ## Tasks
 
 ### Phase 1: Create Core Module Structure and Move Independent Components
-- [ ] Create directory structure
-  - [ ] `lib/type_guessr/core/`
-  - [ ] `lib/type_guessr/core/models/`
-  - [ ] `lib/type_guessr/integrations/ruby_lsp/`
+- [x] Create directory structure
+  - [x] `lib/type_guessr/core/`
+  - [x] `lib/type_guessr/core/models/`
+  - [x] `lib/type_guessr/integrations/ruby_lsp/`
 
-- [ ] Move data models (no dependencies)
-  - [ ] `parameter.rb` → `core/models/parameter.rb`
+- [x] Move data models (no dependencies)
+  - [x] `parameter.rb` → `core/models/parameter.rb`
     - Change namespace: `RubyLsp::TypeGuessr::Parameter` → `TypeGuessr::Core::Parameter`
-  - [ ] `method_signature.rb` → `core/models/method_signature.rb`
+  - [x] `method_signature.rb` → `core/models/method_signature.rb`
     - Change namespace: `RubyLsp::TypeGuessr::MethodSignature` → `TypeGuessr::Core::MethodSignature`
 
-- [ ] Move independent index components
-  - [ ] `method_signature_index.rb` → `core/method_signature_index.rb`
+- [x] Move independent index components
+  - [x] `method_signature_index.rb` → `core/method_signature_index.rb`
     - Change namespace: `RubyLsp::TypeGuessr::MethodSignatureIndex` → `TypeGuessr::Core::MethodSignatureIndex`
     - Update MethodSignature references
-  - [ ] `variable_index.rb` → `core/variable_index.rb`
+  - [x] `variable_index.rb` → `core/variable_index.rb`
     - Change namespace: `RubyLsp::TypeGuessr::VariableIndex` → `TypeGuessr::Core::VariableIndex`
-  - [ ] `scope_resolver.rb` → `core/scope_resolver.rb`
+  - [x] `scope_resolver.rb` → `core/scope_resolver.rb`
     - Change namespace: `RubyLsp::TypeGuessr::ScopeResolver` → `TypeGuessr::Core::ScopeResolver`
 
-- [ ] Move RBS indexer
-  - [ ] `rbs_signature_indexer.rb` → `core/rbs_indexer.rb`
+- [x] Move RBS indexer
+  - [x] `rbs_signature_indexer.rb` → `core/rbs_indexer.rb`
     - Rename: `RBSSignatureIndexer` → `RBSIndexer`
     - Change namespace: `RubyLsp::TypeGuessr::RBSIndexer` → `TypeGuessr::Core::RBSIndexer`
     - Update MethodSignatureIndex references
 
-- [ ] Move AST analyzer
-  - [ ] `ast_visitor.rb` → `core/ast_analyzer.rb`
+- [x] Move AST analyzer
+  - [x] `ast_visitor.rb` → `core/ast_analyzer.rb`
     - Rename: `ASTVisitor` → `ASTAnalyzer` (more descriptive name)
     - Change namespace: `RubyLsp::TypeGuessr::ASTAnalyzer` → `TypeGuessr::Core::ASTAnalyzer`
     - Update VariableIndex, ScopeResolver references
 
-- [ ] Update main entry point
-  - [ ] Update `lib/type-guessr.rb` to load new structure
+- [x] Update main entry point
+  - [x] Update `lib/type-guessr.rb` to load new structure
 
 ### Phase 2: Separate Ruby LSP Integration Layer
-- [ ] Refactor TypeMatcher
-  - [ ] Split into two parts:
-    - [ ] Core logic → `core/type_matcher.rb` (interface-based, no LSP dependency)
-    - [ ] LSP adapter → `integrations/ruby_lsp/index_adapter.rb`
-  - [ ] Change namespace: `RubyLsp::TypeGuessr::TypeMatcher` → `TypeGuessr::Core::TypeMatcher`
+- [x] Refactor TypeMatcher
+  - [x] Split into two parts:
+    - [x] Core logic → `core/type_matcher.rb` (interface-based, no LSP dependency)
+    - [x] LSP adapter → `integrations/ruby_lsp/index_adapter.rb`
+  - [x] Change namespace: `RubyLsp::TypeGuessr::TypeMatcher` → `TypeGuessr::Core::TypeMatcher`
 
-- [ ] Refactor VariableTypeResolver
-  - [ ] Core logic → `core/type_resolver.rb`
-  - [ ] Remove LSP dependencies (node_context)
-  - [ ] Change to pure functional interface
-  - [ ] Change namespace: `RubyLsp::TypeGuessr::TypeResolver` → `TypeGuessr::Core::TypeResolver`
+- [x] Refactor VariableTypeResolver
+  - [x] Core logic → `core/type_resolver.rb`
+  - [x] Remove LSP dependencies (node_context)
+  - [x] Change to pure functional interface
+  - [x] Change namespace: `RubyLsp::TypeGuessr::TypeResolver` → `TypeGuessr::Core::TypeResolver`
 
 - [ ] Move LSP integration components
   - [ ] `addon.rb` → `integrations/ruby_lsp/addon.rb`

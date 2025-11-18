@@ -21,8 +21,8 @@ module RubyLsp
         resolver_file = File.read("lib/ruby_lsp/type_guessr/variable_type_resolver.rb")
 
         # Check that it uses absolute paths for core references
-        assert_match(/::TypeGuessr::Core::VariableIndex/, resolver_file,
-                     "VariableTypeResolver should use absolute path for VariableIndex")
+        assert_match(/::TypeGuessr::Core::TypeResolver/, resolver_file,
+                     "VariableTypeResolver should use absolute path for TypeResolver")
         assert_match(/::TypeGuessr::Core::ScopeResolver/, resolver_file,
                      "VariableTypeResolver should use absolute path for ScopeResolver")
       end
