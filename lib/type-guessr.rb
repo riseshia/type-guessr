@@ -1,12 +1,46 @@
 # frozen_string_literal: true
 
+require "prism"
+
 # Main module for TypeGuessr
 module TypeGuessr
   class Error < StandardError; end
+
+  # Analyze a single Ruby file and return type information
+  # @param file_path [String] Path to the Ruby file
+  # @return [FileAnalysisResult] Analysis result containing variable types
+  # @raise [Error] If file doesn't exist
+  def self.analyze_file(file_path)
+    raise Error, "File not found: #{file_path}" unless File.exist?(file_path)
+
+    source = File.read(file_path)
+    parsed_result = Prism.parse(source)
+
+    # Clear the singleton index for this file to ensure clean state
+    variable_index = Core::VariableIndex.instance
+    variable_index.clear_file(file_path)
+
+    ast_analyzer = Core::ASTAnalyzer.new(file_path)
+    ast_analyzer.visit(parsed_result.value)
+
+    FileAnalysisResult.new(file_path, variable_index)
+  end
+
+  # Create a project-wide type inference context
+  # @param root_path [String] Root directory of the project
+  # @return [Project] Project instance
+  # @raise [Error] If directory doesn't exist
+  def self.create_project(root_path)
+    raise Error, "Directory not found: #{root_path}" unless Dir.exist?(root_path)
+
+    Project.new(root_path)
+  end
 end
 
 # Load core components
 require_relative "type_guessr/version"
+require_relative "type_guessr/file_analysis_result"
+require_relative "type_guessr/project"
 require_relative "type_guessr/core/scope_resolver"
 require_relative "type_guessr/core/models/parameter"
 require_relative "type_guessr/core/models/method_signature"
