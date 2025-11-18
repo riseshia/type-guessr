@@ -15,6 +15,7 @@ require_relative "type_guessr/core/rbs_indexer"
 require_relative "type_guessr/core/variable_index"
 require_relative "type_guessr/core/ast_analyzer"
 require_relative "type_guessr/core/type_matcher"
+require_relative "type_guessr/core/type_resolver"
 
 # Load Ruby LSP integration
 require_relative "type_guessr/integrations/ruby_lsp/index_adapter"
