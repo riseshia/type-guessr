@@ -75,65 +75,86 @@ Refactor the gem architecture to separate core type inference functionality from
   - [x] Change to pure functional interface
   - [x] Change namespace: `RubyLsp::TypeGuessr::TypeResolver` → `TypeGuessr::Core::TypeResolver`
 
-- [ ] Move LSP integration components
+- [ ] Move LSP integration components (execute in file-by-file steps)
+  - [ ] Add temporary shims or requires so existing tests keep passing while files move
   - [ ] `addon.rb` → `integrations/ruby_lsp/addon.rb`
-    - Change namespace: `RubyLsp::TypeGuessr::Addon` → `TypeGuessr::Integrations::RubyLsp::Addon`
-    - Update to use core API
+    - [ ] Change namespace: `RubyLsp::TypeGuessr::Addon` → `TypeGuessr::Integrations::RubyLsp::Addon`
+    - [ ] Update to use core API and new namespaces for dependencies
+    - [ ] Adjust load paths/require statements
+    - [ ] Verify addon registration still matches Ruby LSP expectations
   - [ ] `hover.rb` → `integrations/ruby_lsp/hover_provider.rb`
-    - Rename: `Hover` → `HoverProvider`
-    - Change namespace: `RubyLsp::TypeGuessr::HoverProvider` → `TypeGuessr::Integrations::RubyLsp::HoverProvider`
+    - [ ] Rename class: `Hover` → `HoverProvider`
+    - [ ] Change namespace: `RubyLsp::TypeGuessr::HoverProvider` → `TypeGuessr::Integrations::RubyLsp::HoverProvider`
+    - [ ] Update listener registration to reference moved core types
+    - [ ] Ensure debug mode handling still wired through hover content builder
   - [ ] `hover_content_builder.rb` → `integrations/ruby_lsp/hover_content_builder.rb`
-    - Change namespace: `RubyLsp::TypeGuessr::HoverContentBuilder` → `TypeGuessr::Integrations::RubyLsp::HoverContentBuilder`
+    - [ ] Change namespace: `RubyLsp::TypeGuessr::HoverContentBuilder` → `TypeGuessr::Integrations::RubyLsp::HoverContentBuilder`
+    - [ ] Make sure any config/constants referenced from core are re-required correctly
   - [ ] `ruby_index_adapter.rb` → `integrations/ruby_lsp/index_adapter.rb`
-    - Change namespace: `RubyLsp::TypeGuessr::RubyIndexAdapter` → `TypeGuessr::Integrations::RubyLsp::IndexAdapter`
+    - [ ] Change namespace: `RubyLsp::TypeGuessr::RubyIndexAdapter` → `TypeGuessr::Integrations::RubyLsp::IndexAdapter`
+    - [ ] Wire adapter to `TypeGuessr::Core::TypeMatcher` and any core models
 
 - [ ] Update Addon to use core API
-  - [ ] Use `TypeGuessr::Core::RBSIndexer`
-  - [ ] Use `TypeGuessr::Core::ASTAnalyzer`
+  - [ ] Replace old module references with `TypeGuessr::Core::RBSIndexer`
+  - [ ] Replace AST traversal usage with `TypeGuessr::Core::ASTAnalyzer`
+  - [ ] Confirm addon requires load moved files before activation
+  - [ ] Smoke test hover functionality manually or with focused tests
 
 ### Phase 3: Create Main TypeGuessr API and Facade
-- [ ] Create main module API
+- [ ] Create main module API (public entry points)
   - [ ] Add `TypeGuessr.analyze_file(file_path)` method
+    - [ ] Accept optional config (RBS search paths, debug flag)
+    - [ ] Return structured result (e.g., inferred types + diagnostics)
   - [ ] Add `TypeGuessr.create_project(root_path)` method
+    - [ ] Cache project-level indexes for reuse across files
+    - [ ] Expose hooks for integrations (Ruby LSP addon)
 
 - [ ] Create Project class
-  - [ ] `lib/type_guessr/project.rb`
-  - [ ] Project-wide indexing management
-  - [ ] RBS indexing
-  - [ ] AST analysis
-  - [ ] Type inference API
+  - [ ] Add `lib/type_guessr/project.rb`
+  - [ ] Initialize and cache `Core::RBSIndexer` and `Core::ASTAnalyzer`
+  - [ ] Provide method to analyze a file using shared indexes
+  - [ ] Add configuration object/struct for toggles (debug, include paths)
+  - [ ] Ensure thread safety for LSP multi-request scenarios
 
 - [ ] Create FileAnalyzer
-  - [ ] `lib/type_guessr/core/file_analyzer.rb`
-  - [ ] Single file analysis functionality
-  - [ ] Can run independently
+  - [ ] Add `lib/type_guessr/core/file_analyzer.rb`
+  - [ ] Encapsulate single-file workflow: parse → analyze → infer types
+  - [ ] Accept injected dependencies (indexer, matcher) for testability
+  - [ ] Return data consumed by hover provider and CLI/other integrations
 
 ### Phase 4: Update Tests to Match New Structure
-- [ ] Separate core tests
+- [ ] Separate core tests (do in batches to keep git history clear)
   - [ ] Create `test/type_guessr/core/` directory
   - [ ] Move and update core component tests:
     - [ ] `test_type_matcher.rb` → `test/type_guessr/core/test_type_matcher.rb`
+      - [ ] Update namespaces and setup helpers
     - [ ] `test_variable_index.rb` → `test/type_guessr/core/test_variable_index.rb`
+      - [ ] Swap fixtures to new locations if needed
     - [ ] `test_scope_resolver.rb` → `test/type_guessr/core/test_scope_resolver.rb`
     - [ ] `test_method_signature.rb` → `test/type_guessr/core/test_method_signature.rb`
     - [ ] `test_method_signature_index.rb` → `test/type_guessr/core/test_method_signature_index.rb`
     - [ ] `test_parameter.rb` → `test/type_guessr/core/test_parameter.rb`
     - [ ] `test_rbs_signature_indexer.rb` → `test/type_guessr/core/test_rbs_indexer.rb`
     - [ ] `test_ast_visitor.rb` → `test/type_guessr/core/test_ast_analyzer.rb`
+  - [ ] Add coverage for new `Core::FileAnalyzer`
 
-- [ ] Separate integration tests
+- [ ] Separate integration tests (mirror integration layout)
   - [ ] Create `test/type_guessr/integrations/ruby_lsp/` directory
   - [ ] Move LSP-related tests:
     - [ ] `test_hover.rb` → `test/type_guessr/integrations/ruby_lsp/test_hover_provider.rb`
+      - [ ] Update fixtures/helpers to find moved core classes
     - [ ] `test_guesser.rb` → reorganize as integration test
+  - [ ] Add addon activation test to ensure registration loads moved files
 
 - [ ] Add new API tests
   - [ ] `test/test_type_guessr.rb`: main API tests
   - [ ] `test/type_guessr/test_project.rb`: Project class tests
+  - [ ] Consider smoke test for `TypeGuessr.analyze_file` on sample fixture
 
 - [ ] Run all tests and fix issues
   - [ ] `rake test`
   - [ ] Fix any failures
+  - [ ] Run targeted `ruby -Itest` commands when iterating on single files
 
 ### Phase 5: Update Documentation and Configuration
 - [ ] Update README.md
@@ -142,20 +163,22 @@ Refactor the gem architecture to separate core type inference functionality from
     - [ ] Using as core library
     - [ ] Using as Ruby LSP addon
   - [ ] Add architecture diagram
+  - [ ] Document new API methods and expected outputs
 
 - [ ] Update CLAUDE.md
   - [ ] Reflect new project structure
   - [ ] Explain responsibilities per layer
-  - [ ] Update development guidelines
+  - [ ] Update development guidelines (TDD flow with core + integrations)
 
 - [ ] Clean up configuration files
   - [ ] Rename `.ruby-lsp-guesser.yml.example` → `.type-guessr.yml.example`
   - [ ] Review RuboCop configuration
+  - [ ] Ensure bin/setup/bin/console references new constants/modules
 
 - [ ] Create CHANGELOG.md
   - [ ] Document v0.2.0 changes
   - [ ] Note breaking changes
-  - [ ] Provide migration guide
+  - [ ] Provide migration guide for users upgrading from RubyLsp::TypeGuessr
 
 ## Expected File Structure After Refactoring
 
