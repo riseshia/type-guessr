@@ -90,9 +90,9 @@ Refactor the gem architecture to separate core type inference functionality from
   - [x] `hover_content_builder.rb` → `integrations/ruby_lsp/hover_content_builder.rb`
     - [x] Change namespace: `RubyLsp::TypeGuessr::HoverContentBuilder` → `TypeGuessr::Integrations::RubyLsp::HoverContentBuilder`
     - [x] Make sure any config/constants referenced from core are re-required correctly
-  - [ ] `ruby_index_adapter.rb` → `integrations/ruby_lsp/index_adapter.rb`
-    - [ ] Change namespace: `RubyLsp::TypeGuessr::RubyIndexAdapter` → `TypeGuessr::Integrations::RubyLsp::IndexAdapter`
-    - [ ] Wire adapter to `TypeGuessr::Core::TypeMatcher` and any core models
+  - [x] `ruby_index_adapter.rb` → `integrations/ruby_lsp/index_adapter.rb`
+    - [x] Change namespace: `RubyLsp::TypeGuessr::RubyIndexAdapter` → `TypeGuessr::Integrations::RubyLsp::IndexAdapter`
+    - [x] Wire adapter to `TypeGuessr::Core::TypeMatcher` and any core models
 
 - [ ] Update Addon to use core API
   - [ ] Replace old module references with `TypeGuessr::Core::RBSIndexer`
