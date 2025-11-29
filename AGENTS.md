@@ -1,8 +1,8 @@
-# Ruby LSP Guesser - Project Context
+# TypeGuessr - Project Context
 
 ## Project Overview
 
-Ruby LSP Guesser is a Ruby LSP addon that provides **heuristic type inference** without requiring explicit type annotations. The goal is to achieve a "useful enough" development experience by prioritizing practical type hints over perfect accuracy.
+TypeGuessr is a Ruby LSP addon that provides **heuristic type inference** without requiring explicit type annotations. The goal is to achieve a "useful enough" development experience by prioritizing practical type hints over perfect accuracy.
 
 **Core Approach:**
 - Infers types from **method call patterns** (inspired by duck typing)
@@ -22,12 +22,12 @@ end                # infer recipe type as Recipe instance
 - **Type:** Ruby LSP Addon (Gem)
 - **Main Dependency:** ruby-lsp ~> 0.22
 - **Author:** riseshia
-- **Repository:** https://github.com/riseshia/ruby-lsp-guesser
+- **Repository:** https://github.com/riseshia/type-guessr
 
 ## Project Structure
 
 ```
-ruby-lsp-guesser/
+type-guessr/
 ├── .claude/
 │   └── commands/
 │       └── go.md                                # TDD cycle automation command
@@ -35,31 +35,43 @@ ruby-lsp-guesser/
 │   └── workflows/                               # GitHub Actions CI configuration
 ├── bin/
 │   ├── console
+│   ├── rake
+│   ├── rubocop
 │   └── setup
 ├── lib/
-│   ├── ruby-lsp-guesser.rb                      # Main entry point
-│   └── ruby_lsp/
-│       └── ruby_lsp_guesser/
-│           ├── addon.rb                         # LSP addon registration
-│           ├── ast_visitor.rb                   # AST traversal for method call tracking
-│           ├── hover.rb                         # Hover provider implementation
-│           ├── hover_content_builder.rb         # Hover content formatting and debug mode
-│           ├── method_signature.rb              # Method signature representation
-│           ├── method_signature_index.rb        # Index of method signatures from RBS
-│           ├── parameter.rb                     # Method parameter representation
-│           ├── rbs_signature_indexer.rb         # RBS file parser and indexer
-│           ├── ruby_index_adapter.rb            # Adapter for RubyIndexer access
-│           ├── scope_resolver.rb                # Scope type and ID resolution
-│           ├── type_matcher.rb                  # Type matching logic
-│           ├── variable_index.rb                # Variable type information storage
-│           ├── variable_type_resolver.rb        # Variable type inference logic
-│           └── version.rb                       # Version constant
+│   ├── type-guessr.rb                           # Main entry point
+│   ├── ruby_lsp/
+│   │   └── type_guessr/
+│   │       ├── addon.rb                         # LSP addon registration
+│   │       ├── hover.rb                         # Hover provider implementation
+│   │       ├── hover_content_builder.rb         # Hover content formatting
+│   │       ├── type_matcher.rb                  # Type matching (LSP integration wrapper)
+│   │       └── variable_type_resolver.rb        # Variable type inference logic
+│   └── type_guessr/
+│       ├── version.rb                           # Version constant
+│       ├── core/
+│       │   ├── ast_analyzer.rb                  # AST traversal for method call tracking
+│       │   ├── method_signature_index.rb        # Index of method signatures from RBS
+│       │   ├── rbs_indexer.rb                   # RBS file parser and indexer
+│       │   ├── scope_resolver.rb                # Scope type and ID resolution
+│       │   ├── type_matcher.rb                  # Core type matching logic
+│       │   ├── type_resolver.rb                 # Type resolution logic
+│       │   ├── variable_index.rb                # Variable type information storage
+│       │   └── models/
+│       │       ├── method_signature.rb          # Method signature representation
+│       │       └── parameter.rb                 # Method parameter representation
+│       └── integrations/
+│           └── ruby_lsp/
+│               ├── hover_content_builder.rb     # LSP-specific hover formatting
+│               └── index_adapter.rb             # Adapter for RubyIndexer access
 ├── test/
 │   ├── test_helper.rb
 │   └── ruby_lsp/
+│       ├── test_addon_loading.rb
 │       ├── test_ast_visitor.rb
 │       ├── test_guesser.rb
 │       ├── test_hover.rb
+│       ├── test_independent_addon_loading.rb
 │       ├── test_method_signature.rb
 │       ├── test_method_signature_index.rb
 │       ├── test_parameter.rb
@@ -68,96 +80,114 @@ ruby-lsp-guesser/
 │       ├── test_type_matcher.rb
 │       └── test_variable_index.rb
 ├── .rubocop.yml                                 # RuboCop configuration
-├── CLAUDE.md                                    # Project context for Claude
+├── AGENTS.md                                    # Project context for AI agents
 ├── Gemfile
+├── plan.md                                      # TDD implementation plan
 ├── Rakefile                                     # Rake tasks (test, rubocop)
 ├── README.md
-└── ruby-lsp-guesser.gemspec                     # Gem specification
+└── type-guessr.gemspec                          # Gem specification
 ```
 
 ## Core Components
 
-### 1. Addon (lib/ruby_lsp/ruby_lsp_guesser/addon.rb)
-- Registers the addon with Ruby LSP
-- Implements the Ruby LSP addon interface
-- Creates hover listeners via `create_hover_listener`
-- Initializes RBS signature indexing on activation
+### Architecture Overview
 
-### 2. Hover (lib/ruby_lsp/ruby_lsp_guesser/hover.rb)
-- **Purpose:** Provides type information on hover
-- Uses metaprogramming to dynamically create listener methods for all supported node types
-- Defines supported node types in HOVER_NODE_TYPES constant (14 types including variables, parameters, self)
-- Listens to AST node events for variables and constants
-- Delegates type resolution to VariableTypeResolver
-- Delegates content formatting to HoverContentBuilder
-- Returns formatted hover content with type information
+The project is organized into two main layers:
+- **Core (`TypeGuessr::Core`)**: Framework-agnostic type inference logic
+- **Integrations (`lib/ruby_lsp/type_guessr/`)**: Ruby LSP-specific adapter layer
 
-### 3. Hover Content Builder (lib/ruby_lsp/ruby_lsp_guesser/hover_content_builder.rb)
-- **Purpose:** Formats hover content from type information
-- Handles debug mode configuration (ENV variable or config file)
-- Formats inferred types, ambiguous types, and debug content
-- Separates presentation logic from type inference logic
+### Core Layer (`lib/type_guessr/core/`)
 
-### 4. Variable Type Resolver (lib/ruby_lsp/ruby_lsp_guesser/variable_type_resolver.rb)
-- **Purpose:** Resolves variable types by analyzing definitions and method calls
-- Extracts variable names from various node types (local, instance, class variables, parameters)
-- Retrieves direct types from literal assignments or `.new` calls
-- Collects method calls for variables using VariableIndex
-- Integrates with TypeMatcher for method-based type inference
-
-### 5. AST Visitor (lib/ruby_lsp/ruby_lsp_guesser/ast_visitor.rb)
+#### 1. AST Analyzer (`ast_analyzer.rb`)
 - **Purpose:** Traverses AST to collect method call patterns
-- Inherits from Prism::Visitor
+- Inherits from `Prism::Visitor`
 - Tracks method calls on variables throughout the document
 - Feeds data to VariableIndex for type inference
+- **Aliased as:** `RubyLsp::TypeGuessr::ASTVisitor`
 
-### 6. RBS Signature Indexer (lib/ruby_lsp/ruby_lsp_guesser/rbs_signature_indexer.rb)
-- **Purpose:** Parses and indexes RBS type definitions
-- Searches for RBS files in project and gem dependencies
-- Extracts method signatures from RBS definitions
-- Populates MethodSignatureIndex with type information
+#### 2. Scope Resolver (`scope_resolver.rb`)
+- **Purpose:** Provides common scope resolution logic
+- Determines scope type based on variable name (local/instance/class)
+- Generates scope IDs for different contexts (class, method, top-level)
+- Shared utility module used by ASTAnalyzer and VariableTypeResolver
 
-### 7. Method Signature Index (lib/ruby_lsp/ruby_lsp_guesser/method_signature_index.rb)
+#### 3. Variable Index (`variable_index.rb`)
+- **Purpose:** Stores inferred types for variables
+- Tracks variable assignments and method calls
+- Stores type information from literal assignments and `.new` calls
+- Provides public API for querying variable types and method calls
+
+#### 4. Method Signature Index (`method_signature_index.rb`)
 - **Purpose:** Central storage for method signatures
 - Maps class names to their method signatures
 - Enables reverse lookup: method name → possible classes
 - Used for method-based type inference
 
-### 8. Variable Index (lib/ruby_lsp/ruby_lsp_guesser/variable_index.rb)
-- **Purpose:** Stores inferred types for variables
-- Tracks variable assignments and method calls
-- Stores type information from literal assignments and `.new` calls
-- Provides public API for querying variable types and method calls
-- Encapsulates internal data structures for better maintainability
+#### 5. RBS Indexer (`rbs_indexer.rb`)
+- **Purpose:** Parses and indexes RBS type definitions
+- Searches for RBS files in project and gem dependencies
+- Extracts method signatures from RBS definitions
+- Populates MethodSignatureIndex with type information
+- **Aliased as:** `RubyLsp::TypeGuessr::RBSSignatureIndexer`
 
-### 9. Type Matcher (lib/ruby_lsp/ruby_lsp_guesser/type_matcher.rb)
-- **Purpose:** Matches method calls to type signatures
-- Compares observed method calls with Ruby LSP's index
+#### 6. Type Matcher (`type_matcher.rb`)
+- **Purpose:** Core type matching logic
+- Compares observed method calls with known type signatures
 - Determines compatible types based on available methods
-- Core of the heuristic type inference logic
+- Framework-agnostic implementation
 
-### 10. Ruby Index Adapter (lib/ruby_lsp/ruby_lsp_guesser/ruby_index_adapter.rb)
-- **Purpose:** Adapter for accessing RubyIndexer using public APIs
-- Provides stable interface isolating TypeMatcher from implementation details
-- Uses only public APIs (fuzzy_search, resolve_method) for better compatibility with ruby-lsp updates
-- Encapsulates access to Ruby LSP's index entries
-- Retrieves class/module entries and resolves methods
+#### 7. Type Resolver (`type_resolver.rb`)
+- **Purpose:** High-level type resolution coordination
+- Orchestrates AST analysis and type matching
+- Provides unified interface for type queries
 
-### 11. Scope Resolver (lib/ruby_lsp/ruby_lsp_guesser/scope_resolver.rb)
-- **Purpose:** Provides common scope resolution logic
-- Determines scope type based on variable name (local/instance/class)
-- Generates scope IDs for different contexts (class, method, top-level)
-- Shared utility module used by both ASTVisitor and VariableTypeResolver
+### Core Models (`lib/type_guessr/core/models/`)
 
-### 12. Method Signature (lib/ruby_lsp/ruby_lsp_guesser/method_signature.rb)
+#### 8. Method Signature (`method_signature.rb`)
 - **Purpose:** Represents a method's type signature
 - Stores method name, parameters, and return type
 - Extracted from RBS definitions
 
-### 13. Parameter (lib/ruby_lsp/ruby_lsp_guesser/parameter.rb)
+#### 9. Parameter (`parameter.rb`)
 - **Purpose:** Represents a method parameter
 - Stores parameter name, type, and metadata (required/optional, keyword/positional)
 - Used in method signature matching
+
+### Integration Layer (`lib/ruby_lsp/type_guessr/`)
+
+#### 10. Addon (`addon.rb`)
+- Registers the addon with Ruby LSP
+- Implements the Ruby LSP addon interface
+- Creates hover listeners via `create_hover_listener`
+- Initializes RBS signature indexing on activation
+
+#### 11. Hover (`hover.rb`)
+- **Purpose:** Provides type information on hover
+- Uses metaprogramming to dynamically create listener methods for supported node types
+- Defines supported node types in HOVER_NODE_TYPES constant
+- Delegates type resolution to VariableTypeResolver
+- Delegates content formatting to HoverContentBuilder
+
+#### 12. Hover Content Builder (`hover_content_builder.rb`)
+- **Purpose:** Formats hover content from type information
+- Handles debug mode configuration (ENV variable or config file)
+- Formats inferred types, ambiguous types, and debug content
+
+#### 13. Variable Type Resolver (`variable_type_resolver.rb`)
+- **Purpose:** Resolves variable types by analyzing definitions and method calls
+- Extracts variable names from various node types
+- Retrieves direct types from literal assignments or `.new` calls
+- Integrates with TypeMatcher for method-based type inference
+
+#### 14. Type Matcher (`type_matcher.rb`)
+- **Purpose:** Ruby LSP-specific type matching wrapper
+- Integrates core TypeMatcher with Ruby LSP's index
+- Uses IndexAdapter for accessing RubyIndexer
+
+#### 15. Index Adapter (`integrations/ruby_lsp/index_adapter.rb`)
+- **Purpose:** Adapter for accessing RubyIndexer using public APIs
+- Provides stable interface isolating from Ruby LSP implementation details
+- Uses only public APIs for better compatibility with ruby-lsp updates
 
 ## Development Workflow
 
@@ -248,8 +278,8 @@ This project follows strict Test-Driven Development (TDD) practices based on Ken
 4. **Testing:** Uses Minitest for testing
 
 5. **Naming:**
-   - Module: `RubyLsp::Guesser`
-   - Gem: `ruby-lsp-guesser`
+   - Module: `TypeGuessr` (core), `RubyLsp::TypeGuessr` (LSP integration)
+   - Gem: `type-guessr`
    - Files follow Ruby conventions (snake_case)
 
 ## Before Making Changes
@@ -323,14 +353,14 @@ This project follows strict Test-Driven Development (TDD) practices based on Ken
 ## Common Tasks
 
 ### Adding a New Hover Feature
-1. Edit `lib/ruby_lsp/ruby_lsp_guesser/hover.rb`
+1. Edit `lib/ruby_lsp/type_guessr/hover.rb`
 2. Add new node listener methods if needed
 3. Register new listeners in `register_listeners`
 4. Add tests in `test/ruby_lsp/test_hover.rb`
 5. Run `rake test` to verify
 
 ### Updating Dependencies
-1. Edit `ruby-lsp-guesser.gemspec`
+1. Edit `type-guessr.gemspec`
 2. Run `bundle install`
 3. Test thoroughly with `rake test`
 
