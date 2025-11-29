@@ -56,17 +56,21 @@ type-guessr/
 │           └── ruby_lsp/
 │               ├── hover_content_builder.rb     # LSP-specific hover formatting
 │               └── index_adapter.rb             # Adapter for RubyIndexer access
-├── test/
-│   ├── test_helper.rb
-│   └── ruby_lsp/
-│       ├── test_addon_loading.rb
-│       ├── test_ast_visitor.rb
-│       ├── test_guesser.rb
-│       ├── test_hover.rb
-│       ├── test_independent_addon_loading.rb
-│       ├── test_scope_resolver.rb
-│       ├── test_type_matcher.rb
-│       └── test_variable_index.rb
+├── spec/
+│   ├── spec_helper.rb
+│   ├── ruby_lsp/
+│   │   ├── addon_loading_spec.rb
+│   │   ├── ast_visitor_spec.rb
+│   │   ├── guesser_spec.rb
+│   │   ├── hover_spec.rb
+│   │   ├── independent_addon_loading_spec.rb
+│   │   ├── scope_resolver_spec.rb
+│   │   ├── type_matcher_spec.rb
+│   │   └── variable_index_spec.rb
+│   └── type_guessr/
+│       └── core/
+│           └── type_inferrer_spec.rb
+├── .rspec                                       # RSpec configuration
 ├── .rubocop.yml                                 # RuboCop configuration
 ├── AGENTS.md                                    # Project context for AI agents
 ├── Gemfile
@@ -161,9 +165,9 @@ bin/setup
 
 ### Running Tests
 ```bash
-rake test
+rake spec
 # or
-bundle exec rake test
+bundle exec rspec
 ```
 
 ### Running Linter
@@ -176,7 +180,7 @@ bundle exec rubocop
 ### Running All Checks (Default)
 ```bash
 rake
-# Runs both tests and rubocop
+# Runs both spec and rubocop
 ```
 
 ### Installing Locally
@@ -224,7 +228,7 @@ This project follows strict Test-Driven Development (TDD) practices based on Ken
 
 3. **Code Style:** Follows RuboCop rules defined in `.rubocop.yml`
 
-4. **Testing:** Uses Minitest for testing
+4. **Testing:** Uses RSpec for testing
 
 5. **Naming:**
    - Module: `TypeGuessr` (core), `RubyLsp::TypeGuessr` (LSP integration)
@@ -238,7 +242,7 @@ This project follows strict Test-Driven Development (TDD) practices based on Ken
 1. **Read relevant files in parallel** - Use multiple Read tool calls together
 2. **Always run tests first:**
    ```bash
-   rake test
+   rake spec
    ```
 4. **Check RuboCop:**
    ```bash
@@ -257,7 +261,7 @@ This project follows strict Test-Driven Development (TDD) practices based on Ken
    ```
 2. **Run all tests** - Ensure nothing breaks
    ```bash
-   rake test
+   rake spec
    ```
 3. **Check for untracked files** - Add relevant new files
    ```bash

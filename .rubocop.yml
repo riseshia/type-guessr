@@ -1,3 +1,6 @@
+plugins:
+  - rubocop-rspec
+
 AllCops:
   TargetRubyVersion: 3.3
   NewCops: enable
@@ -23,3 +26,28 @@ Lint/DuplicateBranch:
 # Disable all Metrics cops
 Metrics:
   Enabled: false
+
+# RSpec cops configuration
+RSpec/ExampleLength:
+  Enabled: false
+
+RSpec/MultipleExpectations:
+  Enabled: false
+
+RSpec/NestedGroups:
+  Max: 4
+
+RSpec/DescribeClass:
+  Exclude:
+    - "spec/ruby_lsp/addon_loading_spec.rb"
+    - "spec/ruby_lsp/independent_addon_loading_spec.rb"
+
+RSpec/SpecFilePathFormat:
+  Enabled: false
+
+RSpec/ContextWording:
+  Prefixes:
+    - when
+    - with
+    - without
+    - for

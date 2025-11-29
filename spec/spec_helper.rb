@@ -8,10 +8,26 @@ require "uri"
 # Ensure TypeInferrer is loaded for tests
 require "type_guessr/core/type_inferrer"
 
-require "minitest/autorun"
-
 # Enable debug mode for tests
 ENV["TYPE_GUESSR_DEBUG"] = "1"
+
+RSpec.configure do |config|
+  # Enable flags like --only-failures and --next-failure
+  config.example_status_persistence_file_path = ".rspec_status"
+
+  # Disable RSpec exposing methods globally on `Module` and `main`
+  config.disable_monkey_patching!
+
+  config.expect_with :rspec do |c|
+    c.syntax = :expect
+  end
+
+  # Run specs in random order to surface order dependencies
+  config.order = :random
+
+  # Seed global randomization in this process using the `--seed` CLI option
+  Kernel.srand config.seed
+end
 
 # Test helper module for TypeGuessr addon tests
 module TypeGuessrTestHelper

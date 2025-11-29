@@ -9,6 +9,6 @@ gem "irb"
 gem "rake"
 
 gem "rubocop"
-gem "rubocop-minitest"
+gem "rubocop-rspec"
 
-gem "minitest"
+gem "rspec"
