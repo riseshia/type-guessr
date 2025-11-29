@@ -16,18 +16,6 @@
 
 ---
 
-### Improve IndexAdapter Performance
-- [ ] Consider caching `all_class_and_module_entries` result
-- [ ] Or use more targeted queries instead of iterating all entries
-
-**Context:**
-- Location: `lib/type_guessr/integrations/ruby_lsp/index_adapter.rb`
-- `all_class_and_module_entries` calls `@index.fuzzy_search(nil)` on every hover
-- May be slow on large projects
-- Currently relying on ruby-lsp's internal optimization
-
----
-
 ### Create Main TypeGuessr API
 - [ ] Add `TypeGuessr.analyze_file(file_path)` method
 - [ ] Add `TypeGuessr::Project` class for caching indexes
@@ -37,27 +25,3 @@
 - Goal: Make core library usable independently from Ruby LSP
 - Enables CLI tools, Rails integration, etc.
 - Blocked by: LSP integration layer cleanup
-
----
-
-### Update Tests Structure
-- [ ] Move core tests to `test/type_guessr/core/`
-- [ ] Move LSP tests to `test/type_guessr/integrations/ruby_lsp/`
-- [ ] Add API tests for main entry points
-
-**Context:**
-- Current: All tests in `test/ruby_lsp/`
-- Target: Mirror lib structure for better organization
-- Blocked by: Core/integration separation completion
-
----
-
-### Update Documentation
-- [ ] Update README.md with architecture diagram
-- [ ] Update AGENTS.md with new structure
-- [ ] Create CHANGELOG.md for v0.2.0
-
-**Context:**
-- Document dual usage: Ruby LSP addon + standalone library
-- Explain layer responsibilities
-- Migration guide for namespace changes
