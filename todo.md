@@ -4,16 +4,6 @@
 
 ---
 
-### Fix ClosedQueueError in Tests
-- [ ] Add guard in `log_message` to check if queue is closed before pushing
-
-**Context:**
-- Location: `lib/ruby_lsp/type_guessr/addon.rb` line 99
-- Error: `queue closed (ClosedQueueError)` when background threads (RBS indexing, AST traversal) try to log after test completion
-- Fix: Add `return if @message_queue.closed?` before pushing to queue
-
----
-
 ### Remove Unused MethodSignatureIndex
 - [ ] Verify MethodSignatureIndex is not used in type inference
 - [ ] Remove MethodSignatureIndex and related code

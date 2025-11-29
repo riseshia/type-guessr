@@ -95,6 +95,7 @@ module RubyLsp
       # Send a log message to the LSP client
       def log_message(message)
         return unless @message_queue
+        return if @message_queue.closed?
 
         @message_queue << RubyLsp::Notification.window_log_message(
           "[TypeGuessr] #{message}",
