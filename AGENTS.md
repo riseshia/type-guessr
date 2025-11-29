@@ -32,8 +32,6 @@ type-guessr/
 │   └── workflows/                               # GitHub Actions CI configuration
 ├── bin/
 │   ├── console
-│   ├── rake
-│   ├── rubocop
 │   └── setup
 ├── lib/
 │   ├── type-guessr.rb                           # Main entry point
@@ -75,7 +73,6 @@ type-guessr/
 ├── AGENTS.md                                    # Project context for AI agents
 ├── Gemfile
 ├── todo.md                                      # Task tracking and priorities
-├── Rakefile                                     # Rake tasks (test, rubocop)
 ├── README.md
 └── type-guessr.gemspec                          # Gem specification
 ```
@@ -165,27 +162,17 @@ bin/setup
 
 ### Running Tests
 ```bash
-rake spec
-# or
 bundle exec rspec
 ```
 
 ### Running Linter
 ```bash
-rake rubocop
-# or
 bundle exec rubocop
 ```
 
-### Running All Checks (Default)
+### Running All Checks
 ```bash
-rake
-# Runs both spec and rubocop
-```
-
-### Installing Locally
-```bash
-bundle exec rake install
+bundle exec rspec && bundle exec rubocop
 ```
 
 ### Console
@@ -242,26 +229,22 @@ This project follows strict Test-Driven Development (TDD) practices based on Ken
 1. **Read relevant files in parallel** - Use multiple Read tool calls together
 2. **Always run tests first:**
    ```bash
-   rake spec
+   bundle exec rspec
    ```
-4. **Check RuboCop:**
+3. **Check RuboCop:**
    ```bash
-   rake rubocop
-   ```
-5. **Run all checks:**
-   ```bash
-   rake
+   bundle exec rubocop
    ```
 
 **Pre-Commit Checklist:**
 
 1. **Run linter on changed files FIRST** - Fix violations before committing
    ```bash
-   bin/rubocop <changed_files>
+   bundle exec rubocop <changed_files>
    ```
 2. **Run all tests** - Ensure nothing breaks
    ```bash
-   rake spec
+   bundle exec rspec
    ```
 3. **Check for untracked files** - Add relevant new files
    ```bash
@@ -296,7 +279,7 @@ This project follows strict Test-Driven Development (TDD) practices based on Ken
 **CRITICAL:** Run linter BEFORE committing to avoid separate "fix linting" commits.
 
 **Workflow:**
-1. After editing any Ruby file, run: `bin/rubocop <file_path>`
+1. After editing any Ruby file, run: `bundle exec rubocop <file_path>`
 2. If violations found, fix them immediately
 3. Commit once with all changes together (code + linting fixes)
 
@@ -308,13 +291,13 @@ This project follows strict Test-Driven Development (TDD) practices based on Ken
 1. Edit `lib/ruby_lsp/type_guessr/hover.rb`
 2. Add new node listener methods if needed
 3. Register new listeners in `register_listeners`
-4. Add tests in `test/ruby_lsp/test_hover.rb`
-5. Run `rake test` to verify
+4. Add tests in `spec/ruby_lsp/hover_spec.rb`
+5. Run `bundle exec rspec` to verify
 
 ### Updating Dependencies
 1. Edit `type-guessr.gemspec`
 2. Run `bundle install`
-3. Test thoroughly with `rake test`
+3. Test thoroughly with `bundle exec rspec`
 
 ### Fixing Linting Issues
 ```bash
@@ -369,9 +352,9 @@ This collected data enables type guessing through:
 ### Development Process
 
 - **TDD is mandatory:** Follow Red-Green-Refactor cycle
-- **Linter-first:** Run `bin/rubocop` on changed files BEFORE committing
+- **Linter-first:** Run `bundle exec rubocop` on changed files BEFORE committing
 - **Atomic commits:** Group related changes (code + tests + linting) into single commits
-- **Test-driven:** Run `rake test` before and after making changes
+- **Test-driven:** Run `bundle exec rspec` before and after making changes
 - **AST traversal:** When working with Prism nodes, be careful with node types and methods
 
 ### TodoWrite Usage

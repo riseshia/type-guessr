@@ -1,9 +1,0 @@
-#!/usr/bin/env bash
-set -euo pipefail
-IFS=$'\n\t'
-
-# Ensure dependencies are installed
-bundle check || bundle install
-
-# Run rake with all arguments
-bundle exec rake "$@"
