@@ -46,7 +46,12 @@ module RubyLsp
           "**Inferred type:** `#{matching_types.first}`"
         else
           # Multiple matches - ambiguous
-          "**Ambiguous type** (could be: #{matching_types.map { |t| "`#{t}`" }.join(", ")})"
+          # Check if results were truncated (indicated by '...' marker)
+          truncated = matching_types.last == ::TypeGuessr::Core::TypeMatcher::TRUNCATED_MARKER
+          display_types = truncated ? matching_types[0...-1] : matching_types
+          type_list = display_types.map { |t| "`#{t}`" }.join(", ")
+          type_list += ", ..." if truncated
+          "**Ambiguous type** (could be: #{type_list})"
         end
       end
 

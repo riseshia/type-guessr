@@ -165,6 +165,67 @@ RSpec.describe RubyLsp::TypeGuessr::TypeMatcher do
         expect(matches.sort).to eq(%w[Cached Persisted])
       end
     end
+
+    context "when more than MAX_MATCHING_TYPES classes match" do
+      before do
+        source = <<~RUBY
+          class ClassA
+            def common_method; end
+          end
+
+          class ClassB
+            def common_method; end
+          end
+
+          class ClassC
+            def common_method; end
+          end
+
+          class ClassD
+            def common_method; end
+          end
+
+          class ClassE
+            def common_method; end
+          end
+        RUBY
+
+        index.index_single(URI::Generic.from_path(path: "/fake5.rb"), source)
+      end
+
+      it "truncates results and adds marker when more than 3 classes match" do
+        matches = matcher.find_matching_types(["common_method"])
+        # Should return exactly MAX_MATCHING_TYPES (3) classes plus the truncation marker
+        expect(matches.size).to eq(4)
+        expect(matches.last).to eq(TypeGuessr::Core::TypeMatcher::TRUNCATED_MARKER)
+        # The first 3 should be actual class names (order may vary)
+        expect(matches[0..2]).to all(match(/^Class[A-E]$/))
+      end
+
+      it "returns all results when exactly MAX_MATCHING_TYPES match" do
+        # Remove 2 classes to have exactly 3 matching
+        source = <<~RUBY
+          class ClassX
+            def exact_method; end
+          end
+
+          class ClassY
+            def exact_method; end
+          end
+
+          class ClassZ
+            def exact_method; end
+          end
+        RUBY
+
+        index.index_single(URI::Generic.from_path(path: "/fake6.rb"), source)
+
+        matches = matcher.find_matching_types(["exact_method"])
+        expect(matches.size).to eq(3)
+        expect(matches).not_to include(TypeGuessr::Core::TypeMatcher::TRUNCATED_MARKER)
+        expect(matches.sort).to eq(%w[ClassX ClassY ClassZ])
+      end
+    end
   end
 
   describe "finding methods in class" do

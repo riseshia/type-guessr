@@ -448,6 +448,76 @@ RSpec.describe RubyLsp::TypeGuessr::Hover do
       end
     end
 
+    context "when too many classes match (truncated ambiguous)" do
+      it "shows truncated type list with ellipsis" do
+        source = <<~RUBY
+          class ClassA
+            def common_method_for_truncation_test
+            end
+          end
+
+          class ClassB
+            def common_method_for_truncation_test
+            end
+          end
+
+          class ClassC
+            def common_method_for_truncation_test
+            end
+          end
+
+          class ClassD
+            def common_method_for_truncation_test
+            end
+          end
+
+          class ClassE
+            def common_method_for_truncation_test
+            end
+          end
+
+          def process(item)
+            item.common_method_for_truncation_test
+            item
+          end
+        RUBY
+
+        with_server_and_addon(source) do |server, uri|
+          index = RubyLsp::TypeGuessr::VariableIndex.instance
+          index.clear
+
+          index.add_method_call(
+            file_path: uri.to_s,
+            scope_type: :local_variables,
+            scope_id: "process",
+            var_name: "item",
+            def_line: 26,
+            def_column: 12,
+            method_name: "common_method_for_truncation_test",
+            call_line: 27,
+            call_column: 4
+          )
+
+          server.process_message(
+            id: 1,
+            method: "textDocument/hover",
+            params: { textDocument: { uri: uri }, position: { line: 25, character: 12 } }
+          )
+
+          result = pop_result(server)
+          response = result.response
+          content = response.contents.value
+
+          expect(content).to match(/Ambiguous type/)
+          # Should show only 3 classes plus ellipsis
+          expect(content).to match(/\.\.\./)
+          # Should have exactly 3 class names shown
+          class_count = content.scan(/`Class[A-E]`/).size
+          expect(class_count).to eq(3)
+        end
+      end
+    end
+
     context "when no type can be inferred" do
       it "shows method list" do
         source = <<~RUBY
