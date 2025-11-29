@@ -7,9 +7,7 @@ require_relative "hover"
 # Explicitly require core dependencies used by this addon
 require_relative "../../type_guessr/version" unless defined?(TypeGuessr::VERSION)
 require_relative "../../type_guessr/core/ast_analyzer"
-require_relative "../../type_guessr/core/rbs_indexer"
 require_relative "../../type_guessr/core/variable_index"
-require_relative "../../type_guessr/core/method_signature_index"
 
 module RubyLsp
   module TypeGuessr
@@ -52,9 +50,6 @@ module RubyLsp
         new_targets.each do |target|
           targets << target unless targets.include?(target)
         end
-
-        # Start background thread to index RBS signatures
-        start_rbs_indexing
 
         # Start background thread to traverse AST for indexed files
         start_ast_traversal(global_state)
@@ -101,27 +96,6 @@ module RubyLsp
           "[TypeGuessr] #{message}",
           type: RubyLsp::Constant::MessageType::LOG
         )
-      end
-
-      def start_rbs_indexing
-        Thread.new do
-          log_message("Starting RBS signature indexing.")
-          indexer = ::TypeGuessr::Core::RBSIndexer.new
-
-          # Index Ruby core library
-          log_message("Indexing Ruby core library signatures...")
-          indexer.index_ruby_core
-
-          # Index project RBS files from sig/ directory
-          log_message("Indexing project RBS signatures...")
-          indexer.index_project_rbs
-
-          total_signatures = ::TypeGuessr::Core::MethodSignatureIndex.instance.size
-          log_message("RBS indexing completed. Total signatures: #{total_signatures}")
-        rescue StandardError => e
-          log_message("Error during RBS indexing: #{e.message}")
-          log_message(e.backtrace.join("\n"))
-        end
       end
 
       def start_ast_traversal(global_state)

@@ -23,7 +23,6 @@ module RubyLsp
 
         # Verify core dependencies are accessible
         assert defined?(::TypeGuessr::Core::ASTAnalyzer), "ASTAnalyzer should be loaded"
-        assert defined?(::TypeGuessr::Core::RBSIndexer), "RBSIndexer should be loaded"
         assert defined?(::TypeGuessr::Core::VariableIndex), "VariableIndex should be loaded"
       end
 

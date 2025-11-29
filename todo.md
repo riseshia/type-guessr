@@ -4,26 +4,6 @@
 
 ---
 
-### Remove Unused MethodSignatureIndex
-- [ ] Verify MethodSignatureIndex is not used in type inference
-- [ ] Remove MethodSignatureIndex and related code
-- [ ] Update RBSIndexer (remove or repurpose)
-- [ ] Remove related tests
-- [ ] Update backward compatibility aliases
-
-**Context:**
-- `RBSIndexer` populates `MethodSignatureIndex` with RBS signatures
-- But `TypeMatcher.find_matching_types` uses `RubyIndexer` (via `IndexAdapter`) instead
-- Files to remove if confirmed unused:
-  - `lib/type_guessr/core/method_signature_index.rb`
-  - `lib/type_guessr/core/models/method_signature.rb`
-  - `lib/type_guessr/core/models/parameter.rb`
-  - `test/ruby_lsp/test_method_signature_index.rb`
-  - `test/ruby_lsp/test_method_signature.rb`
-  - `test/ruby_lsp/test_parameter.rb`
-
----
-
 ### Move LSP Integration Components
 - [ ] Move `addon.rb` → `integrations/ruby_lsp/addon.rb`
 - [ ] Move `hover.rb` → `integrations/ruby_lsp/hover_provider.rb`
