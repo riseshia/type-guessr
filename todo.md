@@ -4,16 +4,6 @@
 
 ---
 
-### Remove Write Nodes from HOVER_NODE_TYPES
-- [ ] Consider removing `local_variable_write`, `local_variable_target` etc.
-
-**Context:**
-- Location: `lib/ruby_lsp/type_guessr/hover.rb` line 14-30
-- Write nodes trigger hover but typically users want type info when reading, not writing
-- Not harmful, just unnecessary
-
----
-
 ### Unify Scope ID Generation
 - [ ] Investigate if `ASTAnalyzer` and `VariableTypeResolver` can produce mismatched scope IDs
 - [ ] Refactor both to use `ScopeResolver` consistently
