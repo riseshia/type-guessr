@@ -1,5 +1,6 @@
-require:
+plugins:
   - rubocop-rspec
+  - rubocop-rubycw
 
 AllCops:
   TargetRubyVersion: 3.3
