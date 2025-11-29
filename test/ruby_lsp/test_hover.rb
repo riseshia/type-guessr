@@ -6,7 +6,7 @@ require "ruby_lsp/internal"
 module RubyLsp
   module TypeGuessr
     class TestHover < Minitest::Test
-      include RubyLsp::TestHelper
+      include TypeGuessrTestHelper
 
       def test_hover_on_local_variable
         source = <<~RUBY
@@ -246,7 +246,7 @@ module RubyLsp
           end
         RUBY
 
-        with_server(source, stub_no_typechecker: true) do |server, uri|
+        with_server_and_addon(source) do |server, uri|
           # Clear the index and add test data
           index = RubyLsp::TypeGuessr::VariableIndex.instance
           index.clear
@@ -336,7 +336,7 @@ module RubyLsp
           end
         RUBY
 
-        with_server(source, stub_no_typechecker: true) do |server, uri|
+        with_server_and_addon(source) do |server, uri|
           # Clear index and manually add the method calls to avoid interference from background indexing
           index = RubyLsp::TypeGuessr::VariableIndex.instance
           index.clear
@@ -430,7 +430,7 @@ module RubyLsp
           end
         RUBY
 
-        with_server(source, stub_no_typechecker: true) do |server, uri|
+        with_server_and_addon(source) do |server, uri|
           # Clear and setup index
           index = RubyLsp::TypeGuessr::VariableIndex.instance
           index.clear
@@ -486,7 +486,7 @@ module RubyLsp
           end
         RUBY
 
-        with_server(source, stub_no_typechecker: true) do |server, uri|
+        with_server_and_addon(source) do |server, uri|
           # Clear and setup index
           index = RubyLsp::TypeGuessr::VariableIndex.instance
           index.clear
@@ -548,7 +548,7 @@ module RubyLsp
           end
         RUBY
 
-        with_server(source, stub_no_typechecker: true) do |server, uri|
+        with_server_and_addon(source) do |server, uri|
           # Clear and setup index
           index = RubyLsp::TypeGuessr::VariableIndex.instance
           index.clear
@@ -612,7 +612,7 @@ module RubyLsp
           end
         RUBY
 
-        with_server(source, stub_no_typechecker: true) do |server, uri|
+        with_server_and_addon(source) do |server, uri|
           # Clear and setup index
           index = RubyLsp::TypeGuessr::VariableIndex.instance
           index.clear
@@ -665,7 +665,7 @@ module RubyLsp
           end
         RUBY
 
-        with_server(source, stub_no_typechecker: true) do |server, uri|
+        with_server_and_addon(source) do |server, uri|
           # Clear and manually add type information
           index = RubyLsp::TypeGuessr::VariableIndex.instance
           index.clear
@@ -704,7 +704,7 @@ module RubyLsp
           end
         RUBY
 
-        with_server(source, stub_no_typechecker: true) do |server, uri|
+        with_server_and_addon(source) do |server, uri|
           index = RubyLsp::TypeGuessr::VariableIndex.instance
           index.clear
 
@@ -743,7 +743,7 @@ module RubyLsp
           end
         RUBY
 
-        with_server(source, stub_no_typechecker: true) do |server, uri|
+        with_server_and_addon(source) do |server, uri|
           index = RubyLsp::TypeGuessr::VariableIndex.instance
           index.clear
 
@@ -779,7 +779,7 @@ module RubyLsp
           end
         RUBY
 
-        with_server(source, stub_no_typechecker: true) do |server, uri|
+        with_server_and_addon(source) do |server, uri|
           index = RubyLsp::TypeGuessr::VariableIndex.instance
           index.clear
 
@@ -815,7 +815,7 @@ module RubyLsp
           end
         RUBY
 
-        with_server(source, stub_no_typechecker: true) do |server, uri|
+        with_server_and_addon(source) do |server, uri|
           index = RubyLsp::TypeGuessr::VariableIndex.instance
           index.clear
 
@@ -851,7 +851,7 @@ module RubyLsp
           end
         RUBY
 
-        with_server(source, stub_no_typechecker: true) do |server, uri|
+        with_server_and_addon(source) do |server, uri|
           index = RubyLsp::TypeGuessr::VariableIndex.instance
           index.clear
 
@@ -894,7 +894,7 @@ module RubyLsp
           end
         RUBY
 
-        with_server(source, stub_no_typechecker: true) do |server, uri|
+        with_server_and_addon(source) do |server, uri|
           index = RubyLsp::TypeGuessr::VariableIndex.instance
           index.clear
 
@@ -942,7 +942,7 @@ module RubyLsp
       private
 
       def hover_on_source(source, position)
-        with_server(source, stub_no_typechecker: true) do |server, uri|
+        with_server_and_addon(source) do |server, uri|
           server.process_message(
             id: 1,
             method: "textDocument/hover",
