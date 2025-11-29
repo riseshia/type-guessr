@@ -8,6 +8,7 @@ require_relative "hover"
 require_relative "../../type_guessr/version" unless defined?(TypeGuessr::VERSION)
 require_relative "../../type_guessr/core/ast_analyzer"
 require_relative "../../type_guessr/core/variable_index"
+require_relative "../../type_guessr/core/type_inferrer"
 
 module RubyLsp
   module TypeGuessr
@@ -27,6 +28,9 @@ module RubyLsp
         @message_queue = message_queue
 
         log_message("Activating TypeGuessr LSP addon #{::TypeGuessr::VERSION}.")
+
+        # Swap the type inferrer with our custom implementation
+        swap_type_inferrer(global_state)
 
         # Extend Ruby LSP's ALLOWED_TARGETS to support local variables, parameters, and self for hover
         targets = RubyLsp::Listeners::Hover::ALLOWED_TARGETS
@@ -56,7 +60,8 @@ module RubyLsp
       end
 
       def deactivate
-        # Deactivation logic if needed
+        # Restore the original type inferrer
+        restore_type_inferrer
       end
 
       # Handle file change notifications from LSP client
@@ -86,6 +91,22 @@ module RubyLsp
       end
 
       private
+
+      # Swap the ruby-lsp's type inferrer with our custom implementation
+      def swap_type_inferrer(global_state)
+        @original_type_inferrer = global_state.type_inferrer
+        custom_inferrer = ::TypeGuessr::Core::TypeInferrer.new(global_state.index)
+        global_state.instance_variable_set(:@type_inferrer, custom_inferrer)
+        log_message("Swapped TypeInferrer with TypeGuessr::Core::TypeInferrer")
+      end
+
+      # Restore the original type inferrer
+      def restore_type_inferrer
+        return unless @global_state && @original_type_inferrer
+
+        @global_state.instance_variable_set(:@type_inferrer, @original_type_inferrer)
+        log_message("Restored original TypeInferrer")
+      end
 
       # Send a log message to the LSP client
       def log_message(message)

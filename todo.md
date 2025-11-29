@@ -4,21 +4,6 @@
 
 ---
 
-### Create Custom TypeInferrer and Swap on Addon Activation
-- [ ] Create `TypeGuessr::Core::TypeInferrer` class with same interface as ruby-lsp's `TypeInferrer`
-- [ ] Start by copying ruby-lsp's `TypeInferrer` implementation as baseline
-- [ ] Swap `RubyLsp::GlobalState.type_inferrer` with custom instance on `addon.activate`
-- [ ] Restore original `TypeInferrer` on `addon.deactivate`
-- [ ] Add tests for swap/restore behavior
-
-**Context:**
-- Goal: Hook into ruby-lsp's type inference system for custom type guessing
-- ruby-lsp's `TypeInferrer` is used for type inference in various LSP features
-- By swapping with our own implementation, we can inject heuristic type inference
-- Must maintain interface compatibility to avoid breaking ruby-lsp functionality
-
----
-
 ### Move LSP Integration Components
 - [ ] Move `addon.rb` → `integrations/ruby_lsp/addon.rb`
 - [ ] Move `hover.rb` → `integrations/ruby_lsp/hover_provider.rb`
