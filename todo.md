@@ -4,17 +4,13 @@
 
 ---
 
-### Move LSP Integration Components
-- [ ] Move `addon.rb` → `integrations/ruby_lsp/addon.rb`
-- [ ] Move `hover.rb` → `integrations/ruby_lsp/hover_provider.rb`
-- [ ] Update namespaces to `TypeGuessr::Integrations::RubyLsp::*`
-- [ ] Verify addon registration still works with Ruby LSP
+### Remove Write Nodes from HOVER_NODE_TYPES
+- [ ] Consider removing `local_variable_write`, `local_variable_target` etc.
 
 **Context:**
-- Current location: `lib/ruby_lsp/type_guessr/`
-- Target location: `lib/type_guessr/integrations/ruby_lsp/`
-- `hover_content_builder.rb` and `index_adapter.rb` already moved
-- Ruby LSP expects addon at `lib/ruby_lsp/<gem_name>/addon.rb` - may need shim
+- Location: `lib/ruby_lsp/type_guessr/hover.rb` line 14-30
+- Write nodes trigger hover but typically users want type info when reading, not writing
+- Not harmful, just unnecessary
 
 ---
 
@@ -39,16 +35,6 @@
 - `all_class_and_module_entries` calls `@index.fuzzy_search(nil)` on every hover
 - May be slow on large projects
 - Currently relying on ruby-lsp's internal optimization
-
----
-
-### Remove Write Nodes from HOVER_NODE_TYPES
-- [ ] Consider removing `local_variable_write`, `local_variable_target` etc.
-
-**Context:**
-- Location: `lib/ruby_lsp/type_guessr/hover.rb` line 14-30
-- Write nodes trigger hover but typically users want type info when reading, not writing
-- Not harmful, just unnecessary
 
 ---
 
