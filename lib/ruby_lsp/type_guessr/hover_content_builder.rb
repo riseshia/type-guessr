@@ -24,7 +24,7 @@ module RubyLsp
         # Priority 2: Try to infer type if we have method calls and matching types
         unless matching_types.empty?
           # Debug logging for method calls
-          warn("[RubyLspGuesser] Variable '#{variable_name}' method calls: #{method_calls.inspect}") if debug_mode? && !method_calls.empty?
+          warn("[TypeGuessr] Variable '#{variable_name}' method calls: #{method_calls.inspect}") if debug_mode? && !method_calls.empty?
 
           return format_inferred_types(matching_types)
         end
@@ -56,10 +56,10 @@ module RubyLsp
       # @return [String] formatted debug content
       def format_debug_content(variable_name, method_calls)
         if method_calls.empty?
-          warn("[RubyLspGuesser] Variable '#{variable_name}': No method calls found")
+          warn("[TypeGuessr] Variable '#{variable_name}': No method calls found")
           "No method calls found."
         else
-          warn("[RubyLspGuesser] Variable '#{variable_name}' method calls: #{method_calls.inspect}")
+          warn("[TypeGuessr] Variable '#{variable_name}' method calls: #{method_calls.inspect}")
           content = "Method calls:\n"
           method_calls.each do |method_name|
             content += "- `#{method_name}`\n"
