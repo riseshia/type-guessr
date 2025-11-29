@@ -14,7 +14,7 @@ require_relative "type_guessr/core/type_matcher"
 require_relative "type_guessr/core/type_resolver"
 
 # Load Ruby LSP integration
-require_relative "type_guessr/integrations/ruby_lsp/index_adapter"
+require_relative "ruby_lsp/type_guessr/index_adapter"
 require_relative "ruby_lsp/type_guessr/type_matcher"
 require_relative "ruby_lsp/type_guessr/hover"
 require_relative "ruby_lsp/type_guessr/addon"

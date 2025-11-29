@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "../../type_guessr/core/type_matcher"
-require_relative "../../type_guessr/integrations/ruby_lsp/index_adapter"
+require_relative "index_adapter"
 
 module RubyLsp
   module TypeGuessr
@@ -9,7 +9,7 @@ module RubyLsp
     # This is a compatibility wrapper that delegates to the core implementation
     class TypeMatcher
       def initialize(index)
-        adapter = ::TypeGuessr::Integrations::RubyLsp::IndexAdapter.new(index)
+        adapter = IndexAdapter.new(index)
         @core_matcher = ::TypeGuessr::Core::TypeMatcher.new(adapter)
       end
 
