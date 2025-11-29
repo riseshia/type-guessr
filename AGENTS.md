@@ -28,9 +28,6 @@ end                # infer recipe type as Recipe instance
 
 ```
 type-guessr/
-├── .claude/
-│   └── commands/
-│       └── go.md                                # TDD cycle automation command
 ├── .github/
 │   └── workflows/                               # GitHub Actions CI configuration
 ├── bin/
@@ -237,20 +234,6 @@ This project follows strict Test-Driven Development (TDD) practices based on Ken
 3. **Refactor:** Clean up code while keeping tests green
 4. **Commit:** Only commit when all tests pass
 
-### Automatic TDD Mode with `/go` Command
-
-**CRITICAL:** When implementing features or fixing bugs:
-
-1. **ALWAYS use `/go` command first** - Do not implement directly
-2. The `/go` command will automatically:
-   - Find the next unmarked test in `plan.md`
-   - Mark it as [~] (in progress)
-   - Write the test first (Red phase)
-   - Implement minimal code to pass (Green phase)
-   - Refactor if needed
-   - Mark it as [x] (completed)
-   - Commit with clear message
-
 ### Code Quality Standards
 
 - Eliminate duplication ruthlessly
@@ -286,9 +269,8 @@ This project follows strict Test-Driven Development (TDD) practices based on Ken
 
 **Pre-Implementation Checklist:**
 
-1. **Check for `/go` command** - If implementing features/fixes, use `/go` instead of direct implementation
-2. **Read relevant files in parallel** - Use multiple Read tool calls together
-3. **Always run tests first:**
+1. **Read relevant files in parallel** - Use multiple Read tool calls together
+2. **Always run tests first:**
    ```bash
    rake test
    ```
@@ -416,7 +398,7 @@ This collected data enables type guessing through:
 
 ### Development Process
 
-- **TDD is mandatory:** Use `/go` command for implementations, follow Red-Green-Refactor cycle
+- **TDD is mandatory:** Follow Red-Green-Refactor cycle
 - **Linter-first:** Run `bin/rubocop` on changed files BEFORE committing
 - **Atomic commits:** Group related changes (code + tests + linting) into single commits
 - **Test-driven:** Run `rake test` before and after making changes
