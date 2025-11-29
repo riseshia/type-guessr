@@ -79,7 +79,7 @@ type-guessr/
 ├── .rubocop.yml                                 # RuboCop configuration
 ├── AGENTS.md                                    # Project context for AI agents
 ├── Gemfile
-├── plan.md                                      # TDD implementation plan
+├── todo.md                                      # Task tracking and priorities
 ├── Rakefile                                     # Rake tasks (test, rubocop)
 ├── README.md
 └── type-guessr.gemspec                          # Gem specification
