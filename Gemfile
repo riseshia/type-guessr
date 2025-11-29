@@ -10,6 +10,5 @@ gem "rake"
 
 gem "rubocop", require: false
 gem "rubocop-rspec", require: false
-gem "rubocop-rubycw", require: false
 
 gem "rspec", require: false

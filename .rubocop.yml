@@ -1,6 +1,5 @@
 plugins:
   - rubocop-rspec
-  - rubocop-rubycw
 
 AllCops:
   TargetRubyVersion: 3.3
@@ -8,6 +7,7 @@ AllCops:
   SuggestExtensions: false
   Exclude:
     - "a.rb"
+    - "vendor/**/*"
 
 Style/StringLiterals:
   EnforcedStyle: double_quotes
