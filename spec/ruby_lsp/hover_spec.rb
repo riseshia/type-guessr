@@ -1040,4 +1040,66 @@ RSpec.describe RubyLsp::TypeGuessr::Hover do
       end
     end
   end
+
+  describe "type definition links" do
+    it "includes link to class definition in guessed type" do
+      source = <<~RUBY
+        class Recipe
+          def ingredients
+          end
+
+          def steps
+          end
+        end
+
+        def cook(recipe)
+          recipe.ingredients
+          recipe.steps
+          recipe
+        end
+      RUBY
+
+      with_server_and_addon(source) do |server, uri|
+        index = RubyLsp::TypeGuessr::VariableIndex.instance
+        index.clear
+
+        index.add_method_call(
+          file_path: uri.to_s,
+          scope_type: :local_variables,
+          scope_id: "cook",
+          var_name: "recipe",
+          def_line: 9,
+          def_column: 9,
+          method_name: "ingredients",
+          call_line: 10,
+          call_column: 4
+        )
+        index.add_method_call(
+          file_path: uri.to_s,
+          scope_type: :local_variables,
+          scope_id: "cook",
+          var_name: "recipe",
+          def_line: 9,
+          def_column: 9,
+          method_name: "steps",
+          call_line: 11,
+          call_column: 4
+        )
+
+        server.process_message(
+          id: 1,
+          method: "textDocument/hover",
+          params: { textDocument: { uri: uri }, position: { line: 11, character: 4 } }
+        )
+
+        result = pop_result(server)
+        response = result.response
+        content = response.contents.value
+
+        # Should include the type name with link format
+        expect(content).to match(/Guessed type:/)
+        expect(content).to match(/\[`Recipe`\]\(file:/)
+      end
+    end
+  end
 end

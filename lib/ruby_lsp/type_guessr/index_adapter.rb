@@ -25,6 +25,13 @@ module RubyLsp
       def method_entries(method_name)
         @index[method_name] || []
       end
+
+      # Resolve a constant (class/module) by name
+      # @param constant_name [String] the fully qualified constant name
+      # @return [Array<RubyIndexer::Entry>] array of entries or empty array
+      def resolve_constant(constant_name)
+        @index[constant_name] || []
+      end
     end
   end
 end

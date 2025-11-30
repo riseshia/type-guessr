@@ -50,6 +50,15 @@ module RubyLsp
 
         candidates
       end
+
+      # Get the first entry for a given constant name
+      # Used to retrieve location information for linking
+      # @param constant_name [String] the fully qualified constant name
+      # @return [RubyIndexer::Entry, nil] the entry or nil if not found
+      def get_entry(constant_name)
+        entries = @adapter.resolve_constant(constant_name)
+        entries.first
+      end
     end
   end
 end

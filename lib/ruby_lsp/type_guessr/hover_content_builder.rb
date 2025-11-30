@@ -14,8 +14,9 @@ module RubyLsp
       # Build hover content from type information
       # @param type_info [Hash] hash with :variable_name, :direct_type, and :method_calls keys
       # @param matching_types [Array<String>] array of matching type names from inference
+      # @param type_entries [Hash<String, Entry>] map of type name to entry for linking
       # @return [String, nil] the hover content or nil
-      def build(type_info, matching_types: [])
+      def build(type_info, matching_types: [], type_entries: {})
         variable_name = type_info[:variable_name]
         direct_type = type_info[:direct_type]
         method_calls = type_info[:method_calls] || []
@@ -24,10 +25,13 @@ module RubyLsp
         warn("[TypeGuessr] Variable '#{variable_name}' method calls: #{method_calls.inspect}") if debug_mode?
 
         # Priority 1: Use direct type inference (from literal or .new call)
-        return "**Guessed type:** `#{direct_type}`" if direct_type
+        if direct_type
+          formatted_type = format_type_with_link(direct_type, type_entries[direct_type])
+          return "**Guessed type:** #{formatted_type}"
+        end
 
         # Priority 2: Try to guess type if we have method calls and matching types
-        return format_guessed_types(matching_types) if !matching_types.empty?
+        return format_guessed_types(matching_types, type_entries) if !matching_types.empty?
 
         # Fallback: show method calls only in debug mode, otherwise show nothing
         return if !debug_mode?
@@ -39,19 +43,61 @@ module RubyLsp
 
       # Format guessed types based on count
       # @param matching_types [Array<String>] array of matching type names
+      # @param type_entries [Hash<String, Entry>] map of type name to entry for linking
       # @return [String] formatted type string
-      def format_guessed_types(matching_types)
+      def format_guessed_types(matching_types, type_entries)
         case matching_types.size
         when 1
-          "**Guessed type:** `#{matching_types.first}`"
+          type_name = matching_types.first
+          formatted_type = format_type_with_link(type_name, type_entries[type_name])
+          "**Guessed type:** #{formatted_type}"
         else
-          # Multiple matches - ambiguous
+          # Multiple matches - ambiguous (no links needed)
           # Check if results were truncated (indicated by '...' marker)
           truncated = matching_types.last == TypeMatcher::TRUNCATED_MARKER
           display_types = truncated ? matching_types[0...-1] : matching_types
           type_list = display_types.map { |t| "`#{t}`" }.join(", ")
           type_list += ", ..." if truncated
           "**Ambiguous type** (could be: #{type_list})"
+        end
+      end
+
+      # Format a type name with link to definition if entry is available
+      # @param type_name [String] the type name
+      # @param entry [RubyIndexer::Entry, nil] the entry for the type
+      # @return [String] formatted type, possibly with link
+      def format_type_with_link(type_name, entry)
+        return "`#{type_name}`" if entry.nil?
+
+        location_link = build_location_link(entry)
+        return "`#{type_name}`" if location_link.nil?
+
+        "[`#{type_name}`](#{location_link})"
+      end
+
+      # Build a location link from an entry
+      # @param entry [RubyIndexer::Entry] the entry
+      # @return [String, nil] the location link or nil
+      def build_location_link(entry)
+        uri = entry.uri
+        return nil if uri.nil?
+
+        location = entry_location(entry)
+        return nil if location.nil?
+
+        "#{uri}#L#{location.start_line},#{location.start_column + 1}-#{location.end_line},#{location.end_column + 1}"
+      end
+
+      # Get the appropriate location from an entry
+      # Namespace entries have name_location, others use location
+      # @param entry [RubyIndexer::Entry] the entry
+      # @return [RubyIndexer::Location, nil] the location
+      def entry_location(entry)
+        # Namespace entries (Class, Module) have name_location for precise linking
+        if entry.respond_to?(:name_location)
+          entry.name_location
+        else
+          entry.location
         end
       end
 

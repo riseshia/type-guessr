@@ -58,6 +58,23 @@ module RubyLsp
         @core_resolver.infer_type_from_methods(method_calls, matcher)
       end
 
+      # Get entries for type names to enable linking to definitions
+      # @param type_names [Array<String>] array of type names
+      # @return [Hash<String, Entry>] map of type name to entry
+      def get_type_entries(type_names)
+        return {} if !@index
+
+        matcher = TypeMatcher.new(@index)
+        entries = {}
+        type_names.each do |type_name|
+          next if type_name == TypeMatcher::TRUNCATED_MARKER
+
+          entry = matcher.get_entry(type_name)
+          entries[type_name] = entry if entry
+        end
+        entries
+      end
+
       private
 
       # Extract index from global_state or use directly if it's already an index

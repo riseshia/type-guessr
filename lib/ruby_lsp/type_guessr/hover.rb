@@ -65,7 +65,14 @@ module RubyLsp
         # Try to infer type from method calls if available
         matching_types = @type_resolver.infer_type_from_methods(type_info[:method_calls])
 
-        content = @content_builder.build(type_info, matching_types: matching_types)
+        # Collect all type names that need entries (both direct_type and matching_types)
+        all_type_names = matching_types.dup
+        all_type_names << type_info[:direct_type] if type_info[:direct_type]
+
+        # Get entries for linking to type definitions
+        type_entries = @type_resolver.get_type_entries(all_type_names)
+
+        content = @content_builder.build(type_info, matching_types: matching_types, type_entries: type_entries)
         @response_builder.push(content, category: :documentation) if content
       end
     end
