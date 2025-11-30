@@ -481,4 +481,102 @@ RSpec.describe TypeGuessr::Core::ASTAnalyzer do
       expect(method_names).to include("to_s")
     end
   end
+
+  describe "type extraction from .new calls" do
+    it "extracts type from simple .new call at top level" do
+      source = <<~RUBY
+        user = User.new
+      RUBY
+
+      parse_and_visit(source, "/test/file.rb")
+
+      type = index.get_variable_type(
+        file_path: "/test/file.rb",
+        scope_type: :local_variables,
+        scope_id: "(top-level)",
+        var_name: "user",
+        def_line: 1,
+        def_column: 0
+      )
+
+      expect(type).to eq("User")
+    end
+
+    it "extracts fully qualified type from .new call inside nested module" do
+      source = <<~RUBY
+        module RubyLsp
+          module TypeGuessr
+            class Hover
+              def initialize
+                @resolver = VariableTypeResolver.new
+              end
+            end
+          end
+        end
+      RUBY
+
+      parse_and_visit(source, "/test/file.rb")
+
+      type = index.get_variable_type(
+        file_path: "/test/file.rb",
+        scope_type: :instance_variables,
+        scope_id: "RubyLsp::TypeGuessr::Hover",
+        var_name: "@resolver",
+        def_line: 5,
+        def_column: 8
+      )
+
+      expect(type).to eq("RubyLsp::TypeGuessr::VariableTypeResolver")
+    end
+
+    it "preserves explicit fully qualified type from .new call" do
+      source = <<~RUBY
+        module RubyLsp
+          module TypeGuessr
+            class Hover
+              def initialize
+                @adapter = Other::Module::Adapter.new
+              end
+            end
+          end
+        end
+      RUBY
+
+      parse_and_visit(source, "/test/file.rb")
+
+      type = index.get_variable_type(
+        file_path: "/test/file.rb",
+        scope_type: :instance_variables,
+        scope_id: "RubyLsp::TypeGuessr::Hover",
+        var_name: "@adapter",
+        def_line: 5,
+        def_column: 8
+      )
+
+      expect(type).to eq("Other::Module::Adapter")
+    end
+
+    it "extracts type from .new call inside method" do
+      source = <<~RUBY
+        class Processor
+          def process
+            item = Item.new
+          end
+        end
+      RUBY
+
+      parse_and_visit(source, "/test/file.rb")
+
+      type = index.get_variable_type(
+        file_path: "/test/file.rb",
+        scope_type: :local_variables,
+        scope_id: "Processor#process",
+        var_name: "item",
+        def_line: 3,
+        def_column: 4
+      )
+
+      expect(type).to eq("Item")
+    end
+  end
 end

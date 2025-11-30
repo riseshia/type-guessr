@@ -296,15 +296,40 @@ module TypeGuessr
       end
 
       # Extract class name from a receiver node (for .new calls)
+      # Resolves short names to fully qualified names using current nesting context
       # @param receiver [Prism::Node] the receiver node
       # @return [String, nil] the class name or nil
       def extract_class_name_from_receiver(receiver)
         case receiver
         when Prism::ConstantReadNode
-          receiver.name.to_s
+          short_name = receiver.name.to_s
+          resolve_constant_to_fqn(short_name)
         when Prism::ConstantPathNode
           receiver.slice
         end
+      end
+
+      # Resolve a short constant name to its fully qualified name using current nesting
+      # Follows Ruby's constant lookup rules: searches from current nesting outward
+      # @param short_name [String] the short constant name (e.g., "VariableTypeResolver")
+      # @return [String] the fully qualified name (e.g., "RubyLsp::TypeGuessr::VariableTypeResolver")
+      def resolve_constant_to_fqn(short_name)
+        return short_name if @class_stack.empty?
+
+        # Ruby's constant lookup searches from parent namespace, not current class
+        # e.g., for nesting ["RubyLsp", "TypeGuessr", "Hover"] and short_name "Foo":
+        # - Inside Hover class, referencing "Foo" looks for:
+        #   1. RubyLsp::TypeGuessr::Foo (sibling in parent namespace)
+        #   2. RubyLsp::Foo
+        #   3. Foo (top-level)
+        #
+        # Since we don't have access to the index here, we return the most likely candidate:
+        # the FQN using parent nesting (excluding current class)
+        # This matches the common case where a class references a sibling in the same namespace
+        parent_nesting = @class_stack[0...-1]
+        return short_name if parent_nesting.empty?
+
+        "#{parent_nesting.join("::")}::#{short_name}"
       end
 
       def register_variable(var_name, line, column)
