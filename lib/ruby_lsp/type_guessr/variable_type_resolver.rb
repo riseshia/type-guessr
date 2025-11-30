@@ -77,11 +77,14 @@ module RubyLsp
           node.name&.to_s
         when ::Prism::BlockParameterNode
           node.name&.to_s
-        when ::Prism::InstanceVariableReadNode
+        when ::Prism::InstanceVariableReadNode, ::Prism::InstanceVariableWriteNode,
+             ::Prism::InstanceVariableTargetNode
           node.name.to_s
-        when ::Prism::ClassVariableReadNode
+        when ::Prism::ClassVariableReadNode, ::Prism::ClassVariableWriteNode,
+             ::Prism::ClassVariableTargetNode
           node.name.to_s
-        when ::Prism::GlobalVariableReadNode
+        when ::Prism::GlobalVariableReadNode, ::Prism::GlobalVariableWriteNode,
+             ::Prism::GlobalVariableTargetNode
           node.name.to_s
         when ::Prism::SelfNode
           "self"
