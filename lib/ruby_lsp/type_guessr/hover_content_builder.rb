@@ -107,9 +107,9 @@ module RubyLsp
       # @return [String] formatted debug content
       def format_debug_content(_variable_name, method_calls)
         if method_calls.empty?
-          "No method calls found."
+          "**[Debug]** No method calls found."
         else
-          content = "Method calls:\n"
+          content = "**[Debug]** Method calls:\n"
           method_calls.each do |method_name|
             content += "- `#{method_name}`\n"
           end
