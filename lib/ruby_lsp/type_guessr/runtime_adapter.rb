@@ -13,6 +13,9 @@ module RubyLsp
     # Handles AST traversal, indexing, and type inferrer management.
     # @api private
     class RuntimeAdapter
+      # Number of worker threads for parallel AST analysis
+      WORKER_COUNT = 4
+
       def initialize(global_state, message_queue)
         @global_state = global_state
         @message_queue = message_queue
@@ -36,18 +39,20 @@ module RubyLsp
       end
 
       # Start background thread to traverse AST for indexed files
+      # Waits for Ruby LSP's initial indexing to complete before starting
       def start_ast_traversal
         Thread.new do
-          log_message("Starting AST traversal with parallel processing.")
           index = @global_state.index
+
+          # Wait for Ruby LSP's initial indexing to complete
+          log_message("Waiting for Ruby LSP initial indexing to complete...")
+          sleep(0.1) until index.initial_indexing_completed
+          log_message("Ruby LSP indexing completed. Starting TypeGuessr AST traversal.")
 
           # Get indexable URIs from RubyIndexer configuration
           indexable_uris = index.configuration.indexable_uris
           log_message("Found #{indexable_uris.size} indexed files to traverse.")
-
-          # Use 8 worker threads for parallel processing
-          worker_count = 8
-          log_message("Using #{worker_count} worker threads.")
+          log_message("Using #{WORKER_COUNT} worker threads.")
 
           # Thread-safe progress tracking
           progress_mutex = Mutex.new
@@ -57,10 +62,10 @@ module RubyLsp
           # Create a thread pool with work queue
           queue = Thread::Queue.new
           indexable_uris.each { |uri| queue << uri }
-          worker_count.times { queue << :stop } # Sentinel values to stop workers
+          WORKER_COUNT.times { queue << :stop } # Sentinel values to stop workers
 
           # Start worker threads
-          workers = worker_count.times.map do
+          workers = WORKER_COUNT.times.map do
             Thread.new do
               loop do
                 uri = queue.pop
