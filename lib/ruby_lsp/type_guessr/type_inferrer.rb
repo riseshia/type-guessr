@@ -47,7 +47,7 @@ module RubyLsp
 
         # Check for direct type first
         direct_type = type_info[:direct_type]
-        return GuessedType.new(direct_type) if direct_type
+        return Type.new(direct_type) if direct_type
 
         # Try to infer from method calls
         method_calls = type_info[:method_calls]
@@ -58,7 +58,7 @@ module RubyLsp
         # Only return when exactly one type matches (unambiguous)
         return nil if matching_types.size != 1
 
-        GuessedType.new(matching_types.first)
+        Type.new(matching_types.first)
       end
 
       # Extract the variable node from a CallNode's receiver
