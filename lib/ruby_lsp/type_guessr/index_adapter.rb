@@ -10,15 +10,6 @@ module RubyLsp
         @index = index
       end
 
-      # Get all class and module entries from the index
-      # @return [Array<RubyIndexer::Entry::Class, RubyIndexer::Entry::Module>]
-      def all_class_and_module_entries
-        # Use fuzzy_search with nil query to get all entries, filtered by condition block
-        @index.fuzzy_search(nil) do |entry|
-          class_or_module_entry?(entry)
-        end
-      end
-
       # Resolve a method for a specific class/module name
       # @param method_name [String] the method name
       # @param class_name [String] the class/module name
@@ -27,13 +18,12 @@ module RubyLsp
         @index.resolve_method(method_name, class_name)
       end
 
-      private
-
-      # Check if an entry is a class or module
-      # @param entry [RubyIndexer::Entry] the entry to check
-      # @return [Boolean]
-      def class_or_module_entry?(entry)
-        entry.is_a?(RubyIndexer::Entry::Class) || entry.is_a?(RubyIndexer::Entry::Module)
+      # Get all method entries with the given name from the index
+      # This uses direct index access for efficient lookup
+      # @param method_name [String] the method name to search for
+      # @return [Array<RubyIndexer::Entry::Method>] array of method entries
+      def method_entries(method_name)
+        @index[method_name] || []
       end
     end
   end
