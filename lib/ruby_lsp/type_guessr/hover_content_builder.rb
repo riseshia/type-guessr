@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative "type_matcher"
+
 module RubyLsp
   module TypeGuessr
     # Builds hover content from type information
@@ -47,7 +49,7 @@ module RubyLsp
         else
           # Multiple matches - ambiguous
           # Check if results were truncated (indicated by '...' marker)
-          truncated = matching_types.last == ::TypeGuessr::Core::TypeMatcher::TRUNCATED_MARKER
+          truncated = matching_types.last == TypeMatcher::TRUNCATED_MARKER
           display_types = truncated ? matching_types[0...-1] : matching_types
           type_list = display_types.map { |t| "`#{t}`" }.join(", ")
           type_list += ", ..." if truncated

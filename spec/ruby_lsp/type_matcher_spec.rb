@@ -197,7 +197,7 @@ RSpec.describe RubyLsp::TypeGuessr::TypeMatcher do
         matches = matcher.find_matching_types(["common_method"])
         # Should return exactly MAX_MATCHING_TYPES (3) classes plus the truncation marker
         expect(matches.size).to eq(4)
-        expect(matches.last).to eq(TypeGuessr::Core::TypeMatcher::TRUNCATED_MARKER)
+        expect(matches.last).to eq(RubyLsp::TypeGuessr::TypeMatcher::TRUNCATED_MARKER)
         # The first 3 should be actual class names (order may vary)
         expect(matches[0..2]).to all(match(/^Class[A-E]$/))
       end
@@ -222,7 +222,7 @@ RSpec.describe RubyLsp::TypeGuessr::TypeMatcher do
 
         matches = matcher.find_matching_types(["exact_method"])
         expect(matches.size).to eq(3)
-        expect(matches).not_to include(TypeGuessr::Core::TypeMatcher::TRUNCATED_MARKER)
+        expect(matches).not_to include(RubyLsp::TypeGuessr::TypeMatcher::TRUNCATED_MARKER)
         expect(matches.sort).to eq(%w[ClassX ClassY ClassZ])
       end
     end

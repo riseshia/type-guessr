@@ -10,7 +10,6 @@ require_relative "type_guessr/version"
 require_relative "type_guessr/core/scope_resolver"
 require_relative "type_guessr/core/variable_index"
 require_relative "type_guessr/core/ast_analyzer"
-require_relative "type_guessr/core/type_matcher"
 require_relative "type_guessr/core/type_resolver"
 
 # Load Ruby LSP integration
