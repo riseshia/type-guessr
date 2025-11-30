@@ -11,13 +11,19 @@ module RubyLsp
     # Delegates content generation to HoverContentBuilder
     class Hover
       # Define all node types that should trigger hover content
-      # Note: Write nodes (local_variable_write, local_variable_target) are intentionally
-      # excluded because users typically want type info when reading variables, not writing
       HOVER_NODE_TYPES = %i[
         local_variable_read
+        local_variable_write
+        local_variable_target
         instance_variable_read
+        instance_variable_write
+        instance_variable_target
         class_variable_read
+        class_variable_write
+        class_variable_target
         global_variable_read
+        global_variable_write
+        global_variable_target
         self
         required_parameter
         optional_parameter
