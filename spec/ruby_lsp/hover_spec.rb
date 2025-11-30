@@ -518,7 +518,7 @@ RSpec.describe RubyLsp::TypeGuessr::Hover do
       end
     end
 
-    context "when no type can be inferred" do
+    context "when no type can be guessed" do
       it "shows method list" do
         source = <<~RUBY
           def process(unknown_var)
@@ -555,13 +555,13 @@ RSpec.describe RubyLsp::TypeGuessr::Hover do
 
           expect(content).to match(/Method calls:/)
           expect(content).to match(/unique_method_xyz_12345/)
-          expect(content).not_to match(/Inferred type/)
+          expect(content).not_to match(/Guessed type/)
         end
       end
     end
 
     context "when exactly one class matches" do
-      it "shows inferred type" do
+      it "shows guessed type" do
         source = <<~RUBY
           class Recipe
             def ingredients
@@ -623,12 +623,12 @@ RSpec.describe RubyLsp::TypeGuessr::Hover do
           response = result.response
           content = response.contents.value
 
-          expect(content).to match(/Inferred type:.*Recipe/)
+          expect(content).to match(/Guessed type:.*Recipe/)
           expect(content).not_to match(/Article/)
         end
       end
 
-      it "shows inferred type on parameter usage" do
+      it "shows guessed type on parameter usage" do
         source = <<~RUBY
           class User
             def save
@@ -682,7 +682,7 @@ RSpec.describe RubyLsp::TypeGuessr::Hover do
           response = result.response
           content = response.contents.value
 
-          expect(content).to match(/Inferred type:.*User/)
+          expect(content).to match(/Guessed type:.*User/)
         end
       end
     end
@@ -721,7 +721,7 @@ RSpec.describe RubyLsp::TypeGuessr::Hover do
         response = result.response
         content = response.contents.value
 
-        expect(content).to match(/Inferred type:.*String/)
+        expect(content).to match(/Guessed type:.*String/)
       end
     end
 
@@ -757,7 +757,7 @@ RSpec.describe RubyLsp::TypeGuessr::Hover do
         response = result.response
         content = response.contents.value
 
-        expect(content).to match(/Inferred type:.*Integer/)
+        expect(content).to match(/Guessed type:.*Integer/)
       end
     end
 
@@ -796,7 +796,7 @@ RSpec.describe RubyLsp::TypeGuessr::Hover do
         response = result.response
         content = response.contents.value
 
-        expect(content).to match(/Inferred type:.*User/)
+        expect(content).to match(/Guessed type:.*User/)
       end
     end
 
@@ -832,7 +832,7 @@ RSpec.describe RubyLsp::TypeGuessr::Hover do
         response = result.response
         content = response.contents.value
 
-        expect(content).to match(/Inferred type:.*Float/)
+        expect(content).to match(/Guessed type:.*Float/)
       end
     end
 
@@ -868,7 +868,7 @@ RSpec.describe RubyLsp::TypeGuessr::Hover do
         response = result.response
         content = response.contents.value
 
-        expect(content).to match(/Inferred type:.*Array/)
+        expect(content).to match(/Guessed type:.*Array/)
       end
     end
 
@@ -904,7 +904,7 @@ RSpec.describe RubyLsp::TypeGuessr::Hover do
         response = result.response
         content = response.contents.value
 
-        expect(content).to match(/Inferred type:.*Hash/)
+        expect(content).to match(/Guessed type:.*Hash/)
       end
     end
   end
@@ -962,7 +962,7 @@ RSpec.describe RubyLsp::TypeGuessr::Hover do
         response = result.response
         content = response.contents.value
 
-        expect(content).to match(/Inferred type:.*User/)
+        expect(content).to match(/Guessed type:.*User/)
         expect(content).not_to match(/Ambiguous/)
       end
     end

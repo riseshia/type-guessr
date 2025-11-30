@@ -101,7 +101,7 @@ The project is organized into two main layers:
 - Shared utility module used by ASTAnalyzer and VariableTypeResolver
 
 #### 3. Variable Index (`variable_index.rb`)
-- **Purpose:** Stores inferred types for variables
+- **Purpose:** Stores guessed types for variables
 - Tracks variable assignments and method calls
 - Stores type information from literal assignments and `.new` calls
 - Provides public API for querying variable types and method calls
@@ -135,7 +135,7 @@ The project is organized into two main layers:
 #### 8. Hover Content Builder (`hover_content_builder.rb`)
 - **Purpose:** Formats hover content from type information
 - Handles debug mode configuration (ENV variable or config file)
-- Formats inferred types, ambiguous types, and debug content
+- Formats guessed types, ambiguous types, and debug content
 
 #### 9. Variable Type Resolver (`variable_type_resolver.rb`)
 - **Purpose:** Resolves variable types by analyzing definitions and method calls

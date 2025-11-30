@@ -24,10 +24,10 @@ module RubyLsp
         warn("[TypeGuessr] Variable '#{variable_name}' method calls: #{method_calls.inspect}") if debug_mode?
 
         # Priority 1: Use direct type inference (from literal or .new call)
-        return "**Inferred type:** `#{direct_type}`" if direct_type
+        return "**Guessed type:** `#{direct_type}`" if direct_type
 
-        # Priority 2: Try to infer type if we have method calls and matching types
-        return format_inferred_types(matching_types) if !matching_types.empty?
+        # Priority 2: Try to guess type if we have method calls and matching types
+        return format_guessed_types(matching_types) if !matching_types.empty?
 
         # Fallback: show method calls only in debug mode, otherwise show nothing
         return if !debug_mode?
@@ -37,13 +37,13 @@ module RubyLsp
 
       private
 
-      # Format inferred types based on count
+      # Format guessed types based on count
       # @param matching_types [Array<String>] array of matching type names
       # @return [String] formatted type string
-      def format_inferred_types(matching_types)
+      def format_guessed_types(matching_types)
         case matching_types.size
         when 1
-          "**Inferred type:** `#{matching_types.first}`"
+          "**Guessed type:** `#{matching_types.first}`"
         else
           # Multiple matches - ambiguous
           # Check if results were truncated (indicated by '...' marker)

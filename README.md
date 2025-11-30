@@ -5,7 +5,7 @@ A Ruby LSP addon that provides hover tooltips with helpful information.
 ## Features
 
 - **Type Inference**: Automatically infers variable types based on method call patterns
-- **Hover Tooltips**: Shows inferred types when hovering over variables
+- **Hover Tooltips**: Shows guessed types when hovering over variables
 - **Heuristic Approach**: Works without type annotations by analyzing method usage
 - **Smart Matching**: Finds classes that have all the methods called on a variable
 
@@ -31,7 +31,7 @@ gem install type-guessr
 
 ## Usage
 
-Once installed, the addon will automatically be loaded by Ruby LSP. Hover over variables, parameters, or instance variables to see inferred types.
+Once installed, the addon will automatically be loaded by Ruby LSP. Hover over variables, parameters, or instance variables to see guessed types.
 
 ### Example
 
@@ -47,7 +47,7 @@ class Recipe
 end
 
 def process(recipe)
-  recipe.ingredients  # Hover over 'recipe' shows: Inferred type: Recipe
+  recipe.ingredients  # Hover over 'recipe' shows: Guessed type: Recipe
   recipe.steps
 end
 ```
@@ -88,7 +88,7 @@ When debug mode is enabled, a web server starts automatically at `http://127.0.0
 
 - **Statistics**: Total indexed definitions, file count, variable counts by type
 - **Search**: Search by file path pattern to view indexed variables
-- **Variable details**: See inferred types and method calls for each variable
+- **Variable details**: See guessed types and method calls for each variable
 
 This is useful for understanding how TypeGuessr analyzes your codebase and debugging type inference issues.
 

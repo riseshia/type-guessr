@@ -14,7 +14,7 @@ module RubyLsp
       # Falls back to super when type cannot be uniquely determined.
       #
       # @param node_context [RubyLsp::NodeContext] The context of the node
-      # @return [Type, GuessedType, nil] The inferred type or nil if unknown
+      # @return [Type, GuessedType, nil] The guessed type or nil if unknown
       def infer_receiver_type(node_context)
         guessed_type = guess_type_from_variable(node_context)
         return guessed_type if guessed_type

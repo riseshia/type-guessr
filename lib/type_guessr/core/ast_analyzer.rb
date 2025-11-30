@@ -260,9 +260,9 @@ module TypeGuessr
 
       private
 
-      # Analyze a value node and return its inferred type
+      # Analyze a value node and return its guessed type
       # @param node [Prism::Node] the value node to analyze
-      # @return [String, nil] the inferred type or nil if cannot be determined
+      # @return [String, nil] the guessed type or nil if cannot be determined
       def analyze_value_type(node)
         case node
         when Prism::IntegerNode
