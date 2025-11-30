@@ -60,7 +60,7 @@ Enable debug mode to see method call information in the LSP output. There are tw
 
 **Method 1: Config file (recommended)**
 
-Create a `.ruby-lsp-guesser.yml` file in your project root:
+Create a `.type-guessr.yml` file in your project root:
 
 ```yaml
 debug: true
@@ -73,7 +73,7 @@ Then restart Ruby LSP (VSCode: reload window).
 Launch VSCode from terminal with the environment variable:
 
 ```bash
-export RUBY_LSP_GUESSER_DEBUG=1
+export TYPE_GUESSR_DEBUG=1
 code .
 ```
 
