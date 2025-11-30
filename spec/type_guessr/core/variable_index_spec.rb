@@ -2,7 +2,7 @@
 
 require "spec_helper"
 
-RSpec.describe RubyLsp::TypeGuessr::VariableIndex do
+RSpec.describe TypeGuessr::Core::VariableIndex do
   subject(:index) { described_class.instance }
 
   before do

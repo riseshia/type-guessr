@@ -2,8 +2,8 @@
 
 require "spec_helper"
 
-RSpec.describe RubyLsp::TypeGuessr::ASTVisitor do
-  subject(:index) { RubyLsp::TypeGuessr::VariableIndex.instance }
+RSpec.describe TypeGuessr::Core::ASTAnalyzer do
+  subject(:index) { TypeGuessr::Core::VariableIndex.instance }
 
   before do
     index.clear

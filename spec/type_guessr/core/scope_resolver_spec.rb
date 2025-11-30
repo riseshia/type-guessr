@@ -2,7 +2,7 @@
 
 require "spec_helper"
 
-RSpec.describe RubyLsp::TypeGuessr::ScopeResolver do
+RSpec.describe TypeGuessr::Core::ScopeResolver do
   describe ".determine_scope_type" do
     context "with local variables" do
       it "returns :local_variables for user" do
