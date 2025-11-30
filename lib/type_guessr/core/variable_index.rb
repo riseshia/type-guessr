@@ -181,9 +181,9 @@ module TypeGuessr
       # @param var_name [String] the variable name
       # @param scope_type [Symbol] :instance_variable, :local_variable, or :class_variable
       # @param max_line [Integer] the maximum line number (finds closest definition before this line)
-      # @param scope_id [String] the scope identifier (optional for broader search)
+      # @param scope_id [String] the scope identifier
       # @return [String, nil] the inferred type or nil if not found
-      def find_variable_type_at_location(var_name:, scope_type:, max_line:, scope_id: nil)
+      def find_variable_type_at_location(var_name:, scope_type:, max_line:, scope_id:)
         @mutex.synchronize do
           scope_types = @types[scope_type]
           return nil if !scope_types
@@ -192,31 +192,14 @@ module TypeGuessr
           best_line = 0
 
           scope_types.each_value do |scopes|
-            # First try exact scope match if scope_id is provided
-            if scope_id && scopes.key?(scope_id) && scopes[scope_id].key?(var_name)
-              scopes[scope_id][var_name].each do |def_key, type|
-                line, _column = def_key.split(":").map(&:to_i)
-                # Find closest definition before max_line
-                if line <= max_line && line > best_line
-                  best_type = type
-                  best_line = line
-                end
-              end
-            end
+            next if !scopes.key?(scope_id) || !scopes[scope_id].key?(var_name)
 
-            # If no exact match, try all scopes
-            next if !best_type.nil?
-
-            scopes.each_value do |vars|
-              next if !vars.key?(var_name)
-
-              vars[var_name].each do |def_key, type|
-                line, _column = def_key.split(":").map(&:to_i)
-                # Find closest definition before max_line
-                if line <= max_line && line > best_line
-                  best_type = type
-                  best_line = line
-                end
+            scopes[scope_id][var_name].each do |def_key, type|
+              line, _column = def_key.split(":").map(&:to_i)
+              # Find closest definition before max_line
+              if line <= max_line && line > best_line
+                best_type = type
+                best_line = line
               end
             end
           end

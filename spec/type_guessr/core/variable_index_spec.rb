@@ -464,26 +464,6 @@ RSpec.describe TypeGuessr::Core::VariableIndex do
       expect(type2).to eq("Integer")
     end
 
-    it "searches broadly without scope_id" do
-      index.add_variable_type(
-        file_path: "/test/file.rb",
-        scope_type: :local_variables,
-        scope_id: "Recipe#cook",
-        var_name: "user",
-        def_line: 5,
-        def_column: 2,
-        type: "User"
-      )
-
-      type = index.find_variable_type_at_location(
-        var_name: "user",
-        scope_type: :local_variables,
-        max_line: 10
-      )
-
-      expect(type).to eq("User")
-    end
-
     it "returns nil for nonexistent variable" do
       type = index.find_variable_type_at_location(
         var_name: "nonexistent",

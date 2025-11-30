@@ -107,8 +107,8 @@ module RubyLsp
         # nesting may contain strings or objects with name method
         class_path = nesting.map { |n| n.is_a?(String) ? n : n.name }.join("::")
 
-        # Try to find enclosing method name for local variables
-        method_name = scope_type == :local_variables ? @node_context.call_node&.name&.to_s : nil
+        # Use surrounding_method to find enclosing method name for local variables
+        method_name = scope_type == :local_variables ? @node_context.surrounding_method : nil
 
         ::TypeGuessr::Core::ScopeResolver.generate_scope_id(
           scope_type,

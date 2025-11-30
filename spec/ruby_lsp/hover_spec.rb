@@ -967,4 +967,77 @@ RSpec.describe RubyLsp::TypeGuessr::Hover do
       end
     end
   end
+
+  describe "scope isolation for local variables" do
+    it "does not leak method calls from other methods with same parameter name" do
+      source = <<~RUBY
+        class Foo
+          def method_a(context)
+            @ctx = context
+          end
+
+          def method_b(context)
+            context.name
+            context.age
+          end
+        end
+      RUBY
+
+      with_server_and_addon(source) do |server, uri|
+        index = RubyLsp::TypeGuessr::VariableIndex.instance
+        index.clear
+
+        # Index method calls for method_b's context only
+        # method_a's context has no method calls
+        index.add_method_call(
+          file_path: uri.to_s,
+          scope_type: :local_variables,
+          scope_id: "Foo#method_b",
+          var_name: "context",
+          def_line: 6,
+          def_column: 15,
+          method_name: "name",
+          call_line: 7,
+          call_column: 4
+        )
+        index.add_method_call(
+          file_path: uri.to_s,
+          scope_type: :local_variables,
+          scope_id: "Foo#method_b",
+          var_name: "context",
+          def_line: 6,
+          def_column: 15,
+          method_name: "age",
+          call_line: 8,
+          call_column: 4
+        )
+
+        # Hover on context in method_a (line 2 = @ctx = context, character 15 = context)
+        server.process_message(
+          id: 1,
+          method: "textDocument/hover",
+          params: { textDocument: { uri: uri }, position: { line: 2, character: 15 } }
+        )
+        result_a = pop_result(server)
+        content_a = result_a.response.contents.value
+
+        # Hover on context in method_b (line 6 = context.name, character 4 = context)
+        server.process_message(
+          id: 2,
+          method: "textDocument/hover",
+          params: { textDocument: { uri: uri }, position: { line: 6, character: 4 } }
+        )
+        result_b = pop_result(server)
+        content_b = result_b.response.contents.value
+
+        # method_a's context should NOT show method calls from method_b
+        expect(content_a).not_to include("name")
+        expect(content_a).not_to include("age")
+
+        # method_b's context should show its own method calls
+        expect(content_b).to include("name")
+        expect(content_b).to include("age")
+      end
+    end
+  end
 end

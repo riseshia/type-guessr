@@ -66,20 +66,12 @@ module TypeGuessr
       # rubocop:disable Lint/UnusedMethodArgument
       def get_direct_type(variable_name:, hover_line:, scope_type:, scope_id:, file_path: nil)
         # rubocop:enable Lint/UnusedMethodArgument
-        # First, try to find definitions from method call index
+        # Find definitions matching the exact scope
         definitions = @index.find_definitions(
           var_name: variable_name,
           scope_type: scope_type,
           scope_id: scope_id
         )
-
-        # If no exact match, try broader search
-        if definitions.empty?
-          definitions = @index.find_definitions(
-            var_name: variable_name,
-            scope_type: scope_type
-          )
-        end
 
         # Find the closest definition before the hover line
         best_match = definitions
@@ -134,53 +126,30 @@ module TypeGuessr
       # rubocop:disable Lint/UnusedMethodArgument
       def collect_method_calls(variable_name:, hover_line:, scope_type:, scope_id:, file_path: nil)
         # rubocop:enable Lint/UnusedMethodArgument
-        # Try to find definitions matching the exact scope
+        # Find definitions matching the exact scope
         definitions = @index.find_definitions(
           var_name: variable_name,
           scope_type: scope_type,
           scope_id: scope_id
         )
 
-        # If no exact match, try without scope_id (broader search)
-        if definitions.empty?
-          definitions = @index.find_definitions(
-            var_name: variable_name,
-            scope_type: scope_type
-          )
-        end
-
         # Find the closest definition that appears before the hover line
         best_match = definitions
                      .select { |def_info| def_info[:def_line] <= hover_line }
                      .max_by { |def_info| def_info[:def_line] }
 
-        if best_match
-          # Use the exact variable definition location for precise results
-          calls = @index.get_method_calls(
-            file_path: best_match[:file_path],
-            scope_type: best_match[:scope_type],
-            scope_id: best_match[:scope_id],
-            var_name: variable_name,
-            def_line: best_match[:def_line],
-            def_column: best_match[:def_column]
-          )
-          calls.map { |call| call[:method] }.uniq
-        else
-          # Fallback: collect method calls from all matching definitions
-          method_names = []
-          definitions.each do |def_info|
-            calls = @index.get_method_calls(
-              file_path: def_info[:file_path],
-              scope_type: def_info[:scope_type],
-              scope_id: def_info[:scope_id],
-              var_name: variable_name,
-              def_line: def_info[:def_line],
-              def_column: def_info[:def_column]
-            )
-            method_names.concat(calls.map { |call| call[:method] })
-          end
-          method_names.uniq.take(20)
-        end
+        return [] if !best_match
+
+        # Use the exact variable definition location for precise results
+        calls = @index.get_method_calls(
+          file_path: best_match[:file_path],
+          scope_type: best_match[:scope_type],
+          scope_id: best_match[:scope_id],
+          var_name: variable_name,
+          def_line: best_match[:def_line],
+          def_column: best_match[:def_column]
+        )
+        calls.map { |call| call[:method] }.uniq
       end
     end
   end
