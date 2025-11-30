@@ -220,6 +220,102 @@ module TypeGuessr
           end
         end
       end
+
+      # Export index data as a hash (for debug inspection)
+      # @return [Hash] the complete index data
+      def to_h
+        @mutex.synchronize do
+          {
+            index: deep_copy(@index),
+            types: deep_copy(@types)
+          }
+        end
+      end
+
+      # Get statistics about the index
+      # @return [Hash] statistics about indexed data
+      def stats
+        @mutex.synchronize do
+          files = Set.new
+          local_count = 0
+          instance_count = 0
+          class_count = 0
+
+          @index.each do |scope_type, scope_index|
+            scope_index.each do |file_path, scopes|
+              files << file_path
+              scopes.each_value do |vars|
+                vars.each_value do |defs|
+                  count = defs.size
+                  case scope_type
+                  when :local_variables
+                    local_count += count
+                  when :instance_variables
+                    instance_count += count
+                  when :class_variables
+                    class_count += count
+                  end
+                end
+              end
+            end
+          end
+
+          {
+            total_definitions: local_count + instance_count + class_count,
+            files_count: files.size,
+            local_variables_count: local_count,
+            instance_variables_count: instance_count,
+            class_variables_count: class_count
+          }
+        end
+      end
+
+      # Search index by file path pattern
+      # @param query [String] the file path pattern to search for (case-insensitive)
+      # @return [Hash] filtered index and types matching the query
+      def search(query)
+        @mutex.synchronize do
+          query_downcase = query.downcase
+          filtered_index = {}
+          filtered_types = {}
+
+          @index.each do |scope_type, scope_index|
+            scope_index.each do |file_path, scopes|
+              next if !file_path.downcase.include?(query_downcase)
+
+              filtered_index[scope_type] ||= {}
+              filtered_index[scope_type][file_path] = deep_copy(scopes)
+
+              # Also include types for matching files
+              if @types[scope_type]&.key?(file_path)
+                filtered_types[scope_type] ||= {}
+                filtered_types[scope_type][file_path] = deep_copy(@types[scope_type][file_path])
+              end
+            end
+          end
+
+          {
+            index: filtered_index,
+            types: filtered_types
+          }
+        end
+      end
+
+      private
+
+      # Deep copy a nested hash structure
+      # @param obj [Object] the object to copy
+      # @return [Object] deep copy of the object
+      def deep_copy(obj)
+        case obj
+        when Hash
+          obj.transform_values { |v| deep_copy(v) }
+        when Array
+          obj.map { |v| deep_copy(v) }
+        else
+          obj
+        end
+      end
     end
   end
 end

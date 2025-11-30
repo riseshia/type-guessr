@@ -77,7 +77,20 @@ export TYPE_GUESSR_DEBUG=1
 code .
 ```
 
-In debug mode, the addon will log method calls to stderr and show method lists in hover tooltips when type cannot be inferred.
+In debug mode, the addon will:
+- Log method calls to stderr
+- Show method lists in hover tooltips when type cannot be inferred
+- Start a debug web server on `http://127.0.0.1:7010`
+
+### Debug Web Server
+
+When debug mode is enabled, a web server starts automatically at `http://127.0.0.1:7010`. This provides a web interface to inspect the variable index:
+
+- **Statistics**: Total indexed definitions, file count, variable counts by type
+- **Search**: Search by file path pattern to view indexed variables
+- **Variable details**: See inferred types and method calls for each variable
+
+This is useful for understanding how TypeGuessr analyzes your codebase and debugging type inference issues.
 
 ## Development
 
