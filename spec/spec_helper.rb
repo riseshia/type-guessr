@@ -6,7 +6,7 @@ require "ruby_lsp/test_helper"
 require "uri"
 
 # Ensure TypeInferrer is loaded for tests
-require "type_guessr/core/type_inferrer"
+require "ruby_lsp/type_guessr/type_inferrer"
 
 # Enable debug mode for tests
 ENV["TYPE_GUESSR_DEBUG"] = "1"

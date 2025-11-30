@@ -5,7 +5,7 @@ require "prism"
 require_relative "../../type_guessr/version" unless defined?(TypeGuessr::VERSION)
 require_relative "../../type_guessr/core/ast_analyzer"
 require_relative "../../type_guessr/core/variable_index"
-require_relative "../../type_guessr/core/type_inferrer"
+require_relative "type_inferrer"
 
 module RubyLsp
   module TypeGuessr
@@ -22,9 +22,9 @@ module RubyLsp
       # Swap the ruby-lsp's type inferrer with our custom implementation
       def swap_type_inferrer
         @original_type_inferrer = @global_state.type_inferrer
-        custom_inferrer = ::TypeGuessr::Core::TypeInferrer.new(@global_state.index)
+        custom_inferrer = ::RubyLsp::TypeGuessr::TypeInferrer.new(@global_state.index)
         @global_state.instance_variable_set(:@type_inferrer, custom_inferrer)
-        log_message("Swapped TypeInferrer with TypeGuessr::Core::TypeInferrer")
+        log_message("Swapped TypeInferrer with RubyLsp::TypeGuessr::TypeInferrer")
       end
 
       # Restore the original type inferrer

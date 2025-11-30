@@ -2,7 +2,7 @@
 
 require "spec_helper"
 
-RSpec.describe TypeGuessr::Core::TypeInferrer do
+RSpec.describe RubyLsp::TypeGuessr::TypeInferrer do
   subject(:inferrer) { described_class.new(index) }
 
   let(:index) { RubyIndexer::Index.new }

@@ -2,8 +2,8 @@
 
 require "ruby_lsp/type_inferrer"
 
-module TypeGuessr
-  module Core
+module RubyLsp
+  module TypeGuessr
     # Custom TypeInferrer that inherits from ruby-lsp's TypeInferrer.
     # This allows TypeGuessr to hook into ruby-lsp's type inference system
     # for enhanced heuristic type guessing while reusing Type and GuessedType classes.
