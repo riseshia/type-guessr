@@ -20,16 +20,14 @@ module RubyLsp
         direct_type = type_info[:direct_type]
         method_calls = type_info[:method_calls] || []
 
+        # Debug logging for method calls (always log when debug mode, regardless of matching_types)
+        warn("[TypeGuessr] Variable '#{variable_name}' method calls: #{method_calls.inspect}") if debug_mode?
+
         # Priority 1: Use direct type inference (from literal or .new call)
         return "**Inferred type:** `#{direct_type}`" if direct_type
 
         # Priority 2: Try to infer type if we have method calls and matching types
-        unless matching_types.empty?
-          # Debug logging for method calls
-          warn("[TypeGuessr] Variable '#{variable_name}' method calls: #{method_calls.inspect}") if debug_mode? && !method_calls.empty?
-
-          return format_inferred_types(matching_types)
-        end
+        return format_inferred_types(matching_types) unless matching_types.empty?
 
         # Fallback: show method calls only in debug mode, otherwise show nothing
         return unless debug_mode?
@@ -61,12 +59,10 @@ module RubyLsp
       # @param variable_name [String] the variable name
       # @param method_calls [Array<String>] array of method names
       # @return [String] formatted debug content
-      def format_debug_content(variable_name, method_calls)
+      def format_debug_content(_variable_name, method_calls)
         if method_calls.empty?
-          warn("[TypeGuessr] Variable '#{variable_name}': No method calls found")
           "No method calls found."
         else
-          warn("[TypeGuessr] Variable '#{variable_name}' method calls: #{method_calls.inspect}")
           content = "Method calls:\n"
           method_calls.each do |method_name|
             content += "- `#{method_name}`\n"
