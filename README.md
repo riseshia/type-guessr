@@ -1,4 +1,4 @@
-# RubyLsp::Guesser
+# TypeGuessr
 
 A Ruby LSP addon that provides hover tooltips with helpful information.
 
@@ -14,7 +14,7 @@ A Ruby LSP addon that provides hover tooltips with helpful information.
 Add this line to your application's Gemfile:
 
 ```ruby
-gem 'ruby-lsp-guesser'
+gem 'type-guessr'
 ```
 
 And then execute:
@@ -26,7 +26,7 @@ bundle install
 Or install it yourself as:
 
 ```bash
-gem install ruby-lsp-guesser
+gem install type-guessr
 ```
 
 ## Usage
@@ -85,4 +85,4 @@ After checking out the repo, run `bin/setup` to install dependencies. Then, run 
 
 ## Contributing
 
-Bug reports and pull requests are welcome on GitHub at https://github.com/[USERNAME]/ruby-lsp-guesser.
+Bug reports and pull requests are welcome on GitHub at https://github.com/riseshia/type-guessr.
