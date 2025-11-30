@@ -16,9 +16,12 @@ module RubyLsp
     # Resolves variable types by analyzing definitions and method calls
     # LSP adapter that extracts data from Prism nodes and delegates to core TypeResolver
     class VariableTypeResolver
-      def initialize(node_context, global_state = nil)
+      # Initialize with node context and either global_state or index
+      # @param node_context [RubyLsp::NodeContext] the node context
+      # @param global_state_or_index [Object, nil] either GlobalState (has .index) or RubyIndexer::Index directly
+      def initialize(node_context, global_state_or_index = nil)
         @node_context = node_context
-        @global_state = global_state
+        @index = extract_index(global_state_or_index)
         @core_resolver = ::TypeGuessr::Core::TypeResolver.new
       end
 
@@ -48,15 +51,29 @@ module RubyLsp
       # @param method_calls [Array<String>] array of method names
       # @return [Array<String>] array of matching type names
       def infer_type_from_methods(method_calls)
-        return [] if !@global_state
+        return [] if !@index
         return [] if method_calls.empty?
 
-        index = @global_state.index
-        matcher = TypeMatcher.new(index)
+        matcher = TypeMatcher.new(@index)
         @core_resolver.infer_type_from_methods(method_calls, matcher)
       end
 
       private
+
+      # Extract index from global_state or use directly if it's already an index
+      # @param global_state_or_index [Object, nil] either GlobalState or Index
+      # @return [RubyIndexer::Index, nil] the index or nil
+      def extract_index(global_state_or_index)
+        return nil if global_state_or_index.nil?
+
+        # If it responds to .index, it's a GlobalState
+        if global_state_or_index.respond_to?(:index)
+          global_state_or_index.index
+        else
+          # Otherwise assume it's already an index
+          global_state_or_index
+        end
+      end
 
       # Extract variable name from a node
       # @param node [Prism::Node] the node to extract from
