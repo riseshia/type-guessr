@@ -60,7 +60,7 @@ module RubyLsp
 
       def add_hover_content(node)
         type_info = @type_resolver.resolve_type(node)
-        return unless type_info
+        return if !type_info
 
         # Try to infer type from method calls if available
         matching_types = @type_resolver.infer_type_from_methods(type_info[:method_calls])

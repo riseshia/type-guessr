@@ -49,7 +49,7 @@ module TypeGuessr
       # @return [Array<String>] array of matching type names
       def infer_type_from_methods(method_calls, type_matcher)
         return [] if method_calls.empty?
-        return [] unless type_matcher
+        return [] if !type_matcher
 
         type_matcher.find_matching_types(method_calls)
       end

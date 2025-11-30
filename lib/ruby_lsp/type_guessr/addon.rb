@@ -4,7 +4,7 @@ require "ruby_lsp/addon"
 require "prism"
 require_relative "hover"
 require_relative "runtime_adapter"
-require_relative "../../type_guessr/version" unless defined?(TypeGuessr::VERSION)
+require_relative "../../type_guessr/version" if !defined?(TypeGuessr::VERSION)
 
 module RubyLsp
   module TypeGuessr
@@ -72,7 +72,7 @@ module RubyLsp
           uri = URI(change[:uri])
           file_path = uri.to_standardized_path
           next if file_path.nil? || File.directory?(file_path)
-          next unless file_path.end_with?(".rb")
+          next if !file_path.end_with?(".rb")
 
           case change[:type]
           when Constant::FileChangeType::CREATED, Constant::FileChangeType::CHANGED
@@ -94,12 +94,12 @@ module RubyLsp
         targets = RubyLsp::Listeners::Hover::ALLOWED_TARGETS
 
         HOVER_TARGET_NODES.each do |target|
-          targets << target unless targets.include?(target)
+          targets << target if !targets.include?(target)
         end
       end
 
       def log_message(message_queue, message)
-        return unless message_queue
+        return if !message_queue
         return if message_queue.closed?
 
         message_queue << RubyLsp::Notification.window_log_message(

@@ -24,6 +24,9 @@ Layout/LineLength:
 Lint/DuplicateBranch:
   Enabled: false
 
+Style/NegatedIf:
+  Enabled: false
+
 # Disable all Metrics cops
 Metrics:
   Enabled: false

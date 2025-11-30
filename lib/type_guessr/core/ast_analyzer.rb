@@ -134,7 +134,7 @@ module TypeGuessr
       end
 
       def visit_rest_parameter_node(node)
-        return super unless node.name
+        return super if !node.name
 
         var_name = node.name.to_s
         location = node.location
@@ -157,7 +157,7 @@ module TypeGuessr
       end
 
       def visit_keyword_rest_parameter_node(node)
-        return super unless node.name
+        return super if !node.name
 
         var_name = node.name.to_s
         location = node.location
@@ -166,7 +166,7 @@ module TypeGuessr
       end
 
       def visit_block_parameter_node(node)
-        return super unless node.name
+        return super if !node.name
 
         var_name = node.name.to_s
         location = node.location
@@ -176,7 +176,7 @@ module TypeGuessr
 
       # Track method calls on variables
       def visit_call_node(node)
-        return super unless node.receiver
+        return super if !node.receiver
 
         receiver = node.receiver
 

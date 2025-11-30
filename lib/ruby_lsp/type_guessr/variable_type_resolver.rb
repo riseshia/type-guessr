@@ -6,7 +6,7 @@ require_relative "type_matcher"
 # Explicitly require core dependencies to ensure they're loaded
 # even when this file is loaded independently (e.g., by Ruby LSP)
 # Load version first to ensure TypeGuessr module exists
-require_relative "../../type_guessr/version" unless defined?(TypeGuessr::VERSION)
+require_relative "../../type_guessr/version" if !defined?(TypeGuessr::VERSION)
 require_relative "../../type_guessr/core/type_resolver"
 require_relative "../../type_guessr/core/variable_index"
 require_relative "../../type_guessr/core/scope_resolver"
@@ -27,7 +27,7 @@ module RubyLsp
       # @return [Hash] hash with :direct_type and :method_calls keys
       def resolve_type(node)
         variable_name = extract_variable_name(node)
-        return nil unless variable_name
+        return nil if !variable_name
 
         location = node.location
         hover_line = location.start_line
@@ -48,7 +48,7 @@ module RubyLsp
       # @param method_calls [Array<String>] array of method names
       # @return [Array<String>] array of matching type names
       def infer_type_from_methods(method_calls)
-        return [] unless @global_state
+        return [] if !@global_state
         return [] if method_calls.empty?
 
         index = @global_state.index

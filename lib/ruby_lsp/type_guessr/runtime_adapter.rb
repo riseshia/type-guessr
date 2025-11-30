@@ -2,7 +2,7 @@
 
 require "prism"
 
-require_relative "../../type_guessr/version" unless defined?(TypeGuessr::VERSION)
+require_relative "../../type_guessr/version" if !defined?(TypeGuessr::VERSION)
 require_relative "../../type_guessr/core/ast_analyzer"
 require_relative "../../type_guessr/core/variable_index"
 require_relative "type_inferrer"
@@ -29,7 +29,7 @@ module RubyLsp
 
       # Restore the original type inferrer
       def restore_type_inferrer
-        return unless @global_state && @original_type_inferrer
+        return if !@global_state || !@original_type_inferrer
 
         @global_state.instance_variable_set(:@type_inferrer, @original_type_inferrer)
         log_message("Restored original TypeInferrer")
@@ -98,7 +98,7 @@ module RubyLsp
 
       # Re-index a single file by traversing its AST
       def reindex_file(file_path)
-        return unless File.exist?(file_path)
+        return if !File.exist?(file_path)
 
         # First, clear existing index entries for this file
         clear_file_index(file_path)
@@ -127,7 +127,7 @@ module RubyLsp
 
       def traverse_file_ast(uri)
         file_path = uri.full_path
-        return unless file_path && File.exist?(file_path)
+        return if !file_path || !File.exist?(file_path)
 
         source = File.read(file_path)
         result = Prism.parse(source)
@@ -141,7 +141,7 @@ module RubyLsp
 
       # Send a log message to the LSP client
       def log_message(message)
-        return unless @message_queue
+        return if !@message_queue
         return if @message_queue.closed?
 
         @message_queue << RubyLsp::Notification.window_log_message(

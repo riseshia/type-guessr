@@ -57,7 +57,7 @@ module TypeGuessr
           }
 
           calls = scope_index[file_path][scope_id][var_name][def_key]
-          calls << call_info unless calls.include?(call_info)
+          calls << call_info if !calls.include?(call_info)
         end
       end
 
@@ -96,7 +96,7 @@ module TypeGuessr
 
               scopes.each do |sid, vars|
                 next if scope_id && sid != scope_id
-                next unless vars.key?(var_name)
+                next if !vars.key?(var_name)
 
                 vars[var_name].each_key do |def_key|
                   line, column = def_key.split(":").map(&:to_i)
@@ -186,7 +186,7 @@ module TypeGuessr
       def find_variable_type_at_location(var_name:, scope_type:, max_line:, scope_id: nil)
         @mutex.synchronize do
           scope_types = @types[scope_type]
-          return nil unless scope_types
+          return nil if !scope_types
 
           best_type = nil
           best_line = 0
@@ -205,10 +205,10 @@ module TypeGuessr
             end
 
             # If no exact match, try all scopes
-            next unless best_type.nil?
+            next if !best_type.nil?
 
             scopes.each_value do |vars|
-              next unless vars.key?(var_name)
+              next if !vars.key?(var_name)
 
               vars[var_name].each do |def_key, type|
                 line, _column = def_key.split(":").map(&:to_i)

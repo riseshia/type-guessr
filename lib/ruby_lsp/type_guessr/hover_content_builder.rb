@@ -27,10 +27,10 @@ module RubyLsp
         return "**Inferred type:** `#{direct_type}`" if direct_type
 
         # Priority 2: Try to infer type if we have method calls and matching types
-        return format_inferred_types(matching_types) unless matching_types.empty?
+        return format_inferred_types(matching_types) if !matching_types.empty?
 
         # Fallback: show method calls only in debug mode, otherwise show nothing
-        return unless debug_mode?
+        return if !debug_mode?
 
         format_debug_content(variable_name, method_calls)
       end
@@ -85,7 +85,7 @@ module RubyLsp
       # @return [Boolean] true if debug mode is enabled in config
       def load_debug_mode_from_config
         config_path = File.join(Dir.pwd, ".type-guessr.yml")
-        return false unless File.exist?(config_path)
+        return false if !File.exist?(config_path)
 
         require "yaml"
         config = YAML.load_file(config_path)
