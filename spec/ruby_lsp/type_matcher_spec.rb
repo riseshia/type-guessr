@@ -263,6 +263,39 @@ RSpec.describe RubyLsp::TypeGuessr::TypeMatcher do
     end
   end
 
+  describe "with method override in subclasses" do
+    before do
+      source = <<~RUBY
+        class Animal
+          def eat; end
+        end
+
+        class Dog < Animal
+          def eat; end
+          def bark; end
+        end
+
+        class Cat < Animal
+          def eat; end
+          def meow; end
+        end
+      RUBY
+
+      index.index_single(URI::Generic.from_path(path: "/override.rb"), source)
+    end
+
+    it "reduces overriding subclasses to common ancestor" do
+      matches = matcher.find_matching_types(["eat"])
+      # Dog and Cat both override eat, but Animal is the common ancestor
+      expect(matches).to eq(["Animal"])
+    end
+
+    it "returns specific class when subclass-only method is included" do
+      matches = matcher.find_matching_types(%w[eat bark])
+      expect(matches).to eq(["Dog"])
+    end
+  end
+
   describe "with mixins" do
     before do
       source = <<~RUBY
