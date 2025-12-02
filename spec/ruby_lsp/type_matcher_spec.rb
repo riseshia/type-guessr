@@ -228,6 +228,100 @@ RSpec.describe RubyLsp::TypeGuessr::TypeMatcher do
     end
   end
 
+  describe "with inheritance" do
+    before do
+      source = <<~RUBY
+        class Recipe
+          def ingredients
+            []
+          end
+        end
+
+        class Recipe2 < Recipe
+          def steps
+            []
+          end
+        end
+      RUBY
+
+      index.index_single(URI::Generic.from_path(path: "/inheritance.rb"), source)
+    end
+
+    it "finds subclass that has inherited method and own method" do
+      matches = matcher.find_matching_types(%w[ingredients steps])
+      expect(matches).to eq(["Recipe2"])
+    end
+
+    it "finds parent class when only parent methods are called" do
+      matches = matcher.find_matching_types(["ingredients"])
+      expect(matches).to eq(["Recipe"])
+    end
+
+    it "excludes parent class when it lacks subclass methods" do
+      matches = matcher.find_matching_types(%w[ingredients steps])
+      expect(matches).not_to include("Recipe")
+    end
+  end
+
+  describe "with mixins" do
+    before do
+      source = <<~RUBY
+        module Commentable
+          def comments; end
+        end
+
+        module Likeable
+          def likes; end
+        end
+
+        class Recipe
+          include Commentable
+          def ingredients; end
+        end
+
+        class Article
+          include Commentable
+          include Likeable
+          def author; end
+        end
+
+        class Post
+          include Likeable
+          def title; end
+        end
+      RUBY
+
+      index.index_single(URI::Generic.from_path(path: "/mixins.rb"), source)
+    end
+
+    it "finds class with mixin method and own method" do
+      matches = matcher.find_matching_types(%w[comments ingredients])
+      expect(matches).to eq(["Recipe"])
+    end
+
+    it "finds class when class method is combined with mixin method" do
+      matches = matcher.find_matching_types(%w[author comments])
+      expect(matches).to eq(["Article"])
+    end
+
+    it "finds class when own method owner is collected and mixin is resolved" do
+      matches = matcher.find_matching_types(%w[likes author])
+      expect(matches).to eq(["Article"])
+    end
+
+    # NOTE: This is a known limitation of the current algorithm.
+    # When all methods come from mixins (no class-defined methods in the query),
+    # we cannot find the class that includes both modules.
+    # This would require reverse-lookup of module includers, which is expensive.
+    # If this becomes a common need, consider building a dedicated includers index.
+    it "cannot find class when all methods come from mixins (known limitation)" do
+      matches = matcher.find_matching_types(%w[comments likes])
+      # Article includes both Commentable and Likeable, but we can't find it
+      # because neither module is a class and they don't include each other
+      expect(matches).to eq([])
+    end
+  end
+
   describe "finding methods in class" do
     before do
       source = <<~RUBY
