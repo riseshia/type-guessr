@@ -27,16 +27,22 @@ module RubyLsp
         # Priority 1: Use direct type inference (from literal or .new call)
         if direct_type
           formatted_type = format_type_with_link(direct_type, type_entries[direct_type])
-          return "**Guessed type:** #{formatted_type}"
+          result = "**Guessed type:** #{formatted_type}"
+          result += format_debug_reason(:direct_type, direct_type, method_calls) if debug_mode?
+          return result
         end
 
         # Priority 2: Try to guess type if we have method calls and matching types
-        return format_guessed_types(matching_types, type_entries) if !matching_types.empty?
+        if !matching_types.empty?
+          result = format_guessed_types(matching_types, type_entries)
+          result += format_debug_reason(:method_calls, matching_types, method_calls) if debug_mode?
+          return result
+        end
 
         # Fallback: show method calls only in debug mode, otherwise show nothing
         return if !debug_mode?
 
-        format_debug_content(variable_name, method_calls)
+        format_debug_reason(:unknown, nil, method_calls)
       end
 
       private
@@ -101,20 +107,39 @@ module RubyLsp
         end
       end
 
-      # Format debug content showing method calls
-      # @param variable_name [String] the variable name
+      # Format debug reason showing inference basis
+      # @param reason_type [Symbol] :direct_type, :method_calls, or :unknown
+      # @param inferred_type [String, Array<String>, nil] the inferred type(s)
       # @param method_calls [Array<String>] array of method names
-      # @return [String] formatted debug content
-      def format_debug_content(_variable_name, method_calls)
-        if method_calls.empty?
-          "**[Debug]** No method calls found."
-        else
-          content = "**[Debug]** Method calls:\n"
-          method_calls.each do |method_name|
-            content += "- `#{method_name}`\n"
-          end
-          content
+      # @return [String] formatted debug reason
+      def format_debug_reason(reason_type, inferred_type, method_calls)
+        content = "\n\n---\n**[TypeGuessr Debug] Inference basis:**\n"
+
+        case reason_type
+        when :direct_type
+          content += "- Reason: `.new` call or literal assignment\n"
+          content += "- Direct type: `#{inferred_type}`\n"
+          content += "- Method calls: #{format_method_calls_list(method_calls)}\n"
+        when :method_calls
+          types = Array(inferred_type)
+          content += "- Reason: Method call pattern matching\n"
+          content += "- Matched types: #{types.map { |t| "`#{t}`" }.join(", ")}\n"
+          content += "- Method calls: #{format_method_calls_list(method_calls)}\n"
+        when :unknown
+          content += "- Reason: Unknown\n"
+          content += "- Method calls: #{format_method_calls_list(method_calls)}\n"
         end
+
+        content
+      end
+
+      # Format method calls as a readable list
+      # @param method_calls [Array<String>] array of method names
+      # @return [String] formatted method calls
+      def format_method_calls_list(method_calls)
+        return "(none)" if method_calls.empty?
+
+        method_calls.map { |m| "`#{m}`" }.join(", ")
       end
 
       # Check if debug mode is enabled via environment variable or config file

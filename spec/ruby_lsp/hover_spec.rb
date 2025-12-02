@@ -511,8 +511,10 @@ RSpec.describe RubyLsp::TypeGuessr::Hover do
           expect(content).to match(/Ambiguous type/)
           # Should show only 3 classes plus ellipsis
           expect(content).to match(/\.\.\./)
-          # Should have exactly 3 class names shown
-          class_count = content.scan(/`Class[A-E]`/).size
+          # Should have exactly 3 class names shown in the main content
+          # (may have more in debug info section, so match only the first occurrence before debug section)
+          main_content = content.split("**[TypeGuessr Debug]").first
+          class_count = main_content.scan(/`Class[A-E]`/).size
           expect(class_count).to eq(3)
         end
       end
