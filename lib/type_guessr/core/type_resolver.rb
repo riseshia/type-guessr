@@ -37,7 +37,6 @@ module TypeGuessr
         )
 
         {
-          variable_name: variable_name,
           direct_type: direct_type,
           method_calls: method_calls
         }

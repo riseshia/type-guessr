@@ -12,17 +12,13 @@ module RubyLsp
       end
 
       # Build hover content from type information
-      # @param type_info [Hash] hash with :variable_name, :direct_type, and :method_calls keys
+      # @param type_info [Hash] hash with :direct_type and :method_calls keys
       # @param matching_types [Array<String>] array of matching type names from inference
       # @param type_entries [Hash<String, Entry>] map of type name to entry for linking
       # @return [String, nil] the hover content or nil
       def build(type_info, matching_types: [], type_entries: {})
-        variable_name = type_info[:variable_name]
         direct_type = type_info[:direct_type]
         method_calls = type_info[:method_calls] || []
-
-        # Debug logging for method calls (always log when debug mode, regardless of matching_types)
-        warn("[TypeGuessr] Variable '#{variable_name}' method calls: #{method_calls.inspect}") if debug_mode?
 
         # Priority 1: Use direct type inference (from literal or .new call)
         if direct_type
