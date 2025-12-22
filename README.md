@@ -1,3 +1,5 @@
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/riseshia/type-guessr)
+
 # TypeGuessr
 
 A Ruby LSP addon that provides hover tooltips with helpful information.
