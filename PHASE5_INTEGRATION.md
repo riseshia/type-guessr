@@ -1,227 +1,346 @@
-# Phase 5: Hover Enhancement - Integration Guide
+# Phase 5: Hover Enhancement - Design Document
 
-This document describes the Phase 5 components that have been implemented and how they can be integrated into the existing Hover system.
+## Overview
 
-## Completed Components
+This document describes the design for integrating type inference components (implemented in Phase 1-4) into the existing Hover system.
 
-All core components for Phase 5 are **fully implemented and tested**:
+**Key Question**: Do the new components replace or augment the existing system?
 
-### 1. TypeFormatter (lib/type_guessr/core/type_formatter.rb)
-Converts Type objects to RBS-style strings:
-- `Unknown` → `"untyped"`
-- `ClassInstance` → class name
-- `Union` → `"A | B | C"`
-- `ArrayType` → `"Array[ElementType]"`
-- `HashShape` → `"{ key: Type, ... }"`
-
-**Status:** ✅ Complete (8 tests passing)
-
-### 2. FlowAnalyzer (lib/type_guessr/core/flow_analyzer.rb)
-Performs flow-sensitive type inference for local variables:
-- Assignment tracking
-- Branch merge (if/else → union)
-- Short-circuit operators (||=, &&=)
-- Return type inference
-
-**Status:** ✅ Complete (10 tests passing)
-
-### 3. TypeDB (lib/type_guessr/core/type_db.rb)
-Storage system for inferred types:
-- 2-layer lookup: (file, range) → Type
-- File-level invalidation
-- Incremental updates
-
-**Status:** ✅ Complete (7 tests passing)
-
-### 4. RBSProvider (lib/type_guessr/core/rbs_provider.rb)
-Loads and queries RBS signatures:
-- Lazy environment loading
-- `get_method_signatures(class_name, method_name)` API
-- Handles overloaded signatures
-
-**Status:** ✅ Complete (6 tests passing)
-
-### 5. Core Type System (lib/type_guessr/core/types.rb)
-Foundation type representations:
-- Unknown, ClassInstance, Union, ArrayType, HashShape
-- Type equality and normalization
-
-**Status:** ✅ Complete (31 tests passing)
+**Conclusion**: **Augmentation** - New components serve as fallbacks to the existing method-call heuristic, gradually becoming the primary source over time.
 
 ---
 
-## Integration Approach
+## 1. Implemented Components Summary
 
-### Current Architecture
+| Component | Role | Tests | Dependencies |
+|-----------|------|-------|--------------|
+| `Types` | Type representation (Unknown, Union, etc.) | 31 | None |
+| `TypeDB` | (file, range) → Type storage | 7 | Types |
+| `FlowAnalyzer` | Flow-sensitive local variable analysis | 10 | Types, Prism |
+| `RBSProvider` | RBS signature lookup | 6 | RBS gem |
+| `TypeFormatter` | Type → RBS-style string | 8 | Types |
+
+---
+
+## 2. Current vs Target Architecture
+
+### 2.1 Current System
 
 ```
-User Hover Request
-       ↓
-   Hover.rb (LSP Adapter)
-       ↓
-VariableTypeResolver ──→ VariableIndex (method-call set heuristic)
-       ↓
-HoverContentBuilder ──→ Display
+[Hover Request]
+      │
+      ▼
+┌─────────────────┐
+│     Hover.rb    │ ← LSP event listener
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────────────┐
+│  VariableTypeResolver   │ ← Extract variable info from node
+└────────┬────────────────┘
+         │
+         ▼
+┌─────────────────────────┐
+│    VariableIndex        │ ← method-call set storage (existing)
+│  + TypeMatcher          │ ← method-call set → candidate types
+└────────┬────────────────┘
+         │
+         ▼
+┌─────────────────────────┐
+│  HoverContentBuilder    │ ← Format results
+└─────────────────────────┘
 ```
 
-### Target Architecture (Phase 5)
+**Current Limitations**:
+- Only method-call heuristic → no inference without method calls
+- Only literal assignments recognized as direct_type
+- RBS information not utilized
+
+### 2.2 Target System
 
 ```
-User Hover Request
-       ↓
-   Hover.rb (Enhanced)
-       ↓
-   ┌───┴───┐
-   ↓       ↓
-Variable  Method Call/Definition
-Hover     Hover (NEW)
-   ↓          ↓
-TypeDB ←─ FlowAnalyzer    RBSProvider
-   ↓          ↓                ↓
-TypeFormatter ←───────────────┘
-   ↓
-Display (RBS-style)
+[Hover Request]
+      │
+      ▼
+┌─────────────────────────────────────────────────────┐
+│                    Hover.rb                          │
+│  ┌─────────────┬─────────────┬────────────────────┐ │
+│  │ Variable    │ Call Node   │ Def Node           │ │
+│  │ Hover       │ Hover (NEW) │ Hover (NEW)        │ │
+│  └──────┬──────┴──────┬──────┴─────────┬──────────┘ │
+└─────────┼─────────────┼────────────────┼────────────┘
+          │             │                │
+          ▼             ▼                ▼
+    ┌───────────┐  ┌───────────┐  ┌───────────────┐
+    │  TypeDB   │  │RBSProvider│  │ FlowAnalyzer  │
+    │(1st try)  │  │           │  │ (on-demand)   │
+    └─────┬─────┘  └───────────┘  └───────────────┘
+          │
+          ▼ (fallback)
+    ┌─────────────────────────┐
+    │ VariableIndex (existing)│
+    │ + TypeMatcher           │
+    └─────────────────────────┘
+          │
+          ▼
+    ┌─────────────────────────┐
+    │    TypeFormatter        │ ← Unified output formatting
+    └─────────────────────────┘
 ```
 
-### Integration Steps
+---
 
-#### Step 1: Expression Type Hover (5.1)
+## 3. Key Design Decisions
 
-**Objective:** Use FlowAnalyzer + TypeDB for local variable types
+### 3.1 FlowAnalyzer Execution Timing
+
+**Option A: At file indexing time (Background)**
+- Pros: Fast hover response
+- Cons: Increased memory usage, complex invalidation logic
+
+**Option B: At hover request time (On-demand)**
+- Pros: Always up-to-date results, simple implementation
+- Cons: Possible hover response delay (mitigated by scope-limited analysis)
+
+**Decision: Option B (On-demand) with caching**
+- FlowAnalyzer only analyzes method/block scope → fast
+- Results reused for repeated requests on same file
+
+### 3.2 RBSProvider Instance Management
+
+**Decision: Singleton with lazy loading**
+```ruby
+# RBS environment loading is heavy (~500ms)
+# Load only on first request, reuse thereafter
+module TypeGuessr::Core
+  class RBSProvider
+    class << self
+      def instance
+        @instance ||= new
+      end
+    end
+  end
+end
+```
+
+### 3.3 Type Inference Priority
+
+```
+1. TypeDB (FlowAnalyzer results) ← Most accurate
+2. VariableIndex direct_type    ← Literal/.new assignments
+3. TypeMatcher (method-call)    ← Heuristic fallback
+4. Unknown                      ← Final fallback
+```
+
+### 3.4 Compatibility with Existing System
+
+**No Changes**:
+- VariableIndex, TypeMatcher, VariableTypeResolver remain unchanged
+- All existing tests continue to pass
+
+**Extensions**:
+- Integrate TypeFormatter into HoverContentBuilder
+- Add new node type listeners to Hover (call, def)
+
+---
+
+## 4. Integration Details
+
+### Phase 5.1: TypeFormatter Integration (Low Risk)
+
+**Files to Change**: `hover_content_builder.rb`
+
+**Current**:
+```ruby
+"**Guessed type:** `#{type_name}`"
+```
+
+**After**:
+```ruby
+# If type_name is String, use existing approach
+# If Type object, use TypeFormatter
+formatted = type_name.is_a?(String) ? type_name : TypeFormatter.format(type_name)
+"**Guessed type:** `#{formatted}`"
+```
+
+**Impact**: Output format change only, no logic changes
+
+---
+
+### Phase 5.2: Call Node Hover (Medium Risk)
+
+**Files to Change**: `hover.rb`
+
+**Additions**:
+```ruby
+HOVER_NODE_TYPES = [
+  # ... existing items ...
+  :call,  # NEW
+].freeze
+
+def on_call_node_enter(node)
+  # 1. Infer receiver type
+  receiver_type = resolve_receiver_type(node.receiver)
+  return if receiver_type.nil? || receiver_type == "Unknown"
+
+  # 2. Query RBS signatures
+  signatures = RBSProvider.instance.get_method_signatures(
+    receiver_type,
+    node.name.to_s
+  )
+  return if signatures.empty?
+
+  # 3. Format and output
+  content = format_method_signatures(node.name, signatures)
+  @response_builder.push(content, category: :documentation)
+end
+```
+
+**Dependencies**: Uses existing VariableTypeResolver for receiver type inference
+
+**Risk**: RBS loading delay (mitigated by lazy loading)
+
+---
+
+### Phase 5.3: FlowAnalyzer Integration (High Risk)
+
+**Files to Change**: `hover.rb`, `variable_type_resolver.rb`
+
+**Approach**: Add parallel path without modifying VariableTypeResolver
 
 ```ruby
-# In RuntimeAdapter or similar
-def analyze_file(file_path, source)
-  analyzer = TypeGuessr::Core::FlowAnalyzer.new
-  result = analyzer.analyze(source)
-
-  # Store results in TypeDB
-  type_db = TypeGuessr::Core::TypeDB.new
-  # ... convert AnalysisResult to TypeDB entries
-end
-
 # In Hover
 def add_hover_content(node)
-  # Try TypeDB first for expression types
-  type = type_db.get_type(file_path, node_range)
-
-  if type
-    formatted = TypeGuessr::Core::TypeFormatter.format(type)
-    @response_builder.push("**Type:** `#{formatted}`")
-  else
-    # Fallback to existing method-call heuristic
-    # ...
+  # 1. Try FlowAnalyzer (new path)
+  flow_type = try_flow_analysis(node)
+  if flow_type && flow_type != Types::Unknown.instance
+    formatted = TypeFormatter.format(flow_type)
+    @response_builder.push("**Type:** `#{formatted}`", category: :documentation)
+    return
   end
-end
-```
 
-**Changes Required:**
-- Add FlowAnalyzer execution in file indexing pipeline
-- Store results in TypeDB
-- Query TypeDB in Hover before fallback to method-call heuristic
-
-#### Step 2: Call Node Hover (5.2)
-
-**Objective:** Show RBS signatures for method calls
-
-```ruby
-# In Hover
-def on_call_node_enter(node)
-  receiver_type = infer_receiver_type(node.receiver)
-  return if receiver_type.nil?
-
-  class_name = extract_class_name(receiver_type)
-  method_name = node.name
-
-  rbs_provider = TypeGuessr::Core::RBSProvider.new
-  signatures = rbs_provider.get_method_signatures(class_name, method_name)
-
-  if signatures.any?
-    content = format_signatures(signatures)
-    @response_builder.push(content)
-  end
+  # 2. Existing path (fallback)
+  type_info = @type_resolver.resolve_type(node)
+  # ... existing logic ...
 end
 
-def format_signatures(signatures)
-  lines = signatures.map { |sig| "  #{sig.method_type}" }
-  "**Method signatures:**\n```ruby\n#{lines.join("\n")}\n```"
-end
-```
+private
 
-**Changes Required:**
-- Add `:call` to `HOVER_NODE_TYPES`
-- Implement receiver type inference (can use existing VariableTypeResolver)
-- Format RBS signatures for display
+def try_flow_analysis(node)
+  # Scope-limited analysis: current method/block only
+  source = extract_containing_scope_source(node)
+  return nil if source.nil?
 
-#### Step 3: Definition Hover (5.3)
-
-**Objective:** Show inferred return type for method definitions
-
-```ruby
-# In Hover
-def on_def_node_enter(node)
-  # Use FlowAnalyzer to get return type
-  analyzer = TypeGuessr::Core::FlowAnalyzer.new
-  source = extract_method_source(node)
+  analyzer = FlowAnalyzer.new
   result = analyzer.analyze(source)
+  result.type_at(node.location.start_line, node.location.start_column)
+rescue => e
+  nil  # Fallback on failure
+end
+```
+
+**Risks**:
+- Scope extraction logic complexity
+- Performance impact (mitigated by scope-limiting)
+
+---
+
+### Phase 5.4: Definition Hover (Low Risk)
+
+**Additions**:
+```ruby
+HOVER_NODE_TYPES = [
+  # ...
+  :def,  # NEW
+].freeze
+
+def on_def_node_enter(node)
+  # Use FlowAnalyzer for return type inference
+  source = node.slice  # method body only
+  analyzer = FlowAnalyzer.new
+  result = analyzer.analyze("def #{node.name}\n#{source}\nend")
 
   return_type = result.return_type_for_method(node.name.to_s)
-  formatted = TypeGuessr::Core::TypeFormatter.format(return_type)
+  formatted = TypeFormatter.format(return_type)
 
-  @response_builder.push("**Return type:** `#{formatted}`")
+  @response_builder.push(
+    "**Return type:** `#{formatted}`",
+    category: :documentation
+  )
 end
 ```
 
-**Changes Required:**
-- Add `:def` to `HOVER_NODE_TYPES`
-- Extract method source for analysis
-- Display inferred return type
+---
+
+## 5. Performance Considerations
+
+### LSP Response Time Constraints
+- Target: < 100ms (hover response)
+- RBS first load: ~500ms → solved with lazy loading + singleton
+- FlowAnalyzer: scope-limited → typically < 10ms
+
+### Memory
+- RBS Environment: ~50MB (loaded once)
+- TypeDB: few KB per file (if implemented)
+- FlowAnalyzer: one-time analysis, no caching needed
 
 ---
 
-## Testing Strategy
+## 6. Implementation Priority and Rationale
 
-All core components are fully tested. Integration testing should focus on:
+| Order | Task | Risk | Value | Rationale |
+|-------|------|------|-------|-----------|
+| 1 | TypeFormatter integration | Low | Medium | Minimal code changes, improved output |
+| 2 | Call Node Hover | Medium | High | New feature, immediate RBSProvider use |
+| 3 | Def Node Hover | Low | Medium | Uses FlowAnalyzer, independent |
+| 4 | FlowAnalyzer integration | High | High | Most complex, interacts with existing system |
 
-1. **File Indexing Pipeline**
-   - FlowAnalyzer execution on file changes
-   - TypeDB population and invalidation
-
-2. **Hover Integration**
-   - TypeDB lookup for expressions
-   - RBSProvider queries for method calls
-   - Fallback behavior when types are unknown
-
-3. **Performance**
-   - FlowAnalyzer is scope-limited (method/block level)
-   - RBSProvider uses lazy loading
-   - TypeDB provides fast lookups
+**Rationale**:
+- 1, 2, 3 can be implemented/deployed independently
+- 4 requires understanding of existing system, do last
 
 ---
 
-## Current Status Summary
+## 7. Testing Strategy
 
-✅ **Phase 1-4: Complete** (208 tests passing)
-- Core Type Model
-- TypeDB
-- FlowAnalyzer
-- RBSProvider
-- TypeFormatter
+### Unit Tests (Existing)
+- All component tests complete (208 tests)
 
-🔄 **Phase 5: Components Ready, Integration Pending**
-- All building blocks are implemented and tested
-- Integration requires architectural changes to existing Hover system
-- Recommended: Incremental integration with feature flags
+### Integration Tests (To Be Added)
+
+```ruby
+# Call Node Hover
+describe "call node hover" do
+  it "shows RBS signature for String#upcase" do
+    source = 'str = "hello"; str.upcase'
+    response = hover_at(source, line: 0, char: 18)  # 'upcase' position
+    expect(response).to include("() -> String")
+  end
+end
+
+# Def Node Hover
+describe "def node hover" do
+  it "shows inferred return type" do
+    source = "def foo; 42; end"
+    response = hover_at(source, line: 0, char: 4)  # 'foo' position
+    expect(response).to include("Integer")
+  end
+end
+```
 
 ---
 
-## Recommendation
+## 8. Conclusion
 
-The core infrastructure for Phase 5 is complete. Full integration should be done incrementally:
+All Phase 5 building blocks are fully implemented. Integration follows these principles:
 
-1. **First:** Add TypeFormatter to existing type display (low risk)
-2. **Second:** Add call node hover with RBSProvider (new feature)
-3. **Third:** Integrate FlowAnalyzer + TypeDB (requires file indexing changes)
-4. **Fourth:** Add method definition hover (small addition)
+1. **Preserve Existing System**: Augment, don't replace
+2. **Incremental Integration**: Separate into independently deployable units
+3. **Guaranteed Fallback**: Maintain existing behavior when new features fail
+4. **Performance First**: Lazy loading, scope-limited analysis
 
-Each step can be implemented, tested, and released independently.
+Estimated effort:
+- Phase 5.1 (TypeFormatter): ~1 hour
+- Phase 5.2 (Call Hover): ~2 hours
+- Phase 5.3 (Def Hover): ~1 hour
+- Phase 5.4 (FlowAnalyzer): ~4 hours
