@@ -163,15 +163,7 @@ module TypeGuessr
       def size
         @mutex.synchronize do
           count = 0
-          @index.each_value do |scope_index|
-            scope_index.each_value do |scopes|
-              scopes.each_value do |vars|
-                vars.each_value do |defs|
-                  count += defs.size
-                end
-              end
-            end
-          end
+          each_definition { |*, data| count += data.size }
           count
         end
       end
@@ -241,22 +233,16 @@ module TypeGuessr
           instance_count = 0
           class_count = 0
 
-          @index.each do |scope_type, scope_index|
-            scope_index.each do |file_path, scopes|
-              files << file_path
-              scopes.each_value do |vars|
-                vars.each_value do |defs|
-                  count = defs.size
-                  case scope_type
-                  when :local_variables
-                    local_count += count
-                  when :instance_variables
-                    instance_count += count
-                  when :class_variables
-                    class_count += count
-                  end
-                end
-              end
+          each_definition do |scope_type, file_path, _scope_id, _var_name, _def_key, data|
+            files << file_path
+            count = data.size
+            case scope_type
+            when :local_variables
+              local_count += count
+            when :instance_variables
+              instance_count += count
+            when :class_variables
+              class_count += count
             end
           end
 
@@ -302,6 +288,23 @@ module TypeGuessr
       end
 
       private
+
+      # Iterate over all definitions in the index
+      # Yields scope_type, file_path, scope_id, var_name, def_key, and data for each definition
+      # @yield [Symbol, String, String, String, String, Array<Hash>] scope_type, file_path, scope_id, var_name, def_key, data
+      def each_definition
+        @index.each do |scope_type, scope_index|
+          scope_index.each do |file_path, scopes|
+            scopes.each do |scope_id, vars|
+              vars.each do |var_name, defs|
+                defs.each do |def_key, data|
+                  yield(scope_type, file_path, scope_id, var_name, def_key, data)
+                end
+              end
+            end
+          end
+        end
+      end
 
       # Deep copy a nested hash structure
       # @param obj [Object] the object to copy
