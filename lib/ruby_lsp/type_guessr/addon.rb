@@ -34,7 +34,7 @@ module RubyLsp
         Prism::KeywordRestParameterNode,
         Prism::BlockParameterNode,
         Prism::ForwardingParameterNode,
-        Prism::SelfNode
+        Prism::SelfNode,
       ].freeze
 
       def initialize

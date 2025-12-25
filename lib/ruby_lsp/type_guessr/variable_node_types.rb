@@ -29,7 +29,7 @@ module RubyLsp
         ::Prism::KeywordRestParameterNode,
         ::Prism::BlockParameterNode,
         ::Prism::SelfNode,
-        ::Prism::ForwardingParameterNode
+        ::Prism::ForwardingParameterNode,
       ].freeze
 
       # Check if the given node is a variable node
