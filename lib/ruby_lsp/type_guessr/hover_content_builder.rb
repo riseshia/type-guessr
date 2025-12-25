@@ -81,7 +81,7 @@ module RubyLsp
           # Check if results were truncated (indicated by '...' marker)
           truncated = matching_types.last == TypeMatcher::TRUNCATED_MARKER
           display_types = truncated ? matching_types[0...-1] : matching_types
-          type_list = display_types.map { |t| "`#{t}`" }.join(", ")
+          type_list = format_inline_list(display_types)
           type_list += ", ..." if truncated
           "**Ambiguous type** (could be: #{type_list})"
         end
@@ -142,7 +142,7 @@ module RubyLsp
         when :method_calls
           types = Array(inferred_type)
           content += "- Reason: Method call pattern matching\n"
-          content += "- Matched types: #{types.map { |t| "`#{t}`" }.join(", ")}\n"
+          content += "- Matched types: #{format_inline_list(types)}\n"
           content += "- Method calls: #{format_method_calls_list(method_calls)}\n"
         when :unknown
           content += "- Reason: Unknown\n"
@@ -152,13 +152,20 @@ module RubyLsp
         content
       end
 
+      # Format an array of items as inline backtick-wrapped, comma-separated list
+      # @param items [Array<String>] array of items to format
+      # @return [String] formatted inline list (e.g., "`item1`, `item2`")
+      def format_inline_list(items)
+        items.map { |item| "`#{item}`" }.join(", ")
+      end
+
       # Format method calls as a readable list
       # @param method_calls [Array<String>] array of method names
       # @return [String] formatted method calls
       def format_method_calls_list(method_calls)
         return "(none)" if method_calls.empty?
 
-        method_calls.map { |m| "`#{m}`" }.join(", ")
+        format_inline_list(method_calls)
       end
 
       # Check if debug mode is enabled via environment variable or config file
