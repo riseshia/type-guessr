@@ -42,13 +42,10 @@ module TypeGuessr
       def add_method_call(file_path:, scope_type:, scope_id:, var_name:, def_line:, def_column:, method_name:,
                           call_line:, call_column:)
         @mutex.synchronize do
-          scope_index = @index[scope_type]
-          scope_index[file_path] ||= {}
-          scope_index[file_path][scope_id] ||= {}
-          scope_index[file_path][scope_id][var_name] ||= {}
+          nested = ensure_nested_hash(@index[scope_type], file_path, scope_id, var_name)
 
           def_key = "#{def_line}:#{def_column}"
-          scope_index[file_path][scope_id][var_name][def_key] ||= []
+          nested[def_key] ||= []
 
           call_info = {
             method: method_name,
@@ -56,7 +53,7 @@ module TypeGuessr
             column: call_column
           }
 
-          calls = scope_index[file_path][scope_id][var_name][def_key]
+          calls = nested[def_key]
           calls << call_info if !calls.include?(call_info)
         end
       end
@@ -126,13 +123,10 @@ module TypeGuessr
       # @param type [String] the guessed type (e.g., "String", "Integer", "User")
       def add_variable_type(file_path:, scope_type:, scope_id:, var_name:, def_line:, def_column:, type:)
         @mutex.synchronize do
-          scope_types = @types[scope_type]
-          scope_types[file_path] ||= {}
-          scope_types[file_path][scope_id] ||= {}
-          scope_types[file_path][scope_id][var_name] ||= {}
+          nested = ensure_nested_hash(@types[scope_type], file_path, scope_id, var_name)
 
           def_key = "#{def_line}:#{def_column}"
-          scope_types[file_path][scope_id][var_name][def_key] = type
+          nested[def_key] = type
         end
       end
 
@@ -288,6 +282,16 @@ module TypeGuessr
       end
 
       private
+
+      # Ensure nested hash structure exists for the given keys
+      # @param root [Hash] the root hash to start from
+      # @param keys [Array] the keys to traverse/create
+      # @return [Hash] the final nested hash
+      def ensure_nested_hash(root, *keys)
+        current = root
+        keys.each { |key| current = (current[key] ||= {}) }
+        current
+      end
 
       # Iterate over all definitions in the index
       # Yields scope_type, file_path, scope_id, var_name, def_key, and data for each definition
