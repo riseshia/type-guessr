@@ -17,31 +17,54 @@ module RubyLsp
       # @param type_entries [Hash<String, Entry>] map of type name to entry for linking
       # @return [String, nil] the hover content or nil
       def build(type_info, matching_types: [], type_entries: {})
-        direct_type = type_info[:direct_type]
         method_calls = type_info[:method_calls] || []
+        content, reason, inferred = build_type_content(type_info, matching_types, type_entries)
+
+        # Return nil if no content and not in debug mode
+        return nil if content.nil? && !debug_mode?
+
+        append_debug_info(content, reason, inferred, method_calls)
+      end
+
+      private
+
+      # Build type content from available type information
+      # @param type_info [Hash] hash with :direct_type and :method_calls keys
+      # @param matching_types [Array<String>] array of matching type names
+      # @param type_entries [Hash<String, Entry>] map of type name to entry for linking
+      # @return [Array<String, Symbol, Object>] tuple of [content, reason, inferred_type]
+      def build_type_content(type_info, matching_types, type_entries)
+        direct_type = type_info[:direct_type]
 
         # Priority 1: Use direct type inference (from literal or .new call)
         if direct_type
           formatted_type = format_type_with_link(direct_type, type_entries[direct_type])
-          result = "**Guessed type:** #{formatted_type}"
-          result += format_debug_reason(:direct_type, direct_type, method_calls) if debug_mode?
-          return result
+          content = "**Guessed type:** #{formatted_type}"
+          return [content, :direct_type, direct_type]
         end
 
         # Priority 2: Try to guess type if we have method calls and matching types
         if !matching_types.empty?
-          result = format_guessed_types(matching_types, type_entries)
-          result += format_debug_reason(:method_calls, matching_types, method_calls) if debug_mode?
-          return result
+          content = format_guessed_types(matching_types, type_entries)
+          return [content, :method_calls, matching_types]
         end
 
-        # Fallback: show method calls only in debug mode, otherwise show nothing
-        return if !debug_mode?
-
-        format_debug_reason(:unknown, nil, method_calls)
+        # No type information available
+        [nil, :unknown, nil]
       end
 
-      private
+      # Append debug information to content if debug mode is enabled
+      # @param content [String, nil] the base content
+      # @param reason [Symbol] the inference reason (:direct_type, :method_calls, :unknown)
+      # @param inferred [Object] the inferred type(s)
+      # @param method_calls [Array<String>] array of method names
+      # @return [String, nil] content with debug info appended, or nil
+      def append_debug_info(content, reason, inferred, method_calls)
+        return content unless debug_mode?
+
+        base = content || ""
+        base + format_debug_reason(reason, inferred, method_calls)
+      end
 
       # Format guessed types based on count
       # @param matching_types [Array<String>] array of matching type names
