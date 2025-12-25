@@ -5,50 +5,43 @@
 
 ---
 
-## Pre-Phase 5: Refactoring
+## Pre-Phase 5: Refactoring ✅ COMPLETED
 
-> Refactoring items to address before Phase 5 integration.
+> Refactoring completed before Phase 5 integration.
 
-### High Priority (Affects Phase 5)
+### High Priority (Affects Phase 5) ✅
 
-- [ ] Extract variable node types to shared constant
-  - Files: `variable_type_resolver.rb`, `type_inferrer.rb`
-  - Issue: Same Prism node type list duplicated in both files
-  - Solution: Create shared `VARIABLE_NODE_TYPES` constant
+- [x] Extract variable node types to shared constant
+  - Created `VariableNodeTypes` module with shared `CLASSES` constant
+  - Commit: `641a653`
 
-- [ ] Extract best-match selection logic in TypeResolver
-  - File: `type_resolver.rb` (lines 76-78, 136-138)
-  - Issue: Identical `.select.max_by` pattern in two methods
-  - Solution: Create `find_best_definition_before(definitions, hover_line)` helper
+- [x] Extract best-match selection logic in TypeResolver
+  - Added `find_best_definition_before` helper method
+  - Commit: `aad39da`
 
-- [ ] Refactor VariableIndex nested hash iteration
-  - File: `variable_index.rb` (multiple methods)
-  - Issue: 4-level deep iteration repeated in `size`, `clear_file`, `stats`
-  - Solution: Create iterator helper method
+- [x] Refactor VariableIndex nested hash iteration
+  - Added `each_definition` iterator helper
+  - Commit: `54a250f`
 
-### Medium Priority (Maintainability)
+### Medium Priority (Maintainability) ✅
 
-- [ ] Consolidate TypeMatcher entry handling patterns
-  - File: `type_matcher.rb`
-  - Issue: Inconsistent patterns (`any?`, `first`, `find`) for same purpose
-  - Solution: Create `find_class_entry`, `is_class?` helpers
+- [x] Consolidate TypeMatcher entry handling patterns
+  - Added `find_class_entry` and `entries_present?` helpers
+  - Commit: `74f11ba`
 
-- [ ] Unify hash initialization in VariableIndex
-  - File: `variable_index.rb` (lines 44-48, 128-132)
-  - Issue: Same `||=` chain duplicated for `@index` and `@types`
-  - Solution: Create `ensure_nested_hash(root, *keys)` helper
+- [x] Unify hash initialization in VariableIndex
+  - Added `ensure_nested_hash` helper method
+  - Commit: `7ffaac5`
 
-- [ ] Simplify HoverContentBuilder conditional logic
-  - File: `hover_content_builder.rb` (lines 19-42)
-  - Issue: Debug mode handling repeated 3 times, complex conditionals
-  - Solution: Extract `append_debug_info` helper
+- [x] Simplify HoverContentBuilder conditional logic
+  - Added `build_type_content` and `append_debug_info` helpers
+  - Commit: `425b5d9`
 
-### Low Priority (Code Style)
+### Low Priority (Code Style) ✅
 
-- [ ] Consolidate formatting patterns
-  - Files: `hover_content_builder.rb`, `type_formatter.rb`
-  - Issue: `.map { |t| backticks }.join(", ")` pattern repeated
-  - Solution: Create `format_inline_list` helper
+- [x] Consolidate formatting patterns
+  - Added `format_inline_list` helper method
+  - Commit: `e26e43e`
 
 ---
 
