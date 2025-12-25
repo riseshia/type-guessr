@@ -1,0 +1,233 @@
+# frozen_string_literal: true
+
+require "spec_helper"
+require "type_guessr/core/types"
+
+RSpec.describe TypeGuessr::Core::Types do
+  describe "Unknown" do
+    it "is a singleton" do
+      unknown1 = TypeGuessr::Core::Types::Unknown.instance
+      unknown2 = TypeGuessr::Core::Types::Unknown.instance
+      expect(unknown1).to be(unknown2)
+    end
+
+    it "equals other Unknown instances" do
+      unknown1 = TypeGuessr::Core::Types::Unknown.instance
+      unknown2 = TypeGuessr::Core::Types::Unknown.instance
+      expect(unknown1).to eq(unknown2)
+    end
+
+    it "does not equal other types" do
+      unknown = TypeGuessr::Core::Types::Unknown.instance
+      class_instance = TypeGuessr::Core::Types::ClassInstance.new("String")
+      expect(unknown).not_to eq(class_instance)
+    end
+
+    it "has a string representation" do
+      unknown = TypeGuessr::Core::Types::Unknown.instance
+      expect(unknown.to_s).to eq("untyped")
+    end
+  end
+
+  describe "ClassInstance" do
+    it "stores the class name" do
+      type = TypeGuessr::Core::Types::ClassInstance.new("String")
+      expect(type.name).to eq("String")
+    end
+
+    it "equals another ClassInstance with the same name" do
+      type1 = TypeGuessr::Core::Types::ClassInstance.new("String")
+      type2 = TypeGuessr::Core::Types::ClassInstance.new("String")
+      expect(type1).to eq(type2)
+    end
+
+    it "does not equal ClassInstance with different name" do
+      type1 = TypeGuessr::Core::Types::ClassInstance.new("String")
+      type2 = TypeGuessr::Core::Types::ClassInstance.new("Integer")
+      expect(type1).not_to eq(type2)
+    end
+
+    it "has a string representation" do
+      type = TypeGuessr::Core::Types::ClassInstance.new("String")
+      expect(type.to_s).to eq("String")
+    end
+  end
+
+  describe "Union" do
+    it "creates a union of types" do
+      type1 = TypeGuessr::Core::Types::ClassInstance.new("String")
+      type2 = TypeGuessr::Core::Types::ClassInstance.new("Integer")
+      union = TypeGuessr::Core::Types::Union.new([type1, type2])
+      expect(union.types).to contain_exactly(type1, type2)
+    end
+
+    it "deduplicates types" do
+      type1 = TypeGuessr::Core::Types::ClassInstance.new("String")
+      type2 = TypeGuessr::Core::Types::ClassInstance.new("String")
+      union = TypeGuessr::Core::Types::Union.new([type1, type2])
+      expect(union.types.size).to eq(1)
+    end
+
+    it "flattens nested unions" do
+      type1 = TypeGuessr::Core::Types::ClassInstance.new("String")
+      type2 = TypeGuessr::Core::Types::ClassInstance.new("Integer")
+      type3 = TypeGuessr::Core::Types::ClassInstance.new("Float")
+      inner_union = TypeGuessr::Core::Types::Union.new([type1, type2])
+      outer_union = TypeGuessr::Core::Types::Union.new([inner_union, type3])
+      expect(outer_union.types).to contain_exactly(type1, type2, type3)
+    end
+
+    it "removes Unknown when other types are present" do
+      unknown = TypeGuessr::Core::Types::Unknown.instance
+      type1 = TypeGuessr::Core::Types::ClassInstance.new("String")
+      union = TypeGuessr::Core::Types::Union.new([unknown, type1])
+      expect(union.types).to contain_exactly(type1)
+    end
+
+    it "keeps Unknown when it is the only type" do
+      unknown = TypeGuessr::Core::Types::Unknown.instance
+      union = TypeGuessr::Core::Types::Union.new([unknown])
+      expect(union.types).to contain_exactly(unknown)
+    end
+
+    it "applies cutoff when too many types" do
+      types = (1..10).map { |i| TypeGuessr::Core::Types::ClassInstance.new("Class#{i}") }
+      union = TypeGuessr::Core::Types::Union.new(types, cutoff: 5)
+      expect(union.types.size).to eq(5)
+    end
+
+    it "has a string representation" do
+      type1 = TypeGuessr::Core::Types::ClassInstance.new("String")
+      type2 = TypeGuessr::Core::Types::ClassInstance.new("Integer")
+      union = TypeGuessr::Core::Types::Union.new([type1, type2])
+      expect(union.to_s).to match(/String \| Integer|Integer \| String/)
+    end
+
+    it "equals another Union with the same types" do
+      type1 = TypeGuessr::Core::Types::ClassInstance.new("String")
+      type2 = TypeGuessr::Core::Types::ClassInstance.new("Integer")
+      union1 = TypeGuessr::Core::Types::Union.new([type1, type2])
+      union2 = TypeGuessr::Core::Types::Union.new([type2, type1])
+      expect(union1).to eq(union2)
+    end
+
+    it "does not equal Union with different types" do
+      type1 = TypeGuessr::Core::Types::ClassInstance.new("String")
+      type2 = TypeGuessr::Core::Types::ClassInstance.new("Integer")
+      type3 = TypeGuessr::Core::Types::ClassInstance.new("Float")
+      union1 = TypeGuessr::Core::Types::Union.new([type1, type2])
+      union2 = TypeGuessr::Core::Types::Union.new([type1, type3])
+      expect(union1).not_to eq(union2)
+    end
+  end
+
+  describe "ArrayType" do
+    it "creates an array type with element type" do
+      element_type = TypeGuessr::Core::Types::ClassInstance.new("String")
+      array_type = TypeGuessr::Core::Types::ArrayType.new(element_type)
+      expect(array_type.element_type).to eq(element_type)
+    end
+
+    it "creates an array type with Unknown element type by default" do
+      array_type = TypeGuessr::Core::Types::ArrayType.new
+      expect(array_type.element_type).to eq(TypeGuessr::Core::Types::Unknown.instance)
+    end
+
+    it "equals another ArrayType with the same element type" do
+      element_type = TypeGuessr::Core::Types::ClassInstance.new("String")
+      array1 = TypeGuessr::Core::Types::ArrayType.new(element_type)
+      array2 = TypeGuessr::Core::Types::ArrayType.new(element_type)
+      expect(array1).to eq(array2)
+    end
+
+    it "does not equal ArrayType with different element type" do
+      type1 = TypeGuessr::Core::Types::ClassInstance.new("String")
+      type2 = TypeGuessr::Core::Types::ClassInstance.new("Integer")
+      array1 = TypeGuessr::Core::Types::ArrayType.new(type1)
+      array2 = TypeGuessr::Core::Types::ArrayType.new(type2)
+      expect(array1).not_to eq(array2)
+    end
+
+    it "has a string representation" do
+      element_type = TypeGuessr::Core::Types::ClassInstance.new("String")
+      array_type = TypeGuessr::Core::Types::ArrayType.new(element_type)
+      expect(array_type.to_s).to eq("Array[String]")
+    end
+
+    it "has a string representation with Unknown element type" do
+      array_type = TypeGuessr::Core::Types::ArrayType.new
+      expect(array_type.to_s).to eq("Array[untyped]")
+    end
+  end
+
+  describe "HashShape" do
+    it "creates a hash shape with field types" do
+      fields = {
+        id: TypeGuessr::Core::Types::ClassInstance.new("Integer"),
+        name: TypeGuessr::Core::Types::ClassInstance.new("String")
+      }
+      hash_shape = TypeGuessr::Core::Types::HashShape.new(fields)
+      expect(hash_shape.fields).to eq(fields)
+    end
+
+    it "creates an empty hash shape" do
+      hash_shape = TypeGuessr::Core::Types::HashShape.new({})
+      expect(hash_shape.fields).to eq({})
+    end
+
+    it "equals another HashShape with the same fields" do
+      fields = {
+        id: TypeGuessr::Core::Types::ClassInstance.new("Integer"),
+        name: TypeGuessr::Core::Types::ClassInstance.new("String")
+      }
+      hash1 = TypeGuessr::Core::Types::HashShape.new(fields)
+      hash2 = TypeGuessr::Core::Types::HashShape.new(fields)
+      expect(hash1).to eq(hash2)
+    end
+
+    it "does not equal HashShape with different fields" do
+      fields1 = {
+        id: TypeGuessr::Core::Types::ClassInstance.new("Integer")
+      }
+      fields2 = {
+        name: TypeGuessr::Core::Types::ClassInstance.new("String")
+      }
+      hash1 = TypeGuessr::Core::Types::HashShape.new(fields1)
+      hash2 = TypeGuessr::Core::Types::HashShape.new(fields2)
+      expect(hash1).not_to eq(hash2)
+    end
+
+    it "has a string representation" do
+      fields = {
+        id: TypeGuessr::Core::Types::ClassInstance.new("Integer"),
+        name: TypeGuessr::Core::Types::ClassInstance.new("String")
+      }
+      hash_shape = TypeGuessr::Core::Types::HashShape.new(fields)
+      # Order can vary, so we check both possibilities
+      expect(hash_shape.to_s).to match(/\{ (id: Integer, name: String|name: String, id: Integer) \}/)
+    end
+
+    it "has a string representation for empty hash" do
+      hash_shape = TypeGuessr::Core::Types::HashShape.new({})
+      expect(hash_shape.to_s).to eq("{ }")
+    end
+
+    it "widens to generic Hash when too many fields" do
+      fields = (1..20).to_h do |i|
+        [:"key#{i}", TypeGuessr::Core::Types::ClassInstance.new("String")]
+      end
+      hash_shape = TypeGuessr::Core::Types::HashShape.new(fields, max_fields: 10)
+      expect(hash_shape).to be_a(TypeGuessr::Core::Types::ClassInstance)
+      expect(hash_shape.name).to eq("Hash")
+    end
+
+    it "does not widen when fields are within limit" do
+      fields = {
+        id: TypeGuessr::Core::Types::ClassInstance.new("Integer"),
+        name: TypeGuessr::Core::Types::ClassInstance.new("String")
+      }
+      hash_shape = TypeGuessr::Core::Types::HashShape.new(fields, max_fields: 10)
+      expect(hash_shape).to be_a(TypeGuessr::Core::Types::HashShape)
+    end
+  end
+end
