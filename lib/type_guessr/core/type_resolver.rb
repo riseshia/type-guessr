@@ -55,6 +55,17 @@ module TypeGuessr
 
       private
 
+      # Find the best definition before the hover line
+      # Returns the definition with the highest line number that is <= hover_line
+      # @param definitions [Array<Hash>] array of definition hashes with :def_line key
+      # @param hover_line [Integer] the hover line number
+      # @return [Hash, nil] the best matching definition or nil
+      def find_best_definition_before(definitions, hover_line)
+        definitions
+          .select { |def_info| def_info[:def_line] <= hover_line }
+          .max_by { |def_info| def_info[:def_line] }
+      end
+
       # Get the direct type for a variable (from literal assignment or .new call)
       # @param variable_name [String] the variable name
       # @param hover_line [Integer] the hover line number
@@ -73,9 +84,7 @@ module TypeGuessr
         )
 
         # Find the closest definition before the hover line
-        best_match = definitions
-                     .select { |def_info| def_info[:def_line] <= hover_line }
-                     .max_by { |def_info| def_info[:def_line] }
+        best_match = find_best_definition_before(definitions, hover_line)
 
         if best_match
           # Get the type for this definition
@@ -133,9 +142,7 @@ module TypeGuessr
         )
 
         # Find the closest definition that appears before the hover line
-        best_match = definitions
-                     .select { |def_info| def_info[:def_line] <= hover_line }
-                     .max_by { |def_info| def_info[:def_line] }
+        best_match = find_best_definition_before(definitions, hover_line)
 
         return [] if !best_match
 
