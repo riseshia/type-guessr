@@ -5,46 +5,6 @@
 
 ---
 
-## Pre-Phase 5: Refactoring ✅ COMPLETED
-
-> Refactoring completed before Phase 5 integration.
-
-### High Priority (Affects Phase 5) ✅
-
-- [x] Extract variable node types to shared constant
-  - Created `VariableNodeTypes` module with shared `CLASSES` constant
-  - Commit: `641a653`
-
-- [x] Extract best-match selection logic in TypeResolver
-  - Added `find_best_definition_before` helper method
-  - Commit: `aad39da`
-
-- [x] Refactor VariableIndex nested hash iteration
-  - Added `each_definition` iterator helper
-  - Commit: `54a250f`
-
-### Medium Priority (Maintainability) ✅
-
-- [x] Consolidate TypeMatcher entry handling patterns
-  - Added `find_class_entry` and `entries_present?` helpers
-  - Commit: `74f11ba`
-
-- [x] Unify hash initialization in VariableIndex
-  - Added `ensure_nested_hash` helper method
-  - Commit: `7ffaac5`
-
-- [x] Simplify HoverContentBuilder conditional logic
-  - Added `build_type_content` and `append_debug_info` helpers
-  - Commit: `425b5d9`
-
-### Low Priority (Code Style) ✅
-
-- [x] Consolidate formatting patterns
-  - Added `format_inline_list` helper method
-  - Commit: `e26e43e`
-
----
-
 ## Phase 5: Hover Enhancement
 
 ### 5.1 Expression Type Hover
