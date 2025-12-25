@@ -49,7 +49,7 @@ module RubyLsp
         candidates.select! do |class_name|
           method_names.all? do |method_name|
             entries = @adapter.resolve_method(method_name, class_name)
-            !entries.nil? && !entries.empty?
+            entries_present?(entries)
           end
         end
 
@@ -66,8 +66,7 @@ module RubyLsp
       # @param name [String] the constant name to check
       # @return [Boolean] true if it's a class
       def class_entry?(name)
-        entries = @adapter.resolve_constant(name)
-        entries.any? { |e| e.is_a?(RubyIndexer::Entry::Class) }
+        !find_class_entry(name).nil?
       end
 
       # Get the first entry for a given constant name
@@ -81,6 +80,20 @@ module RubyLsp
 
       private
 
+      # Find the first Class entry for a given constant name
+      # @param constant_name [String] the constant name to search for
+      # @return [RubyIndexer::Entry::Class, nil] the class entry or nil
+      def find_class_entry(constant_name)
+        @adapter.resolve_constant(constant_name).find { |e| e.is_a?(RubyIndexer::Entry::Class) }
+      end
+
+      # Check if entries array is present and not empty
+      # @param entries [Array, nil] the entries to check
+      # @return [Boolean] true if entries exist and are not empty
+      def entries_present?(entries)
+        !entries.nil? && !entries.empty?
+      end
+
       # Reduce a class to its topmost ancestor that still has all specified methods
       # Walks up the inheritance chain until parent no longer has all methods
       # @param class_name [String] the starting class name
@@ -90,8 +103,7 @@ module RubyLsp
         current = class_name
 
         loop do
-          entries = @adapter.resolve_constant(current)
-          entry = entries.find { |e| e.is_a?(RubyIndexer::Entry::Class) }
+          entry = find_class_entry(current)
           break current unless entry
 
           parent = entry.parent_class
@@ -101,7 +113,7 @@ module RubyLsp
           # Check if parent has all required methods
           parent_has_all = method_names.all? do |method_name|
             resolved = @adapter.resolve_method(method_name, parent)
-            !resolved.nil? && !resolved.empty?
+            entries_present?(resolved)
           end
 
           break current unless parent_has_all
