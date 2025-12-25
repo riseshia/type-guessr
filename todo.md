@@ -5,74 +5,50 @@
 
 ---
 
-## Phase 1: Type Model (MVP)
+## Pre-Phase 5: Refactoring
 
-### 1.1 Core Type Model Implementation
-- [ ] Create `TypeGuessr::Core::Types` module with base type classes
-  - [ ] `Unknown` - no information available
-  - [ ] `Union[T...]` - with normalization, dedup, cutoff
-  - [ ] `Array[T]` - element type from literals/mutations
-  - [ ] `HashShape{ key: Type }` - Symbol/String literal keys only (MVP)
-  - [ ] `ClassInstance(name)` - instance of a class
-- [ ] Implement type equality, union merge, and widening logic
+> Refactoring items to address before Phase 5 integration.
 
-**Context:**
-- Foundation for all type inference features
-- `Unknown` is actively allowed: "unknown means unknown"
-- HashShape falls back to general Hash when too large (widening)
+### High Priority (Affects Phase 5)
 
----
+- [ ] Extract variable node types to shared constant
+  - Files: `variable_type_resolver.rb`, `type_inferrer.rb`
+  - Issue: Same Prism node type list duplicated in both files
+  - Solution: Create shared `VARIABLE_NODE_TYPES` constant
 
-## Phase 2: TypeDB (Type Storage)
+- [ ] Extract best-match selection logic in TypeResolver
+  - File: `type_resolver.rb` (lines 76-78, 136-138)
+  - Issue: Identical `.select.max_by` pattern in two methods
+  - Solution: Create `find_best_definition_before(definitions, hover_line)` helper
 
-### 2.1 TypeDB Architecture
-- [ ] Create `TypeGuessr::Core::TypeDB` for storing inferred types
-- [ ] Implement 2-layer lookup:
-  - [ ] Layer 1: `(file, range) → ref` (SymbolRef or ExprRef)
-  - [ ] Layer 2: `ref → Type`
-- [ ] Add file-level invalidation (`clear_file` + recompute)
+- [ ] Refactor VariableIndex nested hash iteration
+  - File: `variable_index.rb` (multiple methods)
+  - Issue: 4-level deep iteration repeated in `size`, `clear_file`, `stats`
+  - Solution: Create iterator helper method
 
-**Context:**
-- RubyIndexer doesn't store type info → TypeGuessr needs own TypeDB
-- Incremental strategy: file-level clear + recompute (like current VariableIndex)
-- Hover uses: range → ref → type lookup chain
+### Medium Priority (Maintainability)
 
----
+- [ ] Consolidate TypeMatcher entry handling patterns
+  - File: `type_matcher.rb`
+  - Issue: Inconsistent patterns (`any?`, `first`, `find`) for same purpose
+  - Solution: Create `find_class_entry`, `is_class?` helpers
 
-## Phase 3: Local Flow Inference (MVP)
+- [ ] Unify hash initialization in VariableIndex
+  - File: `variable_index.rb` (lines 44-48, 128-132)
+  - Issue: Same `||=` chain duplicated for `@index` and `@types`
+  - Solution: Create `ensure_nested_hash(root, *keys)` helper
 
-### 3.1 Flow-Sensitive Type Analysis
-- [ ] Create `TypeGuessr::Core::FlowAnalyzer` for method/block-local inference
-- [ ] Support basic constructs:
-  - [ ] Assignment: `x = expr`
-  - [ ] Branch merge: `if/else` → union at join point
-  - [ ] Short-circuit assignment: `||=`, `&&=`
-  - [ ] Return type: union of all `return` expressions + last expression
-- [ ] Implement scope limiting: analyze only the method/block containing hover position
+- [ ] Simplify HoverContentBuilder conditional logic
+  - File: `hover_content_builder.rb` (lines 19-42)
+  - Issue: Debug mode handling repeated 3 times, complex conditionals
+  - Solution: Extract `append_debug_info` helper
 
-**Context:**
-- MVP: No full fixpoint for loops (limited iterations + widening)
-- Scope: Only the method/block containing the cursor, not entire file
-- For callee return types: use RBS summary or simple inference
+### Low Priority (Code Style)
 
----
-
-## Phase 4: RBS Integration
-
-### 4.1 RBS Environment Loader
-- [ ] Create `TypeGuessr::Core::RBSProvider` for signature lookup
-- [ ] Implement lazy loading (Option A): load on first signature query, then memoize
-- [ ] Load from `rbs collection` (stdlib + gems + project)
-- [ ] Add `get_method_signatures(class_name, method_name)` API
-
-### 4.2 Method Signature from RBS
-- [ ] Query RBS for receiver type when known
-- [ ] Return overloaded signatures as `Array[Signature]`
-- [ ] For unknown receiver: return `Unknown` (don't guess globally)
-
-**Context:**
-- MVP: No prewarm/background loading, accept slight delay on first query
-- Overloads are preserved; filtering happens at call-site hover
+- [ ] Consolidate formatting patterns
+  - Files: `hover_content_builder.rb`, `type_formatter.rb`
+  - Issue: `.map { |t| backticks }.join(", ")` pattern repeated
+  - Solution: Create `format_inline_list` helper
 
 ---
 

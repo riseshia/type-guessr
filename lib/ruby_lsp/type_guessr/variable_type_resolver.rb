@@ -2,6 +2,7 @@
 
 require "prism"
 require_relative "type_matcher"
+require_relative "variable_node_types"
 
 # Explicitly require core dependencies to ensure they're loaded
 # even when this file is loaded independently (e.g., by Ruby LSP)

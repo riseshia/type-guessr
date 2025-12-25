@@ -2,6 +2,7 @@
 
 require "ruby_lsp/type_inferrer"
 require_relative "variable_type_resolver"
+require_relative "variable_node_types"
 
 module RubyLsp
   module TypeGuessr
@@ -84,23 +85,7 @@ module RubyLsp
       # @param node [Prism::Node] The node to check
       # @return [Boolean] true if the node is a variable node
       def variable_node?(node)
-        case node
-        when ::Prism::LocalVariableReadNode, ::Prism::LocalVariableWriteNode,
-             ::Prism::LocalVariableTargetNode,
-             ::Prism::InstanceVariableReadNode, ::Prism::InstanceVariableWriteNode,
-             ::Prism::InstanceVariableTargetNode,
-             ::Prism::ClassVariableReadNode, ::Prism::ClassVariableWriteNode,
-             ::Prism::ClassVariableTargetNode,
-             ::Prism::GlobalVariableReadNode, ::Prism::GlobalVariableWriteNode,
-             ::Prism::GlobalVariableTargetNode,
-             ::Prism::RequiredParameterNode, ::Prism::OptionalParameterNode,
-             ::Prism::RestParameterNode, ::Prism::RequiredKeywordParameterNode,
-             ::Prism::OptionalKeywordParameterNode, ::Prism::KeywordRestParameterNode,
-             ::Prism::BlockParameterNode, ::Prism::SelfNode, ::Prism::ForwardingParameterNode
-          true
-        else
-          false
-        end
+        VariableNodeTypes.variable_node?(node)
       end
     end
   end
