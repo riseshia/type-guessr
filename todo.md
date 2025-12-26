@@ -5,6 +5,20 @@
 
 ---
 
+## Testing Infrastructure
+
+### Integration Test Refactoring
+- [x] Create `spec/integration/` directory
+- [x] Create `spec/integration/hover_spec.rb` for E2E hover tests
+- [x] Move LSP server-based tests from `spec/ruby_lsp/hover_spec.rb`
+- [x] Add missing scenarios from qa.md:
+  - [x] 2.2 Namespaced .new (`Admin::User.new`)
+  - [x] 4.2 Local vs Instance variable distinction
+  - [x] 7.1 Debug mode explicit test
+- [x] Clean up `spec/ruby_lsp/hover_spec.rb` to keep only unit tests
+
+---
+
 ## Phase 5: Hover Enhancement
 
 ### 5.0 Type System Integration (Pre-requisite)
