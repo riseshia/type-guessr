@@ -3,6 +3,7 @@
 require "ruby_lsp/type_inferrer"
 require_relative "variable_type_resolver"
 require_relative "variable_node_types"
+require_relative "../../type_guessr/core/type_formatter"
 
 module RubyLsp
   module TypeGuessr
@@ -48,7 +49,11 @@ module RubyLsp
 
         # Check for direct type first
         direct_type = type_info[:direct_type]
-        return Type.new(direct_type) if direct_type
+        if direct_type
+          # Convert Types object to string format for ruby-lsp's Type.new
+          type_string = ::TypeGuessr::Core::TypeFormatter.format(direct_type)
+          return Type.new(type_string)
+        end
 
         # Try to infer from method calls
         method_calls = type_info[:method_calls]
