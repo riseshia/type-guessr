@@ -7,6 +7,23 @@
 
 ## Phase 5: Hover Enhancement
 
+### 5.0 Type System Integration (Pre-requisite)
+
+Refactor codebase to use Types classes instead of strings:
+
+- [ ] VariableIndex: Store types as Types objects instead of strings
+- [ ] TypeResolver: Return Types objects instead of strings
+- [ ] TypeMatcher: Return Types objects instead of string arrays
+- [ ] HoverContentBuilder: Use Types objects + TypeFormatter for output
+
+**Context:**
+- Currently types are stored/passed as strings ("String", "Recipe")
+- Types classes already implemented: `Unknown`, `ClassInstance`, `Union`, `ArrayType`, `HashShape`
+- TypeFormatter already implemented for RBS-style output
+- This unification is required before TypeDB integration
+
+---
+
 ### 5.1 Expression Type Hover
 - [ ] Update Hover to use TypeDB for variable/expression types
 - [ ] Display types in RBS-ish format:
