@@ -29,32 +29,9 @@ RSpec.describe "Hover Integration" do
         end
       RUBY
 
-      with_server_and_addon(source) do |server, uri|
-        index = RubyLsp::TypeGuessr::VariableIndex.instance
-        index.clear
+      response = hover_on_source(source, { line: 2, character: 2 })
 
-        index.add_variable_type(
-          file_path: uri.to_s,
-          scope_type: :local_variables,
-          scope_id: "foo",
-          var_name: "name",
-          def_line: 2,
-          def_column: 4,
-          type: TypeGuessr::Core::Types::ClassInstance.new("String")
-        )
-
-        server.process_message(
-          id: 1,
-          method: "textDocument/hover",
-          params: { textDocument: { uri: uri }, position: { line: 2, character: 2 } }
-        )
-
-        result = pop_result(server)
-        response = result.response
-        content = response.contents.value
-
-        expect(content).to match(/Guessed type:.*String/)
-      end
+      expect(response.contents.value).to match(/Guessed type:.*String/)
     end
 
     it "infers Integer from integer literal" do
@@ -65,32 +42,9 @@ RSpec.describe "Hover Integration" do
         end
       RUBY
 
-      with_server_and_addon(source) do |server, uri|
-        index = RubyLsp::TypeGuessr::VariableIndex.instance
-        index.clear
+      response = hover_on_source(source, { line: 2, character: 2 })
 
-        index.add_variable_type(
-          file_path: uri.to_s,
-          scope_type: :local_variables,
-          scope_id: "foo",
-          var_name: "count",
-          def_line: 2,
-          def_column: 4,
-          type: TypeGuessr::Core::Types::ClassInstance.new("Integer")
-        )
-
-        server.process_message(
-          id: 1,
-          method: "textDocument/hover",
-          params: { textDocument: { uri: uri }, position: { line: 2, character: 2 } }
-        )
-
-        result = pop_result(server)
-        response = result.response
-        content = response.contents.value
-
-        expect(content).to match(/Guessed type:.*Integer/)
-      end
+      expect(response.contents.value).to match(/Guessed type:.*Integer/)
     end
 
     it "infers Float from float literal" do
@@ -101,32 +55,9 @@ RSpec.describe "Hover Integration" do
         end
       RUBY
 
-      with_server_and_addon(source) do |server, uri|
-        index = RubyLsp::TypeGuessr::VariableIndex.instance
-        index.clear
+      response = hover_on_source(source, { line: 2, character: 2 })
 
-        index.add_variable_type(
-          file_path: uri.to_s,
-          scope_type: :local_variables,
-          scope_id: "foo",
-          var_name: "price",
-          def_line: 2,
-          def_column: 4,
-          type: TypeGuessr::Core::Types::ClassInstance.new("Float")
-        )
-
-        server.process_message(
-          id: 1,
-          method: "textDocument/hover",
-          params: { textDocument: { uri: uri }, position: { line: 2, character: 2 } }
-        )
-
-        result = pop_result(server)
-        response = result.response
-        content = response.contents.value
-
-        expect(content).to match(/Guessed type:.*Float/)
-      end
+      expect(response.contents.value).to match(/Guessed type:.*Float/)
     end
 
     it "infers Array from array literal" do
@@ -137,32 +68,9 @@ RSpec.describe "Hover Integration" do
         end
       RUBY
 
-      with_server_and_addon(source) do |server, uri|
-        index = RubyLsp::TypeGuessr::VariableIndex.instance
-        index.clear
+      response = hover_on_source(source, { line: 2, character: 2 })
 
-        index.add_variable_type(
-          file_path: uri.to_s,
-          scope_type: :local_variables,
-          scope_id: "foo",
-          var_name: "items",
-          def_line: 2,
-          def_column: 4,
-          type: TypeGuessr::Core::Types::ClassInstance.new("Array")
-        )
-
-        server.process_message(
-          id: 1,
-          method: "textDocument/hover",
-          params: { textDocument: { uri: uri }, position: { line: 2, character: 2 } }
-        )
-
-        result = pop_result(server)
-        response = result.response
-        content = response.contents.value
-
-        expect(content).to match(/Guessed type:.*Array/)
-      end
+      expect(response.contents.value).to match(/Guessed type:.*Array/)
     end
 
     it "infers Hash from hash literal" do
@@ -173,32 +81,9 @@ RSpec.describe "Hover Integration" do
         end
       RUBY
 
-      with_server_and_addon(source) do |server, uri|
-        index = RubyLsp::TypeGuessr::VariableIndex.instance
-        index.clear
+      response = hover_on_source(source, { line: 2, character: 2 })
 
-        index.add_variable_type(
-          file_path: uri.to_s,
-          scope_type: :local_variables,
-          scope_id: "foo",
-          var_name: "data",
-          def_line: 2,
-          def_column: 4,
-          type: TypeGuessr::Core::Types::ClassInstance.new("Hash")
-        )
-
-        server.process_message(
-          id: 1,
-          method: "textDocument/hover",
-          params: { textDocument: { uri: uri }, position: { line: 2, character: 2 } }
-        )
-
-        result = pop_result(server)
-        response = result.response
-        content = response.contents.value
-
-        expect(content).to match(/Guessed type:.*Hash/)
-      end
+      expect(response.contents.value).to match(/Guessed type:.*Hash/)
     end
   end
 
@@ -214,32 +99,9 @@ RSpec.describe "Hover Integration" do
         end
       RUBY
 
-      with_server_and_addon(source) do |server, uri|
-        index = RubyLsp::TypeGuessr::VariableIndex.instance
-        index.clear
+      response = hover_on_source(source, { line: 5, character: 2 })
 
-        index.add_variable_type(
-          file_path: uri.to_s,
-          scope_type: :local_variables,
-          scope_id: "foo",
-          var_name: "user",
-          def_line: 5,
-          def_column: 4,
-          type: TypeGuessr::Core::Types::ClassInstance.new("User")
-        )
-
-        server.process_message(
-          id: 1,
-          method: "textDocument/hover",
-          params: { textDocument: { uri: uri }, position: { line: 5, character: 2 } }
-        )
-
-        result = pop_result(server)
-        response = result.response
-        content = response.contents.value
-
-        expect(content).to match(/Guessed type:.*User/)
-      end
+      expect(response.contents.value).to match(/Guessed type:.*User/)
     end
 
     it "infers type from namespaced class .new" do
@@ -255,32 +117,9 @@ RSpec.describe "Hover Integration" do
         end
       RUBY
 
-      with_server_and_addon(source) do |server, uri|
-        index = RubyLsp::TypeGuessr::VariableIndex.instance
-        index.clear
+      response = hover_on_source(source, { line: 7, character: 4 })
 
-        index.add_variable_type(
-          file_path: uri.to_s,
-          scope_type: :local_variables,
-          scope_id: "test_namespaced",
-          var_name: "admin",
-          def_line: 7,
-          def_column: 4,
-          type: TypeGuessr::Core::Types::ClassInstance.new("Admin::User")
-        )
-
-        server.process_message(
-          id: 1,
-          method: "textDocument/hover",
-          params: { textDocument: { uri: uri }, position: { line: 7, character: 4 } }
-        )
-
-        result = pop_result(server)
-        response = result.response
-        content = response.contents.value
-
-        expect(content).to match(/Guessed type:.*Admin::User/)
-      end
+      expect(response.contents.value).to match(/Guessed type:.*Admin::User/)
     end
   end
 
@@ -310,46 +149,10 @@ RSpec.describe "Hover Integration" do
         end
       RUBY
 
-      with_server_and_addon(source) do |server, uri|
-        index = RubyLsp::TypeGuessr::VariableIndex.instance
-        index.clear
+      response = hover_on_source(source, { line: 16, character: 12 })
 
-        index.add_method_call(
-          file_path: uri.to_s,
-          scope_type: :local_variables,
-          scope_id: "process",
-          var_name: "recipe",
-          def_line: 17,
-          def_column: 12,
-          method_name: "ingredients",
-          call_line: 18,
-          call_column: 4
-        )
-        index.add_method_call(
-          file_path: uri.to_s,
-          scope_type: :local_variables,
-          scope_id: "process",
-          var_name: "recipe",
-          def_line: 17,
-          def_column: 12,
-          method_name: "steps",
-          call_line: 19,
-          call_column: 4
-        )
-
-        server.process_message(
-          id: 1,
-          method: "textDocument/hover",
-          params: { textDocument: { uri: uri }, position: { line: 16, character: 12 } }
-        )
-
-        result = pop_result(server)
-        response = result.response
-        content = response.contents.value
-
-        expect(content).to match(/Guessed type:.*Recipe/)
-        expect(content).not_to match(/Article/)
-      end
+      expect(response.contents.value).to match(/Guessed type:.*Recipe/)
+      expect(response.contents.value).not_to match(/Article/)
     end
 
     it "shows ambiguous when multiple classes match" do
@@ -377,47 +180,11 @@ RSpec.describe "Hover Integration" do
         end
       RUBY
 
-      with_server_and_addon(source) do |server, uri|
-        index = RubyLsp::TypeGuessr::VariableIndex.instance
-        index.clear
+      response = hover_on_source(source, { line: 16, character: 12 })
 
-        index.add_method_call(
-          file_path: uri.to_s,
-          scope_type: :local_variables,
-          scope_id: "process",
-          var_name: "item",
-          def_line: 17,
-          def_column: 12,
-          method_name: "save",
-          call_line: 18,
-          call_column: 4
-        )
-        index.add_method_call(
-          file_path: uri.to_s,
-          scope_type: :local_variables,
-          scope_id: "process",
-          var_name: "item",
-          def_line: 17,
-          def_column: 12,
-          method_name: "destroy",
-          call_line: 19,
-          call_column: 4
-        )
-
-        server.process_message(
-          id: 1,
-          method: "textDocument/hover",
-          params: { textDocument: { uri: uri }, position: { line: 16, character: 12 } }
-        )
-
-        result = pop_result(server)
-        response = result.response
-        content = response.contents.value
-
-        expect(content).to match(/Ambiguous type/)
-        expect(content).to match(/Cacheable/)
-        expect(content).to match(/Persistable/)
-      end
+      expect(response.contents.value).to match(/Ambiguous type/)
+      expect(response.contents.value).to match(/Cacheable/)
+      expect(response.contents.value).to match(/Persistable/)
     end
 
     it "truncates when too many classes match" do
@@ -453,38 +220,13 @@ RSpec.describe "Hover Integration" do
         end
       RUBY
 
-      with_server_and_addon(source) do |server, uri|
-        index = RubyLsp::TypeGuessr::VariableIndex.instance
-        index.clear
+      response = hover_on_source(source, { line: 25, character: 12 })
 
-        index.add_method_call(
-          file_path: uri.to_s,
-          scope_type: :local_variables,
-          scope_id: "process",
-          var_name: "item",
-          def_line: 26,
-          def_column: 12,
-          method_name: "common_method_for_truncation_test",
-          call_line: 27,
-          call_column: 4
-        )
-
-        server.process_message(
-          id: 1,
-          method: "textDocument/hover",
-          params: { textDocument: { uri: uri }, position: { line: 25, character: 12 } }
-        )
-
-        result = pop_result(server)
-        response = result.response
-        content = response.contents.value
-
-        expect(content).to match(/Ambiguous type/)
-        expect(content).to match(/\.\.\./)
-        main_content = content.split("**[TypeGuessr Debug]").first
-        class_count = main_content.scan(/`Class[A-E]`/).size
-        expect(class_count).to eq(3)
-      end
+      expect(response.contents.value).to match(/Ambiguous type/)
+      expect(response.contents.value).to match(/\.\.\./)
+      main_content = response.contents.value.split("**[TypeGuessr Debug]").first
+      class_count = main_content.scan(/`Class[A-E]`/).size
+      expect(class_count).to eq(3)
     end
   end
 
@@ -503,55 +245,14 @@ RSpec.describe "Hover Integration" do
         end
       RUBY
 
-      with_server_and_addon(source) do |server, uri|
-        index = RubyLsp::TypeGuessr::VariableIndex.instance
-        index.clear
+      response_a = hover_on_source(source, { line: 2, character: 15 })
+      response_b = hover_on_source(source, { line: 6, character: 4 })
 
-        index.add_method_call(
-          file_path: uri.to_s,
-          scope_type: :local_variables,
-          scope_id: "Foo#method_b",
-          var_name: "context",
-          def_line: 6,
-          def_column: 15,
-          method_name: "name",
-          call_line: 7,
-          call_column: 4
-        )
-        index.add_method_call(
-          file_path: uri.to_s,
-          scope_type: :local_variables,
-          scope_id: "Foo#method_b",
-          var_name: "context",
-          def_line: 6,
-          def_column: 15,
-          method_name: "age",
-          call_line: 8,
-          call_column: 4
-        )
+      expect(response_a.contents.value).not_to include("name")
+      expect(response_a.contents.value).not_to include("age")
 
-        server.process_message(
-          id: 1,
-          method: "textDocument/hover",
-          params: { textDocument: { uri: uri }, position: { line: 2, character: 15 } }
-        )
-        result_a = pop_result(server)
-        content_a = result_a.response.contents.value
-
-        server.process_message(
-          id: 2,
-          method: "textDocument/hover",
-          params: { textDocument: { uri: uri }, position: { line: 6, character: 4 } }
-        )
-        result_b = pop_result(server)
-        content_b = result_b.response.contents.value
-
-        expect(content_a).not_to include("name")
-        expect(content_a).not_to include("age")
-
-        expect(content_b).to include("name")
-        expect(content_b).to include("age")
-      end
+      expect(response_b.contents.value).to include("name")
+      expect(response_b.contents.value).to include("age")
     end
 
     it "distinguishes local from instance variable" do
@@ -571,44 +272,10 @@ RSpec.describe "Hover Integration" do
         end
       RUBY
 
-      with_server_and_addon(source) do |server, uri|
-        index = RubyLsp::TypeGuessr::VariableIndex.instance
-        index.clear
+      response = hover_on_source(source, { line: 7, character: 4 })
 
-        # Instance variable @user
-        index.add_variable_type(
-          file_path: uri.to_s,
-          scope_type: :instance_variables,
-          scope_id: "Bar",
-          var_name: "@user",
-          def_line: 3,
-          def_column: 6,
-          type: TypeGuessr::Core::Types::ClassInstance.new("User")
-        )
-
-        # Local variable user
-        index.add_variable_type(
-          file_path: uri.to_s,
-          scope_type: :local_variables,
-          scope_id: "Bar#process",
-          var_name: "user",
-          def_line: 7,
-          def_column: 6,
-          type: TypeGuessr::Core::Types::ClassInstance.new("String")
-        )
-
-        # Hover on local variable user (line 7, character 4)
-        server.process_message(
-          id: 1,
-          method: "textDocument/hover",
-          params: { textDocument: { uri: uri }, position: { line: 7, character: 4 } }
-        )
-        result_local = pop_result(server)
-        content_local = result_local.response.contents.value
-
-        expect(content_local).to match(/String/)
-        expect(content_local).not_to match(/User/)
-      end
+      expect(response.contents.value).to match(/String/)
+      expect(response.contents.value).not_to match(/User/)
     end
   end
 
@@ -710,46 +377,10 @@ RSpec.describe "Hover Integration" do
         end
       RUBY
 
-      with_server_and_addon(source) do |server, uri|
-        index = RubyLsp::TypeGuessr::VariableIndex.instance
-        index.clear
+      response = hover_on_source(source, { line: 11, character: 4 })
 
-        index.add_method_call(
-          file_path: uri.to_s,
-          scope_type: :local_variables,
-          scope_id: "cook",
-          var_name: "recipe",
-          def_line: 9,
-          def_column: 9,
-          method_name: "ingredients",
-          call_line: 10,
-          call_column: 4
-        )
-        index.add_method_call(
-          file_path: uri.to_s,
-          scope_type: :local_variables,
-          scope_id: "cook",
-          var_name: "recipe",
-          def_line: 9,
-          def_column: 9,
-          method_name: "steps",
-          call_line: 11,
-          call_column: 4
-        )
-
-        server.process_message(
-          id: 1,
-          method: "textDocument/hover",
-          params: { textDocument: { uri: uri }, position: { line: 11, character: 4 } }
-        )
-
-        result = pop_result(server)
-        response = result.response
-        content = response.contents.value
-
-        expect(content).to match(/Guessed type:/)
-        expect(content).to match(/\[`Recipe`\]\(file:/)
-      end
+      expect(response.contents.value).to match(/Guessed type:/)
+      expect(response.contents.value).to match(/\[`Recipe`\]\(file:/)
     end
   end
 
@@ -762,37 +393,12 @@ RSpec.describe "Hover Integration" do
         end
       RUBY
 
-      with_server_and_addon(source) do |server, uri|
-        index = RubyLsp::TypeGuessr::VariableIndex.instance
-        index.clear
+      response = hover_on_source(source, { line: 0, character: 12 })
 
-        index.add_method_call(
-          file_path: uri.to_s,
-          scope_type: :local_variables,
-          scope_id: "process",
-          var_name: "item",
-          def_line: 1,
-          def_column: 12,
-          method_name: "save",
-          call_line: 2,
-          call_column: 4
-        )
-
-        server.process_message(
-          id: 1,
-          method: "textDocument/hover",
-          params: { textDocument: { uri: uri }, position: { line: 0, character: 12 } }
-        )
-
-        result = pop_result(server)
-        response = result.response
-        content = response.contents.value
-
-        # Debug mode is enabled in spec_helper.rb via ENV["TYPE_GUESSR_DEBUG"] = "1"
-        expect(content).to match(/\*\*\[TypeGuessr Debug\]/)
-        expect(content).to match(/Reason:/)
-        expect(content).to match(/Method calls:/)
-      end
+      # Debug mode is enabled in spec_helper.rb via ENV["TYPE_GUESSR_DEBUG"] = "1"
+      expect(response.contents.value).to match(/\*\*\[TypeGuessr Debug\]/)
+      expect(response.contents.value).to match(/Reason:/)
+      expect(response.contents.value).to match(/Method calls:/)
     end
   end
 

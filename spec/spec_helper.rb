@@ -45,6 +45,10 @@ module TypeGuessrTestHelper
       # Register the addon so the server knows about it
       RubyLsp::Addon.addons << addon
 
+      # Index the source directly for integration tests
+      # This works with in-memory test sources and doesn't require actual files
+      addon.runtime_adapter.index_source(uri.to_s, source)
+
       begin
         block.call(server, uri)
       ensure

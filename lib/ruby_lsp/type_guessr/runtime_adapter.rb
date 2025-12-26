@@ -20,6 +20,12 @@ module RubyLsp
         @global_state = global_state
         @message_queue = message_queue
         @original_type_inferrer = nil
+        @indexing_completed = false
+      end
+
+      # Check if initial AST indexing has completed
+      def indexing_completed?
+        @indexing_completed
       end
 
       # Swap the ruby-lsp's type inferrer with our custom implementation
@@ -95,9 +101,11 @@ module RubyLsp
           workers.each(&:join)
 
           log_message("AST traversal completed. Processed #{processed_count} files.")
+          @indexing_completed = true
         rescue StandardError => e
           log_message("Error during AST traversal: #{e.message}")
           log_message(e.backtrace.join("\n"))
+          @indexing_completed = true # Mark as completed even on error
         end
       end
 
@@ -118,6 +126,21 @@ module RubyLsp
         log_message("Re-indexed file: #{file_path}")
       rescue StandardError => e
         log_message("Error re-indexing #{file_path}: #{e.message}")
+      end
+
+      # Index source code directly (useful for testing with in-memory sources)
+      def index_source(file_path, source)
+        # First, clear existing index entries for this file
+        clear_file_index(file_path)
+
+        # Then, traverse the source's AST
+        result = Prism.parse(source)
+        visitor = ::TypeGuessr::Core::ASTAnalyzer.new(file_path)
+        result.value.accept(visitor)
+
+        log_message("Indexed source for: #{file_path}")
+      rescue StandardError => e
+        log_message("Error indexing source for #{file_path}: #{e.message}")
       end
 
       # Clear all index entries for a specific file

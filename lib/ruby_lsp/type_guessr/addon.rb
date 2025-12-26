@@ -37,6 +37,8 @@ module RubyLsp
         Prism::SelfNode,
       ].freeze
 
+      attr_reader :runtime_adapter
+
       def initialize
         super
         @runtime_adapter = nil
