@@ -59,17 +59,19 @@ module RubyLsp
         @core_resolver.infer_type_from_methods(method_calls, matcher)
       end
 
-      # Get entries for type names to enable linking to definitions
-      # @param type_names [Array<String>] array of type names
+      # Get entries for types to enable linking to definitions
+      # @param types [Array<TypeGuessr::Core::Types::Type>] array of type objects
       # @return [Hash<String, Entry>] map of type name to entry
-      def get_type_entries(type_names)
+      def get_type_entries(types)
         return {} if !@index
 
         matcher = TypeMatcher.new(@index)
         entries = {}
-        type_names.each do |type_name|
-          next if type_name == TypeMatcher::TRUNCATED_MARKER
+        types.each do |type_obj|
+          next if type_obj == TypeMatcher::TRUNCATED_MARKER
+          next unless type_obj.is_a?(::TypeGuessr::Core::Types::ClassInstance)
 
+          type_name = type_obj.name
           entry = matcher.get_entry(type_name)
           entries[type_name] = entry if entry
         end
