@@ -59,17 +59,23 @@ RSpec.describe RubyLsp::TypeGuessr::TypeMatcher do
 
       it "finds classes with all specified methods" do
         matches = matcher.find_matching_types(%w[ingredients comments])
-        expect(matches).to eq(["Recipe"])
+        expect(matches.size).to eq(1)
+        expect(matches[0]).to be_a(TypeGuessr::Core::Types::ClassInstance)
+        expect(matches[0].name).to eq("Recipe")
       end
 
       it "finds all classes with a common method" do
         matches = matcher.find_matching_types(["comments"])
-        expect(matches.sort).to eq(%w[Article Recipe])
+        expect(matches.size).to eq(2)
+        names = matches.map(&:name).sort
+        expect(names).to eq(%w[Article Recipe])
       end
 
       it "finds multiple classes with author method" do
         matches = matcher.find_matching_types(["author"])
-        expect(matches.sort).to eq(%w[Article Book])
+        expect(matches.size).to eq(2)
+        names = matches.map(&:name).sort
+        expect(names).to eq(%w[Article Book])
       end
     end
 
@@ -125,7 +131,9 @@ RSpec.describe RubyLsp::TypeGuessr::TypeMatcher do
 
       it "returns single class name" do
         matches = matcher.find_matching_types(%w[unique_method_alpha unique_method_beta])
-        expect(matches).to eq(["UniqueClass"])
+        expect(matches.size).to eq(1)
+        expect(matches[0]).to be_a(TypeGuessr::Core::Types::ClassInstance)
+        expect(matches[0].name).to eq("UniqueClass")
       end
     end
 
@@ -162,7 +170,9 @@ RSpec.describe RubyLsp::TypeGuessr::TypeMatcher do
 
       it "returns all matching class names" do
         matches = matcher.find_matching_types(%w[save destroy])
-        expect(matches.sort).to eq(%w[Cached Persisted])
+        expect(matches.size).to eq(2)
+        names = matches.map(&:name).sort
+        expect(names).to eq(%w[Cached Persisted])
       end
     end
 
@@ -198,8 +208,10 @@ RSpec.describe RubyLsp::TypeGuessr::TypeMatcher do
         # Should return exactly MAX_MATCHING_TYPES (3) classes plus the truncation marker
         expect(matches.size).to eq(4)
         expect(matches.last).to eq(RubyLsp::TypeGuessr::TypeMatcher::TRUNCATED_MARKER)
-        # The first 3 should be actual class names (order may vary)
-        expect(matches[0..2]).to all(match(/^Class[A-E]$/))
+        # The first 3 should be Types objects with class names (order may vary)
+        expect(matches[0..2]).to all(be_a(TypeGuessr::Core::Types::ClassInstance))
+        names = matches[0..2].map(&:name)
+        expect(names).to all(match(/^Class[A-E]$/))
       end
 
       it "returns all results when exactly MAX_MATCHING_TYPES match" do
@@ -223,7 +235,8 @@ RSpec.describe RubyLsp::TypeGuessr::TypeMatcher do
         matches = matcher.find_matching_types(["exact_method"])
         expect(matches.size).to eq(3)
         expect(matches).not_to include(RubyLsp::TypeGuessr::TypeMatcher::TRUNCATED_MARKER)
-        expect(matches.sort).to eq(%w[ClassX ClassY ClassZ])
+        names = matches.map(&:name).sort
+        expect(names).to eq(%w[ClassX ClassY ClassZ])
       end
     end
   end
@@ -249,17 +262,20 @@ RSpec.describe RubyLsp::TypeGuessr::TypeMatcher do
 
     it "finds subclass that has inherited method and own method" do
       matches = matcher.find_matching_types(%w[ingredients steps])
-      expect(matches).to eq(["Recipe2"])
+      expect(matches.size).to eq(1)
+      expect(matches[0].name).to eq("Recipe2")
     end
 
     it "finds parent class when only parent methods are called" do
       matches = matcher.find_matching_types(["ingredients"])
-      expect(matches).to eq(["Recipe"])
+      expect(matches.size).to eq(1)
+      expect(matches[0].name).to eq("Recipe")
     end
 
     it "excludes parent class when it lacks subclass methods" do
       matches = matcher.find_matching_types(%w[ingredients steps])
-      expect(matches).not_to include("Recipe")
+      names = matches.map(&:name)
+      expect(names).not_to include("Recipe")
     end
   end
 
@@ -287,12 +303,14 @@ RSpec.describe RubyLsp::TypeGuessr::TypeMatcher do
     it "reduces overriding subclasses to common ancestor" do
       matches = matcher.find_matching_types(["eat"])
       # Dog and Cat both override eat, but Animal is the common ancestor
-      expect(matches).to eq(["Animal"])
+      expect(matches.size).to eq(1)
+      expect(matches[0].name).to eq("Animal")
     end
 
     it "returns specific class when subclass-only method is included" do
       matches = matcher.find_matching_types(%w[eat bark])
-      expect(matches).to eq(["Dog"])
+      expect(matches.size).to eq(1)
+      expect(matches[0].name).to eq("Dog")
     end
   end
 
@@ -329,17 +347,20 @@ RSpec.describe RubyLsp::TypeGuessr::TypeMatcher do
 
     it "finds class with mixin method and own method" do
       matches = matcher.find_matching_types(%w[comments ingredients])
-      expect(matches).to eq(["Recipe"])
+      expect(matches.size).to eq(1)
+      expect(matches[0].name).to eq("Recipe")
     end
 
     it "finds class when class method is combined with mixin method" do
       matches = matcher.find_matching_types(%w[author comments])
-      expect(matches).to eq(["Article"])
+      expect(matches.size).to eq(1)
+      expect(matches[0].name).to eq("Article")
     end
 
     it "finds class when own method owner is collected and mixin is resolved" do
       matches = matcher.find_matching_types(%w[likes author])
-      expect(matches).to eq(["Article"])
+      expect(matches.size).to eq(1)
+      expect(matches[0].name).to eq("Article")
     end
 
     # NOTE: This is a known limitation of the current algorithm.

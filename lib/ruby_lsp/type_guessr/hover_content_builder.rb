@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "type_matcher"
+require_relative "../../type_guessr/core/type_formatter"
 
 module RubyLsp
   module TypeGuessr
@@ -13,7 +14,7 @@ module RubyLsp
 
       # Build hover content from type information
       # @param type_info [Hash] hash with :direct_type and :method_calls keys
-      # @param matching_types [Array<String>] array of matching type names from inference
+      # @param matching_types [Array<TypeGuessr::Core::Types::Type>] array of matching types from inference
       # @param type_entries [Hash<String, Entry>] map of type name to entry for linking
       # @return [String, nil] the hover content or nil
       def build(type_info, matching_types: [], type_entries: {})
@@ -30,7 +31,7 @@ module RubyLsp
 
       # Build type content from available type information
       # @param type_info [Hash] hash with :direct_type and :method_calls keys
-      # @param matching_types [Array<String>] array of matching type names
+      # @param matching_types [Array<TypeGuessr::Core::Types::Type>] array of matching types
       # @param type_entries [Hash<String, Entry>] map of type name to entry for linking
       # @return [Array<String, Symbol, Object>] tuple of [content, reason, inferred_type]
       def build_type_content(type_info, matching_types, type_entries)
@@ -38,7 +39,8 @@ module RubyLsp
 
         # Priority 1: Use direct type inference (from literal or .new call)
         if direct_type
-          formatted_type = format_type_with_link(direct_type, type_entries[direct_type])
+          type_name = extract_type_name(direct_type)
+          formatted_type = format_type_with_link(direct_type, type_entries[type_name])
           content = "**Guessed type:** #{formatted_type}"
           return [content, :direct_type, direct_type]
         end
@@ -67,14 +69,15 @@ module RubyLsp
       end
 
       # Format guessed types based on count
-      # @param matching_types [Array<String>] array of matching type names
+      # @param matching_types [Array<TypeGuessr::Core::Types::Type>] array of matching types
       # @param type_entries [Hash<String, Entry>] map of type name to entry for linking
       # @return [String] formatted type string
       def format_guessed_types(matching_types, type_entries)
         case matching_types.size
         when 1
-          type_name = matching_types.first
-          formatted_type = format_type_with_link(type_name, type_entries[type_name])
+          type_obj = matching_types.first
+          type_name = extract_type_name(type_obj)
+          formatted_type = format_type_with_link(type_obj, type_entries[type_name])
           "**Guessed type:** #{formatted_type}"
         else
           # Multiple matches - ambiguous (no links needed)
@@ -87,17 +90,18 @@ module RubyLsp
         end
       end
 
-      # Format a type name with link to definition if entry is available
-      # @param type_name [String] the type name
+      # Format a type with link to definition if entry is available
+      # @param type_obj [TypeGuessr::Core::Types::Type] the type object
       # @param entry [RubyIndexer::Entry, nil] the entry for the type
       # @return [String] formatted type, possibly with link
-      def format_type_with_link(type_name, entry)
-        return "`#{type_name}`" if entry.nil?
+      def format_type_with_link(type_obj, entry)
+        formatted = ::TypeGuessr::Core::TypeFormatter.format(type_obj)
+        return "`#{formatted}`" if entry.nil?
 
         location_link = build_location_link(entry)
-        return "`#{type_name}`" if location_link.nil?
+        return "`#{formatted}`" if location_link.nil?
 
-        "[`#{type_name}`](#{location_link})"
+        "[`#{formatted}`](#{location_link})"
       end
 
       # Build a location link from an entry
@@ -128,7 +132,7 @@ module RubyLsp
 
       # Format debug reason showing inference basis
       # @param reason_type [Symbol] :direct_type, :method_calls, or :unknown
-      # @param inferred_type [String, Array<String>, nil] the inferred type(s)
+      # @param inferred_type [TypeGuessr::Core::Types::Type, Array<TypeGuessr::Core::Types::Type>, nil] the inferred type(s)
       # @param method_calls [Array<String>] array of method names
       # @return [String] formatted debug reason
       def format_debug_reason(reason_type, inferred_type, method_calls)
@@ -136,8 +140,9 @@ module RubyLsp
 
         case reason_type
         when :direct_type
+          formatted_type = ::TypeGuessr::Core::TypeFormatter.format(inferred_type)
           content += "- Reason: `.new` call or literal assignment\n"
-          content += "- Direct type: `#{inferred_type}`\n"
+          content += "- Direct type: `#{formatted_type}`\n"
           content += "- Method calls: #{format_method_calls_list(method_calls)}\n"
         when :method_calls
           types = Array(inferred_type)
@@ -153,10 +158,13 @@ module RubyLsp
       end
 
       # Format an array of items as inline backtick-wrapped, comma-separated list
-      # @param items [Array<String>] array of items to format
+      # @param items [Array] array of items to format (can be Types or Strings)
       # @return [String] formatted inline list (e.g., "`item1`, `item2`")
       def format_inline_list(items)
-        items.map { |item| "`#{item}`" }.join(", ")
+        items.map do |item|
+          formatted = item.is_a?(String) ? item : ::TypeGuessr::Core::TypeFormatter.format(item)
+          "`#{formatted}`"
+        end.join(", ")
       end
 
       # Format method calls as a readable list
@@ -166,6 +174,18 @@ module RubyLsp
         return "(none)" if method_calls.empty?
 
         format_inline_list(method_calls)
+      end
+
+      # Extract type name from a Types object
+      # @param type_obj [TypeGuessr::Core::Types::Type] the type object
+      # @return [String] the type name
+      def extract_type_name(type_obj)
+        case type_obj
+        when ::TypeGuessr::Core::Types::ClassInstance
+          type_obj.name
+        else
+          ::TypeGuessr::Core::TypeFormatter.format(type_obj)
+        end
       end
 
       # Check if debug mode is enabled via environment variable or config file

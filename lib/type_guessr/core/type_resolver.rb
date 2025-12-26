@@ -72,7 +72,7 @@ module TypeGuessr
       # @param scope_type [Symbol] the scope type
       # @param scope_id [String] the scope identifier
       # @param file_path [String, nil] optional file path (reserved for future use)
-      # @return [String, nil] the guessed type or nil
+      # @return [TypeGuessr::Core::Types::Type, nil] the guessed type object or nil
       # rubocop:disable Lint/UnusedMethodArgument
       def get_direct_type(variable_name:, hover_line:, scope_type:, scope_id:, file_path: nil)
         # rubocop:enable Lint/UnusedMethodArgument
@@ -113,7 +113,7 @@ module TypeGuessr
       # @param scope_type [Symbol] the scope type
       # @param scope_id [String] the scope identifier
       # @param hover_line [Integer] the hover line number
-      # @return [String, nil] the guessed type or nil
+      # @return [TypeGuessr::Core::Types::Type, nil] the guessed type object or nil
       def find_direct_type_from_index(variable_name:, scope_type:, scope_id:, hover_line:)
         # Use the public API to find variable type at location
         @index.find_variable_type_at_location(

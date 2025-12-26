@@ -499,7 +499,8 @@ RSpec.describe TypeGuessr::Core::ASTAnalyzer do
         def_column: 0
       )
 
-      expect(type).to eq("User")
+      expect(type).to be_a(TypeGuessr::Core::Types::ClassInstance)
+      expect(type.name).to eq("User")
     end
 
     it "extracts fully qualified type from .new call inside nested module" do
@@ -526,7 +527,8 @@ RSpec.describe TypeGuessr::Core::ASTAnalyzer do
         def_column: 8
       )
 
-      expect(type).to eq("RubyLsp::TypeGuessr::VariableTypeResolver")
+      expect(type).to be_a(TypeGuessr::Core::Types::ClassInstance)
+      expect(type.name).to eq("RubyLsp::TypeGuessr::VariableTypeResolver")
     end
 
     it "preserves explicit fully qualified type from .new call" do
@@ -553,7 +555,8 @@ RSpec.describe TypeGuessr::Core::ASTAnalyzer do
         def_column: 8
       )
 
-      expect(type).to eq("Other::Module::Adapter")
+      expect(type).to be_a(TypeGuessr::Core::Types::ClassInstance)
+      expect(type.name).to eq("Other::Module::Adapter")
     end
 
     it "extracts type from .new call inside method" do
@@ -576,7 +579,8 @@ RSpec.describe TypeGuessr::Core::ASTAnalyzer do
         def_column: 4
       )
 
-      expect(type).to eq("Item")
+      expect(type).to be_a(TypeGuessr::Core::Types::ClassInstance)
+      expect(type.name).to eq("Item")
     end
   end
 end

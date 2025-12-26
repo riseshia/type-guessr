@@ -710,7 +710,7 @@ RSpec.describe RubyLsp::TypeGuessr::Hover do
           var_name: "name",
           def_line: 2,
           def_column: 4,
-          type: "String"
+          type: TypeGuessr::Core::Types::ClassInstance.new("String")
         )
 
         server.process_message(
@@ -746,7 +746,7 @@ RSpec.describe RubyLsp::TypeGuessr::Hover do
           var_name: "count",
           def_line: 2,
           def_column: 4,
-          type: "Integer"
+          type: TypeGuessr::Core::Types::ClassInstance.new("Integer")
         )
 
         server.process_message(
@@ -785,7 +785,7 @@ RSpec.describe RubyLsp::TypeGuessr::Hover do
           var_name: "user",
           def_line: 5,
           def_column: 4,
-          type: "User"
+          type: TypeGuessr::Core::Types::ClassInstance.new("User")
         )
 
         server.process_message(
@@ -821,7 +821,7 @@ RSpec.describe RubyLsp::TypeGuessr::Hover do
           var_name: "price",
           def_line: 2,
           def_column: 4,
-          type: "Float"
+          type: TypeGuessr::Core::Types::ClassInstance.new("Float")
         )
 
         server.process_message(
@@ -857,7 +857,7 @@ RSpec.describe RubyLsp::TypeGuessr::Hover do
           var_name: "items",
           def_line: 2,
           def_column: 4,
-          type: "Array"
+          type: TypeGuessr::Core::Types::ClassInstance.new("Array")
         )
 
         server.process_message(
@@ -893,7 +893,7 @@ RSpec.describe RubyLsp::TypeGuessr::Hover do
           var_name: "data",
           def_line: 2,
           def_column: 4,
-          type: "Hash"
+          type: TypeGuessr::Core::Types::ClassInstance.new("Hash")
         )
 
         server.process_message(
@@ -938,7 +938,7 @@ RSpec.describe RubyLsp::TypeGuessr::Hover do
           var_name: "user",
           def_line: 7,
           def_column: 4,
-          type: "User"
+          type: TypeGuessr::Core::Types::ClassInstance.new("User")
         )
 
         # Also add method call (to test that direct type takes priority)

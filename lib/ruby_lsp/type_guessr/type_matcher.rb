@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "index_adapter"
+require_relative "../../type_guessr/core/types"
 
 module RubyLsp
   module TypeGuessr
@@ -25,7 +26,7 @@ module RubyLsp
       # 3. Filter candidates that have all specified methods (using resolve_method for inheritance/mixin chain)
       # 4. Reduce each candidate to its topmost ancestor that still has all methods
       # @param method_names [Array<String>] the method names to search for
-      # @return [Array<String>] class names that have all the specified methods
+      # @return [Array<TypeGuessr::Core::Types::Type>] Types objects that have all the specified methods
       #   Returns up to MAX_MATCHING_TYPES results, with TRUNCATED_MARKER appended if more exist
       def find_matching_types(method_names)
         return [] if method_names.empty?
@@ -57,9 +58,14 @@ module RubyLsp
         candidates = candidates.map { |name| reduce_to_topmost_ancestor(name, method_names) }.uniq
 
         # Apply truncation if needed
-        candidates = candidates.take(MAX_MATCHING_TYPES) + [TRUNCATED_MARKER] if candidates.size > MAX_MATCHING_TYPES
+        truncated = candidates.size > MAX_MATCHING_TYPES
+        candidates = candidates.take(MAX_MATCHING_TYPES) if truncated
 
-        candidates
+        # Convert to Types objects
+        result = candidates.map { |name| ::TypeGuessr::Core::Types::ClassInstance.new(name) }
+        result << TRUNCATED_MARKER if truncated
+
+        result
       end
 
       # Check if the given name is a class (not a module)

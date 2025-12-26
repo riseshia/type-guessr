@@ -120,7 +120,7 @@ module TypeGuessr
       # @param var_name [String] the variable name
       # @param def_line [Integer] the line where the variable is defined
       # @param def_column [Integer] the column where the variable is defined
-      # @param type [String] the guessed type (e.g., "String", "Integer", "User")
+      # @param type [TypeGuessr::Core::Types::Type] the guessed type object
       def add_variable_type(file_path:, scope_type:, scope_id:, var_name:, def_line:, def_column:, type:)
         @mutex.synchronize do
           nested = ensure_nested_hash(@types[scope_type], file_path, scope_id, var_name)
@@ -137,7 +137,7 @@ module TypeGuessr
       # @param var_name [String] the variable name
       # @param def_line [Integer] the line where the variable is defined
       # @param def_column [Integer] the column where the variable is defined
-      # @return [String, nil] the guessed type or nil if not found
+      # @return [TypeGuessr::Core::Types::Type, nil] the guessed type object or nil if not found
       def get_variable_type(file_path:, scope_type:, scope_id:, var_name:, def_line:, def_column:)
         @mutex.synchronize do
           def_key = "#{def_line}:#{def_column}"
@@ -168,7 +168,7 @@ module TypeGuessr
       # @param scope_type [Symbol] :instance_variable, :local_variable, or :class_variable
       # @param max_line [Integer] the maximum line number (finds closest definition before this line)
       # @param scope_id [String] the scope identifier
-      # @return [String, nil] the guessed type or nil if not found
+      # @return [TypeGuessr::Core::Types::Type, nil] the guessed type object or nil if not found
       def find_variable_type_at_location(var_name:, scope_type:, max_line:, scope_id:)
         @mutex.synchronize do
           scope_types = @types[scope_type]

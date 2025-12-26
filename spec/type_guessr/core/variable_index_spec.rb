@@ -390,7 +390,7 @@ RSpec.describe TypeGuessr::Core::VariableIndex do
         var_name: "user",
         def_line: 5,
         def_column: 2,
-        type: "User"
+        type: TypeGuessr::Core::Types::ClassInstance.new("User")
       )
 
       type = index.find_variable_type_at_location(
@@ -400,7 +400,8 @@ RSpec.describe TypeGuessr::Core::VariableIndex do
         scope_id: "Recipe#cook"
       )
 
-      expect(type).to eq("User")
+      expect(type).to be_a(TypeGuessr::Core::Types::ClassInstance)
+      expect(type.name).to eq("User")
     end
 
     it "returns nil before definition line" do
@@ -411,7 +412,7 @@ RSpec.describe TypeGuessr::Core::VariableIndex do
         var_name: "user",
         def_line: 5,
         def_column: 2,
-        type: "User"
+        type: TypeGuessr::Core::Types::ClassInstance.new("User")
       )
 
       type = index.find_variable_type_at_location(
@@ -432,7 +433,7 @@ RSpec.describe TypeGuessr::Core::VariableIndex do
         var_name: "item",
         def_line: 5,
         def_column: 2,
-        type: "String"
+        type: TypeGuessr::Core::Types::ClassInstance.new("String")
       )
 
       index.add_variable_type(
@@ -442,7 +443,7 @@ RSpec.describe TypeGuessr::Core::VariableIndex do
         var_name: "item",
         def_line: 10,
         def_column: 2,
-        type: "Integer"
+        type: TypeGuessr::Core::Types::ClassInstance.new("Integer")
       )
 
       # At line 8, should find the first definition (String)
@@ -452,7 +453,8 @@ RSpec.describe TypeGuessr::Core::VariableIndex do
         max_line: 8,
         scope_id: "Recipe#cook"
       )
-      expect(type1).to eq("String")
+      expect(type1).to be_a(TypeGuessr::Core::Types::ClassInstance)
+      expect(type1.name).to eq("String")
 
       # At line 15, should find the second definition (Integer)
       type2 = index.find_variable_type_at_location(
@@ -461,7 +463,8 @@ RSpec.describe TypeGuessr::Core::VariableIndex do
         max_line: 15,
         scope_id: "Recipe#cook"
       )
-      expect(type2).to eq("Integer")
+      expect(type2).to be_a(TypeGuessr::Core::Types::ClassInstance)
+      expect(type2.name).to eq("Integer")
     end
 
     it "returns nil for nonexistent variable" do

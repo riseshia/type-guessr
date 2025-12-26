@@ -3,6 +3,7 @@
 require "prism"
 require_relative "scope_resolver"
 require_relative "variable_index"
+require_relative "types"
 
 module TypeGuessr
   module Core
@@ -262,36 +263,37 @@ module TypeGuessr
 
       # Analyze a value node and return its guessed type
       # @param node [Prism::Node] the value node to analyze
-      # @return [String, nil] the guessed type or nil if cannot be determined
+      # @return [Types::Type, nil] the guessed type or nil if cannot be determined
       def analyze_value_type(node)
         case node
         when Prism::IntegerNode
-          "Integer"
+          Types::ClassInstance.new("Integer")
         when Prism::FloatNode
-          "Float"
+          Types::ClassInstance.new("Float")
         when Prism::StringNode
-          "String"
+          Types::ClassInstance.new("String")
         when Prism::InterpolatedStringNode
-          "String"
+          Types::ClassInstance.new("String")
         when Prism::SymbolNode
-          "Symbol"
+          Types::ClassInstance.new("Symbol")
         when Prism::TrueNode
-          "TrueClass"
+          Types::ClassInstance.new("TrueClass")
         when Prism::FalseNode
-          "FalseClass"
+          Types::ClassInstance.new("FalseClass")
         when Prism::NilNode
-          "NilClass"
+          Types::ClassInstance.new("NilClass")
         when Prism::ArrayNode
-          "Array"
+          Types::ClassInstance.new("Array")
         when Prism::HashNode
-          "Hash"
+          Types::ClassInstance.new("Hash")
         when Prism::RangeNode
-          "Range"
+          Types::ClassInstance.new("Range")
         when Prism::RegularExpressionNode
-          "Regexp"
+          Types::ClassInstance.new("Regexp")
         when Prism::CallNode
           # Check if it's a .new call
-          extract_class_name_from_receiver(node.receiver) if node.name == :new && node.receiver
+          class_name = extract_class_name_from_receiver(node.receiver) if node.name == :new && node.receiver
+          Types::ClassInstance.new(class_name) if class_name
         end
       end
 
