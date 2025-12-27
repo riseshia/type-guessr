@@ -618,7 +618,8 @@ RSpec.describe "Hover Integration" do
       expect(response.contents.value).to match(/Widget/)
     end
 
-    xit "shows ambiguous when multiple types match" do
+    it "shows ambiguous when multiple types match" do
+      skip "ambiguous type display not yet implemented"
       source = <<~RUBY
         class Parser
           def process
