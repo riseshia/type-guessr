@@ -499,5 +499,54 @@ RSpec.describe "Hover Integration" do
       expect(response).not_to be_nil
     end
   end
+
+  describe "Call Node Hover" do
+    it "shows RBS signature when hovering on method call with variable receiver" do
+      source = <<~RUBY
+        def foo
+          str = "hello"
+          str.upcase
+        end
+      RUBY
+
+      # Hover on "upcase" method call
+      response = hover_on_source(source, { line: 2, character: 6 })
+
+      expect(response).not_to be_nil
+      expect(response.contents.value).to match(/upcase/)
+      expect(response.contents.value).to match(/String/)
+    end
+
+    it "returns nil when receiver type is unknown" do
+      source = <<~RUBY
+        def foo
+          unknown_var.some_method
+        end
+      RUBY
+
+      # Hover on "some_method"
+      response = hover_on_source(source, { line: 1, character: 14 })
+
+      # Should not crash, may return nil or minimal info
+      # This is acceptable behavior for unknown types
+      expect(response).to be_nil
+    end
+
+    it "shows RBS signature for instance variable receiver" do
+      source = <<~RUBY
+        def foo
+          @name = "Alice"
+          @name.downcase
+        end
+      RUBY
+
+      # Hover on "downcase" method call
+      response = hover_on_source(source, { line: 2, character: 8 })
+
+      expect(response).not_to be_nil
+      expect(response.contents.value).to match(/downcase/)
+      expect(response.contents.value).to match(/String/)
+    end
+  end
 end
 # rubocop:enable RSpec/DescribeClass

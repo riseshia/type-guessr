@@ -3,6 +3,7 @@
 require "prism"
 require_relative "variable_type_resolver"
 require_relative "hover_content_builder"
+require_relative "../../type_guessr/core/rbs_provider"
 
 module RubyLsp
   module TypeGuessr
@@ -39,6 +40,7 @@ module RubyLsp
         keyword_rest_parameter
         block_parameter
         forwarding_parameter
+        call
       ].freeze
 
       def initialize(response_builder, node_context, dispatcher, global_state = nil)
@@ -54,6 +56,30 @@ module RubyLsp
         define_method(:"on_#{node_type}_node_enter") do |node|
           add_hover_content(node)
         end
+      end
+
+      # Override on_call_node_enter for method call hover
+      def on_call_node_enter(node)
+        return unless node.receiver
+
+        # Phase 5.2a: Only handle variable receivers
+        return unless variable_receiver?(node.receiver)
+
+        # 1. Infer receiver type using existing VariableTypeResolver
+        receiver_type = resolve_receiver_type(node.receiver)
+        return if receiver_type.nil? || receiver_type == ::TypeGuessr::Core::Types::Unknown.instance
+
+        # 2. Query RBS signatures
+        rbs_provider = ::TypeGuessr::Core::RBSProvider.new
+        signatures = rbs_provider.get_method_signatures(
+          extract_type_name(receiver_type),
+          node.name.to_s
+        )
+        return if signatures.empty?
+
+        # 3. Format and output
+        content = format_method_signatures(node.name, signatures)
+        @response_builder.push(content, category: :documentation)
       end
 
       private
@@ -80,6 +106,50 @@ module RubyLsp
 
         content = @content_builder.build(type_info, matching_types: matching_types, type_entries: type_entries)
         @response_builder.push(content, category: :documentation) if content
+      end
+
+      # Check if node is a variable receiver (local, instance, or class variable)
+      # @param node [Prism::Node] the node to check
+      # @return [Boolean] true if node is a variable receiver
+      def variable_receiver?(node)
+        node.is_a?(Prism::LocalVariableReadNode) ||
+          node.is_a?(Prism::InstanceVariableReadNode) ||
+          node.is_a?(Prism::ClassVariableReadNode)
+      end
+
+      # Resolve the type of a receiver node
+      # @param receiver [Prism::Node] the receiver node
+      # @return [TypeGuessr::Core::Types::Type, nil] the resolved type or nil
+      def resolve_receiver_type(receiver)
+        type_info = @type_resolver.resolve_type(receiver)
+        return nil unless type_info
+
+        # Return direct type if available
+        type_info[:direct_type]
+      end
+
+      # Extract type name from a Types object
+      # @param type_obj [TypeGuessr::Core::Types::Type] the type object
+      # @return [String] the type name
+      def extract_type_name(type_obj)
+        case type_obj
+        when ::TypeGuessr::Core::Types::ClassInstance
+          type_obj.name
+        else
+          ::TypeGuessr::Core::TypeFormatter.format(type_obj)
+        end
+      end
+
+      # Format method signatures for display
+      # @param method_name [Symbol] the method name
+      # @param signatures [Array<TypeGuessr::Core::RBSProvider::Signature>] the signatures
+      # @return [String] formatted signature content
+      def format_method_signatures(method_name, signatures)
+        sig_strings = signatures.map do |sig|
+          sig.method_type.to_s
+        end
+
+        "**Method:** `#{method_name}`\n\n**Signatures:**\n```ruby\n#{sig_strings.join("\n")}\n```"
       end
     end
   end
