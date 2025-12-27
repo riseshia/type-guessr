@@ -72,7 +72,6 @@ module RubyLsp
         return if receiver_type.nil? || receiver_type == ::TypeGuessr::Core::Types::Unknown.instance
 
         # 2. Query RBS signatures
-        rbs_provider = ::TypeGuessr::Core::RBSProvider.new
         signatures = rbs_provider.get_method_signatures(
           extract_type_name(receiver_type),
           node.name.to_s
@@ -103,6 +102,12 @@ module RubyLsp
       end
 
       private
+
+      # Cached RBSProvider instance for querying method signatures
+      # @return [TypeGuessr::Core::RBSProvider]
+      def rbs_provider
+        @rbs_provider ||= ::TypeGuessr::Core::RBSProvider.new
+      end
 
       def register_listeners(dispatcher)
         # Dynamically generate listener method names from HOVER_NODE_TYPES
@@ -187,7 +192,6 @@ module RubyLsp
         end
 
         # 3. Get method return type from RBS
-        rbs_provider = ::TypeGuessr::Core::RBSProvider.new
         rbs_provider.get_method_return_type(extract_type_name(receiver_type), node.name.to_s)
       end
 
@@ -424,7 +428,6 @@ module RubyLsp
         warn "BlockParam: receiver_type = #{receiver_type.inspect}" if ENV["DEBUG"]
 
         # Get block parameter types from RBS with substitution
-        rbs_provider = ::TypeGuessr::Core::RBSProvider.new
         method_name = call_node.name.to_s
         class_name = extract_type_name(receiver_type)
 
