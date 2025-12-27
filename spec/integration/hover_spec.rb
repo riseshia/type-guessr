@@ -547,6 +547,71 @@ RSpec.describe "Hover Integration" do
       expect(response.contents.value).to match(/downcase/)
       expect(response.contents.value).to match(/String/)
     end
+
+    it "shows RBS signature for method chain (variable receiver)" do
+      source = <<~RUBY
+        def foo
+          str = "hello"
+          str.chars.first
+        end
+      RUBY
+
+      # Hover on "first" in the chain
+      response = hover_on_source(source, { line: 2, character: 12 })
+
+      expect(response).not_to be_nil
+      expect(response.contents.value).to match(/first/)
+      # chars returns Array[String], so first returns String | nil
+      expect(response.contents.value).to match(/Array/)
+    end
+
+    it "shows RBS signature for map to first chain" do
+      source = <<~RUBY
+        def foo
+          arr = [1, 2, 3]
+          arr.map { |x| x * 2 }.first
+        end
+      RUBY
+
+      # Hover on "first" after map chain
+      response = hover_on_source(source, { line: 2, character: 24 })
+
+      expect(response).not_to be_nil
+      expect(response.contents.value).to match(/first/)
+      # map returns Array, so first should show Array signatures
+      expect(response.contents.value).to match(/Array/)
+    end
+
+    it "shows RBS signature for chained enumerable methods" do
+      source = <<~RUBY
+        def foo
+          arr = [1, 2, 3]
+          arr.select { |x| x.even? }.map { |x| x * 2 }.compact
+        end
+      RUBY
+
+      # Hover on "compact"
+      response = hover_on_source(source, { line: 2, character: 53 })
+
+      expect(response).not_to be_nil
+      expect(response.contents.value).to match(/compact/)
+      expect(response.contents.value).to match(/Array/)
+    end
+
+    it "returns nil for excessively deep method chains" do
+      source = <<~RUBY
+        def foo
+          "a".upcase.downcase.upcase.downcase.upcase.downcase.upcase
+        end
+      RUBY
+
+      # Hover on the last "upcase" (7th level - exceeds MAX_DEPTH of 5)
+      response = hover_on_source(source, { line: 1, character: 54 })
+
+      # Should return nil or handle gracefully when depth limit exceeded
+      # This prevents infinite recursion and performance issues
+      expect(response).to be_nil
+    end
   end
 
   describe "Def Node Hover" do

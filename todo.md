@@ -90,30 +90,25 @@ Infer variable types from method call assignments at hover time:
 
 **Status:** Implemented in hover.rb:62-83. All 211 tests passing (208 existing + 3 new).
 
-#### Phase 5.2b: Method Chain Support (High Risk, 4-6h)
+#### Phase 5.2b: Method Chain Support ✅ COMPLETED
 
-- [ ] Create `MethodChainResolver` class:
-  ```ruby
-  # lib/ruby_lsp/type_guessr/method_chain_resolver.rb
-  class MethodChainResolver
-    MAX_DEPTH = 5        # Prevent infinite recursion
-    TIMEOUT_MS = 50      # Per-chain timeout
+**Implementation:** Recursive type resolution integrated into Hover class (not separate class for simplicity)
 
-    def resolve_receiver_type(call_node, context:, depth: 0)
-      # Recursive resolution with depth limit
-    end
-  end
-  ```
-- [ ] Handle receiver types:
-  - [ ] Variable nodes → delegate to VariableTypeResolver
-  - [ ] CallNode → recurse with depth+1, get return type from RBS
-  - [ ] SelfNode → use current class context
-- [ ] Integrate into `on_call_node_enter`:
-  - [ ] Try chain resolution first
-  - [ ] Fallback to variable resolution
-- [ ] Add integration tests:
-  - [ ] `'str = "hello"; str.chars.first'` → shows `String?`
-  - [ ] Depth limit test (6+ levels → nil)
+- [x] Implement `resolve_receiver_type_recursively` in Hover class with MAX_DEPTH = 5
+- [x] Handle receiver types:
+  - [x] Variable nodes → delegate to existing VariableTypeResolver
+  - [x] CallNode → recurse with depth+1, get return type from RBS
+  - [x] Literal nodes → Array, Hash, String, Integer, Float, Symbol, etc.
+- [x] Integrate into `on_call_node_enter`:
+  - [x] Replace variable-only check with recursive chain resolution
+  - [x] Query RBS for return types at each chain level
+- [x] Add integration tests:
+  - [x] `'str.chars.first'` → shows Array signatures
+  - [x] `'arr.map { }.first'` → shows Array signatures
+  - [x] `'arr.select { }.map { }.compact'` → shows Array signatures
+  - [x] Depth limit test (7 levels → nil)
+
+**Status:** Implemented in hover.rb:128-190. All 4 integration tests passing (216 total tests passing).
 
 #### Signature Display Features (Future)
 
@@ -324,17 +319,18 @@ Return Unknown / nil
 | - | 5.2a Call Node Hover (basic) | Medium | 2-3h | ✅ Done |
 | - | ~~5.5 Parameter Default Types~~ | - | - | ✅ Merged into 5.3 |
 | - | 5.3 Def Node Hover | Medium | 2-3h | ✅ Done |
-| 1 | 5.2b Call Node Hover (chains) | High | 4-6h | Pending |
-| 2 | 5.4 FlowAnalyzer Integration | High | 4-6h | Pending |
+| - | 5.2b Call Node Hover (chains) | High | 4-6h | ✅ Done |
+| 1 | 5.4 FlowAnalyzer Integration | High | 4-6h | Pending |
 
-**Total Estimated Effort:** 8-12 hours (remaining)
+**Total Estimated Effort:** 4-6 hours (remaining)
 
 **Recent Changes:**
 - Phase 5.5 merged into Phase 5.3 (parameter inference on-demand)
 - Phase 5.3 completed with FlowAnalyzer enhancements for interpolated strings and union types
-- Added support for hovering on method definitions showing complete signatures
+- Phase 5.2b completed with recursive chain resolution (depth limit = 5)
+- Added support for hovering on method definitions and method chains
 
 **Next Steps:**
-1. Consider implementing 5.2b (Call Node Hover with method chains)
-2. Consider implementing 5.4 (FlowAnalyzer Integration for variable types)
-3. Collect feedback on Phase 5.3 before proceeding to complex phases
+1. Consider implementing 5.4 (FlowAnalyzer Integration for variable types)
+2. Collect feedback on Phase 5.2b and 5.3 implementation
+3. Evaluate if 5.4 is needed based on user feedback

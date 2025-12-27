@@ -64,11 +64,8 @@ module RubyLsp
       def on_call_node_enter(node)
         return unless node.receiver
 
-        # Phase 5.2a: Only handle variable receivers
-        return unless variable_receiver?(node.receiver)
-
-        # 1. Infer receiver type using existing VariableTypeResolver
-        receiver_type = resolve_receiver_type(node.receiver)
+        # Phase 5.2b: Resolve receiver type recursively for method chains
+        receiver_type = resolve_receiver_type_recursively(node.receiver)
         return if receiver_type.nil? || receiver_type == ::TypeGuessr::Core::Types::Unknown.instance
 
         # 2. Query RBS signatures
@@ -128,19 +125,63 @@ module RubyLsp
         @response_builder.push(content, category: :documentation) if content
       end
 
-      # Check if node is a variable receiver (local, instance, or class variable)
-      # @param node [Prism::Node] the node to check
-      # @return [Boolean] true if node is a variable receiver
-      def variable_receiver?(node)
-        node.is_a?(Prism::LocalVariableReadNode) ||
-          node.is_a?(Prism::InstanceVariableReadNode) ||
-          node.is_a?(Prism::ClassVariableReadNode)
+      # Resolve receiver type recursively for method chains
+      # Supports: variables, CallNode chains, and literals
+      # @param receiver [Prism::Node] the receiver node
+      # @param depth [Integer] current recursion depth (for safety)
+      # @return [TypeGuessr::Core::Types::Type, nil] the resolved type or nil
+      def resolve_receiver_type_recursively(receiver, depth: 0)
+        # Depth limit to prevent infinite recursion
+        return nil if depth > 5
+
+        case receiver
+        when Prism::LocalVariableReadNode, Prism::InstanceVariableReadNode, Prism::ClassVariableReadNode
+          # Delegate to existing variable resolver
+          resolve_variable_type(receiver)
+        when Prism::CallNode
+          # Recursive: resolve receiver, then get method return type
+          resolve_call_chain(receiver, depth)
+        when Prism::ArrayNode
+          ::TypeGuessr::Core::Types::ArrayType.new
+        when Prism::HashNode
+          ::TypeGuessr::Core::Types::ClassInstance.new("Hash")
+        when Prism::StringNode, Prism::InterpolatedStringNode
+          ::TypeGuessr::Core::Types::ClassInstance.new("String")
+        when Prism::IntegerNode
+          ::TypeGuessr::Core::Types::ClassInstance.new("Integer")
+        when Prism::FloatNode
+          ::TypeGuessr::Core::Types::ClassInstance.new("Float")
+        when Prism::SymbolNode
+          ::TypeGuessr::Core::Types::ClassInstance.new("Symbol")
+        when Prism::TrueNode
+          ::TypeGuessr::Core::Types::ClassInstance.new("TrueClass")
+        when Prism::FalseNode
+          ::TypeGuessr::Core::Types::ClassInstance.new("FalseClass")
+        when Prism::NilNode
+          ::TypeGuessr::Core::Types::ClassInstance.new("NilClass")
+        end
       end
 
-      # Resolve the type of a receiver node
-      # @param receiver [Prism::Node] the receiver node
+      # Resolve a call chain by getting receiver type and method return type
+      # @param node [Prism::CallNode] the call node
+      # @param depth [Integer] current recursion depth
       # @return [TypeGuessr::Core::Types::Type, nil] the resolved type or nil
-      def resolve_receiver_type(receiver)
+      def resolve_call_chain(node, depth)
+        return nil unless node.receiver
+
+        # 1. Get receiver type (recursive)
+        receiver_type = resolve_receiver_type_recursively(node.receiver, depth: depth + 1)
+        return nil if receiver_type.nil? || receiver_type == ::TypeGuessr::Core::Types::Unknown.instance
+
+        # 2. Get method return type from RBS
+        rbs_provider = ::TypeGuessr::Core::RBSProvider.new
+        rbs_provider.get_method_return_type(extract_type_name(receiver_type), node.name.to_s)
+      end
+
+      # Resolve variable type using existing VariableTypeResolver
+      # @param node [Prism::Node] the variable node
+      # @return [TypeGuessr::Core::Types::Type, nil] the resolved type or nil
+      def resolve_variable_type(receiver)
         type_info = @type_resolver.resolve_type(receiver)
         return nil unless type_info
 
