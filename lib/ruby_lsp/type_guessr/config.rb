@@ -10,6 +10,10 @@ module RubyLsp
     module Config
       CONFIG_FILENAME = ".type-guessr.yml"
 
+      # Maximum depth for method chain resolution (e.g., a.b.c.d.e)
+      # Prevents infinite recursion and limits performance impact
+      MAX_CHAIN_DEPTH = 5
+
       module_function
 
       def reset!

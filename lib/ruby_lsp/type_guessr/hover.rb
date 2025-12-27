@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "prism"
+require_relative "config"
 require_relative "variable_type_resolver"
 require_relative "hover_content_builder"
 require_relative "../../type_guessr/core/rbs_provider"
@@ -165,7 +166,7 @@ module RubyLsp
       # @return [TypeGuessr::Core::Types::Type, nil] the resolved type or nil
       def resolve_receiver_type_recursively(receiver, depth: 0)
         # Depth limit to prevent infinite recursion
-        return nil if depth > 5
+        return nil if depth > Config::MAX_CHAIN_DEPTH
 
         case receiver
         when Prism::LocalVariableReadNode, Prism::InstanceVariableReadNode, Prism::ClassVariableReadNode
