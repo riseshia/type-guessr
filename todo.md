@@ -125,23 +125,32 @@ Infer variable types from method call assignments at hover time:
 
 ---
 
-### 5.3 Definition (def) Hover (Low Risk, 1-2h)
+### 5.3 Definition (def) Hover (Medium Risk, 2-3h)
 
-**Goal:** Show inferred return type when hovering on method definitions.
+**Goal:** Show complete method signature (parameters + return type) when hovering on method definitions.
+
+**Depends on:** Phase 5.5 (Parameter Default Types) must be completed first.
 
 - [ ] Add `:def` to `HOVER_NODE_TYPES`
 - [ ] Implement `on_def_node_enter(node)`:
-  - [ ] Use `FlowAnalyzer` to analyze method body
-  - [ ] Extract return type with `result.return_type_for_method`
-  - [ ] Format with `TypeFormatter`
+  - [ ] Extract parameter types from node (uses Phase 5.5 implementation)
+  - [ ] Use `FlowAnalyzer` to analyze method body for return type
+  - [ ] Format complete signature: `(params) -> ReturnType`
+  - [ ] Handle all parameter kinds: required, optional, keyword, rest, block
   - [ ] Handle errors gracefully (return nil on failure)
-- [ ] Infer return type from:
+- [ ] Parameter type inference:
+  - [ ] Required params without default → `untyped`
+  - [ ] Optional params with default → infer from default value
+  - [ ] Keyword params → similar to optional
+  - [ ] Rest/keyword rest → `*untyped`, `**untyped`
+- [ ] Return type inference:
   - [ ] `return expr` statements
   - [ ] Last expression of method body
   - [ ] Union of multiple return paths
-- [ ] Type slots default to `Unknown` when not inferable
-- [ ] Add integration test:
-  - [ ] `'def foo; 42; end'` → shows `Integer`
+- [ ] Add integration tests:
+  - [ ] `'def foo; 42; end'` → shows `() -> Integer`
+  - [ ] `'def greet(name, age = 20); ...; end'` → shows `(untyped name, ?Integer age) -> String`
+  - [ ] Multiple return paths → shows union type
 
 ---
 
@@ -176,6 +185,8 @@ Infer variable types from method call assignments at hover time:
 ### 5.5 Parameter Default Value Type Inference (Medium Risk, 2-3h)
 
 **Goal:** Infer parameter types from default values.
+
+**Note:** This is a prerequisite for Phase 5.3 (Def Node Hover). Implement this first.
 
 **Current Gap:** `visit_optional_parameter_node` doesn't analyze default values.
 
@@ -319,14 +330,18 @@ Return Unknown / nil
 | - | 5.1 Method Call Assignment | - | - | ✅ Done |
 | - | 5.6 TypeFormatter Integration | Low | 1h | ✅ Done |
 | - | 5.2a Call Node Hover (basic) | Medium | 2-3h | ✅ Done |
-| 1 | 5.3 Def Node Hover | Low | 1-2h | Pending |
-| 2 | 5.5 Parameter Default Types | Medium | 2-3h | Pending |
+| 1 | 5.5 Parameter Default Types | Medium | 2-3h | Pending |
+| 2 | 5.3 Def Node Hover | Medium | 2-3h | Pending |
 | 3 | 5.2b Call Node Hover (chains) | High | 4-6h | Pending |
 | 4 | 5.4 FlowAnalyzer Integration | High | 4-6h | Pending |
 
-**Total Estimated Effort:** 11-18 hours (remaining)
+**Total Estimated Effort:** 12-20 hours (remaining)
+
+**Rationale for Priority Change:**
+Phase 5.3 requires parameter type inference to show proper method signatures.
+Therefore, Phase 5.5 (Parameter Default Types) must be implemented first.
 
 **Next Steps:**
-1. Implement 5.3 (Def Node Hover) - low risk, high visibility
-2. Implement 5.5 (Parameter Default Types) - improves inference accuracy
+1. Implement 5.5 (Parameter Default Types) - enables parameter type inference
+2. Implement 5.3 (Def Node Hover) - uses 5.5 to show complete signatures
 3. Collect feedback before proceeding to complex phases (5.2b, 5.4)
