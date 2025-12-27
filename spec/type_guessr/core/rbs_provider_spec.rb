@@ -55,4 +55,65 @@ RSpec.describe TypeGuessr::Core::RBSProvider do
       expect(signature).to respond_to(:method_type)
     end
   end
+
+  describe "#get_method_return_type" do
+    describe "simple types" do
+      it "returns String for String#upcase" do
+        type = provider.get_method_return_type("String", "upcase")
+
+        expect(type).to be_a(TypeGuessr::Core::Types::ClassInstance)
+        expect(type.name).to eq("String")
+      end
+
+      it "returns Integer for String#length" do
+        type = provider.get_method_return_type("String", "length")
+
+        expect(type).to be_a(TypeGuessr::Core::Types::ClassInstance)
+        expect(type.name).to eq("Integer")
+      end
+
+      it "returns Unknown for non-existent method" do
+        type = provider.get_method_return_type("String", "non_existent")
+
+        expect(type).to eq(TypeGuessr::Core::Types::Unknown.instance)
+      end
+    end
+
+    describe "generic types" do
+      it "returns Array[String] for String#chars" do
+        type = provider.get_method_return_type("String", "chars")
+
+        expect(type).to be_a(TypeGuessr::Core::Types::ArrayType)
+        expect(type.element_type).to be_a(TypeGuessr::Core::Types::ClassInstance)
+        expect(type.element_type.name).to eq("String")
+      end
+
+      it "returns Array[String] for String#split" do
+        type = provider.get_method_return_type("String", "split")
+
+        expect(type).to be_a(TypeGuessr::Core::Types::ArrayType)
+        expect(type.element_type).to be_a(TypeGuessr::Core::Types::ClassInstance)
+        expect(type.element_type.name).to eq("String")
+      end
+
+      it "returns Array[untyped] for Array#compact (type variable Elem)" do
+        # Array#compact returns Array[Elem], but Elem is a type variable
+        # Without substitution, we can't resolve it, so return Array[untyped]
+        type = provider.get_method_return_type("Array", "compact")
+
+        expect(type).to be_a(TypeGuessr::Core::Types::ArrayType)
+        # Type variable can't be resolved without context, so element is Unknown
+        expect(type.element_type).to eq(TypeGuessr::Core::Types::Unknown.instance)
+      end
+
+      it "handles nested generic types" do
+        # String#lines returns Array[String]
+        type = provider.get_method_return_type("String", "lines")
+
+        expect(type).to be_a(TypeGuessr::Core::Types::ArrayType)
+        expect(type.element_type).to be_a(TypeGuessr::Core::Types::ClassInstance)
+        expect(type.element_type.name).to eq("String")
+      end
+    end
+  end
 end

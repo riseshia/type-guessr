@@ -75,16 +75,37 @@ module TypeGuessr
       def rbs_type_to_types(rbs_type)
         case rbs_type
         when RBS::Types::ClassInstance
-          Types::ClassInstance.new(rbs_type.name.to_s.delete_prefix("::"))
+          convert_class_instance(rbs_type)
         when RBS::Types::Union
           types = rbs_type.types.map { |t| rbs_type_to_types(t) }
           Types::Union.new(types)
+        when RBS::Types::Variable
+          # Type variable (e.g., Elem, T) - can't resolve without context
+          Types::Unknown.instance
         when RBS::Types::Bases::Self, RBS::Types::Bases::Instance
           # Return Unknown for now - would need context to resolve
           Types::Unknown.instance
         else
           Types::Unknown.instance
         end
+      end
+
+      # Convert RBS ClassInstance to our type system
+      # Handles generic types like Array[String], Hash[Symbol, Integer]
+      # @param rbs_type [RBS::Types::ClassInstance] the RBS type
+      # @return [Types::Type] our type representation
+      def convert_class_instance(rbs_type)
+        class_name = rbs_type.name.to_s.delete_prefix("::")
+
+        # Handle Array with type parameter
+        if class_name == "Array" && rbs_type.args.size == 1
+          element_type = rbs_type_to_types(rbs_type.args.first)
+          return Types::ArrayType.new(element_type)
+        end
+
+        # For other generic types, just return ClassInstance (ignore args for now)
+        # TODO: Add HashType support in the future
+        Types::ClassInstance.new(class_name)
       end
 
       def ensure_environment_loaded
