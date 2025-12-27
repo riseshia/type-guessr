@@ -74,18 +74,21 @@ Infer variable types from method call assignments at hover time:
 
 **Scope:** Two-phase implementation (basic → chain support)
 
-#### Phase 5.2a: Variable Receivers Only (Medium Risk, 2-3h)
+#### Phase 5.2a: Variable Receivers Only ✅ COMPLETED
 
-- [ ] Add `:call` to `HOVER_NODE_TYPES` in `hover.rb`
-- [ ] Implement `on_call_node_enter(node)`:
-  - [ ] Check if receiver is variable node (Local/Instance/ClassVariableReadNode)
-  - [ ] Resolve receiver type using existing `VariableTypeResolver`
-  - [ ] Query `RBSProvider.get_method_signatures(receiver_type, method_name)`
-  - [ ] Format and display signatures
-- [ ] Add helper `variable_receiver?(node)` method
-- [ ] Add integration tests:
-  - [ ] `'str = "hello"; str.upcase'` → shows `() -> String`
-  - [ ] Unknown receiver → returns nil
+- [x] Add `:call` to `HOVER_NODE_TYPES` in `hover.rb`
+- [x] Implement `on_call_node_enter(node)`:
+  - [x] Check if receiver is variable node (Local/Instance/ClassVariableReadNode)
+  - [x] Resolve receiver type using existing `VariableTypeResolver`
+  - [x] Query `RBSProvider.get_method_signatures(receiver_type, method_name)`
+  - [x] Format and display signatures
+- [x] Add helper `variable_receiver?(node)` method
+- [x] Add integration tests:
+  - [x] `'str = "hello"; str.upcase'` → shows method signatures
+  - [x] Unknown receiver → returns nil gracefully
+  - [x] Instance variable receiver (`@name.downcase`)
+
+**Status:** Implemented in hover.rb:62-83. All 211 tests passing (208 existing + 3 new).
 
 #### Phase 5.2b: Method Chain Support (High Risk, 4-6h)
 
@@ -315,15 +318,15 @@ Return Unknown / nil
 | - | 5.0 Type System Integration | - | - | ✅ Done |
 | - | 5.1 Method Call Assignment | - | - | ✅ Done |
 | - | 5.6 TypeFormatter Integration | Low | 1h | ✅ Done |
-| 1 | 5.2a Call Node Hover (basic) | Medium | 2-3h | Pending |
-| 2 | 5.3 Def Node Hover | Low | 1-2h | Pending |
-| 3 | 5.5 Parameter Default Types | Medium | 2-3h | Pending |
-| 4 | 5.2b Call Node Hover (chains) | High | 4-6h | Pending |
-| 5 | 5.4 FlowAnalyzer Integration | High | 4-6h | Pending |
+| - | 5.2a Call Node Hover (basic) | Medium | 2-3h | ✅ Done |
+| 1 | 5.3 Def Node Hover | Low | 1-2h | Pending |
+| 2 | 5.5 Parameter Default Types | Medium | 2-3h | Pending |
+| 3 | 5.2b Call Node Hover (chains) | High | 4-6h | Pending |
+| 4 | 5.4 FlowAnalyzer Integration | High | 4-6h | Pending |
 
-**Total Estimated Effort:** 14-21 hours (remaining)
+**Total Estimated Effort:** 11-18 hours (remaining)
 
 **Next Steps:**
-1. Implement 5.2a (Call Node Hover - basic) - highest user value
-2. Implement 5.3 (Def Node Hover) - low risk
-3. Collect feedback before proceeding to complex phases
+1. Implement 5.3 (Def Node Hover) - low risk, high visibility
+2. Implement 5.5 (Parameter Default Types) - improves inference accuracy
+3. Collect feedback before proceeding to complex phases (5.2b, 5.4)
