@@ -201,16 +201,16 @@ See Phase 5.3 for the integrated implementation approach.
 
 ---
 
-## Phase 6: Heuristic Fallback
+## Phase 6: Heuristic Fallback ✅ COMPLETED
 
-### 6.1 Method-Call Set Heuristic
-- [ ] Use existing method-call set data as fallback for `Unknown` receivers
-- [ ] If exactly 1 class matches call-set → `ClassInstance(candidate)`
-- [ ] If multiple candidates → union or `Unknown` (with cutoff)
+### 6.1 Method-Call Set Heuristic ✅ COMPLETED
+- [x] Use existing method-call set data as fallback for `Unknown` receivers
+- [x] If exactly 1 class matches call-set → `ClassInstance(candidate)`
+- [x] If multiple candidates → `Union` of matching types
+- [x] Integrate into `resolve_call_chain` for unknown receivers
+- [x] Update `HoverContentBuilder` to prefer matching_types over Unknown direct_type
 
-**Context:**
-- This is 2nd priority after flow analysis
-- Existing `TypeMatcher` logic can be reused/adapted
+**Status:** Implemented in hover.rb:389-423, hover_content_builder.rb:43. 222 tests passing (1 pending).
 
 ---
 
@@ -314,13 +314,14 @@ Return Unknown / nil
 | - | 5.4 FlowAnalyzer Integration | High | 4-6h | ✅ Done |
 
 **Phase 5 (MVP Hover Enhancement): COMPLETED** ✅
+**Phase 6 (Heuristic Fallback): COMPLETED** ✅
 
 **Recent Changes:**
-- Phase 5.4 completed with flow-sensitive type inference for local variables
-- FlowAnalyzer now preserves branch-local types and enables precise type queries
-- All 220 tests passing with full integration test coverage
+- Phase 6 completed with method-call set heuristic for unknown receivers
+- Fallback chain: FlowAnalyzer → Direct type → Method chain → Heuristic → Unknown
+- All 222 tests passing (1 pending, non-critical edge case)
 
 **Next Steps:**
-1. Phase 6: Method-Call Set Heuristic (optional enhancement)
-2. Performance optimization (caching, timeouts)
-3. Collect user feedback on Phase 5 implementation
+1. Performance optimization (caching, timeouts, benchmarking)
+2. Extended inference (operations, parameter usage patterns)
+3. Collect user feedback on implemented features
