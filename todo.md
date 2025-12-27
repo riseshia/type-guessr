@@ -194,16 +194,18 @@ Infer variable types from method call assignments at hover time:
 
 ---
 
-### 5.6 TypeFormatter Integration (Low Risk, 1h)
+### 5.6 TypeFormatter Integration ✅ COMPLETED
 
 **Goal:** Unified output formatting for all type displays.
 
-- [ ] Update `HoverContentBuilder` to use TypeFormatter:
+- [x] Update `HoverContentBuilder` to use TypeFormatter:
   ```ruby
   formatted = type_name.is_a?(String) ? type_name : TypeFormatter.format(type_name)
   "**Guessed type:** `#{formatted}`"
   ```
-- [ ] Ensure consistent formatting across all hover scenarios
+- [x] Ensure consistent formatting across all hover scenarios
+
+**Status:** Already completed during Phase 5.0. All type formatting in `HoverContentBuilder` consistently uses `TypeFormatter.format()` (lines 99, 144, 166, 188). 26 integration tests passing.
 
 ---
 
@@ -312,16 +314,16 @@ Return Unknown / nil
 |-------|------|------|------|--------|
 | - | 5.0 Type System Integration | - | - | ✅ Done |
 | - | 5.1 Method Call Assignment | - | - | ✅ Done |
-| 1 | 5.6 TypeFormatter Integration | Low | 1h | Pending |
-| 2 | 5.2a Call Node Hover (basic) | Medium | 2-3h | Pending |
-| 3 | 5.3 Def Node Hover | Low | 1-2h | Pending |
-| 4 | 5.5 Parameter Default Types | Medium | 2-3h | Pending |
-| 5 | 5.2b Call Node Hover (chains) | High | 4-6h | Pending |
-| 6 | 5.4 FlowAnalyzer Integration | High | 4-6h | Pending |
+| - | 5.6 TypeFormatter Integration | Low | 1h | ✅ Done |
+| 1 | 5.2a Call Node Hover (basic) | Medium | 2-3h | Pending |
+| 2 | 5.3 Def Node Hover | Low | 1-2h | Pending |
+| 3 | 5.5 Parameter Default Types | Medium | 2-3h | Pending |
+| 4 | 5.2b Call Node Hover (chains) | High | 4-6h | Pending |
+| 5 | 5.4 FlowAnalyzer Integration | High | 4-6h | Pending |
 
-**Total Estimated Effort:** 15-22 hours
+**Total Estimated Effort:** 14-21 hours (remaining)
 
-**Recommended First Steps:**
-1. Implement 5.6 (TypeFormatter) - safest starting point
-2. Implement 5.2a (Call Node Hover - basic) - most user value
+**Next Steps:**
+1. Implement 5.2a (Call Node Hover - basic) - highest user value
+2. Implement 5.3 (Def Node Hover) - low risk
 3. Collect feedback before proceeding to complex phases
