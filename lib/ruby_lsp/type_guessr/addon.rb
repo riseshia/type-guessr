@@ -36,6 +36,8 @@ module RubyLsp
         Prism::BlockParameterNode,
         Prism::ForwardingParameterNode,
         Prism::SelfNode,
+        Prism::CallNode,
+        Prism::DefNode,
       ].freeze
 
       attr_reader :runtime_adapter

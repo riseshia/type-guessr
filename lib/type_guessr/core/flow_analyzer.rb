@@ -189,7 +189,7 @@ module TypeGuessr
 
         def infer_type_from_node(node)
           case node
-          when Prism::StringNode
+          when Prism::StringNode, Prism::InterpolatedStringNode
             Types::ClassInstance.new("String")
           when Prism::IntegerNode
             Types::ClassInstance.new("Integer")
@@ -205,8 +205,46 @@ module TypeGuessr
             Types::Union.new([Types::ClassInstance.new("TrueClass"), Types::ClassInstance.new("FalseClass")])
           when Prism::NilNode
             Types::ClassInstance.new("NilClass")
+          when Prism::IfNode
+            infer_if_expression_type(node)
           else
             Types::Unknown.instance
+          end
+        end
+
+        # Infer the type of an if expression by analyzing both branches
+        # @param node [Prism::IfNode] the if node
+        # @return [Types::Type] the inferred type
+        def infer_if_expression_type(node)
+          then_type = if node.statements&.body&.any?
+                        infer_type_from_node(node.statements.body.last)
+                      else
+                        Types::ClassInstance.new("NilClass")
+                      end
+
+          else_type = if node.subsequent
+                        case node.subsequent
+                        when Prism::ElseNode
+                          if node.subsequent.statements&.body&.any?
+                            infer_type_from_node(node.subsequent.statements.body.last)
+                          else
+                            Types::ClassInstance.new("NilClass")
+                          end
+                        when Prism::IfNode
+                          # elsif branch
+                          infer_if_expression_type(node.subsequent)
+                        else
+                          Types::Unknown.instance
+                        end
+                      else
+                        Types::ClassInstance.new("NilClass")
+                      end
+
+          # Return union of both branch types
+          if then_type == else_type
+            then_type
+          else
+            Types::Union.new([then_type, else_type])
           end
         end
 

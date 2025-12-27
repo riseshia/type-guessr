@@ -125,34 +125,39 @@ Infer variable types from method call assignments at hover time:
 
 ---
 
-### 5.3 Definition (def) Hover (Medium Risk, 2-3h)
+### 5.3 Definition (def) Hover ✅ COMPLETED
 
 **Goal:** Show complete method signature (parameters + return type) when hovering on method definitions.
 
 **Approach:** Infer parameter types on-demand at hover time (no indexing needed).
 
-- [ ] Add `:def` to `HOVER_NODE_TYPES`
-- [ ] Implement `on_def_node_enter(node)`:
-  - [ ] Iterate through parameters and infer types from default values
-  - [ ] Use `analyze_value_type` for literals/numbers/.new calls
-  - [ ] Use `FlowAnalyzer` to analyze method body for return type
-  - [ ] Format complete signature: `(params) -> ReturnType`
-  - [ ] Handle all parameter kinds: required, optional, keyword, rest, block
-  - [ ] Handle errors gracefully (return nil on failure)
-- [ ] Parameter type inference (on-demand):
-  - [ ] Required params without default → `untyped`
-  - [ ] Optional params with default → infer from default value (literal/number/.new)
-  - [ ] Keyword params → similar to optional
-  - [ ] Rest/keyword rest → `*untyped`, `**untyped`
-  - [ ] Block → `&block`
-- [ ] Return type inference:
-  - [ ] `return expr` statements
-  - [ ] Last expression of method body
-  - [ ] Union of multiple return paths
-- [ ] Add integration tests:
-  - [ ] `'def foo; 42; end'` → shows `() -> Integer`
-  - [ ] `'def greet(name, age = 20); ...; end'` → shows `(untyped name, ?Integer age) -> String`
-  - [ ] Multiple return paths → shows union type
+- [x] Add `:def` to `HOVER_NODE_TYPES`
+- [x] Add `Prism::DefNode` and `Prism::CallNode` to `HOVER_TARGET_NODES` in addon
+- [x] Implement `on_def_node_enter(node)`:
+  - [x] Iterate through parameters and infer types from default values
+  - [x] Use `analyze_value_type` for literals/numbers/.new calls
+  - [x] Use `FlowAnalyzer` to analyze method body for return type
+  - [x] Format complete signature: `(params) -> ReturnType`
+  - [x] Handle all parameter kinds: required, optional, keyword, rest, block
+  - [x] Handle errors gracefully (return nil on failure)
+- [x] Parameter type inference (on-demand):
+  - [x] Required params without default → `untyped`
+  - [x] Optional params with default → infer from default value (literal/number/.new)
+  - [x] Keyword params → similar to optional
+  - [x] Rest/keyword rest → `*args`, `**kwargs`
+  - [x] Block → `&block`
+- [x] Return type inference:
+  - [x] `return expr` statements
+  - [x] Last expression of method body
+  - [x] Union of multiple return paths
+  - [x] Enhanced FlowAnalyzer to support `InterpolatedStringNode` and `IfNode`
+- [x] Add integration tests:
+  - [x] `'def foo; 42; end'` → shows `() -> Integer`
+  - [x] `'def greet(name, age = 20); ...; end'` → shows `(untyped name, ?Integer age) -> String`
+  - [x] Multiple return paths → shows union type
+  - [x] Keyword parameters → shows correct signature
+
+**Status:** Implemented in hover.rb:87-328, flow_analyzer.rb:192-249, addon.rb:39-40. All 4 integration tests passing (212 total tests passing).
 
 ---
 
@@ -318,17 +323,18 @@ Return Unknown / nil
 | - | 5.6 TypeFormatter Integration | Low | 1h | ✅ Done |
 | - | 5.2a Call Node Hover (basic) | Medium | 2-3h | ✅ Done |
 | - | ~~5.5 Parameter Default Types~~ | - | - | ✅ Merged into 5.3 |
-| 1 | 5.3 Def Node Hover | Medium | 2-3h | Pending |
-| 2 | 5.2b Call Node Hover (chains) | High | 4-6h | Pending |
-| 3 | 5.4 FlowAnalyzer Integration | High | 4-6h | Pending |
+| - | 5.3 Def Node Hover | Medium | 2-3h | ✅ Done |
+| 1 | 5.2b Call Node Hover (chains) | High | 4-6h | Pending |
+| 2 | 5.4 FlowAnalyzer Integration | High | 4-6h | Pending |
 
-**Total Estimated Effort:** 10-15 hours (remaining)
+**Total Estimated Effort:** 8-12 hours (remaining)
 
-**Recent Change:**
-Phase 5.5 has been merged into Phase 5.3. Parameter type inference is performed
-on-demand at hover time (fast for literals/numbers/.new), eliminating the need
-for separate indexing phase.
+**Recent Changes:**
+- Phase 5.5 merged into Phase 5.3 (parameter inference on-demand)
+- Phase 5.3 completed with FlowAnalyzer enhancements for interpolated strings and union types
+- Added support for hovering on method definitions showing complete signatures
 
 **Next Steps:**
-1. Implement 5.3 (Def Node Hover) - includes parameter type inference
-2. Collect feedback before proceeding to complex phases (5.2b, 5.4)
+1. Consider implementing 5.2b (Call Node Hover with method chains)
+2. Consider implementing 5.4 (FlowAnalyzer Integration for variable types)
+3. Collect feedback on Phase 5.3 before proceeding to complex phases

@@ -548,5 +548,74 @@ RSpec.describe "Hover Integration" do
       expect(response.contents.value).to match(/String/)
     end
   end
+
+  describe "Def Node Hover" do
+    it "shows signature for simple method with no parameters" do
+      source = <<~RUBY
+        def foo
+          42
+        end
+      RUBY
+
+      # Hover on method name "foo"
+      response = hover_on_source(source, { line: 0, character: 4 })
+
+      expect(response).not_to be_nil
+      expect(response.contents.value).to match(/\(\)/)
+      expect(response.contents.value).to match(/Integer/)
+    end
+
+    it "shows signature with parameter types inferred from defaults" do
+      source = <<~RUBY
+        def greet(name, age = 20)
+          "Hello, \#{name}! You are \#{age}."
+        end
+      RUBY
+
+      # Hover on method name "greet"
+      response = hover_on_source(source, { line: 0, character: 4 })
+
+      expect(response).not_to be_nil
+      expect(response.contents.value).to match(/name/)
+      expect(response.contents.value).to match(/age/)
+      expect(response.contents.value).to match(/Integer/)
+      expect(response.contents.value).to match(/String/)
+    end
+
+    it "shows union type for multiple return paths" do
+      source = <<~RUBY
+        def get_value(flag)
+          if flag
+            42
+          else
+            "not a number"
+          end
+        end
+      RUBY
+
+      # Hover on method name "get_value"
+      response = hover_on_source(source, { line: 0, character: 4 })
+
+      expect(response).not_to be_nil
+      expect(response.contents.value).to match(/Integer/)
+      expect(response.contents.value).to match(/String/)
+    end
+
+    it "handles keyword parameters" do
+      source = <<~RUBY
+        def configure(name:, timeout: 30)
+          # configuration logic
+        end
+      RUBY
+
+      # Hover on method name "configure"
+      response = hover_on_source(source, { line: 0, character: 4 })
+
+      expect(response).not_to be_nil
+      expect(response.contents.value).to match(/name:/)
+      expect(response.contents.value).to match(/timeout:/)
+      expect(response.contents.value).to match(/Integer/)
+    end
+  end
 end
 # rubocop:enable RSpec/DescribeClass
