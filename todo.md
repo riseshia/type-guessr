@@ -7,6 +7,7 @@
 - ✅ Phase 5 (MVP Hover Enhancement): COMPLETED
 - ✅ Phase 6 (Heuristic Fallback): COMPLETED
 - 🔄 Phase 7 (Code Quality & Refactoring): IN PROGRESS
+- ⏳ Phase 8 (Generic & Block Type Inference): PLANNED
 - All 222 tests passing (1 pending, non-critical edge case)
 
 ---
@@ -102,6 +103,101 @@
 
 ---
 
+## Phase 8: Generic & Block Type Inference
+
+Goal: Enable type inference for generic containers and block parameters.
+
+### 8.1 Array Literal Element Type Inference (Foundation)
+
+**Problem:** `[1,2,3]` is inferred as `Array` instead of `Array[Integer]`.
+
+**Locations:**
+- `ast_analyzer.rb:291-292` - `analyze_value_type`
+- `hover.rb:158` - `resolve_receiver_type_recursively`
+
+**Implementation:**
+- [ ] For homogeneous arrays, infer element type (e.g., `[1,2,3]` → `Array[Integer]`)
+- [ ] For mixed arrays, use Union or Unknown element type
+- [ ] Update both locations to return `Types::ArrayType` with element type
+
+**Difficulty:** Easy
+
+### 8.2 RBSProvider Generic Type Preservation
+
+**Problem:** `rbs_type.args` is ignored, so `Array[Integer]` becomes just `Array`.
+
+**Location:** `rbs_provider.rb:76-78`
+
+**Implementation:**
+- [ ] Handle `rbs_type.args` in `rbs_type_to_types`
+- [ ] Convert to `Types::ArrayType`, `Types::HashType` etc. with type parameters
+- [ ] Preserve generic parameters through method return type resolution
+
+**Difficulty:** Easy
+
+### 8.3 Block Parameter Type Inference
+
+**Problem:** In `a.map { |num| ... }`, `num` type is unknown even when `a` is `Array[Integer]`.
+
+**Implementation:**
+
+#### 8.3.1 Block Parameter Type Query API
+- [ ] Add `RBSProvider#get_block_param_types(class_name, method_name)` method
+- [ ] Access block signature via `method_type.type.block`
+- [ ] Extract parameter types from block's function type
+
+#### 8.3.2 Type Variable Substitution
+- [ ] Use RBS `Substitution` class for type variable binding
+- [ ] Bind `Elem` → actual element type (e.g., `Integer`)
+- [ ] Handle common type variables: `Elem`, `K`, `V`, `U`, etc.
+
+#### 8.3.3 Block Scope Parameter Binding
+- [ ] Modify `ast_analyzer.rb` `visit_block_node` to track block context
+- [ ] Identify receiver type of the enclosing CallNode
+- [ ] Query block parameter types and bind to block parameters
+- [ ] Store in VariableIndex for hover resolution
+
+**Difficulty:** Medium
+
+### 8.4 Hash Literal Type Inference
+
+**Problem:** `{a: 1}` is inferred as `Hash` instead of typed hash.
+
+**Implementation:**
+- [ ] For symbol-keyed hashes, use existing `HashShape` type
+- [ ] For homogeneous hashes, infer `Hash[K, V]`
+- [ ] Integrate with RBSProvider for method return types
+
+**Difficulty:** Easy
+
+### 8.5 Method Parameter Type Inference from Usage
+
+**Problem:** Required parameters show as `untyped` even when usage patterns are available.
+
+**Location:** `hover.rb:256-268` - `infer_single_parameter_type`
+
+**Current:** Only optional parameters with default values get types.
+
+**Implementation:**
+- [ ] For required parameters, collect method calls from method body (already in VariableIndex)
+- [ ] Use TypeMatcher to find candidate types
+- [ ] Show inferred type or candidates in hover
+
+**Difficulty:** Medium
+
+### 8.6 Structural Type Display (Optional)
+
+**Problem:** When TypeMatcher can't find unique match, no type info is shown.
+
+**Implementation:**
+- [ ] Add `Types::StructuralType` class with `required_methods` attribute
+- [ ] Display as `{ foo, bar, baz }` format
+- [ ] Use as fallback when nominal type matching fails
+
+**Difficulty:** Easy
+
+---
+
 ## Performance Optimization (Future)
 
 ### Response Time Targets
@@ -153,7 +249,7 @@ Return Unknown / nil
 ### Extended Inference
 - [ ] Operations (`+`, `*`, etc.) type inference
 - [ ] Flow-sensitive refinement through branches/loops
-- [ ] Parameter type inference from usage patterns
+- ~~Parameter type inference from usage patterns~~ → Moved to Phase 8.5
 
 ### Inverted Index
 - [ ] Build method name → owner type candidates index
@@ -161,7 +257,7 @@ Return Unknown / nil
 
 ### UX Improvements
 - [ ] Fold/summarize excessive overloads in hover
-- [ ] Block type notation (`{ (args) -> ret }`)
+- ~~Block type notation~~ → Moved to Phase 8.3, 8.6
 - [ ] Project RBS loading from `sig/` folder
 - [ ] Filter overloads at call-site:
   - [ ] Positional arg count mismatch
@@ -186,6 +282,8 @@ Return Unknown / nil
 
 ## Implementation Priority Summary
 
+### Phase 7 (Code Quality)
+
 | Order | Task | Risk | Status |
 |-------|------|------|--------|
 | 1 | 7.2 Eliminate Duplicate Literal Inference | Low | Pending |
@@ -195,3 +293,16 @@ Return Unknown / nil
 | 5 | 7.5-7.7 Minor cleanups | Low | Pending |
 
 **Rationale:** Start with duplication elimination (7.2) as it's lower risk and enables cleaner split of hover.rb (7.1)
+
+### Phase 8 (Generic & Block Types)
+
+| Order | Task | Difficulty | Dependencies |
+|-------|------|------------|--------------|
+| 1 | 8.1 Array element type inference | Easy | None (foundation) |
+| 2 | 8.2 RBSProvider generic preservation | Easy | 8.1 |
+| 3 | 8.3 Block parameter type inference | Medium | 8.1, 8.2 |
+| 4 | 8.4 Hash type inference | Easy | 8.2 |
+| 5 | 8.5 Method parameter inference | Medium | Existing infra |
+| 6 | 8.6 Structural type display | Easy | Optional |
+
+**Rationale:** 8.1 and 8.2 form the foundation for generic type flow. 8.3 (block params) is the most impactful feature and depends on both. 8.4-8.6 are independent improvements.
