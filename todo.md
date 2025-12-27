@@ -6,55 +6,39 @@
 **Current Status:**
 - ✅ Phase 5 (MVP Hover Enhancement): COMPLETED
 - ✅ Phase 6 (Heuristic Fallback): COMPLETED
-- 🔄 Phase 7 (Code Quality & Refactoring): IN PROGRESS (7.2 done)
-- 🔄 Phase 8 (Generic & Block Type Inference): IN PROGRESS (8.1, 8.2, 8.3 done)
-- All 271 tests passing (1 pending, non-critical edge case)
+- 🔄 Phase 7 (Code Quality & Refactoring): IN PROGRESS (7.1 partial, 7.2, 7.3 done)
+- 🔄 Phase 8 (Generic & Block Type Inference): IN PROGRESS (8.1-8.4 done)
+- All 276 tests passing (1 pending, non-critical edge case)
 
 ---
 
 ## Phase 7: Code Quality & Refactoring (Current Priority)
 
-### 7.1 Split hover.rb (High Priority)
+### 7.1 Split hover.rb (High Priority) - Partial ✅
 
-**Problem:** `hover.rb` is 529 lines with multiple responsibilities mixed together.
+**Problem:** `hover.rb` was 580 lines with multiple responsibilities mixed together.
 
-**Current Responsibilities:**
-- Variable hover handling (local, instance, class variables)
-- Call node hover (method signatures)
-- Def node hover (method definition signatures)
-- Literal type inference
-- Method chain resolution
-- FlowAnalyzer integration
-- DefNodeFinder nested class
+**Completed:**
+- [x] Extract `DefNodeFinder` to `lib/type_guessr/core/def_node_finder.rb` (commit: `dd4d542`)
+- [x] Extract literal type inference to `lib/type_guessr/core/literal_type_analyzer.rb` (Phase 7.2)
 
-**Proposed Split:**
-- [ ] Extract `DefNodeFinder` to `lib/type_guessr/core/def_node_finder.rb`
-- [ ] Extract literal type inference to `lib/type_guessr/core/literal_type_analyzer.rb`
+**Remaining:**
 - [ ] Consider extracting call chain resolution to dedicated class
 - [ ] Keep Hover as thin coordinator that delegates to specialized handlers
 
-### 7.2 Eliminate Duplicate Literal Type Inference (High Priority)
+**Current:** hover.rb is now 542 lines (down from 580)
 
-**Problem:** Three nearly identical case statements for literal type inference:
+### 7.2 Eliminate Duplicate Literal Type Inference ✅
 
-| Location | Method |
-|----------|--------|
-| `hover.rb:150-176` | `resolve_receiver_type_recursively` |
-| `hover.rb:274-301` | `analyze_value_type_for_param` |
-| `flow_analyzer.rb:210-233` | `infer_type_from_node` |
+**Completed:** Created `LiteralTypeAnalyzer.infer(node)` in core layer and consolidated literal type inference across the codebase.
 
-**Solution:**
-- [ ] Create `LiteralTypeAnalyzer.infer(node)` in core layer
-- [ ] Replace all three call sites with single method
-- [ ] Ensure consistent behavior across all contexts
+**Commit:** Phase 8.1 (`a19ad62`)
 
-### 7.3 Cache RBSProvider Instance (Medium Priority)
+### 7.3 Cache RBSProvider Instance ✅
 
-**Problem:** `::TypeGuessr::Core::RBSProvider.new` instantiated multiple times per hover request (lines 74, 195).
+**Completed:** Added memoized `rbs_provider` method in Hover class, replacing 3 separate instantiations.
 
-**Solution:**
-- [ ] Cache as `@rbs_provider` instance variable in Hover
-- [ ] Lazy initialization on first access
+**Commit:** `efed41e`
 
 ### 7.4 Reduce Verbose Type References (Medium Priority)
 
@@ -159,16 +143,23 @@ Goal: Enable type inference for generic containers and block parameters.
 - `names.map { |name| }` → `name: String` (when `names = ["a","b"]`)
 - `text.each_char { |char| }` → `char: String`
 
-### 8.4 Hash Literal Type Inference
+### 8.4 Hash Literal Type Inference ✅
 
 **Problem:** `{a: 1}` is inferred as `Hash` instead of typed hash.
 
-**Implementation:**
-- [ ] For symbol-keyed hashes, use existing `HashShape` type
-- [ ] For homogeneous hashes, infer `Hash[K, V]`
-- [ ] Integrate with RBSProvider for method return types
+**Implemented:**
+- [x] Symbol-keyed hashes → `HashShape` with field types
+- [x] Empty hash → generic `Hash`
+- [x] String/other keys → generic `Hash` (fallback)
+- [x] Non-literal values → `Unknown` type for that field
+- [x] Nested arrays/hashes supported
+- [x] Falls back to `Hash` when >15 fields
 
-**Difficulty:** Easy
+**Commit:** `cec5fed`
+
+**Examples:**
+- `{ name: "Alice", age: 30 }` → `{ name: String, age: Integer }`
+- `{ items: [1,2], active: true }` → `{ items: Array[Integer], active: TrueClass }`
 
 ### 8.5 Method Parameter Type Inference from Usage
 
@@ -286,9 +277,9 @@ Return Unknown / nil
 
 | Order | Task | Risk | Status |
 |-------|------|------|--------|
-| 1 | 7.2 Eliminate Duplicate Literal Inference | Low | Pending |
-| 2 | 7.1 Split hover.rb | Medium | Pending |
-| 3 | 7.3 Cache RBSProvider | Low | Pending |
+| 1 | 7.2 Eliminate Duplicate Literal Inference | Low | ✅ Done |
+| 2 | 7.1 Split hover.rb | Medium | 🔄 Partial |
+| 3 | 7.3 Cache RBSProvider | Low | ✅ Done |
 | 4 | 7.4 Reduce Verbose Type References | Low | Pending |
 | 5 | 7.5-7.7 Minor cleanups | Low | Pending |
 
@@ -301,7 +292,7 @@ Return Unknown / nil
 | 1 | 8.1 Array element type inference | Easy | ✅ Done |
 | 2 | 8.2 RBSProvider generic preservation | Easy | ✅ Done |
 | 3 | 8.3 Block parameter type inference | Medium | ✅ Done |
-| 4 | 8.4 Hash type inference | Easy | Pending |
+| 4 | 8.4 Hash type inference | Easy | ✅ Done |
 | 5 | 8.5 Method parameter inference | Medium | Pending |
 | 6 | 8.6 Structural type display | Easy | Optional |
 
