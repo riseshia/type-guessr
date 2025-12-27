@@ -572,6 +572,79 @@ RSpec.describe "Hover Integration" do
     end
   end
 
+  describe "Method-Call Set Heuristic (Phase 6)" do
+    it "infers type from method pattern when parameter type is unknown" do
+      source = <<~RUBY
+        class Document
+          def title
+            "doc"
+          end
+        end
+
+        def example(obj)
+          obj.title
+          obj
+        end
+      RUBY
+
+      # Hover on "obj" - obj is unknown parameter, but title is unique to Document
+      response = hover_on_source(source, { line: 8, character: 2 })
+
+      expect(response.contents.value).to match(/Document/)
+    end
+
+    it "infers receiver type from multiple method patterns" do
+      source = <<~RUBY
+        class Widget
+          def render
+          end
+
+          def update
+          end
+        end
+
+        def example(obj)
+          obj.render
+          obj.update
+          obj
+        end
+      RUBY
+
+      # Hover on "obj"
+      # obj has render and update → unique to Widget
+      response = hover_on_source(source, { line: 11, character: 2 })
+
+      expect(response).not_to be_nil
+      expect(response.contents.value).to match(/Widget/)
+    end
+
+    xit "shows ambiguous when multiple types match" do
+      source = <<~RUBY
+        class Parser
+          def process
+          end
+        end
+
+        class Compiler
+          def process
+          end
+        end
+
+        def example(obj)
+          obj.process
+          x = 1
+          obj
+        end
+      RUBY
+
+      # Hover on "obj" at line 14
+      # obj has process → both Parser and Compiler have it
+      response = hover_on_source(source, { line: 14, character: 2 })
+
+      expect(response.contents.value).to match(/Ambiguous|Parser|Compiler/)
+    end
+  end
+
   describe "Call Node Hover" do
     it "shows RBS signature when hovering on method call with variable receiver" do
       source = <<~RUBY

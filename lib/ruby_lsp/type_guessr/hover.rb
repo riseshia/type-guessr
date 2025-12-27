@@ -184,9 +184,14 @@ module RubyLsp
 
         # 1. Get receiver type (recursive)
         receiver_type = resolve_receiver_type_recursively(node.receiver, depth: depth + 1)
-        return nil if receiver_type.nil? || receiver_type == ::TypeGuessr::Core::Types::Unknown.instance
 
-        # 2. Get method return type from RBS
+        # 2. Phase 6: If receiver is Unknown, try heuristic inference
+        if receiver_type.nil? || receiver_type == ::TypeGuessr::Core::Types::Unknown.instance
+          receiver_type = try_heuristic_type_inference(node.receiver)
+          return nil if receiver_type.nil? || receiver_type == ::TypeGuessr::Core::Types::Unknown.instance
+        end
+
+        # 3. Get method return type from RBS
         rbs_provider = ::TypeGuessr::Core::RBSProvider.new
         rbs_provider.get_method_return_type(extract_type_name(receiver_type), node.name.to_s)
       end
@@ -379,6 +384,42 @@ module RubyLsp
         result << "&#{parameters.block.name || "block"}" if parameters.block
 
         result
+      end
+
+      # Try to infer receiver type using method-call set heuristic (Phase 6)
+      # @param receiver [Prism::Node] the receiver node
+      # @return [TypeGuessr::Core::Types::Type, nil] the inferred type or nil
+      def try_heuristic_type_inference(receiver)
+        # Only try for variable nodes
+        return nil unless receiver.is_a?(Prism::LocalVariableReadNode) ||
+                          receiver.is_a?(Prism::InstanceVariableReadNode) ||
+                          receiver.is_a?(Prism::ClassVariableReadNode)
+
+        # Get type info from VariableTypeResolver
+        type_info = @type_resolver.resolve_type(receiver)
+        return nil unless type_info
+
+        # If no method calls tracked, can't infer
+        method_calls = type_info[:method_calls]
+        return nil if method_calls.nil? || method_calls.empty?
+
+        # Use TypeMatcher to find types with all these methods
+        matching_types = @type_resolver.infer_type_from_methods(method_calls)
+        return nil if matching_types.empty?
+
+        # If exactly one type matches, use it
+        return matching_types.first if matching_types.size == 1
+
+        # If multiple types match, create a Union
+        # Filter out truncation marker
+        types_only = matching_types.reject { |t| t == TypeMatcher::TRUNCATED_MARKER }
+        return nil if types_only.empty?
+
+        # Return Union for multiple matches
+        ::TypeGuessr::Core::Types::Union.new(types_only)
+      rescue StandardError => e
+        warn "Heuristic inference error: #{e.class}: #{e.message}" if ENV["DEBUG"]
+        nil
       end
 
       # Try to analyze type using FlowAnalyzer
