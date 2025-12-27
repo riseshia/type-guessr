@@ -6,6 +6,7 @@ require_relative "hover_content_builder"
 require_relative "../../type_guessr/core/rbs_provider"
 require_relative "../../type_guessr/core/flow_analyzer"
 require_relative "../../type_guessr/core/literal_type_analyzer"
+require_relative "../../type_guessr/core/def_node_finder"
 
 module RubyLsp
   module TypeGuessr
@@ -524,7 +525,7 @@ module RubyLsp
         parsed = Prism.parse(source_code)
 
         # Find the DefNode that contains this position
-        finder = DefNodeFinder.new(target_line, target_column)
+        finder = ::TypeGuessr::Core::DefNodeFinder.new(target_line, target_column)
         parsed.value.accept(finder)
 
         warn "Found method: #{finder.result&.name}" if ENV["DEBUG"] && finder.result
@@ -535,45 +536,6 @@ module RubyLsp
         warn "find_containing_method error: #{e.class}: #{e.message}" if ENV["DEBUG"]
         warn e.backtrace.join("\n") if ENV["DEBUG"]
         nil
-      end
-
-      # Visitor to find the innermost DefNode containing a target position
-      class DefNodeFinder < Prism::Visitor
-        attr_reader :result
-
-        def initialize(target_line, target_column)
-          super()
-          @target_line = target_line
-          @target_column = target_column
-          @result = nil
-        end
-
-        def visit_def_node(node)
-          # If this method contains the target position, it's a candidate
-          return unless contains_position?(node)
-
-          @result = node
-          # Continue visiting children to find innermost method
-          super
-        end
-
-        private
-
-        def contains_position?(node)
-          loc = node.location
-          # Check if target position is within this node's range
-          if @target_line > loc.start_line && @target_line < loc.end_line
-            true
-          elsif @target_line == loc.start_line && @target_line == loc.end_line
-            @target_column.between?(loc.start_column, loc.end_column)
-          elsif @target_line == loc.start_line
-            @target_column >= loc.start_column
-          elsif @target_line == loc.end_line
-            @target_column <= loc.end_column
-          else
-            false
-          end
-        end
       end
     end
   end
