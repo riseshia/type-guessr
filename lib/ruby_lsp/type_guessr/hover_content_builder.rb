@@ -28,6 +28,10 @@ module RubyLsp
         append_debug_info(content, reason, inferred, method_calls)
       end
 
+      # Type system shortcut
+      Types = ::TypeGuessr::Core::Types
+      private_constant :Types
+
       private
 
       # Build type content from available type information
@@ -40,7 +44,7 @@ module RubyLsp
 
         # Priority 1: Use direct type inference (from literal or .new call)
         # Skip if direct_type is Unknown - let it fall through to method-based inference
-        if direct_type && direct_type != ::TypeGuessr::Core::Types::Unknown.instance
+        if direct_type && direct_type != Types::Unknown.instance
           type_name = extract_type_name(direct_type)
           formatted_type = format_type_with_link(direct_type, type_entries[type_name])
           content = "**Guessed type:** #{formatted_type}"
@@ -183,7 +187,7 @@ module RubyLsp
       # @return [String] the type name
       def extract_type_name(type_obj)
         case type_obj
-        when ::TypeGuessr::Core::Types::ClassInstance
+        when Types::ClassInstance
           type_obj.name
         else
           ::TypeGuessr::Core::TypeFormatter.format(type_obj)

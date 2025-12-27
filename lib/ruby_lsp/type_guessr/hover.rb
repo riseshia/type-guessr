@@ -70,7 +70,7 @@ module RubyLsp
 
         # Phase 5.2b: Resolve receiver type recursively for method chains
         receiver_type = resolve_receiver_type_recursively(node.receiver)
-        return if receiver_type.nil? || receiver_type == ::TypeGuessr::Core::Types::Unknown.instance
+        return if receiver_type.nil? || receiver_type == Types::Unknown.instance
 
         # 2. Query RBS signatures
         signatures = rbs_provider.get_method_signatures(
@@ -102,6 +102,10 @@ module RubyLsp
         nil
       end
 
+      # Type system shortcut for cleaner code
+      Types = ::TypeGuessr::Core::Types
+      private_constant :Types
+
       private
 
       # Cached RBSProvider instance for querying method signatures
@@ -119,7 +123,7 @@ module RubyLsp
       def add_hover_content(node)
         # Phase 8.3: Try block parameter type inference
         block_param_type = try_block_parameter_inference(node)
-        if block_param_type && block_param_type != ::TypeGuessr::Core::Types::Unknown.instance
+        if block_param_type && block_param_type != Types::Unknown.instance
           type_info = { direct_type: block_param_type, method_calls: [] }
           content = @content_builder.build(type_info, matching_types: [], type_entries: {})
           @response_builder.push(content, category: :documentation) if content
@@ -128,7 +132,7 @@ module RubyLsp
 
         # Phase 5.4: Try FlowAnalyzer first for local variables
         flow_type = try_flow_analysis(node)
-        if flow_type && flow_type != ::TypeGuessr::Core::Types::Unknown.instance
+        if flow_type && flow_type != Types::Unknown.instance
           # Build content from flow-inferred type
           type_info = { direct_type: flow_type, method_calls: [] }
           content = @content_builder.build(type_info, matching_types: [], type_entries: {})
@@ -187,9 +191,9 @@ module RubyLsp
         receiver_type = resolve_receiver_type_recursively(node.receiver, depth: depth + 1)
 
         # 2. Phase 6: If receiver is Unknown, try heuristic inference
-        if receiver_type.nil? || receiver_type == ::TypeGuessr::Core::Types::Unknown.instance
+        if receiver_type.nil? || receiver_type == Types::Unknown.instance
           receiver_type = try_heuristic_type_inference(node.receiver)
-          return nil if receiver_type.nil? || receiver_type == ::TypeGuessr::Core::Types::Unknown.instance
+          return nil if receiver_type.nil? || receiver_type == Types::Unknown.instance
         end
 
         # 3. Get method return type from RBS
@@ -212,9 +216,9 @@ module RubyLsp
       # @return [String] the type name
       def extract_type_name(type_obj)
         case type_obj
-        when ::TypeGuessr::Core::Types::ClassInstance
+        when Types::ClassInstance
           type_obj.name
-        when ::TypeGuessr::Core::Types::ArrayType
+        when Types::ArrayType
           "Array"
         else
           ::TypeGuessr::Core::TypeFormatter.format(type_obj)
@@ -260,13 +264,13 @@ module RubyLsp
         when Prism::OptionalParameterNode, Prism::OptionalKeywordParameterNode
           # Infer from default value
           if param.value
-            analyze_value_type_for_param(param.value) || ::TypeGuessr::Core::Types::Unknown.instance
+            analyze_value_type_for_param(param.value) || Types::Unknown.instance
           else
-            ::TypeGuessr::Core::Types::Unknown.instance
+            Types::Unknown.instance
           end
         else
           # Required params, rest, block → untyped
-          ::TypeGuessr::Core::Types::Unknown.instance
+          Types::Unknown.instance
         end
       end
 
@@ -281,7 +285,7 @@ module RubyLsp
         # Handle .new calls
         if node.is_a?(Prism::CallNode) && node.name == :new && node.receiver
           class_name = extract_class_name_from_new_call(node.receiver)
-          return ::TypeGuessr::Core::Types::ClassInstance.new(class_name) if class_name
+          return Types::ClassInstance.new(class_name) if class_name
         end
 
         nil
@@ -308,7 +312,7 @@ module RubyLsp
         result = analyzer.analyze(source)
         result.return_type_for_method(node.name.to_s)
       rescue StandardError
-        ::TypeGuessr::Core::Types::Unknown.instance
+        Types::Unknown.instance
       end
 
       # Format method definition signature
@@ -403,7 +407,7 @@ module RubyLsp
         return nil if types_only.empty?
 
         # Return Union for multiple matches
-        ::TypeGuessr::Core::Types::Union.new(types_only)
+        Types::Union.new(types_only)
       rescue StandardError => e
         warn "Heuristic inference error: #{e.class}: #{e.message}" if ENV["DEBUG"]
         nil
@@ -424,7 +428,7 @@ module RubyLsp
 
         # Get the receiver type
         receiver_type = resolve_receiver_type_recursively(call_node.receiver)
-        return nil if receiver_type.nil? || receiver_type == ::TypeGuessr::Core::Types::Unknown.instance
+        return nil if receiver_type.nil? || receiver_type == Types::Unknown.instance
 
         warn "BlockParam: receiver_type = #{receiver_type.inspect}" if ENV["DEBUG"]
 
@@ -433,7 +437,7 @@ module RubyLsp
         class_name = extract_type_name(receiver_type)
 
         # Extract element type for substitution (if ArrayType)
-        elem_type = receiver_type.is_a?(::TypeGuessr::Core::Types::ArrayType) ? receiver_type.element_type : nil
+        elem_type = receiver_type.is_a?(Types::ArrayType) ? receiver_type.element_type : nil
 
         block_param_types = rbs_provider.get_block_param_types_with_substitution(
           class_name,

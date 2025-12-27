@@ -62,7 +62,7 @@ module RubyLsp
         candidates = candidates.take(MAX_MATCHING_TYPES) if truncated
 
         # Convert to Types objects
-        result = candidates.map { |name| ::TypeGuessr::Core::Types::ClassInstance.new(name) }
+        result = candidates.map { |name| Types::ClassInstance.new(name) }
         result << TRUNCATED_MARKER if truncated
 
         result
@@ -83,6 +83,10 @@ module RubyLsp
         entries = @adapter.resolve_constant(constant_name)
         entries.first
       end
+
+      # Type system shortcut
+      Types = ::TypeGuessr::Core::Types
+      private_constant :Types
 
       private
 

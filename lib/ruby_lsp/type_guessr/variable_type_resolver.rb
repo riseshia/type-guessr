@@ -69,7 +69,7 @@ module RubyLsp
         entries = {}
         types.each do |type_obj|
           next if type_obj == TypeMatcher::TRUNCATED_MARKER
-          next unless type_obj.is_a?(::TypeGuessr::Core::Types::ClassInstance)
+          next unless type_obj.is_a?(Types::ClassInstance)
 
           type_name = type_obj.name
           entry = matcher.get_entry(type_name)
@@ -77,6 +77,10 @@ module RubyLsp
         end
         entries
       end
+
+      # Type system shortcut
+      Types = ::TypeGuessr::Core::Types
+      private_constant :Types
 
       private
 
