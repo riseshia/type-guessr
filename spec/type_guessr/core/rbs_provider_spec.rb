@@ -116,4 +116,85 @@ RSpec.describe TypeGuessr::Core::RBSProvider do
       end
     end
   end
+
+  describe "#get_block_param_types" do
+    it "returns block parameter types for Array#each" do
+      # Array#each { |item| ... } - item is Elem (type variable)
+      types = provider.get_block_param_types("Array", "each")
+
+      expect(types).to be_an(Array)
+      expect(types.size).to eq(1)
+      # Without substitution, Elem is Unknown
+      expect(types.first).to eq(TypeGuessr::Core::Types::Unknown.instance)
+    end
+
+    it "returns block parameter types for Array#map" do
+      # Array#map { |item| ... } - item is Elem (type variable)
+      types = provider.get_block_param_types("Array", "map")
+
+      expect(types).to be_an(Array)
+      expect(types.size).to eq(1)
+      expect(types.first).to eq(TypeGuessr::Core::Types::Unknown.instance)
+    end
+
+    it "returns empty array for method without block" do
+      types = provider.get_block_param_types("String", "upcase")
+
+      expect(types).to eq([])
+    end
+
+    it "returns empty array for non-existent method" do
+      types = provider.get_block_param_types("String", "non_existent")
+
+      expect(types).to eq([])
+    end
+
+    it "returns concrete types for String#each_char" do
+      # String#each_char { |char| ... } - char is String
+      types = provider.get_block_param_types("String", "each_char")
+
+      expect(types).to be_an(Array)
+      expect(types.size).to eq(1)
+      expect(types.first).to be_a(TypeGuessr::Core::Types::ClassInstance)
+      expect(types.first.name).to eq("String")
+    end
+  end
+
+  describe "#get_block_param_types_with_substitution" do
+    it "substitutes Elem with actual element type for Array#each" do
+      # If we know Array[Integer], then Elem -> Integer
+      element_type = TypeGuessr::Core::Types::ClassInstance.new("Integer")
+      types = provider.get_block_param_types_with_substitution("Array", "each", elem: element_type)
+
+      expect(types).to be_an(Array)
+      expect(types.size).to eq(1)
+      expect(types.first).to be_a(TypeGuessr::Core::Types::ClassInstance)
+      expect(types.first.name).to eq("Integer")
+    end
+
+    it "substitutes Elem with actual element type for Array#map" do
+      element_type = TypeGuessr::Core::Types::ClassInstance.new("String")
+      types = provider.get_block_param_types_with_substitution("Array", "map", elem: element_type)
+
+      expect(types).to be_an(Array)
+      expect(types.size).to eq(1)
+      expect(types.first).to be_a(TypeGuessr::Core::Types::ClassInstance)
+      expect(types.first.name).to eq("String")
+    end
+
+    it "handles methods without type variables" do
+      # String#each_char already has concrete type, no substitution needed
+      types = provider.get_block_param_types_with_substitution("String", "each_char", elem: nil)
+
+      expect(types.size).to eq(1)
+      expect(types.first.name).to eq("String")
+    end
+
+    it "returns empty array for method without block" do
+      element_type = TypeGuessr::Core::Types::ClassInstance.new("Integer")
+      types = provider.get_block_param_types_with_substitution("String", "upcase", elem: element_type)
+
+      expect(types).to eq([])
+    end
+  end
 end

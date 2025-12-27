@@ -67,7 +67,70 @@ module TypeGuessr
         rbs_type_to_types(return_type)
       end
 
+      # Get block parameter types for a method
+      # @param class_name [String] the receiver class name
+      # @param method_name [String] the method name
+      # @return [Array<Types::Type>] array of block parameter types (empty if no block)
+      def get_block_param_types(class_name, method_name)
+        block_sig = find_block_signature(class_name, method_name)
+        return [] unless block_sig
+
+        extract_block_param_types(block_sig)
+      end
+
+      # Get block parameter types with type variable substitution
+      # @param class_name [String] the receiver class name
+      # @param method_name [String] the method name
+      # @param elem [Types::Type, nil] the element type to substitute for Elem
+      # @return [Array<Types::Type>] array of block parameter types with substitution applied
+      def get_block_param_types_with_substitution(class_name, method_name, elem: nil)
+        block_sig = find_block_signature(class_name, method_name)
+        return [] unless block_sig
+
+        extract_block_param_types(block_sig, substitutions: { Elem: elem })
+      end
+
       private
+
+      # Find a method signature that has a block
+      # @param class_name [String] the receiver class name
+      # @param method_name [String] the method name
+      # @return [RBS::MethodType, nil] the method type with block, or nil
+      def find_block_signature(class_name, method_name)
+        signatures = get_method_signatures(class_name, method_name)
+        return nil if signatures.empty?
+
+        # Find the signature with a block
+        sig_with_block = signatures.find { |s| s.method_type.block }
+        sig_with_block&.method_type
+      end
+
+      # Extract block parameter types from a method type
+      # @param method_type [RBS::MethodType] the method type
+      # @param substitutions [Hash] type variable substitutions (e.g., { Elem: Integer })
+      # @return [Array<Types::Type>] array of parameter types
+      def extract_block_param_types(method_type, substitutions: {})
+        return [] unless method_type.block
+
+        block_func = method_type.block.type
+        block_func.required_positionals.map do |param|
+          rbs_type_to_types_with_substitution(param.type, substitutions)
+        end
+      end
+
+      # Convert RBS type to our Types system with substitution support
+      # @param rbs_type [RBS::Types::t] the RBS type
+      # @param substitutions [Hash] type variable substitutions
+      # @return [Types::Type] our type representation
+      def rbs_type_to_types_with_substitution(rbs_type, substitutions)
+        case rbs_type
+        when RBS::Types::Variable
+          # Check if we have a substitution for this type variable
+          substitutions[rbs_type.name] || Types::Unknown.instance
+        else
+          rbs_type_to_types(rbs_type)
+        end
+      end
 
       # Convert RBS type to our Types system
       # @param rbs_type [RBS::Types::t] the RBS type
