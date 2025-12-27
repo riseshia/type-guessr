@@ -111,6 +111,15 @@ module RubyLsp
       end
 
       def add_hover_content(node)
+        # Phase 8.3: Try block parameter type inference
+        block_param_type = try_block_parameter_inference(node)
+        if block_param_type && block_param_type != ::TypeGuessr::Core::Types::Unknown.instance
+          type_info = { direct_type: block_param_type, method_calls: [] }
+          content = @content_builder.build(type_info, matching_types: [], type_entries: {})
+          @response_builder.push(content, category: :documentation) if content
+          return
+        end
+
         # Phase 5.4: Try FlowAnalyzer first for local variables
         flow_type = try_flow_analysis(node)
         if flow_type && flow_type != ::TypeGuessr::Core::Types::Unknown.instance
@@ -393,6 +402,73 @@ module RubyLsp
       rescue StandardError => e
         warn "Heuristic inference error: #{e.class}: #{e.message}" if ENV["DEBUG"]
         nil
+      end
+
+      # Try to infer block parameter type from surrounding call context
+      # @param node [Prism::Node] the node to analyze
+      # @return [TypeGuessr::Core::Types::Type, nil] the inferred type or nil
+      def try_block_parameter_inference(node)
+        # Only handle block parameters (RequiredParameterNode inside a block)
+        return nil unless node.is_a?(Prism::RequiredParameterNode)
+
+        # Check if we have a surrounding CallNode via node_context
+        call_node = @node_context.call_node
+        return nil unless call_node
+
+        warn "BlockParam: found call_node #{call_node.name}" if ENV["DEBUG"]
+
+        # Get the receiver type
+        receiver_type = resolve_receiver_type_recursively(call_node.receiver)
+        return nil if receiver_type.nil? || receiver_type == ::TypeGuessr::Core::Types::Unknown.instance
+
+        warn "BlockParam: receiver_type = #{receiver_type.inspect}" if ENV["DEBUG"]
+
+        # Get block parameter types from RBS with substitution
+        rbs_provider = ::TypeGuessr::Core::RBSProvider.new
+        method_name = call_node.name.to_s
+        class_name = extract_type_name(receiver_type)
+
+        # Extract element type for substitution (if ArrayType)
+        elem_type = receiver_type.is_a?(::TypeGuessr::Core::Types::ArrayType) ? receiver_type.element_type : nil
+
+        block_param_types = rbs_provider.get_block_param_types_with_substitution(
+          class_name,
+          method_name,
+          elem: elem_type
+        )
+
+        return nil if block_param_types.empty?
+
+        # Find the index of this parameter in the block
+        param_index = find_block_param_index(node)
+        return nil if param_index.nil? || param_index >= block_param_types.size
+
+        block_param_types[param_index]
+      rescue StandardError => e
+        warn "BlockParam inference error: #{e.class}: #{e.message}" if ENV["DEBUG"]
+        nil
+      end
+
+      # Find the index of a block parameter in its block
+      # @param node [Prism::RequiredParameterNode] the parameter node
+      # @return [Integer, nil] the parameter index or nil
+      def find_block_param_index(node)
+        # Get the call_node and its block
+        call_node = @node_context.call_node
+        return nil unless call_node
+
+        block_node = call_node.block
+        return nil unless block_node.is_a?(Prism::BlockNode)
+
+        block_params = block_node.parameters
+        return nil unless block_params
+
+        params_node = block_params.parameters
+        return nil unless params_node
+
+        # Find the index by matching the parameter name
+        # (Using .equal? doesn't work since we may have different node instances)
+        params_node.requireds.index { |p| p.name == node.name }
       end
 
       # Try to analyze type using FlowAnalyzer

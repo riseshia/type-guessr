@@ -827,5 +827,67 @@ RSpec.describe "Hover Integration" do
       expect(response.contents.value).to match(/Integer/)
     end
   end
+
+  describe "Block Parameter Type Inference" do
+    it "infers block parameter type from Array[Integer]#each" do
+      source = <<~RUBY
+        def foo
+          arr = [1, 2, 3]
+          arr.each { |num| puts num }
+        end
+      RUBY
+
+      # Hover on "num" block parameter (line 2, character 14 = 'n' of 'num')
+      response = hover_on_source(source, { line: 2, character: 14 })
+
+      expect(response).not_to be_nil
+      expect(response.contents.value).to match(/Integer/)
+    end
+
+    it "infers block parameter type from Array[String]#map" do
+      source = <<~RUBY
+        def foo
+          names = ["alice", "bob"]
+          names.map { |name| name.upcase }
+        end
+      RUBY
+
+      # Hover on "name" block parameter
+      response = hover_on_source(source, { line: 2, character: 15 })
+
+      expect(response).not_to be_nil
+      expect(response.contents.value).to match(/String/)
+    end
+
+    it "infers block parameter type from String#each_char" do
+      source = <<~RUBY
+        def foo
+          text = "hello"
+          text.each_char { |char| puts char }
+        end
+      RUBY
+
+      # Hover on "char" block parameter
+      response = hover_on_source(source, { line: 2, character: 21 })
+
+      expect(response).not_to be_nil
+      expect(response.contents.value).to match(/String/)
+    end
+
+    it "returns Unknown for block parameter when receiver type is unknown" do
+      source = <<~RUBY
+        def foo(arr)
+          arr.each { |item| puts item }
+        end
+      RUBY
+
+      # Hover on "item" block parameter - receiver 'arr' has unknown type
+      response = hover_on_source(source, { line: 1, character: 15 })
+
+      # Should still return something (untyped or Unknown)
+      # Not testing specific content since receiver type is unknown
+      expect(response).not_to be_nil
+    end
+  end
 end
 # rubocop:enable RSpec/DescribeClass
