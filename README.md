@@ -65,8 +65,11 @@ Enable debug mode to see method call information in the LSP output. There are tw
 Create a `.type-guessr.yml` file in your project root:
 
 ```yaml
+enabled: true
 debug: true
 ```
+
+`enabled` defaults to `true`. Set `enabled: false` to temporarily disable TypeGuessr without uninstalling the gem.
 
 Then restart Ruby LSP (VSCode: reload window).
 

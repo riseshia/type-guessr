@@ -1,4 +1,9 @@
 # TypeGuessr Configuration
+
+# Enable/disable TypeGuessr addon features
+# Default: true
+enabled: true
+
 #
 # Enable debug mode to see method call logging in LSP output
 debug: false

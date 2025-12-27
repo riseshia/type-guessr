@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "type_matcher"
+require_relative "config"
 require_relative "../../type_guessr/core/type_formatter"
 
 module RubyLsp
@@ -191,25 +192,7 @@ module RubyLsp
       # Check if debug mode is enabled via environment variable or config file
       # @return [Boolean] true if debug mode is enabled
       def debug_mode?
-        # First check environment variable
-        return true if %w[1 true].include?(ENV["TYPE_GUESSR_DEBUG"])
-
-        # Then check config file
-        @debug_mode ||= load_debug_mode_from_config
-      end
-
-      # Load debug mode setting from .type-guessr.yml
-      # @return [Boolean] true if debug mode is enabled in config
-      def load_debug_mode_from_config
-        config_path = File.join(Dir.pwd, ".type-guessr.yml")
-        return false if !File.exist?(config_path)
-
-        require "yaml"
-        config = YAML.load_file(config_path)
-        config["debug"] == true
-      rescue StandardError => e
-        warn("[TypeGuessr] Error loading config file: #{e.message}")
-        false
+        Config.debug?
       end
     end
   end

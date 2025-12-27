@@ -6,6 +6,12 @@ require_relative "hover_content_builder"
 
 module RubyLsp
   module TypeGuessr
+    # No-op hover listener used when TypeGuessr is disabled.
+    # It intentionally registers no listeners.
+    class NoopHover
+      def initialize(*); end
+    end
+
     # Hover provider that coordinates type resolution and content generation
     # Delegates type resolution to VariableTypeResolver
     # Delegates content generation to HoverContentBuilder

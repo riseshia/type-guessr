@@ -3,6 +3,7 @@
 require "ruby_lsp/addon"
 require "prism"
 require_relative "hover"
+require_relative "config"
 require_relative "runtime_adapter"
 require_relative "debug_server"
 require_relative "../../type_guessr/version" if !defined?(TypeGuessr::VERSION)
@@ -43,6 +44,7 @@ module RubyLsp
         super
         @runtime_adapter = nil
         @debug_server = nil
+        @enabled = true
       end
 
       def name
@@ -58,7 +60,14 @@ module RubyLsp
         @message_queue = message_queue
         @runtime_adapter = RuntimeAdapter.new(global_state, message_queue)
 
+        @enabled = Config.enabled?
+
         log_message(message_queue, "Activating TypeGuessr LSP addon #{::TypeGuessr::VERSION}.")
+
+        if !@enabled
+          log_message(message_queue, "TypeGuessr is disabled via .type-guessr.yml (enabled: false).")
+          return
+        end
 
         @runtime_adapter.swap_type_inferrer
         extend_hover_targets
@@ -92,6 +101,8 @@ module RubyLsp
       end
 
       def create_hover_listener(response_builder, node_context, dispatcher)
+        return NoopHover.new if !@enabled
+
         Hover.new(response_builder, node_context, dispatcher, @global_state)
       end
 
@@ -117,6 +128,7 @@ module RubyLsp
       end
 
       def start_debug_server_if_enabled
+        return if !@enabled
         return if !debug_mode?
 
         @debug_server = DebugServer.new(@global_state)
@@ -125,16 +137,7 @@ module RubyLsp
       end
 
       def debug_mode?
-        return true if %w[1 true].include?(ENV["TYPE_GUESSR_DEBUG"])
-
-        config_path = File.join(Dir.pwd, ".type-guessr.yml")
-        return false if !File.exist?(config_path)
-
-        require "yaml"
-        config = YAML.load_file(config_path)
-        config["debug"] == true
-      rescue StandardError
-        false
+        Config.debug?
       end
     end
   end
