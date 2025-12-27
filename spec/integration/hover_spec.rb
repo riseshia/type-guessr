@@ -444,5 +444,60 @@ RSpec.describe "Hover Integration" do
       expect(response.contents.value).not_to be_empty
     end
   end
+
+  describe "Method Call Return Type (Expression Type)" do
+    it "infers variable type from method call assignment" do
+      source = <<~RUBY
+        def example
+          hoge = 1
+          hoge2 = hoge.to_s
+          hoge2
+        end
+      RUBY
+
+      # Hover on "hoge2" - should infer String from Integer#to_s return type
+      response = hover_on_source(source, { line: 3, character: 2 })
+
+      expect(response.contents.value).to match(/String/)
+    end
+
+    it "infers variable type from chained method call assignment" do
+      source = <<~RUBY
+        def example
+          name = "hello"
+          result = name.upcase.length
+          result
+        end
+      RUBY
+
+      # Hover on "result" - should infer Integer from String#length
+      response = hover_on_source(source, { line: 3, character: 2 })
+
+      expect(response.contents.value).to match(/Integer/)
+    end
+
+    it "shows unknown for user-defined class method assignment" do
+      source = <<~RUBY
+        class User
+          def name
+            "John"
+          end
+        end
+
+        def example
+          user = User.new
+          result = user.name
+          result
+        end
+      RUBY
+
+      # Hover on "result" - User#name is not in RBS, should show untyped
+      response = hover_on_source(source, { line: 9, character: 2 })
+
+      # Should show something (either unknown or no type info)
+      # For now, we just check it doesn't crash
+      expect(response).not_to be_nil
+    end
+  end
 end
 # rubocop:enable RSpec/DescribeClass

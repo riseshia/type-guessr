@@ -2,6 +2,8 @@
 
 require_relative "variable_index"
 require_relative "scope_resolver"
+require_relative "rbs_provider"
+require_relative "types"
 
 module TypeGuessr
   module Core
@@ -10,6 +12,7 @@ module TypeGuessr
     class TypeResolver
       def initialize(variable_index = VariableIndex.instance)
         @index = variable_index
+        @rbs_provider = nil
       end
 
       # Resolve type information for a variable
@@ -73,12 +76,11 @@ module TypeGuessr
       # @param scope_id [String] the scope identifier
       # @param file_path [String, nil] optional file path (reserved for future use)
       # @return [TypeGuessr::Core::Types::Type, nil] the guessed type object or nil
-      # rubocop:disable Lint/UnusedMethodArgument
       def get_direct_type(variable_name:, hover_line:, scope_type:, scope_id:, file_path: nil)
-        # rubocop:enable Lint/UnusedMethodArgument
         # Find definitions matching the exact scope
         definitions = @index.find_definitions(
           var_name: variable_name,
+          file_path: file_path,
           scope_type: scope_type,
           scope_id: scope_id
         )
@@ -100,12 +102,87 @@ module TypeGuessr
         end
 
         # Fallback: search type index directly (for variables with type but no method calls)
-        find_direct_type_from_index(
+        fallback_type = find_direct_type_from_index(
           variable_name: variable_name,
           scope_type: scope_type,
           scope_id: scope_id,
           hover_line: hover_line
         )
+
+        return fallback_type if fallback_type && fallback_type != Types::Unknown.instance
+
+        inferred_from_call = infer_type_from_call_assignment(
+          variable_name: variable_name,
+          hover_line: hover_line,
+          scope_type: scope_type,
+          scope_id: scope_id,
+          file_path: file_path
+        )
+
+        return inferred_from_call if inferred_from_call && inferred_from_call != Types::Unknown.instance
+
+        fallback_type
+      end
+
+      def rbs_provider
+        @rbs_provider ||= RBSProvider.new
+      end
+
+      def infer_type_from_call_assignment(variable_name:, hover_line:, scope_type:, scope_id:, file_path: nil)
+        call_info = @index.find_call_assignment_at_location(
+          var_name: variable_name,
+          scope_type: scope_type,
+          max_line: hover_line,
+          scope_id: scope_id
+        )
+
+        return Types::Unknown.instance if !call_info
+
+        receiver_var = call_info[:receiver_var]
+        methods = call_info[:methods]
+        return Types::Unknown.instance if !receiver_var || !methods || methods.empty?
+
+        receiver_type = resolve_receiver_type_for_call(
+          receiver_var: receiver_var,
+          hover_line: hover_line,
+          scope_type: scope_type,
+          scope_id: scope_id,
+          file_path: file_path,
+          visited: {}
+        )
+
+        apply_method_chain(receiver_type, methods)
+      end
+
+      def resolve_receiver_type_for_call(receiver_var:, hover_line:, scope_type:, scope_id:, file_path:, visited:)
+        return Types::Unknown.instance if visited[receiver_var]
+
+        visited[receiver_var] = true
+
+        type = get_direct_type(
+          variable_name: receiver_var,
+          hover_line: hover_line,
+          scope_type: scope_type,
+          scope_id: scope_id,
+          file_path: file_path
+        )
+
+        type || Types::Unknown.instance
+      ensure
+        visited.delete(receiver_var)
+      end
+
+      def apply_method_chain(receiver_type, methods)
+        current = receiver_type || Types::Unknown.instance
+
+        methods.each do |method_name|
+          return Types::Unknown.instance if !current.is_a?(Types::ClassInstance)
+
+          current = rbs_provider.get_method_return_type(current.name, method_name)
+          return Types::Unknown.instance if current == Types::Unknown.instance
+        end
+
+        current
       end
 
       # Search type index directly for variables that have types but no method calls
@@ -131,12 +208,11 @@ module TypeGuessr
       # @param scope_id [String] the scope identifier
       # @param file_path [String, nil] optional file path (reserved for future use)
       # @return [Array<String>] array of method names
-      # rubocop:disable Lint/UnusedMethodArgument
       def collect_method_calls(variable_name:, hover_line:, scope_type:, scope_id:, file_path: nil)
-        # rubocop:enable Lint/UnusedMethodArgument
         # Find definitions matching the exact scope
         definitions = @index.find_definitions(
           var_name: variable_name,
+          file_path: file_path,
           scope_type: scope_type,
           scope_id: scope_id
         )

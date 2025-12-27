@@ -47,6 +47,8 @@ module TypeGuessr
               def_column: column,
               type: type
             )
+          else
+            store_call_assignment_if_applicable(var_name: var_name, def_line: line, def_column: column, value: node.value)
           end
         end
 
@@ -84,6 +86,8 @@ module TypeGuessr
               def_column: column,
               type: type
             )
+          else
+            store_call_assignment_if_applicable(var_name: var_name, def_line: line, def_column: column, value: node.value)
           end
         end
 
@@ -113,6 +117,8 @@ module TypeGuessr
               def_column: column,
               type: type
             )
+          else
+            store_call_assignment_if_applicable(var_name: var_name, def_line: line, def_column: column, value: node.value)
           end
         end
 
@@ -411,6 +417,53 @@ module TypeGuessr
         else
           "Unknown"
         end
+      end
+
+      def store_call_assignment_if_applicable(var_name:, def_line:, def_column:, value:)
+        return if !value.is_a?(Prism::CallNode)
+        return if value.name == :new
+
+        call_info = extract_call_chain_from_call_node(value)
+        return if !call_info
+
+        scope_type = determine_scope_type(var_name)
+        scope_id = generate_scope_id(scope_type)
+
+        @index.add_call_assignment(
+          file_path: @file_path,
+          scope_type: scope_type,
+          scope_id: scope_id,
+          var_name: var_name,
+          def_line: def_line,
+          def_column: def_column,
+          receiver_var: call_info[:receiver_var],
+          methods: call_info[:methods]
+        )
+      end
+
+      # Extract receiver variable and method chain from a CallNode.
+      # For `name.upcase.length`, returns: { receiver_var: "name", methods: ["upcase", "length"] }
+      def extract_call_chain_from_call_node(call_node)
+        methods = []
+        current = call_node
+
+        while current.is_a?(Prism::CallNode)
+          methods << current.name.to_s
+          current = current.receiver
+        end
+
+        receiver_var = case current
+                       when Prism::LocalVariableReadNode, Prism::InstanceVariableReadNode, Prism::ClassVariableReadNode
+                         current.name.to_s
+                       end
+
+        return nil if !receiver_var
+        return nil if methods.empty?
+
+        {
+          receiver_var: receiver_var,
+          methods: methods.reverse
+        }
       end
     end
   end

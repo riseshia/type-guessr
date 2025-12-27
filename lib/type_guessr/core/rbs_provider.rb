@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "rbs"
+require_relative "types"
 
 module TypeGuessr
   module Core
@@ -50,7 +51,41 @@ module TypeGuessr
         []
       end
 
+      # Get the return type of a method call
+      # @param class_name [String] the receiver class name
+      # @param method_name [String] the method name
+      # @return [Types::Type] the return type (Unknown if not found)
+      def get_method_return_type(class_name, method_name)
+        signatures = get_method_signatures(class_name, method_name)
+        return Types::Unknown.instance if signatures.empty?
+
+        # For now, take the first signature's return type
+        # TODO: Handle overloads by considering argument types
+        first_sig = signatures.first
+        return_type = first_sig.method_type.type.return_type
+
+        rbs_type_to_types(return_type)
+      end
+
       private
+
+      # Convert RBS type to our Types system
+      # @param rbs_type [RBS::Types::t] the RBS type
+      # @return [Types::Type] our type representation
+      def rbs_type_to_types(rbs_type)
+        case rbs_type
+        when RBS::Types::ClassInstance
+          Types::ClassInstance.new(rbs_type.name.to_s.delete_prefix("::"))
+        when RBS::Types::Union
+          types = rbs_type.types.map { |t| rbs_type_to_types(t) }
+          Types::Union.new(types)
+        when RBS::Types::Bases::Self, RBS::Types::Bases::Instance
+          # Return Unknown for now - would need context to resolve
+          Types::Unknown.instance
+        else
+          Types::Unknown.instance
+        end
+      end
 
       def ensure_environment_loaded
         return if @env

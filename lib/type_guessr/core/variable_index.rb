@@ -26,7 +26,67 @@ module TypeGuessr
           local_variables: {},
           class_variables: {}
         }
+        @call_assignments = {
+          instance_variables: {},
+          local_variables: {},
+          class_variables: {}
+        }
         @mutex = Mutex.new
+      end
+
+      # Add call assignment info for a variable definition.
+      # Used for inferring types like: result = name.upcase.length
+      #
+      # @param file_path [String] the file path
+      # @param scope_type [Symbol] :instance_variables, :local_variables, or :class_variables
+      # @param scope_id [String] the scope identifier
+      # @param var_name [String] the assigned variable name
+      # @param def_line [Integer] the line where the variable is defined
+      # @param def_column [Integer] the column where the variable is defined
+      # @param receiver_var [String] the receiver variable name (e.g., "name")
+      # @param methods [Array<String>] method chain (e.g., ["upcase", "length"])
+      def add_call_assignment(file_path:, scope_type:, scope_id:, var_name:, def_line:, def_column:, receiver_var:,
+                              methods:)
+        @mutex.synchronize do
+          nested = ensure_nested_hash(@call_assignments[scope_type], file_path, scope_id, var_name)
+          def_key = "#{def_line}:#{def_column}"
+          nested[def_key] = {
+            receiver_var: receiver_var,
+            methods: methods
+          }
+        end
+      end
+
+      # Find the call assignment info at a specific location (line number).
+      # Searches for the closest assignment before the specified line.
+      #
+      # @param var_name [String] the variable name
+      # @param scope_type [Symbol] :instance_variables, :local_variables, or :class_variables
+      # @param max_line [Integer] the maximum line number (finds closest definition before this line)
+      # @param scope_id [String] the scope identifier
+      # @return [Hash, nil] call assignment info or nil
+      def find_call_assignment_at_location(var_name:, scope_type:, max_line:, scope_id:)
+        @mutex.synchronize do
+          scope_types = @call_assignments[scope_type]
+          return nil if !scope_types
+
+          best_info = nil
+          best_line = 0
+
+          scope_types.each_value do |scopes|
+            next if !scopes.key?(scope_id) || !scopes[scope_id].key?(var_name)
+
+            scopes[scope_id][var_name].each do |def_key, info|
+              line, _column = def_key.split(":").map(&:to_i)
+              if line <= max_line && line > best_line
+                best_info = info
+                best_line = line
+              end
+            end
+          end
+
+          best_info
+        end
       end
 
       # Add a method call for a variable
@@ -150,6 +210,7 @@ module TypeGuessr
         @mutex.synchronize do
           @index.each_value(&:clear)
           @types.each_value(&:clear)
+          @call_assignments.each_value(&:clear)
         end
       end
 
@@ -204,6 +265,9 @@ module TypeGuessr
           @types.each_value do |scope_types|
             scope_types.delete(file_path)
           end
+          @call_assignments.each_value do |scope_types|
+            scope_types.delete(file_path)
+          end
         end
       end
 
@@ -213,7 +277,8 @@ module TypeGuessr
         @mutex.synchronize do
           {
             index: deep_copy(@index),
-            types: deep_copy(@types)
+            types: deep_copy(@types),
+            call_assignments: deep_copy(@call_assignments)
           }
         end
       end

@@ -21,30 +21,49 @@
 
 ## Phase 5: Hover Enhancement
 
-### 5.0 Type System Integration (Pre-requisite)
+### 5.0 Type System Integration (Pre-requisite) ✅ COMPLETED
 
 Refactor codebase to use Types classes instead of strings:
 
-- [ ] VariableIndex: Store types as Types objects instead of strings
-- [ ] TypeResolver: Return Types objects instead of strings
-- [ ] TypeMatcher: Return Types objects instead of string arrays
-- [ ] HoverContentBuilder: Use Types objects + TypeFormatter for output
+- [x] VariableIndex: Store types as Types objects instead of strings
+- [x] TypeResolver: Return Types objects instead of strings
+- [x] TypeMatcher: Return Types objects instead of string arrays
+- [x] HoverContentBuilder: Use Types objects + TypeFormatter for output
 
-**Context:**
-- Currently types are stored/passed as strings ("String", "Recipe")
-- Types classes already implemented: `Unknown`, `ClassInstance`, `Union`, `ArrayType`, `HashShape`
-- TypeFormatter already implemented for RBS-style output
-- This unification is required before TypeDB integration
+**Status:** All components now use Types objects consistently throughout the codebase.
 
 ---
 
-### 5.1 Expression Type Hover
-- [ ] Update Hover to use TypeDB for variable/expression types
-- [ ] Display types in RBS-ish format:
-  - [ ] `Unknown` → `untyped`
-  - [ ] `Union` → `A | B`
-  - [ ] `Array[T]` as-is
-  - [ ] `HashShape` → `{ id: Integer, name: String }`
+### 5.1 Method Call Assignment Type Inference
+
+Infer variable types from method call assignments at hover time:
+- Example: `hoge2 = hoge.to_s` → hover on `hoge2` shows `String`
+- Example: `result = name.upcase.length` → hover on `result` shows `Integer`
+
+**Implementation Steps:**
+
+1. VariableIndex Extension
+  - [x] Store call info when assignment value is CallNode
+  - [x] New field: `call_info: { receiver_var, method_name }` or similar structure
+  - [x] Handle chained calls recursively (e.g., `a.b.c`)
+
+2. ASTAnalyzer Modification
+  - [x] In `visit_local_variable_write_node` etc., detect CallNode values
+  - [x] Extract and store receiver variable name and method name
+  - [x] Support chained calls by storing nested call structure
+
+3. TypeResolver Modification
+  - [x] When resolving variable type, check for `call_info`
+  - [x] If present: resolve receiver type (recursive) → RBS lookup → return type
+  - [x] Use RBSProvider.get_method_return_type for stdlib methods
+  - [x] Return Unknown for user-defined methods (no RBS)
+
+**Status:** Implemented with integration tests (hover_spec) passing.
+
+**Context:**
+- Type inference happens at hover time, not AST analysis time
+- RBSProvider already has `get_method_return_type` method
+- User-defined class methods without RBS return Unknown
 
 ### 5.2 Call Node Hover (Method Signature)
 - [ ] Support hover on call expressions (`receiver.method(...)`)
