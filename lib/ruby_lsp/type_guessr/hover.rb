@@ -47,6 +47,8 @@ module RubyLsp
 
       def initialize(response_builder, node_context, dispatcher, global_state = nil)
         @response_builder = response_builder
+        @node_context = node_context
+        @global_state = global_state
         @type_resolver = VariableTypeResolver.new(node_context, global_state)
         @content_builder = HoverContentBuilder.new(global_state)
 
@@ -108,6 +110,17 @@ module RubyLsp
       end
 
       def add_hover_content(node)
+        # Phase 5.4: Try FlowAnalyzer first for local variables
+        flow_type = try_flow_analysis(node)
+        if flow_type && flow_type != ::TypeGuessr::Core::Types::Unknown.instance
+          # Build content from flow-inferred type
+          type_info = { direct_type: flow_type, method_calls: [] }
+          content = @content_builder.build(type_info, matching_types: [], type_entries: {})
+          @response_builder.push(content, category: :documentation) if content
+          return
+        end
+
+        # Fallback to existing VariableTypeResolver
         type_info = @type_resolver.resolve_type(node)
         return if !type_info
 
@@ -366,6 +379,108 @@ module RubyLsp
         result << "&#{parameters.block.name || "block"}" if parameters.block
 
         result
+      end
+
+      # Try to analyze type using FlowAnalyzer
+      # @param node [Prism::Node] the node to analyze
+      # @return [TypeGuessr::Core::Types::Type, nil] the inferred type or nil
+      def try_flow_analysis(node)
+        # Only analyze local variable reads
+        return nil unless node.is_a?(Prism::LocalVariableReadNode)
+
+        # Extract variable name
+        var_name = node.name.to_s
+        warn "FlowAnalyzer: trying for variable #{var_name}" if ENV["DEBUG"]
+
+        # Find the containing method definition
+        method_node = find_containing_method(node)
+        unless method_node
+          warn "FlowAnalyzer: no containing method found" if ENV["DEBUG"]
+          return nil
+        end
+
+        # Analyze the method body
+        source = method_node.slice
+        analyzer = ::TypeGuessr::Core::FlowAnalyzer.new
+        result = analyzer.analyze(source)
+
+        # Query type at the node's line for the specific variable
+        # Note: FlowAnalyzer uses 1-based line numbers
+        inferred_type = result.type_at(node.location.start_line, node.location.start_column, var_name)
+        warn "FlowAnalyzer: inferred type = #{inferred_type.inspect}" if ENV["DEBUG"]
+        inferred_type
+      rescue StandardError => e
+        warn "FlowAnalyzer: error #{e.class}: #{e.message}" if ENV["DEBUG"]
+        # Fall back to existing resolver on any error
+        nil
+      end
+
+      # Find the containing method definition node
+      # @param node [Prism::Node] the starting node
+      # @return [Prism::DefNode, nil] the method node or nil
+      def find_containing_method(node)
+        # Get the full source from the node's location using __send__ to access protected method
+        source_object = node.location.__send__(:source)
+        source_code = source_object.source
+        target_line = node.location.start_line
+        target_column = node.location.start_column
+
+        warn "Finding method containing line #{target_line}, col #{target_column}" if ENV["DEBUG"]
+
+        # Parse the full source
+        parsed = Prism.parse(source_code)
+
+        # Find the DefNode that contains this position
+        finder = DefNodeFinder.new(target_line, target_column)
+        parsed.value.accept(finder)
+
+        warn "Found method: #{finder.result&.name}" if ENV["DEBUG"] && finder.result
+        warn "No containing method found" if ENV["DEBUG"] && !finder.result
+
+        finder.result
+      rescue StandardError => e
+        warn "find_containing_method error: #{e.class}: #{e.message}" if ENV["DEBUG"]
+        warn e.backtrace.join("\n") if ENV["DEBUG"]
+        nil
+      end
+
+      # Visitor to find the innermost DefNode containing a target position
+      class DefNodeFinder < Prism::Visitor
+        attr_reader :result
+
+        def initialize(target_line, target_column)
+          super()
+          @target_line = target_line
+          @target_column = target_column
+          @result = nil
+        end
+
+        def visit_def_node(node)
+          # If this method contains the target position, it's a candidate
+          return unless contains_position?(node)
+
+          @result = node
+          # Continue visiting children to find innermost method
+          super
+        end
+
+        private
+
+        def contains_position?(node)
+          loc = node.location
+          # Check if target position is within this node's range
+          if @target_line > loc.start_line && @target_line < loc.end_line
+            true
+          elsif @target_line == loc.start_line && @target_line == loc.end_line
+            @target_column.between?(loc.start_column, loc.end_column)
+          elsif @target_line == loc.start_line
+            @target_column >= loc.start_column
+          elsif @target_line == loc.end_line
+            @target_column <= loc.end_column
+          else
+            false
+          end
+        end
       end
     end
   end

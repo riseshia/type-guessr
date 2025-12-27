@@ -18,7 +18,7 @@ RSpec.describe TypeGuessr::Core::FlowAnalyzer do
       RUBY
 
       result = analyzer.analyze(source)
-      type_at_line2 = result.type_at(2, 0) # Line 2, column 0 is the 'x' reference
+      type_at_line2 = result.type_at(2, 0, "x") # Line 2, column 0 is the 'x' reference
 
       expect(type_at_line2).to eq(string_type)
     end
@@ -31,7 +31,7 @@ RSpec.describe TypeGuessr::Core::FlowAnalyzer do
       RUBY
 
       result = analyzer.analyze(source)
-      type_at_line3 = result.type_at(3, 0)
+      type_at_line3 = result.type_at(3, 0, "x")
 
       expect(type_at_line3).to eq(integer_type)
     end
@@ -42,7 +42,7 @@ RSpec.describe TypeGuessr::Core::FlowAnalyzer do
       RUBY
 
       result = analyzer.analyze(source)
-      type_at_line1 = result.type_at(1, 0)
+      type_at_line1 = result.type_at(1, 0, "x")
 
       expect(type_at_line1).to eq(unknown_type)
     end
@@ -60,7 +60,7 @@ RSpec.describe TypeGuessr::Core::FlowAnalyzer do
       RUBY
 
       result = analyzer.analyze(source)
-      type_at_line6 = result.type_at(6, 0)
+      type_at_line6 = result.type_at(6, 0, "x")
 
       expect(type_at_line6).to be_a(TypeGuessr::Core::Types::Union)
       expect(type_at_line6.types).to contain_exactly(string_type, integer_type)
@@ -75,7 +75,7 @@ RSpec.describe TypeGuessr::Core::FlowAnalyzer do
       RUBY
 
       result = analyzer.analyze(source)
-      type_at_line4 = result.type_at(4, 0)
+      type_at_line4 = result.type_at(4, 0, "x")
 
       # x might be String or Unknown (if branch not taken)
       expect(type_at_line4).to be_a(TypeGuessr::Core::Types::Union)
@@ -92,7 +92,7 @@ RSpec.describe TypeGuessr::Core::FlowAnalyzer do
       RUBY
 
       result = analyzer.analyze(source)
-      type_at_line3 = result.type_at(3, 0)
+      type_at_line3 = result.type_at(3, 0, "x")
 
       # x is either String (if truthy) or Integer (if falsy, which won't happen for String)
       # For simplicity, we union them
@@ -108,7 +108,7 @@ RSpec.describe TypeGuessr::Core::FlowAnalyzer do
       RUBY
 
       result = analyzer.analyze(source)
-      type_at_line3 = result.type_at(3, 0)
+      type_at_line3 = result.type_at(3, 0, "x")
 
       # x is either String (if falsy, which won't happen) or Integer (if truthy)
       expect(type_at_line3).to be_a(TypeGuessr::Core::Types::Union)

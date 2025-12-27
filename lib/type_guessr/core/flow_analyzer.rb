@@ -25,20 +25,20 @@ module TypeGuessr
           @return_types = return_types # { method_name => type }
         end
 
-        # Get type at a specific line and column
+        # Get type at a specific line and column for a specific variable
         # @param line [Integer] line number (1-based)
         # @param _column [Integer] column number (unused for now)
+        # @param var_name [String] variable name to look up
         # @return [Types::Type] the inferred type
-        def type_at(line, _column)
-          # Find the most recent type assignment for this line
+        def type_at(line, _column, var_name)
+          # Find the most recent type assignment for this variable
           # Look backwards from the current line
           (1..line).reverse_each do |l|
             env = @type_env[l]
             next unless env
 
-            # For simplicity, assume we're looking for the first variable in the env
-            # In a real implementation, we'd need to know which variable we're looking for
-            return env.values.first if env.any?
+            # Look for the specific variable
+            return env[var_name] if env.key?(var_name)
           end
 
           Types::Unknown.instance
@@ -162,25 +162,45 @@ module TypeGuessr
 
         def visit_if_node(node)
           # Visit branches and merge types at join point
-          then_env = {}
-          else_env = {}
+          # Keep all branch-local types in @type_env, and add merged types at join point
+          then_vars = {}
+          else_vars = {}
 
-          # Collect types from then branch
+          # Save environment before visiting branches
+          saved_env = deep_copy_env(@type_env)
+
+          # Visit then branch - types are stored directly in @type_env
           if node.statements
-            old_env = @type_env.dup
             node.statements.accept(self)
-            then_env = extract_env_changes(old_env)
+            then_vars = extract_env_changes(saved_env)
           end
 
-          # Collect types from else branch
+          # Save the state after then branch
+          after_then_env = deep_copy_env(@type_env)
+
+          # Reset to before if, then visit else branch
+          @type_env = deep_copy_env(saved_env)
+
+          # Visit else branch - types are stored directly in @type_env
           if node.subsequent
-            old_env = @type_env.dup
             node.subsequent.accept(self)
-            else_env = extract_env_changes(old_env)
+            else_vars = extract_env_changes(saved_env)
+          else
+            # No else branch means variables keep their original types
+            # Extract original types for variables that changed in then branch
+            then_vars.each_key do |var|
+              # Find the type this variable had before the if
+              original_type = find_type_in_env(saved_env, var)
+              else_vars[var] = original_type if original_type
+            end
           end
 
-          # Merge types at join point
-          merge_branches(node.location.end_line, then_env, else_env)
+          # Merge the two branch environments
+          # Take all lines from both branches and merge them
+          @type_env = merge_branch_envs(after_then_env, @type_env, saved_env)
+
+          # Add merged types at the join point
+          merge_branches(node.location.end_line, then_vars, else_vars, saved_env)
 
           # Don't call super because we've already visited children
         end
@@ -253,6 +273,19 @@ module TypeGuessr
           @type_env[line][var_name] = type
         end
 
+        def deep_copy_env(env)
+          # Create a deep copy of the environment
+          env.transform_values(&:dup)
+        end
+
+        def find_type_in_env(env, var_name)
+          # Find the most recent type for a variable in the environment
+          env.keys.sort.reverse.each do |line|
+            return env[line][var_name] if env[line]&.key?(var_name)
+          end
+          nil
+        end
+
         def get_type(line, var_name)
           # Look backwards from line to find most recent type
           (1..line).reverse_each do |l|
@@ -274,7 +307,7 @@ module TypeGuessr
           changes
         end
 
-        def merge_branches(line, then_env, else_env)
+        def merge_branches(line, then_env, else_env, _saved_env = nil)
           all_vars = (then_env.keys + else_env.keys).uniq
 
           all_vars.each do |var|
@@ -289,6 +322,30 @@ module TypeGuessr
 
             store_type(line, var, merged_type)
           end
+        end
+
+        # Merge two branch environments, keeping types from both branches
+        # @param then_env [Hash] environment from then branch
+        # @param else_env [Hash] environment from else branch
+        # @param base_env [Hash] environment before the if
+        # @return [Hash] merged environment
+        def merge_branch_envs(then_env, else_env, base_env)
+          # Start with the base environment
+          result = deep_copy_env(base_env)
+
+          # Add all lines from then branch
+          then_env.each do |line, vars|
+            result[line] ||= {}
+            result[line].merge!(vars)
+          end
+
+          # Add all lines from else branch
+          else_env.each do |line, vars|
+            result[line] ||= {}
+            result[line].merge!(vars)
+          end
+
+          result
         end
       end
     end

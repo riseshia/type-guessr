@@ -445,6 +445,78 @@ RSpec.describe "Hover Integration" do
     end
   end
 
+  describe "FlowAnalyzer Integration" do
+    it "infers union type from conditional reassignment" do
+      source = <<~RUBY
+        def foo(flag)
+          x = 1
+          if flag
+            x = "string"
+          end
+          x
+        end
+      RUBY
+
+      # Hover on "x" at the end - should show Integer | String
+      response = hover_on_source(source, { line: 5, character: 2 })
+
+      expect(response.contents.value).to match(/Integer/)
+      expect(response.contents.value).to match(/String/)
+    end
+
+    it "infers precise type within a branch" do
+      source = <<~RUBY
+        def foo(flag)
+          x = 1
+          if flag
+            x = "string"
+            x
+          end
+        end
+      RUBY
+
+      # Hover on "x" inside the if branch - should show String (not union)
+      response = hover_on_source(source, { line: 4, character: 4 })
+
+      expect(response.contents.value).to match(/String/)
+      # Should NOT show Integer inside the branch
+      expect(response.contents.value).not_to match(/Integer.*\|.*String/)
+    end
+
+    it "tracks type changes through reassignment" do
+      source = <<~RUBY
+        def foo
+          x = 1
+          x = "string"
+          x
+        end
+      RUBY
+
+      # Hover on final "x" - should show String (the last assignment)
+      response = hover_on_source(source, { line: 3, character: 2 })
+
+      expect(response.contents.value).to match(/String/)
+      expect(response.contents.value).not_to match(/Integer/)
+    end
+
+    it "falls back to VariableTypeResolver when FlowAnalyzer fails" do
+      source = <<~RUBY
+        class Foo
+          def bar
+            @instance_var = "test"
+            @instance_var
+          end
+        end
+      RUBY
+
+      # FlowAnalyzer doesn't handle instance variables well
+      # Should fall back to existing VariableTypeResolver
+      response = hover_on_source(source, { line: 3, character: 4 })
+
+      expect(response.contents.value).to match(/String/)
+    end
+  end
+
   describe "Method Call Return Type (Expression Type)" do
     it "infers variable type from method call assignment" do
       source = <<~RUBY
