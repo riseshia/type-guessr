@@ -4,6 +4,7 @@ require "prism"
 require_relative "scope_resolver"
 require_relative "variable_index"
 require_relative "types"
+require_relative "literal_type_analyzer"
 
 module TypeGuessr
   module Core
@@ -271,36 +272,17 @@ module TypeGuessr
       # @param node [Prism::Node] the value node to analyze
       # @return [Types::Type, nil] the guessed type or nil if cannot be determined
       def analyze_value_type(node)
-        case node
-        when Prism::IntegerNode
-          Types::ClassInstance.new("Integer")
-        when Prism::FloatNode
-          Types::ClassInstance.new("Float")
-        when Prism::StringNode
-          Types::ClassInstance.new("String")
-        when Prism::InterpolatedStringNode
-          Types::ClassInstance.new("String")
-        when Prism::SymbolNode
-          Types::ClassInstance.new("Symbol")
-        when Prism::TrueNode
-          Types::ClassInstance.new("TrueClass")
-        when Prism::FalseNode
-          Types::ClassInstance.new("FalseClass")
-        when Prism::NilNode
-          Types::ClassInstance.new("NilClass")
-        when Prism::ArrayNode
-          Types::ClassInstance.new("Array")
-        when Prism::HashNode
-          Types::ClassInstance.new("Hash")
-        when Prism::RangeNode
-          Types::ClassInstance.new("Range")
-        when Prism::RegularExpressionNode
-          Types::ClassInstance.new("Regexp")
-        when Prism::CallNode
-          # Check if it's a .new call
-          class_name = extract_class_name_from_receiver(node.receiver) if node.name == :new && node.receiver
-          Types::ClassInstance.new(class_name) if class_name
+        # Try literal type inference first
+        type = LiteralTypeAnalyzer.infer(node)
+        return type if type
+
+        # Handle .new calls
+        if node.is_a?(Prism::CallNode) && node.name == :new && node.receiver
+          class_name = extract_class_name_from_receiver(node.receiver)
+          return Types::ClassInstance.new(class_name) if class_name
         end
+
+        nil
       end
 
       # Extract class name from a receiver node (for .new calls)

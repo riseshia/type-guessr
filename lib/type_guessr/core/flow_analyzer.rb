@@ -2,6 +2,7 @@
 
 require "prism"
 require_relative "types"
+require_relative "literal_type_analyzer"
 
 module TypeGuessr
   module Core
@@ -208,27 +209,17 @@ module TypeGuessr
         private
 
         def infer_type_from_node(node)
+          # Handle special flow-sensitive cases first
           case node
-          when Prism::StringNode, Prism::InterpolatedStringNode
-            Types::ClassInstance.new("String")
-          when Prism::IntegerNode
-            Types::ClassInstance.new("Integer")
-          when Prism::FloatNode
-            Types::ClassInstance.new("Float")
-          when Prism::SymbolNode
-            Types::ClassInstance.new("Symbol")
-          when Prism::ArrayNode
-            Types::ArrayType.new
-          when Prism::HashNode
-            Types::ClassInstance.new("Hash")
           when Prism::TrueNode, Prism::FalseNode
+            # FlowAnalyzer-specific: treat boolean literals as union
             Types::Union.new([Types::ClassInstance.new("TrueClass"), Types::ClassInstance.new("FalseClass")])
-          when Prism::NilNode
-            Types::ClassInstance.new("NilClass")
           when Prism::IfNode
             infer_if_expression_type(node)
           else
-            Types::Unknown.instance
+            # Try literal type inference
+            type = LiteralTypeAnalyzer.infer(node)
+            type || Types::Unknown.instance
           end
         end
 

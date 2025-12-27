@@ -5,6 +5,7 @@ require_relative "variable_type_resolver"
 require_relative "hover_content_builder"
 require_relative "../../type_guessr/core/rbs_provider"
 require_relative "../../type_guessr/core/flow_analyzer"
+require_relative "../../type_guessr/core/literal_type_analyzer"
 
 module RubyLsp
   module TypeGuessr
@@ -154,24 +155,9 @@ module RubyLsp
         when Prism::CallNode
           # Recursive: resolve receiver, then get method return type
           resolve_call_chain(receiver, depth)
-        when Prism::ArrayNode
-          ::TypeGuessr::Core::Types::ArrayType.new
-        when Prism::HashNode
-          ::TypeGuessr::Core::Types::ClassInstance.new("Hash")
-        when Prism::StringNode, Prism::InterpolatedStringNode
-          ::TypeGuessr::Core::Types::ClassInstance.new("String")
-        when Prism::IntegerNode
-          ::TypeGuessr::Core::Types::ClassInstance.new("Integer")
-        when Prism::FloatNode
-          ::TypeGuessr::Core::Types::ClassInstance.new("Float")
-        when Prism::SymbolNode
-          ::TypeGuessr::Core::Types::ClassInstance.new("Symbol")
-        when Prism::TrueNode
-          ::TypeGuessr::Core::Types::ClassInstance.new("TrueClass")
-        when Prism::FalseNode
-          ::TypeGuessr::Core::Types::ClassInstance.new("FalseClass")
-        when Prism::NilNode
-          ::TypeGuessr::Core::Types::ClassInstance.new("NilClass")
+        else
+          # Try literal type inference
+          ::TypeGuessr::Core::LiteralTypeAnalyzer.infer(receiver)
         end
       end
 
@@ -214,6 +200,8 @@ module RubyLsp
         case type_obj
         when ::TypeGuessr::Core::Types::ClassInstance
           type_obj.name
+        when ::TypeGuessr::Core::Types::ArrayType
+          "Array"
         else
           ::TypeGuessr::Core::TypeFormatter.format(type_obj)
         end
@@ -272,32 +260,17 @@ module RubyLsp
       # @param node [Prism::Node] the value node
       # @return [TypeGuessr::Core::Types::Type, nil] the inferred type
       def analyze_value_type_for_param(node)
-        case node
-        when Prism::IntegerNode
-          ::TypeGuessr::Core::Types::ClassInstance.new("Integer")
-        when Prism::FloatNode
-          ::TypeGuessr::Core::Types::ClassInstance.new("Float")
-        when Prism::StringNode, Prism::InterpolatedStringNode
-          ::TypeGuessr::Core::Types::ClassInstance.new("String")
-        when Prism::SymbolNode
-          ::TypeGuessr::Core::Types::ClassInstance.new("Symbol")
-        when Prism::TrueNode
-          ::TypeGuessr::Core::Types::ClassInstance.new("TrueClass")
-        when Prism::FalseNode
-          ::TypeGuessr::Core::Types::ClassInstance.new("FalseClass")
-        when Prism::NilNode
-          ::TypeGuessr::Core::Types::ClassInstance.new("NilClass")
-        when Prism::ArrayNode
-          ::TypeGuessr::Core::Types::ClassInstance.new("Array")
-        when Prism::HashNode
-          ::TypeGuessr::Core::Types::ClassInstance.new("Hash")
-        when Prism::CallNode
-          # Only handle .new calls
-          if node.name == :new && node.receiver
-            class_name = extract_class_name_from_new_call(node.receiver)
-            ::TypeGuessr::Core::Types::ClassInstance.new(class_name) if class_name
-          end
+        # Try literal type inference first
+        type = ::TypeGuessr::Core::LiteralTypeAnalyzer.infer(node)
+        return type if type
+
+        # Handle .new calls
+        if node.is_a?(Prism::CallNode) && node.name == :new && node.receiver
+          class_name = extract_class_name_from_new_call(node.receiver)
+          return ::TypeGuessr::Core::Types::ClassInstance.new(class_name) if class_name
         end
+
+        nil
       end
 
       # Extract class name from .new call receiver
