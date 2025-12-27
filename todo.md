@@ -129,20 +129,22 @@ Infer variable types from method call assignments at hover time:
 
 **Goal:** Show complete method signature (parameters + return type) when hovering on method definitions.
 
-**Depends on:** Phase 5.5 (Parameter Default Types) must be completed first.
+**Approach:** Infer parameter types on-demand at hover time (no indexing needed).
 
 - [ ] Add `:def` to `HOVER_NODE_TYPES`
 - [ ] Implement `on_def_node_enter(node)`:
-  - [ ] Extract parameter types from node (uses Phase 5.5 implementation)
+  - [ ] Iterate through parameters and infer types from default values
+  - [ ] Use `analyze_value_type` for literals/numbers/.new calls
   - [ ] Use `FlowAnalyzer` to analyze method body for return type
   - [ ] Format complete signature: `(params) -> ReturnType`
   - [ ] Handle all parameter kinds: required, optional, keyword, rest, block
   - [ ] Handle errors gracefully (return nil on failure)
-- [ ] Parameter type inference:
+- [ ] Parameter type inference (on-demand):
   - [ ] Required params without default → `untyped`
-  - [ ] Optional params with default → infer from default value
+  - [ ] Optional params with default → infer from default value (literal/number/.new)
   - [ ] Keyword params → similar to optional
   - [ ] Rest/keyword rest → `*untyped`, `**untyped`
+  - [ ] Block → `&block`
 - [ ] Return type inference:
   - [ ] `return expr` statements
   - [ ] Last expression of method body
@@ -182,29 +184,14 @@ Infer variable types from method call assignments at hover time:
 
 ---
 
-### 5.5 Parameter Default Value Type Inference (Medium Risk, 2-3h)
+### ~~5.5 Parameter Default Value Type Inference~~ ✅ MERGED INTO 5.3
 
-**Goal:** Infer parameter types from default values.
+**Status:** This phase has been merged into Phase 5.3.
 
-**Note:** This is a prerequisite for Phase 5.3 (Def Node Hover). Implement this first.
+**Rationale:** Parameter type inference is simple and fast (literals/numbers/.new).
+It's more efficient to infer on-demand at hover time rather than storing in index.
 
-**Current Gap:** `visit_optional_parameter_node` doesn't analyze default values.
-
-- [ ] Modify `visit_optional_parameter_node` in `ast_analyzer.rb`:
-  ```ruby
-  def visit_optional_parameter_node(node)
-    var_name = node.name.to_s
-    location = node.location
-    direct_type = analyze_value_type(node.value) if node.value
-
-    register_variable(var_name, location.start_line, location.start_column,
-                      direct_type: direct_type)
-    super
-  end
-  ```
-- [ ] Apply same pattern to `visit_optional_keyword_parameter_node`
-- [ ] Add integration test:
-  - [ ] `'def foo(x = 42); end'` → `x` has `direct_type: "Integer"`
+See Phase 5.3 for the integrated implementation approach.
 
 ---
 
@@ -330,18 +317,18 @@ Return Unknown / nil
 | - | 5.1 Method Call Assignment | - | - | ✅ Done |
 | - | 5.6 TypeFormatter Integration | Low | 1h | ✅ Done |
 | - | 5.2a Call Node Hover (basic) | Medium | 2-3h | ✅ Done |
-| 1 | 5.5 Parameter Default Types | Medium | 2-3h | Pending |
-| 2 | 5.3 Def Node Hover | Medium | 2-3h | Pending |
-| 3 | 5.2b Call Node Hover (chains) | High | 4-6h | Pending |
-| 4 | 5.4 FlowAnalyzer Integration | High | 4-6h | Pending |
+| - | ~~5.5 Parameter Default Types~~ | - | - | ✅ Merged into 5.3 |
+| 1 | 5.3 Def Node Hover | Medium | 2-3h | Pending |
+| 2 | 5.2b Call Node Hover (chains) | High | 4-6h | Pending |
+| 3 | 5.4 FlowAnalyzer Integration | High | 4-6h | Pending |
 
-**Total Estimated Effort:** 12-20 hours (remaining)
+**Total Estimated Effort:** 10-15 hours (remaining)
 
-**Rationale for Priority Change:**
-Phase 5.3 requires parameter type inference to show proper method signatures.
-Therefore, Phase 5.5 (Parameter Default Types) must be implemented first.
+**Recent Change:**
+Phase 5.5 has been merged into Phase 5.3. Parameter type inference is performed
+on-demand at hover time (fast for literals/numbers/.new), eliminating the need
+for separate indexing phase.
 
 **Next Steps:**
-1. Implement 5.5 (Parameter Default Types) - enables parameter type inference
-2. Implement 5.3 (Def Node Hover) - uses 5.5 to show complete signatures
-3. Collect feedback before proceeding to complex phases (5.2b, 5.4)
+1. Implement 5.3 (Def Node Hover) - includes parameter type inference
+2. Collect feedback before proceeding to complex phases (5.2b, 5.4)
