@@ -239,13 +239,68 @@ RSpec.describe TypeGuessr::Core::LiteralTypeAnalyzer do
       end
     end
 
-    it "infers Hash from hash literal" do
-      code = "{ a: 1 }"
-      node = Prism.parse(code).value.statements.body.first
-      type = described_class.infer(node)
+    # Hash type inference tests
+    describe "hash type inference" do
+      it "infers HashShape for symbol-keyed hash with literal values" do
+        code = "{ name: \"Alice\", age: 30 }"
+        node = Prism.parse(code).value.statements.body.first
+        type = described_class.infer(node)
 
-      expect(type).to be_a(TypeGuessr::Core::Types::ClassInstance)
-      expect(type.name).to eq("Hash")
+        expect(type).to be_a(TypeGuessr::Core::Types::HashShape)
+        expect(type.fields[:name]).to be_a(TypeGuessr::Core::Types::ClassInstance)
+        expect(type.fields[:name].name).to eq("String")
+        expect(type.fields[:age]).to be_a(TypeGuessr::Core::Types::ClassInstance)
+        expect(type.fields[:age].name).to eq("Integer")
+      end
+
+      it "infers Hash for empty hash" do
+        code = "{}"
+        node = Prism.parse(code).value.statements.body.first
+        type = described_class.infer(node)
+
+        expect(type).to be_a(TypeGuessr::Core::Types::ClassInstance)
+        expect(type.name).to eq("Hash")
+      end
+
+      it "infers Hash for string-keyed hash" do
+        code = '{ "name" => "Alice" }'
+        node = Prism.parse(code).value.statements.body.first
+        type = described_class.infer(node)
+
+        expect(type).to be_a(TypeGuessr::Core::Types::ClassInstance)
+        expect(type.name).to eq("Hash")
+      end
+
+      it "infers HashShape with Unknown for non-literal values" do
+        code = "{ name: foo, age: 30 }"
+        node = Prism.parse(code).value.statements.body.first
+        type = described_class.infer(node)
+
+        expect(type).to be_a(TypeGuessr::Core::Types::HashShape)
+        expect(type.fields[:name]).to eq(TypeGuessr::Core::Types::Unknown.instance)
+        expect(type.fields[:age].name).to eq("Integer")
+      end
+
+      it "infers HashShape with nested types" do
+        code = "{ items: [1, 2, 3], active: true }"
+        node = Prism.parse(code).value.statements.body.first
+        type = described_class.infer(node)
+
+        expect(type).to be_a(TypeGuessr::Core::Types::HashShape)
+        expect(type.fields[:items]).to be_a(TypeGuessr::Core::Types::ArrayType)
+        expect(type.fields[:items].element_type.name).to eq("Integer")
+        expect(type.fields[:active].name).to eq("TrueClass")
+      end
+
+      it "falls back to Hash when too many fields" do
+        # HashShape::DEFAULT_MAX_FIELDS is 15
+        code = "{ a: 1, b: 2, c: 3, d: 4, e: 5, f: 6, g: 7, h: 8, i: 9, j: 10, k: 11, l: 12, m: 13, n: 14, o: 15, p: 16 }"
+        node = Prism.parse(code).value.statements.body.first
+        type = described_class.infer(node)
+
+        expect(type).to be_a(TypeGuessr::Core::Types::ClassInstance)
+        expect(type.name).to eq("Hash")
+      end
     end
 
     it "infers Range from range literal" do

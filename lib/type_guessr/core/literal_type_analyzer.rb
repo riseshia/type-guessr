@@ -46,7 +46,7 @@ module TypeGuessr
 
           infer_array_type(node, depth)
         when Prism::HashNode
-          Types::ClassInstance.new("Hash")
+          infer_hash_type(node, depth)
         when Prism::RangeNode
           Types::ClassInstance.new("Range")
         when Prism::RegularExpressionNode
@@ -89,6 +89,41 @@ module TypeGuessr
       end
 
       private_class_method :infer_array_type
+
+      # Infer type for hash literals
+      # @param node [Prism::HashNode] the hash node
+      # @param depth [Integer] current nesting depth
+      # @return [Types::Type] hash type (HashShape for symbol keys, Hash otherwise)
+      def self.infer_hash_type(node, depth)
+        # Empty hash → generic Hash
+        return Types::ClassInstance.new("Hash") if node.elements.empty?
+
+        # Check if all keys are symbols (for HashShape)
+        fields = {}
+
+        node.elements.each do |element|
+          # Only handle AssocNode (key-value pairs)
+          next unless element.is_a?(Prism::AssocNode)
+
+          key = element.key
+          value = element.value
+
+          # Only symbol keys qualify for HashShape
+          unless key.is_a?(Prism::SymbolNode)
+            # Non-symbol key → fall back to generic Hash
+            return Types::ClassInstance.new("Hash")
+          end
+
+          key_name = key.value.to_sym
+          value_type = infer(value, depth: depth) || Types::Unknown.instance
+          fields[key_name] = value_type
+        end
+
+        # HashShape.new will fall back to Hash if too many fields
+        Types::HashShape.new(fields)
+      end
+
+      private_class_method :infer_hash_type
     end
   end
 end
