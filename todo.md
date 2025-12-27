@@ -6,9 +6,9 @@
 **Current Status:**
 - ✅ Phase 5 (MVP Hover Enhancement): COMPLETED
 - ✅ Phase 6 (Heuristic Fallback): COMPLETED
-- 🔄 Phase 7 (Code Quality & Refactoring): IN PROGRESS
-- ⏳ Phase 8 (Generic & Block Type Inference): PLANNED
-- All 222 tests passing (1 pending, non-critical edge case)
+- 🔄 Phase 7 (Code Quality & Refactoring): IN PROGRESS (7.2 done)
+- 🔄 Phase 8 (Generic & Block Type Inference): IN PROGRESS (8.1, 8.2, 8.3 done)
+- All 271 tests passing (1 pending, non-critical edge case)
 
 ---
 
@@ -107,57 +107,57 @@
 
 Goal: Enable type inference for generic containers and block parameters.
 
-### 8.1 Array Literal Element Type Inference (Foundation)
+### 8.1 Array Literal Element Type Inference (Foundation) ✅
 
 **Problem:** `[1,2,3]` is inferred as `Array` instead of `Array[Integer]`.
 
-**Locations:**
-- `ast_analyzer.rb:291-292` - `analyze_value_type`
-- `hover.rb:158` - `resolve_receiver_type_recursively`
+**Implemented:**
+- [x] Created `LiteralTypeAnalyzer` class with array element type inference
+- [x] Homogeneous arrays → typed (e.g., `[1,2,3]` → `Array[Integer]`)
+- [x] Mixed arrays (2-3 types) → Union element type
+- [x] Mixed arrays (4+ types) → Unknown element type
+- [x] Max 5 samples for performance, max 1 nesting depth
 
-**Implementation:**
-- [ ] For homogeneous arrays, infer element type (e.g., `[1,2,3]` → `Array[Integer]`)
-- [ ] For mixed arrays, use Union or Unknown element type
-- [ ] Update both locations to return `Types::ArrayType` with element type
+**Commit:** `a19ad62`
 
-**Difficulty:** Easy
-
-### 8.2 RBSProvider Generic Type Preservation
+### 8.2 RBSProvider Generic Type Preservation ✅
 
 **Problem:** `rbs_type.args` is ignored, so `Array[Integer]` becomes just `Array`.
 
-**Location:** `rbs_provider.rb:76-78`
+**Implemented:**
+- [x] Handle `rbs_type.args` in `convert_class_instance`
+- [x] Convert `Array[T]` to `Types::ArrayType` with element type
+- [x] Type variables (Elem, etc.) return Unknown for now
 
-**Implementation:**
-- [ ] Handle `rbs_type.args` in `rbs_type_to_types`
-- [ ] Convert to `Types::ArrayType`, `Types::HashType` etc. with type parameters
-- [ ] Preserve generic parameters through method return type resolution
+**Commit:** `5e8b12d`
 
-**Difficulty:** Easy
-
-### 8.3 Block Parameter Type Inference
+### 8.3 Block Parameter Type Inference ✅
 
 **Problem:** In `a.map { |num| ... }`, `num` type is unknown even when `a` is `Array[Integer]`.
 
-**Implementation:**
+**Implemented:**
 
-#### 8.3.1 Block Parameter Type Query API
-- [ ] Add `RBSProvider#get_block_param_types(class_name, method_name)` method
-- [ ] Access block signature via `method_type.type.block`
-- [ ] Extract parameter types from block's function type
+#### 8.3.1 Block Parameter Type Query API ✅
+- [x] Added `RBSProvider#get_block_param_types(class_name, method_name)`
+- [x] Added `RBSProvider#get_block_param_types_with_substitution` with type variable binding
+- [x] Access block signature via `method_type.block`
+- **Commit:** `31ba88a`
 
-#### 8.3.2 Type Variable Substitution
-- [ ] Use RBS `Substitution` class for type variable binding
-- [ ] Bind `Elem` → actual element type (e.g., `Integer`)
-- [ ] Handle common type variables: `Elem`, `K`, `V`, `U`, etc.
+#### 8.3.2 Type Variable Substitution ✅
+- [x] Implemented in `rbs_type_to_types_with_substitution`
+- [x] Binds `Elem` → actual element type from ArrayType
 
-#### 8.3.3 Block Scope Parameter Binding
-- [ ] Modify `ast_analyzer.rb` `visit_block_node` to track block context
-- [ ] Identify receiver type of the enclosing CallNode
-- [ ] Query block parameter types and bind to block parameters
-- [ ] Store in VariableIndex for hover resolution
+#### 8.3.3 Hover Integration ✅
+- [x] Added `try_block_parameter_inference` in hover.rb
+- [x] Uses `node_context.call_node` to find enclosing call
+- [x] Resolves receiver type and extracts element type for substitution
+- [x] Returns inferred block parameter type in hover
+- **Commit:** `138da9b`
 
-**Difficulty:** Medium
+**Working Examples:**
+- `arr.each { |num| }` → `num: Integer` (when `arr = [1,2,3]`)
+- `names.map { |name| }` → `name: String` (when `names = ["a","b"]`)
+- `text.each_char { |char| }` → `char: String`
 
 ### 8.4 Hash Literal Type Inference
 
@@ -296,13 +296,13 @@ Return Unknown / nil
 
 ### Phase 8 (Generic & Block Types)
 
-| Order | Task | Difficulty | Dependencies |
-|-------|------|------------|--------------|
-| 1 | 8.1 Array element type inference | Easy | None (foundation) |
-| 2 | 8.2 RBSProvider generic preservation | Easy | 8.1 |
-| 3 | 8.3 Block parameter type inference | Medium | 8.1, 8.2 |
-| 4 | 8.4 Hash type inference | Easy | 8.2 |
-| 5 | 8.5 Method parameter inference | Medium | Existing infra |
+| Order | Task | Difficulty | Status |
+|-------|------|------------|--------|
+| 1 | 8.1 Array element type inference | Easy | ✅ Done |
+| 2 | 8.2 RBSProvider generic preservation | Easy | ✅ Done |
+| 3 | 8.3 Block parameter type inference | Medium | ✅ Done |
+| 4 | 8.4 Hash type inference | Easy | Pending |
+| 5 | 8.5 Method parameter inference | Medium | Pending |
 | 6 | 8.6 Structural type display | Easy | Optional |
 
 **Rationale:** 8.1 and 8.2 form the foundation for generic type flow. 8.3 (block params) is the most impactful feature and depends on both. 8.4-8.6 are independent improvements.
