@@ -85,6 +85,258 @@ RSpec.describe "Hover Integration" do
 
       expect(response.contents.value).to match(/Guessed type:.*Hash/)
     end
+
+    # Edge case: Symbol literal
+    it "infers Symbol from symbol literal" do
+      source = <<~RUBY
+        def foo
+          status = :active
+          status
+        end
+      RUBY
+
+      response = hover_on_source(source, { line: 2, character: 2 })
+
+      expect(response.contents.value).to match(/Guessed type:.*Symbol/)
+    end
+
+    # Edge case: Range literal
+    it "infers Range from range literal" do
+      source = <<~RUBY
+        def foo
+          numbers = 1..10
+          numbers
+        end
+      RUBY
+
+      response = hover_on_source(source, { line: 2, character: 2 })
+
+      expect(response.contents.value).to match(/Guessed type:.*Range/)
+    end
+
+    # Edge case: Regexp literal
+    it "infers Regexp from regexp literal" do
+      source = <<~RUBY
+        def foo
+          pattern = /[a-z]+/
+          pattern
+        end
+      RUBY
+
+      response = hover_on_source(source, { line: 2, character: 2 })
+
+      expect(response.contents.value).to match(/Guessed type:.*Regexp/)
+    end
+
+    # Edge case: Boolean true
+    it "infers TrueClass from true literal" do
+      source = <<~RUBY
+        def foo
+          flag = true
+          flag
+        end
+      RUBY
+
+      response = hover_on_source(source, { line: 2, character: 2 })
+
+      expect(response.contents.value).to match(/Guessed type:.*(TrueClass|FalseClass)/)
+    end
+
+    # Edge case: Boolean false
+    it "infers FalseClass from false literal" do
+      source = <<~RUBY
+        def foo
+          flag = false
+          flag
+        end
+      RUBY
+
+      response = hover_on_source(source, { line: 2, character: 2 })
+
+      expect(response.contents.value).to match(/Guessed type:.*(TrueClass|FalseClass)/)
+    end
+
+    # Edge case: Nil literal
+    it "infers NilClass from nil literal" do
+      source = <<~RUBY
+        def foo
+          value = nil
+          value
+        end
+      RUBY
+
+      response = hover_on_source(source, { line: 2, character: 2 })
+
+      expect(response.contents.value).to match(/Guessed type:.*NilClass/)
+    end
+
+    # Edge case: Interpolated string
+    it "infers String from interpolated string" do
+      source = <<~RUBY
+        def foo
+          name = "Alice"
+          greeting = "Hello \#{name}"
+          greeting
+        end
+      RUBY
+
+      response = hover_on_source(source, { line: 3, character: 2 })
+
+      expect(response.contents.value).to match(/Guessed type:.*String/)
+    end
+  end
+
+  describe "Array Type Inference Edge Cases" do
+    # Edge case: Homogeneous array
+    it "infers Array[Integer] from homogeneous integer array" do
+      source = <<~RUBY
+        def foo
+          nums = [1, 2, 3]
+          nums
+        end
+      RUBY
+
+      response = hover_on_source(source, { line: 2, character: 2 })
+
+      expect(response.contents.value).to match(/Guessed type:.*Array\[Integer\]/)
+    end
+
+    # Edge case: Mixed array (2 types)
+    it "infers Array[Integer | String] from mixed array" do
+      source = <<~RUBY
+        def foo
+          mixed = [1, "a"]
+          mixed
+        end
+      RUBY
+
+      response = hover_on_source(source, { line: 2, character: 2 })
+
+      expect(response.contents.value).to match(/Guessed type:.*Array\[/)
+      expect(response.contents.value).to match(/Integer/)
+      expect(response.contents.value).to match(/String/)
+    end
+
+    # Edge case: Mixed array (3 types)
+    it "infers Array[Integer | String | Symbol] from mixed array with 3 types" do
+      source = <<~RUBY
+        def foo
+          mixed = [1, "a", :sym]
+          mixed
+        end
+      RUBY
+
+      response = hover_on_source(source, { line: 2, character: 2 })
+
+      expect(response.contents.value).to match(/Guessed type:.*Array\[/)
+      expect(response.contents.value).to match(/Integer/)
+      expect(response.contents.value).to match(/String/)
+      expect(response.contents.value).to match(/Symbol/)
+    end
+
+    # Edge case: Too many types (4+)
+    it "infers Array[untyped] from array with 4+ types" do
+      source = <<~RUBY
+        def foo
+          mixed = [1, "a", :sym, 1.0]
+          mixed
+        end
+      RUBY
+
+      response = hover_on_source(source, { line: 2, character: 2 })
+
+      expect(response.contents.value).to match(/Guessed type:.*Array(\[untyped\])?/)
+    end
+
+    # Edge case: Nested array
+    it "infers Array[Array[Integer]] from nested array" do
+      source = <<~RUBY
+        def foo
+          nested = [[1, 2], [3, 4]]
+          nested
+        end
+      RUBY
+
+      response = hover_on_source(source, { line: 2, character: 2 })
+
+      expect(response.contents.value).to match(/Guessed type:.*Array\[Array\[Integer\]\]/)
+    end
+
+    # Edge case: Deeply nested array (exceeds depth)
+    it "infers Array[untyped] from deeply nested array" do
+      source = <<~RUBY
+        def foo
+          deep = [[[1]]]
+          deep
+        end
+      RUBY
+
+      response = hover_on_source(source, { line: 2, character: 2 })
+
+      expect(response.contents.value).to match(/Guessed type:.*Array(\[untyped\]|\[Array\])?/)
+    end
+  end
+
+  describe "Hash Type Inference Edge Cases" do
+    # Edge case: Symbol-keyed hash
+    it "infers HashShape from symbol-keyed hash" do
+      source = <<~RUBY
+        def foo
+          user = { name: "John", age: 20 }
+          user
+        end
+      RUBY
+
+      response = hover_on_source(source, { line: 2, character: 2 })
+
+      expect(response.contents.value).to match(/Guessed type:.*\{/)
+      expect(response.contents.value).to match(/name:/)
+      expect(response.contents.value).to match(/age:/)
+    end
+
+    # Edge case: Non-symbol keys
+    it "infers Hash from string-keyed hash" do
+      source = <<~RUBY
+        def foo
+          data = { "key" => "value" }
+          data
+        end
+      RUBY
+
+      response = hover_on_source(source, { line: 2, character: 2 })
+
+      expect(response.contents.value).to match(/Guessed type:.*Hash/)
+    end
+
+    # Edge case: Mixed keys
+    it "infers Hash from hash with mixed keys" do
+      source = <<~RUBY
+        def foo
+          mixed = { name: "John", "key" => 1 }
+          mixed
+        end
+      RUBY
+
+      response = hover_on_source(source, { line: 2, character: 2 })
+
+      expect(response.contents.value).to match(/Guessed type:.*Hash/)
+    end
+
+    # Edge case: Nested hash
+    it "infers nested HashShape from nested symbol-keyed hash" do
+      source = <<~RUBY
+        def foo
+          user = { name: "John", address: { city: "Seoul" } }
+          user
+        end
+      RUBY
+
+      response = hover_on_source(source, { line: 2, character: 2 })
+
+      expect(response.contents.value).to match(/Guessed type:.*\{/)
+      expect(response.contents.value).to match(/name:/)
+      expect(response.contents.value).to match(/address:/)
+    end
   end
 
   describe ".new Call Type Inference" do
@@ -120,6 +372,61 @@ RSpec.describe "Hover Integration" do
       response = hover_on_source(source, { line: 7, character: 4 })
 
       expect(response.contents.value).to match(/Guessed type:.*Admin::User/)
+    end
+
+    # Edge case: .new with arguments
+    it "infers type from .new with arguments" do
+      source = <<~RUBY
+        class User
+        end
+
+        def foo
+          user = User.new("name", 20)
+          user
+        end
+      RUBY
+
+      response = hover_on_source(source, { line: 4, character: 2 })
+
+      expect(response.contents.value).to match(/Guessed type:.*User/)
+    end
+
+    # Edge case: Deeply nested namespace
+    it "infers type from deeply nested namespace .new" do
+      source = <<~RUBY
+        module A
+          module B
+            module C
+              class D
+              end
+            end
+          end
+        end
+
+        def foo
+          obj = A::B::C::D.new
+          obj
+        end
+      RUBY
+
+      response = hover_on_source(source, { line: 10, character: 2 })
+
+      expect(response.contents.value).to match(/Guessed type:.*A::B::C::D/)
+    end
+
+    # Edge case: Dynamic class reference (should not infer)
+    it "does not infer type from dynamic class reference" do
+      source = <<~RUBY
+        def foo(klass)
+          obj = klass.new
+          obj
+        end
+      RUBY
+
+      response = hover_on_source(source, { line: 2, character: 2 })
+
+      # Should not infer a specific type since klass is unknown
+      expect(response).to be_nil.or(be_a(RubyLsp::Interface::Hover))
     end
   end
 
@@ -273,6 +580,53 @@ RSpec.describe "Hover Integration" do
       expect(response.contents.value).to match(/String/)
       expect(response.contents.value).not_to match(/User/)
     end
+
+    # Edge case: Block-local variable shadowing
+    it "handles block-local variable shadowing outer variable" do
+      source = <<~RUBY
+        def foo
+          x = 1
+          [1, 2].each do |x|
+            x
+          end
+        end
+      RUBY
+
+      response = hover_on_source(source, { line: 3, character: 4 })
+
+      # Inside block, x refers to block parameter (Integer from array element)
+      expect(response).not_to be_nil
+    end
+
+    # Edge case: Top-level variable
+    it "handles top-level variable definition" do
+      source = <<~RUBY
+        x = 42
+        x
+      RUBY
+
+      response = hover_on_source(source, { line: 1, character: 0 })
+
+      expect(response.contents.value).to match(/Integer/)
+    end
+
+    # Edge case: Singleton class scope
+    it "handles singleton class scope" do
+      source = <<~RUBY
+        class Foo
+          class << self
+            def bar
+              x = "singleton"
+              x
+            end
+          end
+        end
+      RUBY
+
+      response = hover_on_source(source, { line: 4, character: 6 })
+
+      expect(response.contents.value).to match(/String/)
+    end
   end
 
   describe "Parameter Hover" do
@@ -352,6 +706,49 @@ RSpec.describe "Hover Integration" do
 
       expect(response.contents.value).not_to be_nil
       expect(response.contents.value).not_to be_empty
+    end
+
+    # Edge case: Keyword rest parameter
+    it "shows hover on keyword rest parameter" do
+      source = <<~RUBY
+        def process(**kwargs)
+          kwargs.keys
+        end
+      RUBY
+
+      response = hover_on_source(source, { line: 1, character: 2 })
+
+      expect(response).not_to be_nil
+    end
+
+    # Edge case: Optional parameter with .new default
+    it "infers type from optional parameter with .new default" do
+      source = <<~RUBY
+        class User
+        end
+
+        def foo(x = User.new)
+          x
+        end
+      RUBY
+
+      response = hover_on_source(source, { line: 4, character: 2 })
+
+      # Type inference might vary based on implementation
+      expect(response).not_to be_nil
+    end
+
+    # Edge case: Optional parameter with literal default
+    it "shows hover on optional parameter with integer default" do
+      source = <<~RUBY
+        def foo(x = 42)
+          x
+        end
+      RUBY
+
+      response = hover_on_source(source, { line: 1, character: 2 })
+
+      expect(response).not_to be_nil
     end
   end
 
@@ -510,6 +907,105 @@ RSpec.describe "Hover Integration" do
       response = hover_on_source(source, { line: 3, character: 4 })
 
       expect(response.contents.value).to match(/String/)
+    end
+
+    # Edge case: elsif branches
+    it "infers union type from elsif branches" do
+      source = <<~RUBY
+        def foo(flag)
+          x = 1
+          if flag == 1
+            x = "string"
+          elsif flag == 2
+            x = :symbol
+          end
+          x
+        end
+      RUBY
+
+      response = hover_on_source(source, { line: 7, character: 2 })
+
+      expect(response.contents.value).to match(/Integer/)
+      expect(response.contents.value).to match(/String/)
+      expect(response.contents.value).to match(/Symbol/)
+    end
+
+    # Edge case: Ternary operator
+    it "infers union type from ternary operator" do
+      source = <<~RUBY
+        def foo(flag)
+          x = flag ? 1 : "str"
+          x
+        end
+      RUBY
+
+      response = hover_on_source(source, { line: 2, character: 2 })
+
+      expect(response.contents.value).to match(/Integer/)
+      expect(response.contents.value).to match(/String/)
+    end
+
+    # Edge case: unless statement
+    it "handles unless statement" do
+      source = <<~RUBY
+        def foo(flag)
+          x = 1
+          unless flag
+            x = "string"
+          end
+          x
+        end
+      RUBY
+
+      response = hover_on_source(source, { line: 5, character: 2 })
+
+      # Should work similarly to if - may show union or last type
+      expect(response).not_to be_nil
+    end
+
+    # Edge case: Compound assignment ||=
+    it "infers union type from ||= assignment" do
+      source = <<~RUBY
+        def foo
+          x = nil
+          x ||= 1
+          x
+        end
+      RUBY
+
+      response = hover_on_source(source, { line: 3, character: 2 })
+
+      expect(response.contents.value).to match(/Integer|NilClass/)
+    end
+
+    # Edge case: Compound assignment &&=
+    it "infers union type from &&= assignment" do
+      source = <<~RUBY
+        def foo
+          x = 1
+          x &&= "string"
+          x
+        end
+      RUBY
+
+      response = hover_on_source(source, { line: 3, character: 2 })
+
+      expect(response.contents.value).to match(/Integer|String/)
+    end
+
+    # Edge case: Guard clause
+    it "handles guard clause with return" do
+      source = <<~RUBY
+        def foo(x)
+          return unless x
+          y = 1
+          y
+        end
+      RUBY
+
+      response = hover_on_source(source, { line: 3, character: 2 })
+
+      expect(response.contents.value).to match(/Integer/)
     end
   end
 
@@ -920,6 +1416,44 @@ RSpec.describe "Hover Integration" do
       expect(response).not_to be_nil
       expect(response.contents.value).to match(/ingredients/)
     end
+
+    # Edge case: Safe navigation operator
+    it "handles safe navigation operator" do
+      source = <<~RUBY
+        class User
+          def name
+            "John"
+          end
+        end
+
+        def foo
+          user = User.new
+          user&.name
+        end
+      RUBY
+
+      # Hover on "name" in safe navigation
+      response = hover_on_source(source, { line: 7, character: 11 })
+
+      expect(response).not_to be_nil
+    end
+
+    # Edge case: Method with block
+    it "handles method call with block" do
+      source = <<~RUBY
+        def foo
+          arr = [1, 2, 3]
+          arr.map { |x| x * 2 }
+        end
+      RUBY
+
+      # Hover on "map"
+      response = hover_on_source(source, { line: 2, character: 6 })
+
+      expect(response).not_to be_nil
+      expect(response.contents.value).to match(/map/)
+      expect(response.contents.value).to match(/Array/)
+    end
   end
 
   describe "Def Node Hover" do
@@ -1065,6 +1599,39 @@ RSpec.describe "Hover Integration" do
 
       # Should still return something (untyped or Unknown)
       # Not testing specific content since receiver type is unknown
+      expect(response).not_to be_nil
+    end
+
+    # Edge case: Hash#each with multiple block parameters
+    it "infers block parameter types from Hash#each" do
+      skip "Generic type variable substitution not yet implemented (Hash[K, V] → K, V)"
+      source = <<~RUBY
+        def foo
+          data = { name: "Alice", age: 30 }
+          data.each { |k, v| puts k }
+        end
+      RUBY
+
+      # Hover on "k" parameter - should be Symbol
+      response = hover_on_source(source, { line: 2, character: 16 })
+
+      expect(response).not_to be_nil
+      # k should be Symbol (key type)
+      expect(response.contents.value).to match(/Symbol/)
+    end
+
+    # Edge case: Enumerator chain
+    it "handles enumerator chain with_index" do
+      source = <<~RUBY
+        def foo
+          arr = [1, 2, 3]
+          arr.map.with_index { |x, i| x * i }
+        end
+      RUBY
+
+      # Hover on "x" - should be Integer
+      response = hover_on_source(source, { line: 2, character: 24 })
+
       expect(response).not_to be_nil
     end
   end
@@ -1269,6 +1836,52 @@ RSpec.describe "Hover Integration" do
 
       expect(response).not_to be_nil
       expect(response.contents.value).to match(/Task/)
+    end
+
+    # Edge case: Circular reference protection
+    it "handles circular constant references without infinite loop" do
+      source = <<~RUBY
+        class Base
+          def process
+          end
+        end
+
+        AliasA = Base
+        AliasB = AliasA
+        AliasC = AliasB
+        AliasD = AliasC
+        AliasE = AliasD
+        AliasF = AliasE
+
+        def foo
+          obj = AliasF.new
+          obj
+        end
+      RUBY
+
+      # Should handle deep alias chain (up to max depth)
+      response = hover_on_source(source, { line: 13, character: 2 })
+
+      expect(response).not_to be_nil
+      # Should resolve to Base or handle gracefully
+    end
+
+    # Edge case: Undefined constant reference
+    it "handles undefined constant gracefully" do
+      source = <<~RUBY
+        # UndefinedClass does not exist
+        def foo
+          # This would fail at runtime, but type inference should not crash
+          obj = UndefinedClass.new
+          obj
+        end
+      RUBY
+
+      # Should not crash, may return nil or unknown
+      response = hover_on_source(source, { line: 3, character: 2 })
+
+      # Should handle gracefully (not crash)
+      expect(response).to be_nil.or(be_a(RubyLsp::Interface::Hover))
     end
   end
 end

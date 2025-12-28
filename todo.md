@@ -10,7 +10,7 @@
 - ✅ Phase 8 (Generic & Block Type Inference): COMPLETED
 - ✅ Phase 9 (Constant Alias Support): COMPLETED
 - ✅ Phase 10 (User-Defined Method Return Type Inference): COMPLETED
-- All 327 tests passing (7 pending: 1 non-critical, 6 RubyIndexer integration tests)
+- All tests passing (8 pending: 1 non-critical, 6 RubyIndexer integration, 1 Hash block param)
 
 ---
 
@@ -90,6 +90,38 @@ Return Unknown / nil
 ### Extended Inference
 - [ ] Operations (`+`, `*`, etc.) type inference
 - [ ] Flow-sensitive refinement through branches/loops
+
+### Generic Block Parameter Type Inference (Priority: Medium)
+
+**Current Limitation:**
+- Only supports single type variable substitution (`Array[Elem]` → `Elem`)
+- `Hash#each { |k, v| }` not supported (requires `K`, `V` substitution)
+
+**Proposal: Generic Type Variable Substitution**
+
+1. **Parse RBS Method Signature for Type Variables:**
+   - Extract all type variables from method signature (e.g., `Hash[K, V]#each`)
+   - Identify which type variables are used in block parameters
+
+2. **Map Receiver Type to Type Variables:**
+   - `Array[Integer]` → `{ Elem: Integer }`
+   - `Hash[Symbol, String]` → `{ K: Symbol, V: String }`
+   - `HashShape { name: String, age: Integer }` → `{ K: Symbol, V: String | Integer }`
+
+3. **Substitute Block Parameter Types:**
+   - Replace type variables in block signature with concrete types
+   - `(K, V) -> void` + `{ K: Symbol, V: String }` → `(Symbol, String) -> void`
+
+**Implementation Tasks:**
+- [ ] Add `TypeVariableExtractor` to parse RBS method signatures
+- [ ] Extend `get_block_param_types_with_substitution` to accept multiple type variables (Hash)
+- [ ] Add type variable mapping for `Hash` and `HashShape` types
+- [ ] Update `try_block_parameter_inference` to extract multiple type variables
+- [ ] Add integration tests for `Hash#each`, `Hash#map`, etc.
+
+**References:**
+- `lib/ruby_lsp/type_guessr/hover.rb:477-516` - Current implementation
+- `lib/type_guessr/core/rbs_provider.rb:86-133` - Type substitution logic
 
 ### Inverted Index
 - [ ] Build method name → owner type candidates index
