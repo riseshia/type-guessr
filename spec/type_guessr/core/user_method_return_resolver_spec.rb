@@ -4,15 +4,21 @@ require "spec_helper"
 require "tempfile"
 require "type_guessr/core/user_method_return_resolver"
 require "type_guessr/core/types"
+require "ruby_lsp/type_guessr/index_adapter"
 
-# rubocop:disable RSpec/MultipleMemoizedHelpers, RSpec/VerifiedDoubles, RSpec/ContextWording
+module TypeGuessrSpec
+  MockLocation = Struct.new(:start_line, :end_line, :start_column, :end_column, keyword_init: true)
+  MockURI = Struct.new(:path, keyword_init: true) do
+    def to_s
+      "file://#{path}"
+    end
+  end
+  MockEntry = Struct.new(:uri, :location, keyword_init: true)
+end
+
 RSpec.describe TypeGuessr::Core::UserMethodReturnResolver do
-  let(:index_adapter) { double("IndexAdapter") }
+  let(:index_adapter) { instance_double(RubyLsp::TypeGuessr::IndexAdapter) }
   let(:resolver) { described_class.new(index_adapter) }
-  let(:nil_class_type) { TypeGuessr::Core::Types::ClassInstance.new("NilClass") }
-  let(:string_type) { TypeGuessr::Core::Types::ClassInstance.new("String") }
-  let(:integer_type) { TypeGuessr::Core::Types::ClassInstance.new("Integer") }
-  let(:unknown_type) { TypeGuessr::Core::Types::Unknown.instance }
 
   describe "#get_return_type" do
     context "when method has empty body" do
@@ -27,7 +33,7 @@ RSpec.describe TypeGuessr::Core::UserMethodReturnResolver do
 
         result = resolver.get_return_type("Animal", "eat")
 
-        expect(result).to eq(nil_class_type)
+        expect(result).to eq(TypeGuessr::Core::Types::ClassInstance.new("NilClass"))
       end
     end
 
@@ -44,7 +50,7 @@ RSpec.describe TypeGuessr::Core::UserMethodReturnResolver do
 
         result = resolver.get_return_type("User", "name")
 
-        expect(result).to eq(string_type)
+        expect(result).to eq(TypeGuessr::Core::Types::ClassInstance.new("String"))
       end
 
       it "returns Integer for integer literal" do
@@ -59,7 +65,7 @@ RSpec.describe TypeGuessr::Core::UserMethodReturnResolver do
 
         result = resolver.get_return_type("User", "age")
 
-        expect(result).to eq(integer_type)
+        expect(result).to eq(TypeGuessr::Core::Types::ClassInstance.new("Integer"))
       end
     end
 
@@ -76,7 +82,7 @@ RSpec.describe TypeGuessr::Core::UserMethodReturnResolver do
 
         result = resolver.get_return_type("Greeter", "greet")
 
-        expect(result).to eq(string_type)
+        expect(result).to eq(TypeGuessr::Core::Types::ClassInstance.new("String"))
       end
     end
 
@@ -86,7 +92,7 @@ RSpec.describe TypeGuessr::Core::UserMethodReturnResolver do
 
         result = resolver.get_return_type("Foo", "missing")
 
-        expect(result).to eq(unknown_type)
+        expect(result).to eq(TypeGuessr::Core::Types::Unknown.instance)
       end
 
       it "returns Unknown when entries array is empty" do
@@ -94,7 +100,7 @@ RSpec.describe TypeGuessr::Core::UserMethodReturnResolver do
 
         result = resolver.get_return_type("Foo", "missing")
 
-        expect(result).to eq(unknown_type)
+        expect(result).to eq(TypeGuessr::Core::Types::Unknown.instance)
       end
     end
 
@@ -105,11 +111,11 @@ RSpec.describe TypeGuessr::Core::UserMethodReturnResolver do
 
         result = resolver.get_return_type("Bar", "foo")
 
-        expect(result).to eq(unknown_type)
+        expect(result).to eq(TypeGuessr::Core::Types::Unknown.instance)
       end
     end
 
-    context "caching behavior" do
+    context "when results are cached" do
       it "caches results to avoid repeated analysis" do
         source = <<~RUBY
           def cached_method
@@ -125,14 +131,14 @@ RSpec.describe TypeGuessr::Core::UserMethodReturnResolver do
         # Second call
         result2 = resolver.get_return_type("Test", "cached_method")
 
-        expect(result1).to eq(string_type)
-        expect(result2).to eq(string_type)
+        expect(result1).to eq(TypeGuessr::Core::Types::ClassInstance.new("String"))
+        expect(result2).to eq(TypeGuessr::Core::Types::ClassInstance.new("String"))
         # Verify index_adapter was called only once
         expect(index_adapter).to have_received(:resolve_method).once
       end
     end
 
-    context "depth limit" do
+    context "when depth limit is exceeded" do
       it "returns Unknown when max depth is exceeded" do
         source = <<~RUBY
           def recursive
@@ -145,7 +151,7 @@ RSpec.describe TypeGuessr::Core::UserMethodReturnResolver do
 
         result = resolver.get_return_type("Test", "recursive", depth: 10)
 
-        expect(result).to eq(unknown_type)
+        expect(result).to eq(TypeGuessr::Core::Types::Unknown.instance)
       end
     end
   end
@@ -164,17 +170,18 @@ RSpec.describe TypeGuessr::Core::UserMethodReturnResolver do
     lines = source.lines.count
 
     # Create mock entry
-    location = double("Location",
-                      start_line: 1,
-                      end_line: lines,
-                      start_column: 0,
-                      end_column: 0)
+    location = TypeGuessrSpec::MockLocation.new(
+      start_line: 1,
+      end_line: lines,
+      start_column: 0,
+      end_column: 0
+    )
 
-    uri = double("URI", to_s: "file://#{file_path}")
+    uri = TypeGuessrSpec::MockURI.new(path: file_path)
 
-    double("Entry",
-           uri: uri,
-           location: location)
+    TypeGuessrSpec::MockEntry.new(
+      uri: uri,
+      location: location
+    )
   end
 end
-# rubocop:enable RSpec/MultipleMemoizedHelpers, RSpec/VerifiedDoubles, RSpec/ContextWording
