@@ -222,11 +222,8 @@ RSpec.describe "Hover Integration" do
 
       response = hover_on_source(source, { line: 25, character: 12 })
 
-      expect(response.contents.value).to match(/Ambiguous type/)
-      expect(response.contents.value).to match(/\.\.\./)
-      main_content = response.contents.value.split("**[TypeGuessr Debug]").first
-      class_count = main_content.scan(/`Class[A-E]`/).size
-      expect(class_count).to eq(3)
+      # When 4+ classes match, show untyped instead of listing them
+      expect(response.contents.value).to match(/untyped/)
     end
   end
 

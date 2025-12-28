@@ -58,6 +58,9 @@ module RubyLsp
           return [content, :method_calls, matching_types]
         end
 
+        # Priority 3: Show untyped if we have method calls but no matching types
+        return ["**Guessed type:** untyped", :untyped, nil] if type_info[:method_calls]&.any?
+
         # No type information available
         [nil, :unknown, nil]
       end
@@ -80,6 +83,10 @@ module RubyLsp
       # @param type_entries [Hash<String, Entry>] map of type name to entry for linking
       # @return [String] formatted type string
       def format_guessed_types(matching_types, type_entries)
+        # Check if results were truncated (4+ matches) - show untyped
+        truncated = matching_types.last == TypeMatcher::TRUNCATED_MARKER
+        return "**Guessed type:** untyped" if truncated
+
         case matching_types.size
         when 1
           type_obj = matching_types.first
@@ -87,12 +94,8 @@ module RubyLsp
           formatted_type = format_type_with_link(type_obj, type_entries[type_name])
           "**Guessed type:** #{formatted_type}"
         else
-          # Multiple matches - ambiguous (no links needed)
-          # Check if results were truncated (indicated by '...' marker)
-          truncated = matching_types.last == TypeMatcher::TRUNCATED_MARKER
-          display_types = truncated ? matching_types[0...-1] : matching_types
-          type_list = format_inline_list(display_types)
-          type_list += ", ..." if truncated
+          # 2-3 matches - ambiguous (no links needed)
+          type_list = format_inline_list(matching_types)
           "**Ambiguous type** (could be: #{type_list})"
         end
       end
@@ -138,7 +141,7 @@ module RubyLsp
       end
 
       # Format debug reason showing inference basis
-      # @param reason_type [Symbol] :direct_type, :method_calls, or :unknown
+      # @param reason_type [Symbol] :direct_type, :method_calls, :untyped, or :unknown
       # @param inferred_type [TypeGuessr::Core::Types::Type, Array<TypeGuessr::Core::Types::Type>, nil] the inferred type(s)
       # @param method_calls [Array<String>] array of method names
       # @return [String] formatted debug reason
@@ -155,6 +158,9 @@ module RubyLsp
           types = Array(inferred_type)
           content += "- Reason: Method call pattern matching\n"
           content += "- Matched types: #{format_inline_list(types)}\n"
+          content += "- Method calls: #{format_method_calls_list(method_calls)}\n"
+        when :untyped
+          content += "- Reason: No unique type match found\n"
           content += "- Method calls: #{format_method_calls_list(method_calls)}\n"
         when :unknown
           content += "- Reason: Unknown\n"
