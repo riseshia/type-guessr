@@ -6,7 +6,7 @@
 **Current Status:**
 - ✅ Phase 5 (MVP Hover Enhancement): COMPLETED
 - ✅ Phase 6 (Heuristic Fallback): COMPLETED
-- 🔄 Phase 7 (Code Quality & Refactoring): IN PROGRESS (7.1 partial, 7.2-7.5, 7.8 done)
+- 🔄 Phase 7 (Code Quality & Refactoring): ALMOST COMPLETE (only 7.6 remaining)
 - ✅ Phase 8 (Generic & Block Type Inference): COMPLETED
 - ✅ Phase 9 (Constant Alias Support): COMPLETED
 - ✅ Phase 10 (User-Defined Method Return Type Inference): COMPLETED
@@ -16,19 +16,17 @@
 
 ## Phase 7: Code Quality & Refactoring (Current Priority)
 
-### 7.1 Split hover.rb (High Priority) - Partial ✅
+### 7.1 Split hover.rb ✅
 
 **Problem:** `hover.rb` was 580 lines with multiple responsibilities mixed together.
 
 **Completed:**
 - [x] Extract `DefNodeFinder` to `lib/type_guessr/core/def_node_finder.rb` (commit: `dd4d542`)
 - [x] Extract literal type inference to `lib/type_guessr/core/literal_type_analyzer.rb` (Phase 7.2)
+- [x] Extract call chain resolution to `CallChainResolver` (commit: `7c11e8a`)
+- [x] Hover is now a thin coordinator that delegates to specialized handlers
 
-**Remaining:**
-- [ ] Consider extracting call chain resolution to dedicated class
-- [ ] Keep Hover as thin coordinator that delegates to specialized handlers
-
-**Current:** hover.rb is now 542 lines (down from 580)
+**Result:** hover.rb significantly reduced and responsibilities properly separated
 
 ### 7.2 Eliminate Duplicate Literal Type Inference ✅
 
@@ -82,13 +80,17 @@
 - [ ] If not, document why this workaround is necessary
 - [ ] Consider caching source at initialization if possible
 
-### 7.7 Refactor Similar FlowVisitor Methods (Low Priority)
+### 7.7 Refactor Similar FlowVisitor Methods ✅
 
 **Problem:** `visit_local_variable_or_write_node` and `visit_local_variable_and_write_node` in flow_analyzer.rb are nearly identical (lines 129-161).
 
 **Solution:**
-- [ ] Extract common logic to private helper method
-- [ ] Keep operator-specific semantics in visitor methods
+- [x] Extract common logic to private helper method
+- [x] Keep operator-specific semantics in visitor methods
+
+**Completed:** Extracted `handle_compound_assignment` helper. Reduced code from ~45 lines to ~20 lines.
+
+**Commit:** `b40bcd4`
 
 ### 7.8 Refactor UserMethodReturnResolver Test (Medium Priority)
 
@@ -301,12 +303,13 @@ Return Unknown / nil
 | Order | Task | Risk | Status |
 |-------|------|------|--------|
 | 1 | 7.2 Eliminate Duplicate Literal Inference | Low | ✅ Done |
-| 2 | 7.1 Split hover.rb | Medium | 🔄 Partial |
+| 2 | 7.1 Split hover.rb | Medium | ✅ Done |
 | 3 | 7.3 Cache RBSProvider | Low | ✅ Done |
 | 4 | 7.4 Reduce Verbose Type References | Low | ✅ Done |
 | 5 | 7.5 Extract Magic Numbers | Low | ✅ Done |
 | 6 | 7.8 Refactor UserMethodReturnResolver Test | Medium | ✅ Done |
-| 7 | 7.6-7.7 Minor cleanups | Low | Pending |
+| 7 | 7.7 Refactor FlowVisitor Methods | Low | ✅ Done |
+| 8 | 7.6 Replace __send__ Protected Method Access | Low | Pending |
 
 **Rationale:** Start with duplication elimination (7.2) as it's lower risk and enables cleaner split of hover.rb (7.1). 7.8 added to remove RuboCop disables from Phase 10 test.
 
