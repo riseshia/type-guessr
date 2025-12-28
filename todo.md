@@ -75,6 +75,18 @@ Return Unknown / nil
 
 ## Future Work (Post-MVP)
 
+### Variable Name-Based Type Inference (Priority: High)
+- [ ] Plural names (`users`, `items`) → Array type
+- [ ] `_id`, `_count`, `_num` suffix → Integer type
+- [ ] `_name`, `_title` suffix → String type
+- Reference: "Sound, Heuristic Type Annotation Inference for Ruby" (2020) - reported 30% improvement
+
+### DSL Support (Priority: Low)
+- [ ] General Ruby DSL pattern support
+- [ ] Extensible interface for custom type providers
+- [ ] Rails DSL support (ActiveRecord::Relation deferred - complex)
+- Note: Basic support via ruby-lsp/ruby-lsp-rails indexer already working
+
 ### Extended Inference
 - [ ] Operations (`+`, `*`, etc.) type inference
 - [ ] Flow-sensitive refinement through branches/loops
