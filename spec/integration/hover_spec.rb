@@ -997,5 +997,101 @@ RSpec.describe "Hover Integration" do
       expect(content).to match(/User|Post|Ambiguous/i)
     end
   end
+
+  describe "Constant Alias Support (Phase 9)" do
+    it "resolves simple constant alias in .new calls" do
+      source = <<~RUBY
+        class Recipe
+          def validate!
+          end
+        end
+
+        RecipeAlias = Recipe
+
+        def create_recipe
+          result = RecipeAlias.new
+          result
+        end
+      RUBY
+
+      # Hover on "result" variable
+      response = hover_on_source(source, { line: 9, character: 2 })
+
+      expect(response).not_to be_nil
+      # Should show Recipe type (resolved from alias)
+      expect(response.contents.value).to match(/Recipe/)
+    end
+
+    it "resolves constant alias with full path" do
+      source = <<~RUBY
+        module MyApp
+          class Service
+            def perform
+            end
+          end
+        end
+
+        ServiceAlias = MyApp::Service
+
+        def execute
+          svc = ServiceAlias.new
+          svc
+        end
+      RUBY
+
+      # Hover on "svc" variable
+      response = hover_on_source(source, { line: 11, character: 2 })
+
+      expect(response).not_to be_nil
+      # Should show Service type
+      expect(response.contents.value).to match(/Service/)
+    end
+
+    it "resolves chained constant aliases" do
+      source = <<~RUBY
+        class Worker
+          def execute
+          end
+        end
+
+        WorkerAlias1 = Worker
+        WorkerAlias2 = WorkerAlias1
+
+        def start
+          w = WorkerAlias2.new
+          w
+        end
+      RUBY
+
+      # Hover on "w" variable
+      response = hover_on_source(source, { line: 10, character: 2 })
+
+      expect(response).not_to be_nil
+      # Should show Worker type (resolved through chain)
+      expect(response.contents.value).to match(/Worker/)
+    end
+
+    it "handles non-alias constants normally" do
+      source = <<~RUBY
+        CONFIG = Rails.configuration
+
+        class Task
+          def run
+          end
+        end
+
+        def perform
+          t = Task.new
+          t
+        end
+      RUBY
+
+      # Hover on "t" - Task is not an alias
+      response = hover_on_source(source, { line: 9, character: 2 })
+
+      expect(response).not_to be_nil
+      expect(response.contents.value).to match(/Task/)
+    end
+  end
 end
 # rubocop:enable RSpec/DescribeClass

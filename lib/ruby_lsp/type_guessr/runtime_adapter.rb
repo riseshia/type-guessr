@@ -5,6 +5,7 @@ require "prism"
 require_relative "../../type_guessr/version" if !defined?(TypeGuessr::VERSION)
 require_relative "../../type_guessr/core/ast_analyzer"
 require_relative "../../type_guessr/core/variable_index"
+require_relative "../../type_guessr/core/constant_index"
 require_relative "type_inferrer"
 
 module RubyLsp
@@ -151,6 +152,7 @@ module RubyLsp
       # Clear all index entries for a specific file
       def clear_file_index(file_path)
         VariableIndex.instance.clear_file(file_path)
+        ::TypeGuessr::Core::ConstantIndex.instance.clear_file(file_path)
         log_message("Cleared index for file: #{file_path}")
       rescue StandardError => e
         log_message("Error clearing index for #{file_path}: #{e.message}")

@@ -583,4 +583,113 @@ RSpec.describe TypeGuessr::Core::ASTAnalyzer do
       expect(type.name).to eq("Item")
     end
   end
+
+  describe "constant alias tracking (Phase 9.2)" do
+    subject(:constant_index) { TypeGuessr::Core::ConstantIndex.instance }
+
+    before do
+      constant_index.clear
+    end
+
+    it "tracks simple constant aliases" do
+      source = <<~RUBY
+        Types = ::TypeGuessr::Core::Types
+      RUBY
+
+      parse_and_visit(source, "/test/file.rb")
+
+      resolved = constant_index.resolve_alias("Types")
+      expect(resolved).to eq("::TypeGuessr::Core::Types")
+    end
+
+    it "tracks constant aliases within modules" do
+      source = <<~RUBY
+        module MyApp
+          Types = ::TypeGuessr::Core::Types
+        end
+      RUBY
+
+      parse_and_visit(source, "/test/file.rb")
+
+      resolved = constant_index.resolve_alias("MyApp::Types")
+      expect(resolved).to eq("::TypeGuessr::Core::Types")
+    end
+
+    it "tracks constant aliases within nested modules" do
+      source = <<~RUBY
+        module Outer
+          module Inner
+            Types = ::TypeGuessr::Core::Types
+          end
+        end
+      RUBY
+
+      parse_and_visit(source, "/test/file.rb")
+
+      resolved = constant_index.resolve_alias("Outer::Inner::Types")
+      expect(resolved).to eq("::TypeGuessr::Core::Types")
+    end
+
+    it "tracks constant path aliases" do
+      source = <<~RUBY
+        module MyApp
+          Config::Types = ::TypeGuessr::Core::Types
+        end
+      RUBY
+
+      parse_and_visit(source, "/test/file.rb")
+
+      # ConstantPathWriteNode uses the full slice
+      resolved = constant_index.resolve_alias("Config::Types")
+      expect(resolved).to eq("::TypeGuessr::Core::Types")
+    end
+
+    it "ignores non-constant RHS (method calls)" do
+      source = <<~RUBY
+        Config = Rails.configuration
+      RUBY
+
+      parse_and_visit(source, "/test/file.rb")
+
+      resolved = constant_index.resolve_alias("Config")
+      expect(resolved).to be_nil
+    end
+
+    it "ignores non-constant RHS (literals)" do
+      source = <<~RUBY
+        VALUE = 42
+      RUBY
+
+      parse_and_visit(source, "/test/file.rb")
+
+      resolved = constant_index.resolve_alias("VALUE")
+      expect(resolved).to be_nil
+    end
+
+    it "tracks multiple aliases in the same file" do
+      source = <<~RUBY
+        Types = ::TypeGuessr::Core::Types
+        Analyzer = ::TypeGuessr::Core::ASTAnalyzer
+      RUBY
+
+      parse_and_visit(source, "/test/file.rb")
+
+      expect(constant_index.resolve_alias("Types")).to eq("::TypeGuessr::Core::Types")
+      expect(constant_index.resolve_alias("Analyzer")).to eq("::TypeGuessr::Core::ASTAnalyzer")
+    end
+
+    it "resolves chained aliases with explicit FQN" do
+      source = <<~RUBY
+        Original = ::SomeModule::Thing
+        Alias1 = Original
+        Alias2 = Alias1
+      RUBY
+
+      parse_and_visit(source, "/test/file.rb")
+
+      # Alias2 → Alias1 → Original → ::SomeModule::Thing
+      resolved = constant_index.resolve_alias("Alias2")
+      expect(resolved).to eq("::SomeModule::Thing")
+    end
+  end
 end

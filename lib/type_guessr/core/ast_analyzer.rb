@@ -3,6 +3,7 @@
 require "prism"
 require_relative "scope_resolver"
 require_relative "variable_index"
+require_relative "constant_index"
 require_relative "types"
 require_relative "literal_type_analyzer"
 
@@ -16,6 +17,7 @@ module TypeGuessr
         super()
         @file_path = file_path
         @index = VariableIndex.instance
+        @constant_index = ConstantIndex.instance
         @scopes = [{}] # Stack of scopes for local variables
         @instance_variables = [{}] # Stack of scopes for instance variables (class level)
         @class_variables = [{}] # Stack of scopes for class variables (class level)
@@ -266,6 +268,50 @@ module TypeGuessr
         @class_stack.pop
       end
 
+      # Track constant aliases (Phase 9.2)
+      # Example: Types = ::TypeGuessr::Core::Types
+      def visit_constant_write_node(node)
+        return super unless valid_constant_alias_rhs?(node.value)
+
+        constant_name = node.name.to_s
+        constant_fqn = build_constant_fqn(constant_name)
+        target_fqn = extract_constant_target(node.value)
+
+        if target_fqn
+          @constant_index.add_alias(
+            file_path: @file_path,
+            constant_fqn: constant_fqn,
+            target_fqn: target_fqn,
+            line: node.location.start_line,
+            column: node.location.start_column
+          )
+        end
+
+        super
+      end
+
+      # Track constant path aliases (Phase 9.2)
+      # Example: A::Types = ::TypeGuessr::Core::Types
+      def visit_constant_path_write_node(node)
+        return super unless valid_constant_alias_rhs?(node.value)
+
+        # For constant paths like A::B::Types, extract the full path
+        constant_path = node.target.slice
+        target_fqn = extract_constant_target(node.value)
+
+        if target_fqn
+          @constant_index.add_alias(
+            file_path: @file_path,
+            constant_fqn: constant_path,
+            target_fqn: target_fqn,
+            line: node.location.start_line,
+            column: node.location.start_column
+          )
+        end
+
+        super
+      end
+
       private
 
       # Analyze a value node and return its guessed type
@@ -287,15 +333,24 @@ module TypeGuessr
 
       # Extract class name from a receiver node (for .new calls)
       # Resolves short names to fully qualified names using current nesting context
+      # Phase 9.3: Also resolves constant aliases
       # @param receiver [Prism::Node] the receiver node
       # @return [String, nil] the class name or nil
       def extract_class_name_from_receiver(receiver)
         case receiver
         when Prism::ConstantReadNode
           short_name = receiver.name.to_s
-          resolve_constant_to_fqn(short_name)
+          fqn = resolve_constant_to_fqn(short_name)
+
+          # Phase 9.3: Check if it's an alias and resolve it
+          resolved = @constant_index.resolve_alias(fqn)
+          resolved || fqn
         when Prism::ConstantPathNode
-          receiver.slice
+          path = receiver.slice
+
+          # Phase 9.3: Check if it's an alias and resolve it
+          resolved = @constant_index.resolve_alias(path)
+          resolved || path
         end
       end
 
@@ -446,6 +501,38 @@ module TypeGuessr
           receiver_var: receiver_var,
           methods: methods.reverse
         }
+      end
+
+      # Check if the right-hand side of a constant assignment is a valid alias
+      # Valid aliases are ConstantReadNode or ConstantPathNode (not method calls, literals, etc.)
+      # @param node [Prism::Node] the RHS node
+      # @return [Boolean] true if valid alias RHS
+      def valid_constant_alias_rhs?(node)
+        node.is_a?(Prism::ConstantReadNode) || node.is_a?(Prism::ConstantPathNode)
+      end
+
+      # Build a fully qualified constant name using current nesting
+      # @param name [String] the constant name
+      # @return [String] the FQN
+      def build_constant_fqn(name)
+        return name if @class_stack.empty?
+
+        "#{@class_stack.join("::")}::#{name}"
+      end
+
+      # Extract the target constant path from an alias RHS
+      # @param node [Prism::Node] the RHS node (ConstantReadNode or ConstantPathNode)
+      # @return [String, nil] the target constant FQN
+      def extract_constant_target(node)
+        case node
+        when Prism::ConstantReadNode
+          # Simple constant reference: resolve to FQN
+          short_name = node.name.to_s
+          resolve_constant_to_fqn(short_name)
+        when Prism::ConstantPathNode
+          # Already a full path, return as-is
+          node.slice
+        end
       end
     end
   end

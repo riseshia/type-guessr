@@ -8,6 +8,7 @@ require_relative "../../type_guessr/core/rbs_provider"
 require_relative "../../type_guessr/core/flow_analyzer"
 require_relative "../../type_guessr/core/literal_type_analyzer"
 require_relative "../../type_guessr/core/def_node_finder"
+require_relative "../../type_guessr/core/constant_index"
 
 module RubyLsp
   module TypeGuessr
@@ -54,6 +55,7 @@ module RubyLsp
         @global_state = global_state
         @type_resolver = VariableTypeResolver.new(node_context, global_state)
         @content_builder = HoverContentBuilder.new(global_state)
+        @constant_index = ::TypeGuessr::Core::ConstantIndex.instance
 
         register_listeners(dispatcher)
       end
@@ -323,14 +325,23 @@ module RubyLsp
       end
 
       # Extract class name from .new call receiver
+      # Phase 9.3: Also resolves constant aliases
       # @param receiver [Prism::Node] the receiver node
       # @return [String, nil] the class name or nil
       def extract_class_name_from_new_call(receiver)
         case receiver
         when Prism::ConstantReadNode
-          receiver.name.to_s
+          name = receiver.name.to_s
+
+          # Phase 9.3: Check if it's an alias and resolve it
+          resolved = @constant_index.resolve_alias(name)
+          resolved || name
         when Prism::ConstantPathNode
-          receiver.slice
+          path = receiver.slice
+
+          # Phase 9.3: Check if it's an alias and resolve it
+          resolved = @constant_index.resolve_alias(path)
+          resolved || path
         end
       end
 
