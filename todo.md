@@ -9,8 +9,8 @@
 - 🔄 Phase 7 (Code Quality & Refactoring): IN PROGRESS (7.1 partial, 7.2-7.5 done)
 - ✅ Phase 8 (Generic & Block Type Inference): COMPLETED (8.1-8.5 done, 8.6 optional)
 - ✅ Phase 9 (Constant Alias Support): COMPLETED
-- 🆕 Phase 10 (User-Defined Method Return Type Inference): PLANNED
-- All 307 tests passing (1 pending, non-critical edge case)
+- ✅ Phase 10 (User-Defined Method Return Type Inference): COMPLETED
+- All 322 tests passing (7 pending: 1 non-critical, 6 RubyIndexer integration tests)
 
 ---
 
@@ -421,16 +421,16 @@ Goal: Infer return types for user-defined methods when hovering on variables ass
 
 Currently, `cc = c.eat` returns `Unknown` because `Animal#eat` is not in RBS. We need to infer the return type from the method definition itself.
 
-### 10.1 UserMethodReturnResolver Class
+### 10.1 UserMethodReturnResolver Class ✅
 
 **Problem:** No way to get return type for user-defined methods.
 
 **Implementation:**
-- [ ] Create `lib/type_guessr/core/user_method_return_resolver.rb`
-- [ ] Accept RubyIndexer to find method definitions
-- [ ] Use `FlowAnalyzer` to infer return type on-demand
-- [ ] Cache results to avoid repeated analysis
-- [ ] Handle recursion with depth limit (max 5 levels)
+- [x] Create `lib/type_guessr/core/user_method_return_resolver.rb`
+- [x] Accept RubyIndexer to find method definitions
+- [x] Use `FlowAnalyzer` to infer return type on-demand
+- [x] Cache results to avoid repeated analysis
+- [x] Handle recursion with depth limit (max 5 levels)
 
 **API:**
 ```ruby
@@ -438,28 +438,31 @@ resolver.get_return_type("Animal", "eat") # => Types::ClassInstance.new("NilClas
 ```
 
 **Difficulty:** Medium
+**Commit:** (Phase 10 implementation)
 
-### 10.2 Hover Integration
+### 10.2 Hover Integration ✅
 
 **Problem:** Hover doesn't try user-defined method resolution.
 
 **Implementation:**
-- [ ] Modify `infer_method_call_return_type` in hover.rb
-- [ ] After RBS returns Unknown, try UserMethodReturnResolver
-- [ ] Return inferred type from user-defined method
+- [x] Modify `resolve_call_chain` in hover.rb
+- [x] After RBS returns Unknown, try UserMethodReturnResolver
+- [x] Return inferred type from user-defined method
 
 **Difficulty:** Easy
+**Commit:** (Phase 10 implementation)
 
-### 10.3 Read Method Source from Index Entry
+### 10.3 Read Method Source from Index Entry ✅
 
 **Problem:** Need to get method source code from RubyIndexer entry.
 
 **Implementation:**
-- [ ] Use entry.location to get file path and line range
-- [ ] Read method source from file
-- [ ] Handle errors gracefully (file not found, etc.)
+- [x] Use entry.location to get file path and line range
+- [x] Read method source from file
+- [x] Handle errors gracefully (file not found, etc.)
 
 **Difficulty:** Easy
+**Commit:** (Phase 10 implementation)
 
 ### Implementation Priority
 

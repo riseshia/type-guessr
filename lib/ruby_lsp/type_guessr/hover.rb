@@ -4,11 +4,13 @@ require "prism"
 require_relative "config"
 require_relative "variable_type_resolver"
 require_relative "hover_content_builder"
+require_relative "index_adapter"
 require_relative "../../type_guessr/core/rbs_provider"
 require_relative "../../type_guessr/core/flow_analyzer"
 require_relative "../../type_guessr/core/literal_type_analyzer"
 require_relative "../../type_guessr/core/def_node_finder"
 require_relative "../../type_guessr/core/constant_index"
+require_relative "../../type_guessr/core/user_method_return_resolver"
 
 module RubyLsp
   module TypeGuessr
@@ -112,7 +114,9 @@ module RubyLsp
       FlowAnalyzer = ::TypeGuessr::Core::FlowAnalyzer
       DefNodeFinder = ::TypeGuessr::Core::DefNodeFinder
       RBSProvider = ::TypeGuessr::Core::RBSProvider
-      private_constant :Types, :TypeFormatter, :LiteralTypeAnalyzer, :FlowAnalyzer, :DefNodeFinder, :RBSProvider
+      UserMethodReturnResolver = ::TypeGuessr::Core::UserMethodReturnResolver
+      private_constant :Types, :TypeFormatter, :LiteralTypeAnalyzer, :FlowAnalyzer, :DefNodeFinder, :RBSProvider,
+                       :UserMethodReturnResolver
 
       private
 
@@ -120,6 +124,39 @@ module RubyLsp
       # @return [TypeGuessr::Core::RBSProvider]
       def rbs_provider
         @rbs_provider ||= RBSProvider.new
+      end
+
+      # Cached IndexAdapter instance for accessing RubyIndexer
+      # @return [RubyLsp::TypeGuessr::IndexAdapter, nil]
+      def index_adapter
+        @index_adapter ||= begin
+          index = extract_index(@global_state)
+          index ? IndexAdapter.new(index) : nil
+        end
+      end
+
+      # Cached UserMethodReturnResolver instance for user-defined method analysis
+      # @return [TypeGuessr::Core::UserMethodReturnResolver, nil]
+      def user_method_resolver
+        @user_method_resolver ||= begin
+          adapter = index_adapter
+          adapter ? UserMethodReturnResolver.new(adapter) : nil
+        end
+      end
+
+      # Extract index from global_state or return nil
+      # @param global_state_or_index [Object, nil] either GlobalState (has .index) or RubyIndexer::Index directly
+      # @return [RubyIndexer::Index, nil]
+      def extract_index(global_state_or_index)
+        return nil if global_state_or_index.nil?
+
+        # If it responds to .index, it's a GlobalState
+        if global_state_or_index.respond_to?(:index)
+          global_state_or_index.index
+        else
+          # Otherwise assume it's already an index
+          global_state_or_index
+        end
       end
 
       def register_listeners(dispatcher)
@@ -225,7 +262,17 @@ module RubyLsp
         end
 
         # 3. Get method return type from RBS
-        rbs_provider.get_method_return_type(extract_type_name(receiver_type), node.name.to_s)
+        type = rbs_provider.get_method_return_type(extract_type_name(receiver_type), node.name.to_s)
+
+        # 4. Phase 10: If RBS returns Unknown, try user-defined method analysis
+        if type == Types::Unknown.instance && user_method_resolver
+          type = user_method_resolver.get_return_type(
+            extract_type_name(receiver_type),
+            node.name.to_s
+          )
+        end
+
+        type
       end
 
       # Resolve variable type using existing VariableTypeResolver
