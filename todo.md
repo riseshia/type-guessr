@@ -9,7 +9,8 @@
 - 🔄 Phase 7 (Code Quality & Refactoring): IN PROGRESS (7.1 partial, 7.2-7.5 done)
 - ✅ Phase 8 (Generic & Block Type Inference): COMPLETED (8.1-8.5 done, 8.6 optional)
 - ✅ Phase 9 (Constant Alias Support): COMPLETED
-- All 304 tests passing (1 pending, non-critical edge case)
+- 🆕 Phase 10 (User-Defined Method Return Type Inference): PLANNED
+- All 307 tests passing (1 pending, non-critical edge case)
 
 ---
 
@@ -409,3 +410,72 @@ Goal: Enable type inference through constant aliases like `Types = ::TypeGuessr:
 | 4 | 9.4 Hover Support | Easy | 9.2 |
 
 **Rationale:** 9.1 and 9.2 establish the foundation. 9.3 provides the core value (type inference through aliases). 9.4 is a nice-to-have UX improvement.
+
+---
+
+## Phase 10: User-Defined Method Return Type Inference
+
+Goal: Infer return types for user-defined methods when hovering on variables assigned from method calls.
+
+### Background
+
+Currently, `cc = c.eat` returns `Unknown` because `Animal#eat` is not in RBS. We need to infer the return type from the method definition itself.
+
+### 10.1 UserMethodReturnResolver Class
+
+**Problem:** No way to get return type for user-defined methods.
+
+**Implementation:**
+- [ ] Create `lib/type_guessr/core/user_method_return_resolver.rb`
+- [ ] Accept RubyIndexer to find method definitions
+- [ ] Use `FlowAnalyzer` to infer return type on-demand
+- [ ] Cache results to avoid repeated analysis
+- [ ] Handle recursion with depth limit (max 5 levels)
+
+**API:**
+```ruby
+resolver.get_return_type("Animal", "eat") # => Types::ClassInstance.new("NilClass")
+```
+
+**Difficulty:** Medium
+
+### 10.2 Hover Integration
+
+**Problem:** Hover doesn't try user-defined method resolution.
+
+**Implementation:**
+- [ ] Modify `infer_method_call_return_type` in hover.rb
+- [ ] After RBS returns Unknown, try UserMethodReturnResolver
+- [ ] Return inferred type from user-defined method
+
+**Difficulty:** Easy
+
+### 10.3 Read Method Source from Index Entry
+
+**Problem:** Need to get method source code from RubyIndexer entry.
+
+**Implementation:**
+- [ ] Use entry.location to get file path and line range
+- [ ] Read method source from file
+- [ ] Handle errors gracefully (file not found, etc.)
+
+**Difficulty:** Easy
+
+### Implementation Priority
+
+| Order | Task | Difficulty | Dependencies |
+|-------|------|------------|--------------|
+| 1 | 10.1 UserMethodReturnResolver | Medium | None |
+| 2 | 10.3 Read Method Source | Easy | 10.1 |
+| 3 | 10.2 Hover Integration | Easy | 10.1 |
+
+**Expected Outcome:**
+```ruby
+class Animal
+  def eat; end
+end
+
+c = Animal.new
+cc = c.eat
+# Hover on cc → Guessed type: NilClass
+```
