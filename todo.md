@@ -90,6 +90,24 @@
 - [ ] Extract common logic to private helper method
 - [ ] Keep operator-specific semantics in visitor methods
 
+### 7.8 Refactor UserMethodReturnResolver Test (Medium Priority)
+
+**Problem:** `spec/type_guessr/core/user_method_return_resolver_spec.rb` has too many RuboCop disables:
+- `RSpec/MultipleMemoizedHelpers` - 6 let statements (limit is 5)
+- `RSpec/VerifiedDoubles` - Using `double()` instead of verified doubles
+- `RSpec/ContextWording` - Context descriptions don't follow conventions
+
+**Solution:**
+- [ ] Reduce memoized helpers by inlining type constants or grouping related ones
+- [ ] Use `instance_double()` for IndexAdapter and Entry instead of `double()`
+- [ ] Rename contexts to follow conventions:
+  - "caching behavior" → "when caching results"
+  - "depth limit" → "when depth limit is exceeded"
+- [ ] Remove `# rubocop:disable` and `# rubocop:enable` comments
+
+**Files:**
+- `spec/type_guessr/core/user_method_return_resolver_spec.rb`
+
 ---
 
 ## Phase 8: Generic & Block Type Inference
@@ -298,9 +316,10 @@ Return Unknown / nil
 | 3 | 7.3 Cache RBSProvider | Low | ✅ Done |
 | 4 | 7.4 Reduce Verbose Type References | Low | ✅ Done |
 | 5 | 7.5 Extract Magic Numbers | Low | ✅ Done |
-| 6 | 7.6-7.7 Minor cleanups | Low | Pending |
+| 6 | 7.8 Refactor UserMethodReturnResolver Test | Medium | Pending |
+| 7 | 7.6-7.7 Minor cleanups | Low | Pending |
 
-**Rationale:** Start with duplication elimination (7.2) as it's lower risk and enables cleaner split of hover.rb (7.1)
+**Rationale:** Start with duplication elimination (7.2) as it's lower risk and enables cleaner split of hover.rb (7.1). 7.8 added to remove RuboCop disables from Phase 10 test.
 
 ### Phase 8 (Generic & Block Types)
 
