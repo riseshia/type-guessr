@@ -707,11 +707,44 @@ end
 
 ---
 
+### 9. Variable Reassignment Type Not Updated
+
+**Problem:** Variable type not updated when reassigned to a different type.
+
+**Example:**
+```ruby
+a = [1,2,3]          # Array[Integer]
+a = { a: 1, b: 2 }   # Still shows Array[Integer] instead of Hash
+```
+
+**Why Important:**
+- Core functionality bug affecting type inference accuracy
+- Variable reassignment is common in Ruby code
+- Incorrect types lead to wrong Go to Definition targets
+
+**Potential Causes:**
+1. Scope ID mismatch between AST analysis and hover lookup
+2. Definition not being indexed for reassignment
+3. Method calls lookup overriding direct type lookup
+
+**Investigation Needed:**
+- [ ] Add debug logging to trace type lookup flow
+- [ ] Write failing test case reproducing the bug
+- [ ] Check if scope_id matches between storage and retrieval
+- [ ] Verify Hash literal is stored in `@types` index
+
+**Locations:**
+- `lib/type_guessr/core/variable_index.rb:232-255` - `find_variable_type_at_location`
+- `lib/type_guessr/core/type_resolver.rb:79-125` - `get_direct_type`
+- `lib/type_guessr/core/ast_analyzer.rb:30-130` - variable write visitors
+
+---
+
 ## 🟡 P2: Quality Improvements
 
 > Code quality and maintainability improvements. Important but can be deferred after P0/P1.
 
-### 9. Test Coverage Gaps
+### 10. Test Coverage Gaps
 
 **Problem:** Missing critical test scenarios for production readiness.
 
@@ -819,7 +852,7 @@ end
 
 ---
 
-### 10. Variable Name-Based Type Inference
+### 11. Variable Name-Based Type Inference
 
 **Problem:** Not using variable naming conventions for type hints.
 
@@ -846,7 +879,7 @@ end
 
 ---
 
-### 11. Config Class Design Issues
+### 12. Config Class Design Issues
 
 **Problem:** Configuration responsibilities scattered and not cohesive.
 
@@ -946,7 +979,7 @@ end
 
 ---
 
-### 12. Extended Inference (Operations)
+### 13. Extended Inference (Operations)
 
 **Problem:** No type inference for operations like `+`, `*`, etc.
 
@@ -969,7 +1002,7 @@ end
 
 ---
 
-### 13. UX Improvements
+### 14. UX Improvements
 
 **Problem:** Hover can show too much information or miss useful information.
 
@@ -989,7 +1022,7 @@ end
 
 ---
 
-### 14. Replace `__send__` Protected Method Access
+### 15. Replace `__send__` Protected Method Access
 
 **Problem:** `node.location.__send__(:source)` accesses protected method - fragile.
 
@@ -1008,7 +1041,7 @@ end
 
 > Long-term vision and extensibility. Can be deferred until core functionality is solid.
 
-### 15. Documentation Improvements
+### 16. Documentation Improvements
 
 **Problem:** Missing architecture decisions and performance characteristics.
 
@@ -1156,7 +1189,7 @@ end
 
 ---
 
-### 16. DSL Support
+### 17. DSL Support
 
 **Problem:** Limited support for Ruby DSLs.
 
@@ -1174,7 +1207,7 @@ end
 
 ---
 
-### 17. Standalone API
+### 18. Standalone API
 
 **Problem:** Core library only usable within Ruby LSP.
 
