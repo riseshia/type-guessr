@@ -6,11 +6,11 @@
 **Current Status:**
 - ✅ Phase 5 (MVP Hover Enhancement): COMPLETED
 - ✅ Phase 6 (Heuristic Fallback): COMPLETED
-- 🔄 Phase 7 (Code Quality & Refactoring): IN PROGRESS (7.1 partial, 7.2-7.5 done)
-- ✅ Phase 8 (Generic & Block Type Inference): COMPLETED (8.1-8.5 done, 8.6 optional)
+- 🔄 Phase 7 (Code Quality & Refactoring): IN PROGRESS (7.1 partial, 7.2-7.5, 7.8 done)
+- ✅ Phase 8 (Generic & Block Type Inference): COMPLETED
 - ✅ Phase 9 (Constant Alias Support): COMPLETED
 - ✅ Phase 10 (User-Defined Method Return Type Inference): COMPLETED
-- All 322 tests passing (7 pending: 1 non-critical, 6 RubyIndexer integration tests)
+- All 327 tests passing (7 pending: 1 non-critical, 6 RubyIndexer integration tests)
 
 ---
 
@@ -210,17 +210,6 @@ end
 # Hovering on "recipe" → Guessed type: Recipe
 ```
 
-### 8.6 Structural Type Display (Optional)
-
-**Problem:** When TypeMatcher can't find unique match, no type info is shown.
-
-**Implementation:**
-- [ ] Add `Types::StructuralType` class with `required_methods` attribute
-- [ ] Display as `{ foo, bar, baz }` format
-- [ ] Use as fallback when nominal type matching fails
-
-**Difficulty:** Easy
-
 ---
 
 ## Performance Optimization (Future)
@@ -316,7 +305,7 @@ Return Unknown / nil
 | 3 | 7.3 Cache RBSProvider | Low | ✅ Done |
 | 4 | 7.4 Reduce Verbose Type References | Low | ✅ Done |
 | 5 | 7.5 Extract Magic Numbers | Low | ✅ Done |
-| 6 | 7.8 Refactor UserMethodReturnResolver Test | Medium | Pending |
+| 6 | 7.8 Refactor UserMethodReturnResolver Test | Medium | ✅ Done |
 | 7 | 7.6-7.7 Minor cleanups | Low | Pending |
 
 **Rationale:** Start with duplication elimination (7.2) as it's lower risk and enables cleaner split of hover.rb (7.1). 7.8 added to remove RuboCop disables from Phase 10 test.
@@ -330,9 +319,8 @@ Return Unknown / nil
 | 3 | 8.3 Block parameter type inference | Medium | ✅ Done |
 | 4 | 8.4 Hash type inference | Easy | ✅ Done |
 | 5 | 8.5 Method parameter inference | Medium | ✅ Done |
-| 6 | 8.6 Structural type display | Easy | Optional |
 
-**Rationale:** 8.1 and 8.2 form the foundation for generic type flow. 8.3 (block params) is the most impactful feature and depends on both. 8.4-8.6 are independent improvements.
+**Rationale:** 8.1 and 8.2 form the foundation for generic type flow. 8.3 (block params) is the most impactful feature and depends on both.
 
 ---
 
