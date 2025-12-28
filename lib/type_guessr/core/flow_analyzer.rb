@@ -79,6 +79,9 @@ module TypeGuessr
             last_expr = node.body.body.last
             last_type = infer_type_from_node(last_expr)
             @method_returns << last_type unless last_type == Types::Unknown.instance
+          elsif node.body.nil? || (node.body.is_a?(Prism::StatementsNode) && node.body.body.empty?)
+            # Empty method body returns nil implicitly
+            @method_returns << Types::ClassInstance.new("NilClass")
           end
 
           # Infer return type from collected returns

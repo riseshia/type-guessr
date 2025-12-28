@@ -159,5 +159,17 @@ RSpec.describe TypeGuessr::Core::FlowAnalyzer do
       expect(return_type).to be_a(TypeGuessr::Core::Types::Union)
       expect(return_type.types).to contain_exactly(string_type, integer_type)
     end
+
+    it "infers NilClass from empty method body" do
+      source = <<~RUBY
+        def eat
+        end
+      RUBY
+
+      result = analyzer.analyze(source)
+      return_type = result.return_type_for_method("eat")
+
+      expect(return_type).to eq(TypeGuessr::Core::Types::ClassInstance.new("NilClass"))
+    end
   end
 end

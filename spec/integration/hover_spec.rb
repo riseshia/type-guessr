@@ -841,6 +841,22 @@ RSpec.describe "Hover Integration" do
       expect(response.contents.value).to match(/String/)
     end
 
+    it "shows NilClass for empty method body" do
+      source = <<~RUBY
+        class Animal
+          def eat
+          end
+        end
+      RUBY
+
+      # Hover on method name "eat"
+      response = hover_on_source(source, { line: 1, character: 6 })
+
+      expect(response).not_to be_nil
+      expect(response.contents.value).to match(/NilClass/)
+      expect(response.contents.value).not_to match(/untyped/)
+    end
+
     it "handles keyword parameters" do
       source = <<~RUBY
         def configure(name:, timeout: 30)
