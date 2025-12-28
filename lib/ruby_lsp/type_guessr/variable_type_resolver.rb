@@ -78,9 +78,10 @@ module RubyLsp
         entries
       end
 
-      # Type system shortcut
+      # Core layer shortcuts
       Types = ::TypeGuessr::Core::Types
-      private_constant :Types
+      ScopeResolver = ::TypeGuessr::Core::ScopeResolver
+      private_constant :Types, :ScopeResolver
 
       private
 
@@ -138,7 +139,7 @@ module RubyLsp
       # @param var_name [String] the variable name
       # @return [Symbol] the scope type
       def determine_scope_type(var_name)
-        ::TypeGuessr::Core::ScopeResolver.determine_scope_type(var_name)
+        ScopeResolver.determine_scope_type(var_name)
       end
 
       # Generate scope ID from node context
@@ -154,7 +155,7 @@ module RubyLsp
         # Use surrounding_method to find enclosing method name for local variables
         method_name = scope_type == :local_variables ? @node_context.surrounding_method : nil
 
-        ::TypeGuessr::Core::ScopeResolver.generate_scope_id(
+        ScopeResolver.generate_scope_id(
           scope_type,
           class_path: class_path,
           method_name: method_name

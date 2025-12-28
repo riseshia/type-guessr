@@ -6,8 +6,9 @@
 **Current Status:**
 - ✅ Phase 5 (MVP Hover Enhancement): COMPLETED
 - ✅ Phase 6 (Heuristic Fallback): COMPLETED
-- 🔄 Phase 7 (Code Quality & Refactoring): IN PROGRESS (7.1 partial, 7.2, 7.3 done)
+- 🔄 Phase 7 (Code Quality & Refactoring): IN PROGRESS (7.1 partial, 7.2-7.5 done)
 - 🔄 Phase 8 (Generic & Block Type Inference): IN PROGRESS (8.1-8.4 done)
+- ⏳ Phase 9 (Constant Alias Support): PLANNED
 - All 276 tests passing (1 pending, non-critical edge case)
 
 ---
@@ -40,16 +41,19 @@
 
 **Commit:** `efed41e`
 
-### 7.4 Reduce Verbose Type References (Medium Priority)
+### 7.4 Reduce Verbose Type References ✅
 
 **Problem:** Fully qualified type names repeated throughout codebase:
 - `::TypeGuessr::Core::Types::Unknown.instance` (13+ occurrences)
 - `::TypeGuessr::Core::Types::ClassInstance.new("...")` (20+ occurrences)
 
-**Solutions:**
-- [ ] Use `include TypeGuessr::Core::Types` where appropriate
-- [ ] Create short aliases: `UNKNOWN = Types::Unknown.instance`
-- [ ] Consider `Types.class_instance("String")` factory method
+**Completed:** Added private constant aliases in integration layer classes:
+- [x] `Types`, `TypeFormatter`, `LiteralTypeAnalyzer`, `FlowAnalyzer`, `DefNodeFinder`, `RBSProvider` in hover.rb
+- [x] `Types`, `TypeFormatter` in hover_content_builder.rb
+- [x] `Types`, `ScopeResolver` in variable_type_resolver.rb
+- [x] `ASTAnalyzer`, `VariableIndex` in runtime_adapter.rb
+- [x] `TypeFormatter` in type_inferrer.rb
+- [x] `VariableIndex` in debug_server.rb
 
 ### 7.5 Extract Magic Numbers to Constants (Low Priority)
 
@@ -280,8 +284,9 @@ Return Unknown / nil
 | 1 | 7.2 Eliminate Duplicate Literal Inference | Low | ✅ Done |
 | 2 | 7.1 Split hover.rb | Medium | 🔄 Partial |
 | 3 | 7.3 Cache RBSProvider | Low | ✅ Done |
-| 4 | 7.4 Reduce Verbose Type References | Low | Pending |
-| 5 | 7.5-7.7 Minor cleanups | Low | Pending |
+| 4 | 7.4 Reduce Verbose Type References | Low | ✅ Done |
+| 5 | 7.5 Extract Magic Numbers | Low | ✅ Done |
+| 6 | 7.6-7.7 Minor cleanups | Low | Pending |
 
 **Rationale:** Start with duplication elimination (7.2) as it's lower risk and enables cleaner split of hover.rb (7.1)
 
@@ -297,3 +302,95 @@ Return Unknown / nil
 | 6 | 8.6 Structural type display | Easy | Optional |
 
 **Rationale:** 8.1 and 8.2 form the foundation for generic type flow. 8.3 (block params) is the most impactful feature and depends on both. 8.4-8.6 are independent improvements.
+
+---
+
+## Phase 9: Constant Alias Support
+
+Goal: Enable type inference through constant aliases like `Types = ::TypeGuessr::Core::Types`.
+
+### Specification
+
+**Supported Patterns:**
+- `CONST = ::Foo::Bar` (constant path on RHS)
+- `CONST = Foo` (constant read on RHS)
+- Nested: `module M; Types = ::Core::Types; end`
+
+**Not Supported:**
+- Method call results: `Config = Rails.config`
+- Conditional assignment: `Types ||= Foo`
+- Dynamic assignment: `Types = some_method`
+
+**Use Cases:**
+1. `.new` call type inference: `Types::ClassInstance.new` → resolve `Types` first
+2. Hover info: Show original constant when hovering on alias
+3. Method call analysis: Track calls through aliased constants
+
+### 9.1 ConstantIndex Design
+
+**Problem:** No storage for constant alias mappings.
+
+**Implementation:**
+- [ ] Add `ConstantIndex` class (singleton, similar to VariableIndex)
+- [ ] Data structure:
+  ```ruby
+  {
+    file_path => {
+      "RubyLsp::TypeGuessr::Types" => {
+        target: "::TypeGuessr::Core::Types",
+        line: 107,
+        column: 6
+      }
+    }
+  }
+  ```
+- [ ] Methods: `add_alias`, `resolve_alias`, `clear_file`
+
+**Difficulty:** Easy
+
+### 9.2 AST Analyzer: Constant Tracking
+
+**Problem:** `ConstantWriteNode` and `ConstantPathWriteNode` are not visited.
+
+**Implementation:**
+- [ ] Add `visit_constant_write_node` handler
+- [ ] Add `visit_constant_path_write_node` handler
+- [ ] Extract target constant name from RHS (only if ConstantReadNode or ConstantPathNode)
+- [ ] Generate FQN using current nesting context
+- [ ] Store in ConstantIndex
+
+**Difficulty:** Easy
+
+### 9.3 Alias Resolution in Type Inference
+
+**Problem:** `Types::ClassInstance.new` doesn't resolve `Types` alias.
+
+**Implementation:**
+- [ ] Update `extract_class_name_from_receiver` in AST Analyzer
+- [ ] When encountering ConstantReadNode, check ConstantIndex first
+- [ ] Recursively resolve aliases (with depth limit)
+- [ ] Apply to `.new` call type extraction
+
+**Difficulty:** Medium
+
+### 9.4 Hover Support for Constant Aliases
+
+**Problem:** No hover info for constant aliases.
+
+**Implementation:**
+- [ ] Add `ConstantReadNode` to HOVER_NODE_TYPES (if not already)
+- [ ] Show alias target in hover: `Types → ::TypeGuessr::Core::Types`
+- [ ] Include definition location link
+
+**Difficulty:** Easy
+
+### Implementation Priority
+
+| Order | Task | Difficulty | Dependencies |
+|-------|------|------------|--------------|
+| 1 | 9.1 ConstantIndex Design | Easy | None |
+| 2 | 9.2 AST Constant Tracking | Easy | 9.1 |
+| 3 | 9.3 Alias Resolution | Medium | 9.2 |
+| 4 | 9.4 Hover Support | Easy | 9.2 |
+
+**Rationale:** 9.1 and 9.2 establish the foundation. 9.3 provides the core value (type inference through aliases). 9.4 is a nice-to-have UX improvement.

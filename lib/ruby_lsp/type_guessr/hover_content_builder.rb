@@ -28,9 +28,10 @@ module RubyLsp
         append_debug_info(content, reason, inferred, method_calls)
       end
 
-      # Type system shortcut
+      # Core layer shortcuts
       Types = ::TypeGuessr::Core::Types
-      private_constant :Types
+      TypeFormatter = ::TypeGuessr::Core::TypeFormatter
+      private_constant :Types, :TypeFormatter
 
       private
 
@@ -101,7 +102,7 @@ module RubyLsp
       # @param entry [RubyIndexer::Entry, nil] the entry for the type
       # @return [String] formatted type, possibly with link
       def format_type_with_link(type_obj, entry)
-        formatted = ::TypeGuessr::Core::TypeFormatter.format(type_obj)
+        formatted = TypeFormatter.format(type_obj)
         return "`#{formatted}`" if entry.nil?
 
         location_link = build_location_link(entry)
@@ -146,7 +147,7 @@ module RubyLsp
 
         case reason_type
         when :direct_type
-          formatted_type = ::TypeGuessr::Core::TypeFormatter.format(inferred_type)
+          formatted_type = TypeFormatter.format(inferred_type)
           content += "- Reason: `.new` call or literal assignment\n"
           content += "- Direct type: `#{formatted_type}`\n"
           content += "- Method calls: #{format_method_calls_list(method_calls)}\n"
@@ -168,7 +169,7 @@ module RubyLsp
       # @return [String] formatted inline list (e.g., "`item1`, `item2`")
       def format_inline_list(items)
         items.map do |item|
-          formatted = item.is_a?(String) ? item : ::TypeGuessr::Core::TypeFormatter.format(item)
+          formatted = item.is_a?(String) ? item : TypeFormatter.format(item)
           "`#{formatted}`"
         end.join(", ")
       end
@@ -190,7 +191,7 @@ module RubyLsp
         when Types::ClassInstance
           type_obj.name
         else
-          ::TypeGuessr::Core::TypeFormatter.format(type_obj)
+          TypeFormatter.format(type_obj)
         end
       end
 

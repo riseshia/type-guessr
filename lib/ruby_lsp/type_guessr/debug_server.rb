@@ -10,6 +10,10 @@ module RubyLsp
     # Debug web server for inspecting TypeGuessr index data
     # Only runs when debug mode is enabled
     class DebugServer
+      # Core layer shortcut
+      VariableIndex = ::TypeGuessr::Core::VariableIndex
+      private_constant :VariableIndex
+
       DEFAULT_PORT = 7010
 
       def initialize(global_state, port: DEFAULT_PORT)
@@ -116,7 +120,7 @@ module RubyLsp
       end
 
       def api_search(query)
-        index = ::TypeGuessr::Core::VariableIndex.instance
+        index = VariableIndex.instance
         result = query && !query.empty? ? index.search(query) : { index: {}, types: {} }
         {
           status: "200 OK",
@@ -126,7 +130,7 @@ module RubyLsp
       end
 
       def api_stats
-        index = ::TypeGuessr::Core::VariableIndex.instance
+        index = VariableIndex.instance
         stats = index.stats
         {
           status: "200 OK",

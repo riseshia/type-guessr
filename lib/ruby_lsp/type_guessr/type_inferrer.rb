@@ -11,6 +11,9 @@ module RubyLsp
     # This allows TypeGuessr to hook into ruby-lsp's type inference system
     # for enhanced heuristic type guessing while reusing Type and GuessedType classes.
     class TypeInferrer < ::RubyLsp::TypeInferrer
+      # Core layer shortcut
+      TypeFormatter = ::TypeGuessr::Core::TypeFormatter
+      private_constant :TypeFormatter
       # Infers the type of a node based on its context.
       # Override this method to add heuristic type inference.
       # Falls back to super when type cannot be uniquely determined.
@@ -51,7 +54,7 @@ module RubyLsp
         direct_type = type_info[:direct_type]
         if direct_type
           # Convert Types object to string format for ruby-lsp's Type.new
-          type_string = ::TypeGuessr::Core::TypeFormatter.format(direct_type)
+          type_string = TypeFormatter.format(direct_type)
           return Type.new(type_string)
         end
 

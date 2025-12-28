@@ -103,16 +103,21 @@ module RubyLsp
         nil
       end
 
-      # Type system shortcut for cleaner code
+      # Core layer shortcuts for cleaner code
       Types = ::TypeGuessr::Core::Types
-      private_constant :Types
+      TypeFormatter = ::TypeGuessr::Core::TypeFormatter
+      LiteralTypeAnalyzer = ::TypeGuessr::Core::LiteralTypeAnalyzer
+      FlowAnalyzer = ::TypeGuessr::Core::FlowAnalyzer
+      DefNodeFinder = ::TypeGuessr::Core::DefNodeFinder
+      RBSProvider = ::TypeGuessr::Core::RBSProvider
+      private_constant :Types, :TypeFormatter, :LiteralTypeAnalyzer, :FlowAnalyzer, :DefNodeFinder, :RBSProvider
 
       private
 
       # Cached RBSProvider instance for querying method signatures
       # @return [TypeGuessr::Core::RBSProvider]
       def rbs_provider
-        @rbs_provider ||= ::TypeGuessr::Core::RBSProvider.new
+        @rbs_provider ||= RBSProvider.new
       end
 
       def register_listeners(dispatcher)
@@ -177,7 +182,7 @@ module RubyLsp
           resolve_call_chain(receiver, depth)
         else
           # Try literal type inference
-          ::TypeGuessr::Core::LiteralTypeAnalyzer.infer(receiver)
+          LiteralTypeAnalyzer.infer(receiver)
         end
       end
 
@@ -222,7 +227,7 @@ module RubyLsp
         when Types::ArrayType
           "Array"
         else
-          ::TypeGuessr::Core::TypeFormatter.format(type_obj)
+          TypeFormatter.format(type_obj)
         end
       end
 
@@ -280,7 +285,7 @@ module RubyLsp
       # @return [TypeGuessr::Core::Types::Type, nil] the inferred type
       def analyze_value_type_for_param(node)
         # Try literal type inference first
-        type = ::TypeGuessr::Core::LiteralTypeAnalyzer.infer(node)
+        type = LiteralTypeAnalyzer.infer(node)
         return type if type
 
         # Handle .new calls
@@ -309,7 +314,7 @@ module RubyLsp
       # @return [TypeGuessr::Core::Types::Type] the inferred return type
       def infer_return_type(node)
         source = node.slice
-        analyzer = ::TypeGuessr::Core::FlowAnalyzer.new
+        analyzer = FlowAnalyzer.new
         result = analyzer.analyze(source)
         result.return_type_for_method(node.name.to_s)
       rescue StandardError
@@ -323,7 +328,7 @@ module RubyLsp
       # @return [String] formatted signature
       def format_def_signature(parameters, param_types, return_type)
         param_strings = format_parameters(parameters, param_types)
-        return_str = ::TypeGuessr::Core::TypeFormatter.format(return_type)
+        return_str = TypeFormatter.format(return_type)
 
         "**Signature:** `(#{param_strings.join(", ")}) -> #{return_str}`"
       end
@@ -340,21 +345,21 @@ module RubyLsp
 
         # Required parameters
         parameters.requireds&.each do |param|
-          type_str = ::TypeGuessr::Core::TypeFormatter.format(param_types[type_index])
+          type_str = TypeFormatter.format(param_types[type_index])
           result << "#{type_str} #{param.name}"
           type_index += 1
         end
 
         # Optional parameters
         parameters.optionals&.each do |param|
-          type_str = ::TypeGuessr::Core::TypeFormatter.format(param_types[type_index])
+          type_str = TypeFormatter.format(param_types[type_index])
           result << "?#{type_str} #{param.name}"
           type_index += 1
         end
 
         # Keyword parameters
         parameters.keywords&.each do |param|
-          type_str = ::TypeGuessr::Core::TypeFormatter.format(param_types[type_index])
+          type_str = TypeFormatter.format(param_types[type_index])
           prefix = param.is_a?(Prism::RequiredKeywordParameterNode) ? "" : "?"
           result << "#{param.name}: #{prefix}#{type_str}"
           type_index += 1
@@ -500,7 +505,7 @@ module RubyLsp
 
         # Analyze the method body
         source = method_node.slice
-        analyzer = ::TypeGuessr::Core::FlowAnalyzer.new
+        analyzer = FlowAnalyzer.new
         result = analyzer.analyze(source)
 
         # Query type at the node's line for the specific variable
@@ -530,7 +535,7 @@ module RubyLsp
         parsed = Prism.parse(source_code)
 
         # Find the DefNode that contains this position
-        finder = ::TypeGuessr::Core::DefNodeFinder.new(target_line, target_column)
+        finder = DefNodeFinder.new(target_line, target_column)
         parsed.value.accept(finder)
 
         warn "Found method: #{finder.result&.name}" if ENV["DEBUG"] && finder.result

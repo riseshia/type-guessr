@@ -13,6 +13,11 @@ module RubyLsp
     # Handles AST traversal, indexing, and type inferrer management.
     # @api private
     class RuntimeAdapter
+      # Core layer shortcuts
+      ASTAnalyzer = ::TypeGuessr::Core::ASTAnalyzer
+      VariableIndex = ::TypeGuessr::Core::VariableIndex
+      private_constant :ASTAnalyzer, :VariableIndex
+
       # Number of worker threads for parallel AST analysis
       WORKER_COUNT = 4
 
@@ -120,7 +125,7 @@ module RubyLsp
         source = File.read(file_path)
         result = Prism.parse(source)
 
-        visitor = ::TypeGuessr::Core::ASTAnalyzer.new(file_path)
+        visitor = ASTAnalyzer.new(file_path)
         result.value.accept(visitor)
 
         log_message("Re-indexed file: #{file_path}")
@@ -135,7 +140,7 @@ module RubyLsp
 
         # Then, traverse the source's AST
         result = Prism.parse(source)
-        visitor = ::TypeGuessr::Core::ASTAnalyzer.new(file_path)
+        visitor = ASTAnalyzer.new(file_path)
         result.value.accept(visitor)
 
         log_message("Indexed source for: #{file_path}")
@@ -145,7 +150,7 @@ module RubyLsp
 
       # Clear all index entries for a specific file
       def clear_file_index(file_path)
-        ::TypeGuessr::Core::VariableIndex.instance.clear_file(file_path)
+        VariableIndex.instance.clear_file(file_path)
         log_message("Cleared index for file: #{file_path}")
       rescue StandardError => e
         log_message("Error clearing index for #{file_path}: #{e.message}")
@@ -161,7 +166,7 @@ module RubyLsp
         result = Prism.parse(source)
 
         # Use a visitor to traverse the AST
-        visitor = ::TypeGuessr::Core::ASTAnalyzer.new(file_path)
+        visitor = ASTAnalyzer.new(file_path)
         result.value.accept(visitor)
       rescue StandardError => e
         log_message("Error parsing #{uri}: #{e.message}")
