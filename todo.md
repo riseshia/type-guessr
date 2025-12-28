@@ -7,9 +7,9 @@
 - ✅ Phase 5 (MVP Hover Enhancement): COMPLETED
 - ✅ Phase 6 (Heuristic Fallback): COMPLETED
 - 🔄 Phase 7 (Code Quality & Refactoring): IN PROGRESS (7.1 partial, 7.2-7.5 done)
-- 🔄 Phase 8 (Generic & Block Type Inference): IN PROGRESS (8.1-8.5 done)
-- ⏳ Phase 9 (Constant Alias Support): PLANNED
-- All 280 tests passing (1 pending, non-critical edge case)
+- ✅ Phase 8 (Generic & Block Type Inference): COMPLETED (8.1-8.5 done, 8.6 optional)
+- ✅ Phase 9 (Constant Alias Support): COMPLETED
+- All 304 tests passing (1 pending, non-critical edge case)
 
 ---
 
@@ -337,13 +337,13 @@ Goal: Enable type inference through constant aliases like `Types = ::TypeGuessr:
 2. Hover info: Show original constant when hovering on alias
 3. Method call analysis: Track calls through aliased constants
 
-### 9.1 ConstantIndex Design
+### 9.1 ConstantIndex Design ✅
 
 **Problem:** No storage for constant alias mappings.
 
 **Implementation:**
-- [ ] Add `ConstantIndex` class (singleton, similar to VariableIndex)
-- [ ] Data structure:
+- [x] Add `ConstantIndex` class (singleton, similar to VariableIndex)
+- [x] Data structure:
   ```ruby
   {
     file_path => {
@@ -355,36 +355,39 @@ Goal: Enable type inference through constant aliases like `Types = ::TypeGuessr:
     }
   }
   ```
-- [ ] Methods: `add_alias`, `resolve_alias`, `clear_file`
+- [x] Methods: `add_alias`, `resolve_alias`, `clear_file`
 
 **Difficulty:** Easy
+**Commit:** `30637aa`
 
-### 9.2 AST Analyzer: Constant Tracking
+### 9.2 AST Analyzer: Constant Tracking ✅
 
 **Problem:** `ConstantWriteNode` and `ConstantPathWriteNode` are not visited.
 
 **Implementation:**
-- [ ] Add `visit_constant_write_node` handler
-- [ ] Add `visit_constant_path_write_node` handler
-- [ ] Extract target constant name from RHS (only if ConstantReadNode or ConstantPathNode)
-- [ ] Generate FQN using current nesting context
-- [ ] Store in ConstantIndex
+- [x] Add `visit_constant_write_node` handler
+- [x] Add `visit_constant_path_write_node` handler
+- [x] Extract target constant name from RHS (only if ConstantReadNode or ConstantPathNode)
+- [x] Generate FQN using current nesting context
+- [x] Store in ConstantIndex
 
 **Difficulty:** Easy
+**Commit:** `30637aa`
 
-### 9.3 Alias Resolution in Type Inference
+### 9.3 Alias Resolution in Type Inference ✅
 
 **Problem:** `Types::ClassInstance.new` doesn't resolve `Types` alias.
 
 **Implementation:**
-- [ ] Update `extract_class_name_from_receiver` in AST Analyzer
-- [ ] When encountering ConstantReadNode, check ConstantIndex first
-- [ ] Recursively resolve aliases (with depth limit)
-- [ ] Apply to `.new` call type extraction
+- [x] Update `extract_class_name_from_receiver` in AST Analyzer
+- [x] When encountering ConstantReadNode, check ConstantIndex first
+- [x] Recursively resolve aliases (with depth limit MAX_ALIAS_DEPTH=5)
+- [x] Apply to `.new` call type extraction in both AST Analyzer and Hover
 
 **Difficulty:** Medium
+**Commit:** `30637aa`
 
-### 9.4 Hover Support for Constant Aliases
+### 9.4 Hover Support for Constant Aliases (Optional)
 
 **Problem:** No hover info for constant aliases.
 
@@ -394,6 +397,7 @@ Goal: Enable type inference through constant aliases like `Types = ::TypeGuessr:
 - [ ] Include definition location link
 
 **Difficulty:** Easy
+**Status:** Optional - can be added in future if needed
 
 ### Implementation Priority
 
