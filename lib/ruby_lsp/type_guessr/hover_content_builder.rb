@@ -52,7 +52,6 @@ module RubyLsp
           return [content, :direct_type, direct_type]
         end
 
-        # Priority 2: Try to guess type if we have method calls and matching types (Phase 6)
         if !matching_types.empty?
           content = format_guessed_types(matching_types, type_entries)
           return [content, :method_calls, matching_types]

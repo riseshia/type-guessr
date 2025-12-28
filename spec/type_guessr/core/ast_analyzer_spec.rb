@@ -584,7 +584,7 @@ RSpec.describe TypeGuessr::Core::ASTAnalyzer do
     end
   end
 
-  describe "constant alias tracking (Phase 9.2)" do
+  describe "constant alias tracking" do
     subject(:constant_index) { TypeGuessr::Core::ConstantIndex.instance }
 
     before do

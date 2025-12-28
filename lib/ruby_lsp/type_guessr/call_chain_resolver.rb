@@ -54,7 +54,7 @@ module RubyLsp
         # 1. Get receiver type (recursive)
         receiver_type = resolve(node.receiver, depth: depth + 1)
 
-        # 2. Phase 6: If receiver is Unknown, try heuristic inference
+        # 2. If receiver is Unknown, try heuristic inference
         if receiver_type.nil? || receiver_type == Types::Unknown.instance
           receiver_type = try_heuristic_type_inference(node.receiver)
           return nil if receiver_type.nil? || receiver_type == Types::Unknown.instance
@@ -63,7 +63,7 @@ module RubyLsp
         # 3. Get method return type from RBS
         type = @rbs_provider.get_method_return_type(extract_type_name(receiver_type), node.name.to_s)
 
-        # 4. Phase 10: If RBS returns Unknown, try user-defined method analysis
+        # 4. If RBS returns Unknown, try user-defined method analysis
         if type == Types::Unknown.instance && @user_method_resolver
           type = @user_method_resolver.get_return_type(
             extract_type_name(receiver_type),
@@ -85,7 +85,6 @@ module RubyLsp
         type_info[:direct_type]
       end
 
-      # Try to infer receiver type using method-call set heuristic (Phase 6)
       # @param receiver [Prism::Node] the receiver node
       # @return [TypeGuessr::Core::Types::Type, nil] the inferred type or nil
       def try_heuristic_type_inference(receiver)

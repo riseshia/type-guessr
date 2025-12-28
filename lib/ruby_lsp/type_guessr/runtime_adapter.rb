@@ -34,7 +34,6 @@ module RubyLsp
         @indexing_completed
       end
 
-      # Swap the ruby-lsp's type inferrer with our custom implementation
       def swap_type_inferrer
         @original_type_inferrer = @global_state.type_inferrer
         custom_inferrer = ::RubyLsp::TypeGuessr::TypeInferrer.new(@global_state.index)
@@ -42,7 +41,6 @@ module RubyLsp
         log_message("Swapped TypeInferrer with RubyLsp::TypeGuessr::TypeInferrer")
       end
 
-      # Restore the original type inferrer
       def restore_type_inferrer
         return if !@global_state || !@original_type_inferrer
 
@@ -50,8 +48,6 @@ module RubyLsp
         log_message("Restored original TypeInferrer")
       end
 
-      # Start background thread to traverse AST for indexed files
-      # Waits for Ruby LSP's initial indexing to complete before starting
       def start_ast_traversal
         Thread.new do
           index = @global_state.index
@@ -115,7 +111,6 @@ module RubyLsp
         end
       end
 
-      # Re-index a single file by traversing its AST
       def reindex_file(file_path)
         return if !File.exist?(file_path)
 
@@ -149,7 +144,6 @@ module RubyLsp
         log_message("Error indexing source for #{file_path}: #{e.message}")
       end
 
-      # Clear all index entries for a specific file
       def clear_file_index(file_path)
         VariableIndex.instance.clear_file(file_path)
         ::TypeGuessr::Core::ConstantIndex.instance.clear_file(file_path)
@@ -174,7 +168,6 @@ module RubyLsp
         log_message("Error parsing #{uri}: #{e.message}")
       end
 
-      # Send a log message to the LSP client
       def log_message(message)
         return if !@message_queue
         return if @message_queue.closed?

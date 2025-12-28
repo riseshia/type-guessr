@@ -268,7 +268,6 @@ module TypeGuessr
         @class_stack.pop
       end
 
-      # Track constant aliases (Phase 9.2)
       # Example: Types = ::TypeGuessr::Core::Types
       def visit_constant_write_node(node)
         return super unless valid_constant_alias_rhs?(node.value)
@@ -290,7 +289,6 @@ module TypeGuessr
         super
       end
 
-      # Track constant path aliases (Phase 9.2)
       # Example: A::Types = ::TypeGuessr::Core::Types
       def visit_constant_path_write_node(node)
         return super unless valid_constant_alias_rhs?(node.value)
@@ -333,7 +331,6 @@ module TypeGuessr
 
       # Extract class name from a receiver node (for .new calls)
       # Resolves short names to fully qualified names using current nesting context
-      # Phase 9.3: Also resolves constant aliases
       # @param receiver [Prism::Node] the receiver node
       # @return [String, nil] the class name or nil
       def extract_class_name_from_receiver(receiver)
@@ -342,13 +339,11 @@ module TypeGuessr
           short_name = receiver.name.to_s
           fqn = resolve_constant_to_fqn(short_name)
 
-          # Phase 9.3: Check if it's an alias and resolve it
           resolved = @constant_index.resolve_alias(fqn)
           resolved || fqn
         when Prism::ConstantPathNode
           path = receiver.slice
 
-          # Phase 9.3: Check if it's an alias and resolve it
           resolved = @constant_index.resolve_alias(path)
           resolved || path
         end

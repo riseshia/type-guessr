@@ -182,7 +182,6 @@ RSpec.describe "Hover Integration" do
 
       response = hover_on_source(source, { line: 16, character: 12 })
 
-      # Phase 8.5: Now shows Union type instead of "Ambiguous"
       expect(response.contents.value).to match(/Cacheable/)
       expect(response.contents.value).to match(/Persistable/)
     end
@@ -569,7 +568,7 @@ RSpec.describe "Hover Integration" do
     end
   end
 
-  describe "User-Defined Method Return Type (Phase 10)" do
+  describe "User-Defined Method Return Type" do
     # NOTE: These tests require RubyIndexer to have indexed the test classes.
     # Currently, RubyIndexer is not updated with dynamically generated test sources.
     # The core functionality is verified in spec/type_guessr/core/user_method_return_resolver_spec.rb
@@ -706,7 +705,7 @@ RSpec.describe "Hover Integration" do
     end
   end
 
-  describe "Method-Call Set Heuristic (Phase 6)" do
+  describe "Method-Call Set Heuristic" do
     it "infers type from method pattern when parameter type is unknown" do
       source = <<~RUBY
         class Document
@@ -1070,7 +1069,7 @@ RSpec.describe "Hover Integration" do
     end
   end
 
-  describe "Method Parameter Type Inference (Phase 8.5)" do
+  describe "Method Parameter Type Inference" do
     it "infers required parameter type from method calls in method body" do
       source = <<~RUBY
         class Recipe
@@ -1177,7 +1176,7 @@ RSpec.describe "Hover Integration" do
     end
   end
 
-  describe "Constant Alias Support (Phase 9)" do
+  describe "Constant Alias Support" do
     it "resolves simple constant alias in .new calls" do
       source = <<~RUBY
         class Recipe

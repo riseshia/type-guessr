@@ -68,18 +68,15 @@ module RubyLsp
         register_listeners(dispatcher)
       end
 
-      # Dynamically define listener methods for each node type
       HOVER_NODE_TYPES.each do |node_type|
         define_method(:"on_#{node_type}_node_enter") do |node|
           add_hover_content(node)
         end
       end
 
-      # Override on_call_node_enter for method call hover
       def on_call_node_enter(node)
         return unless node.receiver
 
-        # Phase 5.2b: Resolve receiver type recursively for method chains
         receiver_type = @call_chain_resolver.resolve(node.receiver)
         return if receiver_type.nil? || receiver_type == Types::Unknown.instance
 
@@ -95,7 +92,6 @@ module RubyLsp
         @response_builder.push(content, category: :documentation)
       end
 
-      # Override on_def_node_enter for method definition hover
       def on_def_node_enter(node)
         # 1. Infer parameter types from default values and usage patterns
         param_types = infer_parameter_types(node.parameters, node)
@@ -172,7 +168,6 @@ module RubyLsp
       end
 
       def add_hover_content(node)
-        # Phase 8.3: Try block parameter type inference
         block_param_type = try_block_parameter_inference(node)
         if block_param_type && block_param_type != Types::Unknown.instance
           type_info = { direct_type: block_param_type, method_calls: [] }
@@ -181,7 +176,6 @@ module RubyLsp
           return
         end
 
-        # Phase 8.5: Try parameter type inference from usage
         if node.is_a?(Prism::RequiredParameterNode) || node.is_a?(Prism::RequiredKeywordParameterNode)
           param_type = try_parameter_type_inference(node)
           if param_type && param_type != Types::Unknown.instance
@@ -201,7 +195,6 @@ module RubyLsp
           end
         end
 
-        # Phase 5.4: Try FlowAnalyzer first for local variables
         flow_type = try_flow_analysis(node)
         if flow_type && flow_type != Types::Unknown.instance
           # Build content from flow-inferred type
@@ -289,7 +282,6 @@ module RubyLsp
             Types::Unknown.instance
           end
         when Prism::RequiredParameterNode, Prism::RequiredKeywordParameterNode
-          # Phase 8.5: Infer from usage patterns in method body
           infer_parameter_type_from_usage(param, def_node)
         else
           # Rest, block → untyped
@@ -315,7 +307,6 @@ module RubyLsp
       end
 
       # Extract class name from .new call receiver
-      # Phase 9.3: Also resolves constant aliases
       # @param receiver [Prism::Node] the receiver node
       # @return [String, nil] the class name or nil
       def extract_class_name_from_new_call(receiver)
@@ -323,19 +314,16 @@ module RubyLsp
         when Prism::ConstantReadNode
           name = receiver.name.to_s
 
-          # Phase 9.3: Check if it's an alias and resolve it
           resolved = @constant_index.resolve_alias(name)
           resolved || name
         when Prism::ConstantPathNode
           path = receiver.slice
 
-          # Phase 9.3: Check if it's an alias and resolve it
           resolved = @constant_index.resolve_alias(path)
           resolved || path
         end
       end
 
-      # Infer parameter type from usage patterns in method body (Phase 8.5)
       # @param param [Prism::Node] the parameter node
       # @param def_node [Prism::DefNode] the method definition node
       # @return [TypeGuessr::Core::Types::Type] the inferred type
@@ -469,7 +457,6 @@ module RubyLsp
         result
       end
 
-      # Try to infer parameter type from usage in method body (Phase 8.5)
       # @param node [Prism::RequiredParameterNode, Prism::RequiredKeywordParameterNode] the parameter node
       # @return [TypeGuessr::Core::Types::Type, nil] the inferred type or nil
       def try_parameter_type_inference(node)

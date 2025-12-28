@@ -205,7 +205,6 @@ module TypeGuessr
         end
       end
 
-      # Clear all index data (useful for testing)
       def clear
         @mutex.synchronize do
           @index.each_value(&:clear)
