@@ -115,52 +115,17 @@ module TypeGuessr
         end
 
         def visit_local_variable_operator_write_node(node)
-          var_name = node.name.to_s
-          current_type = get_type(node.location.start_line - 1, var_name)
-          value_type = infer_type_from_node(node.value)
-
-          # For ||= and &&=, create union of existing and new type
-          merged_type = if current_type == Types::Unknown.instance
-                          value_type
-                        else
-                          Types::Union.new([current_type, value_type])
-                        end
-
-          store_type(node.location.start_line, var_name, merged_type)
+          handle_compound_assignment(node)
           super
         end
 
         def visit_local_variable_or_write_node(node)
-          # Handle ||= operator
-          var_name = node.name.to_s
-          current_type = get_type(node.location.start_line - 1, var_name)
-          value_type = infer_type_from_node(node.value)
-
-          # x ||= y means: x = x || y (x if truthy, else y)
-          merged_type = if current_type == Types::Unknown.instance
-                          value_type
-                        else
-                          Types::Union.new([current_type, value_type])
-                        end
-
-          store_type(node.location.start_line, var_name, merged_type)
+          handle_compound_assignment(node)
           super
         end
 
         def visit_local_variable_and_write_node(node)
-          # Handle &&= operator
-          var_name = node.name.to_s
-          current_type = get_type(node.location.start_line - 1, var_name)
-          value_type = infer_type_from_node(node.value)
-
-          # x &&= y means: x = x && y (x if falsy, else y)
-          merged_type = if current_type == Types::Unknown.instance
-                          value_type
-                        else
-                          Types::Union.new([current_type, value_type])
-                        end
-
-          store_type(node.location.start_line, var_name, merged_type)
+          handle_compound_assignment(node)
           super
         end
 
@@ -210,6 +175,20 @@ module TypeGuessr
         end
 
         private
+
+        def handle_compound_assignment(node)
+          var_name = node.name.to_s
+          current_type = get_type(node.location.start_line - 1, var_name)
+          value_type = infer_type_from_node(node.value)
+
+          merged_type = if current_type == Types::Unknown.instance
+                          value_type
+                        else
+                          Types::Union.new([current_type, value_type])
+                        end
+
+          store_type(node.location.start_line, var_name, merged_type)
+        end
 
         def infer_type_from_node(node)
           # Handle special flow-sensitive cases first
