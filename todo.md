@@ -7,9 +7,9 @@
 - ✅ Phase 5 (MVP Hover Enhancement): COMPLETED
 - ✅ Phase 6 (Heuristic Fallback): COMPLETED
 - 🔄 Phase 7 (Code Quality & Refactoring): IN PROGRESS (7.1 partial, 7.2-7.5 done)
-- 🔄 Phase 8 (Generic & Block Type Inference): IN PROGRESS (8.1-8.4 done)
+- 🔄 Phase 8 (Generic & Block Type Inference): IN PROGRESS (8.1-8.5 done)
 - ⏳ Phase 9 (Constant Alias Support): PLANNED
-- All 276 tests passing (1 pending, non-critical edge case)
+- All 280 tests passing (1 pending, non-critical edge case)
 
 ---
 
@@ -165,20 +165,31 @@ Goal: Enable type inference for generic containers and block parameters.
 - `{ name: "Alice", age: 30 }` → `{ name: String, age: Integer }`
 - `{ items: [1,2], active: true }` → `{ items: Array[Integer], active: TrueClass }`
 
-### 8.5 Method Parameter Type Inference from Usage
+### 8.5 Method Parameter Type Inference from Usage ✅
 
 **Problem:** Required parameters show as `untyped` even when usage patterns are available.
 
-**Location:** `hover.rb:256-268` - `infer_single_parameter_type`
+**Implemented:**
+- [x] Collect method calls on parameters directly from method body AST
+- [x] Use TypeMatcher to find candidate types based on method usage
+- [x] Show inferred type in both parameter hover and method signature
+- [x] Return Union type when multiple types match
+- [x] Added `ParameterMethodCallVisitor` for AST traversal
 
-**Current:** Only optional parameters with default values get types.
+**Features:**
+- Hover on required parameter → shows inferred type
+- Hover on DefNode → signature includes inferred parameter types
+- Handles ambiguous cases with Union types
 
-**Implementation:**
-- [ ] For required parameters, collect method calls from method body (already in VariableIndex)
-- [ ] Use TypeMatcher to find candidate types
-- [ ] Show inferred type or candidates in hover
-
-**Difficulty:** Medium
+**Examples:**
+```ruby
+def publish(recipe)
+  recipe.validate!      # These method calls
+  recipe.update(...)    # are collected
+  recipe.notify_followers
+end
+# Hovering on "recipe" → Guessed type: Recipe
+```
 
 ### 8.6 Structural Type Display (Optional)
 
@@ -298,7 +309,7 @@ Return Unknown / nil
 | 2 | 8.2 RBSProvider generic preservation | Easy | ✅ Done |
 | 3 | 8.3 Block parameter type inference | Medium | ✅ Done |
 | 4 | 8.4 Hash type inference | Easy | ✅ Done |
-| 5 | 8.5 Method parameter inference | Medium | Pending |
+| 5 | 8.5 Method parameter inference | Medium | ✅ Done |
 | 6 | 8.6 Structural type display | Easy | Optional |
 
 **Rationale:** 8.1 and 8.2 form the foundation for generic type flow. 8.3 (block params) is the most impactful feature and depends on both. 8.4-8.6 are independent improvements.

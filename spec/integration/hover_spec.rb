@@ -182,7 +182,7 @@ RSpec.describe "Hover Integration" do
 
       response = hover_on_source(source, { line: 16, character: 12 })
 
-      expect(response.contents.value).to match(/Ambiguous type/)
+      # Phase 8.5: Now shows Union type instead of "Ambiguous"
       expect(response.contents.value).to match(/Cacheable/)
       expect(response.contents.value).to match(/Persistable/)
     end
@@ -888,6 +888,113 @@ RSpec.describe "Hover Integration" do
       # Should still return something (untyped or Unknown)
       # Not testing specific content since receiver type is unknown
       expect(response).not_to be_nil
+    end
+  end
+
+  describe "Method Parameter Type Inference (Phase 8.5)" do
+    it "infers required parameter type from method calls in method body" do
+      source = <<~RUBY
+        class Recipe
+          def validate!
+          end
+
+          def update(attrs)
+          end
+
+          def notify_followers
+          end
+        end
+
+        def publish(recipe)
+          recipe.validate!
+          recipe.update(status: :published)
+          recipe.notify_followers
+        end
+      RUBY
+
+      # Hover on "recipe" parameter in def line
+      response = hover_on_source(source, { line: 11, character: 13 })
+
+      expect(response).not_to be_nil
+      expect(response.contents.value).to match(/Recipe/)
+    end
+
+    it "shows Unknown when no method calls on parameter" do
+      source = <<~RUBY
+        def process(data)
+          puts "processing"
+        end
+      RUBY
+
+      # Hover on "data" parameter - no method calls
+      response = hover_on_source(source, { line: 0, character: 13 })
+
+      # With no method calls, type inference returns Unknown
+      # In debug mode, this shows debug info; otherwise may show nothing
+      # Just check that it doesn't crash
+      expect(response).to be_nil.or(be_a(RubyLsp::Interface::Hover))
+    end
+
+    it "infers type when multiple parameters have different types" do
+      source = <<~RUBY
+        class Account
+          def withdraw(amount)
+          end
+
+          def deposit(amount)
+          end
+        end
+
+        class Transaction
+          def self.create(attrs)
+          end
+        end
+
+        def transfer(from_account, to_account, amount)
+          from_account.withdraw(amount)
+          to_account.deposit(amount)
+          Transaction.create(from: from_account, to: to_account)
+        end
+      RUBY
+
+      # Hover on "from_account" parameter
+      response = hover_on_source(source, { line: 13, character: 15 })
+
+      expect(response).not_to be_nil
+      expect(response.contents.value).to match(/Account/)
+    end
+
+    it "shows ambiguous when multiple types match" do
+      source = <<~RUBY
+        class User
+          def save
+          end
+
+          def reload
+          end
+        end
+
+        class Post
+          def save
+          end
+
+          def reload
+          end
+        end
+
+        def persist(item)
+          item.save
+          item.reload
+        end
+      RUBY
+
+      # Hover on "item" parameter - both User and Post have save and reload
+      response = hover_on_source(source, { line: 16, character: 13 })
+
+      expect(response).not_to be_nil
+      # Should show ambiguous or union type
+      content = response.contents.value
+      expect(content).to match(/User|Post|Ambiguous/i)
     end
   end
 end

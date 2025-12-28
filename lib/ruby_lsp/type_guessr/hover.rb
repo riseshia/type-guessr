@@ -87,8 +87,8 @@ module RubyLsp
 
       # Override on_def_node_enter for method definition hover
       def on_def_node_enter(node)
-        # 1. Infer parameter types from default values
-        param_types = infer_parameter_types(node.parameters)
+        # 1. Infer parameter types from default values and usage patterns
+        param_types = infer_parameter_types(node.parameters, node)
 
         # 2. Infer return type using FlowAnalyzer
         return_type = infer_return_type(node)
@@ -134,6 +134,26 @@ module RubyLsp
           content = @content_builder.build(type_info, matching_types: [], type_entries: {})
           @response_builder.push(content, category: :documentation) if content
           return
+        end
+
+        # Phase 8.5: Try parameter type inference from usage
+        if node.is_a?(Prism::RequiredParameterNode) || node.is_a?(Prism::RequiredKeywordParameterNode)
+          param_type = try_parameter_type_inference(node)
+          if param_type && param_type != Types::Unknown.instance
+            type_info = { direct_type: param_type, method_calls: [] }
+
+            # Get type entries for linking if it's a ClassInstance
+            type_entries = {}
+            if param_type.is_a?(Types::ClassInstance)
+              type_entries = @type_resolver.get_type_entries([param_type])
+            elsif param_type.is_a?(Types::Union)
+              type_entries = @type_resolver.get_type_entries(param_type.types)
+            end
+
+            content = @content_builder.build(type_info, matching_types: [], type_entries: type_entries)
+            @response_builder.push(content, category: :documentation) if content
+            return
+          end
         end
 
         # Phase 5.4: Try FlowAnalyzer first for local variables
@@ -243,10 +263,11 @@ module RubyLsp
         "**Method:** `#{method_name}`\n\n**Signatures:**\n```ruby\n#{sig_strings.join("\n")}\n```"
       end
 
-      # Infer parameter types from default values
+      # Infer parameter types from default values and usage patterns
       # @param parameters [Prism::ParametersNode, nil] the parameters node
+      # @param def_node [Prism::DefNode] the method definition node
       # @return [Array<TypeGuessr::Core::Types::Type>] array of parameter types
-      def infer_parameter_types(parameters)
+      def infer_parameter_types(parameters, def_node)
         return [] if parameters.nil?
 
         all_params = []
@@ -258,14 +279,15 @@ module RubyLsp
         all_params << parameters.block if parameters.block
 
         all_params.compact.map do |param|
-          infer_single_parameter_type(param)
+          infer_single_parameter_type(param, def_node)
         end
       end
 
       # Infer type for a single parameter
       # @param param [Prism::Node] the parameter node
+      # @param def_node [Prism::DefNode] the method definition node
       # @return [TypeGuessr::Core::Types::Type] the inferred type
-      def infer_single_parameter_type(param)
+      def infer_single_parameter_type(param, def_node)
         case param
         when Prism::OptionalParameterNode, Prism::OptionalKeywordParameterNode
           # Infer from default value
@@ -274,8 +296,11 @@ module RubyLsp
           else
             Types::Unknown.instance
           end
+        when Prism::RequiredParameterNode, Prism::RequiredKeywordParameterNode
+          # Phase 8.5: Infer from usage patterns in method body
+          infer_parameter_type_from_usage(param, def_node)
         else
-          # Required params, rest, block → untyped
+          # Rest, block → untyped
           Types::Unknown.instance
         end
       end
@@ -306,6 +331,66 @@ module RubyLsp
           receiver.name.to_s
         when Prism::ConstantPathNode
           receiver.slice
+        end
+      end
+
+      # Infer parameter type from usage patterns in method body (Phase 8.5)
+      # @param param [Prism::Node] the parameter node
+      # @param def_node [Prism::DefNode] the method definition node
+      # @return [TypeGuessr::Core::Types::Type] the inferred type
+      def infer_parameter_type_from_usage(param, def_node)
+        param_name = param.name.to_s
+
+        # Collect method calls on this parameter from method body
+        method_calls = collect_parameter_method_calls(param_name, def_node)
+
+        # No method calls → can't infer
+        return Types::Unknown.instance if method_calls.empty?
+
+        # Use TypeMatcher to find candidate types
+        matching_types = @type_resolver.infer_type_from_methods(method_calls)
+
+        # No matches or truncated → Unknown
+        return Types::Unknown.instance if matching_types.empty?
+        return Types::Unknown.instance if matching_types.last == TypeMatcher::TRUNCATED_MARKER
+
+        # Exactly one match → use it
+        return matching_types.first if matching_types.size == 1
+
+        # Multiple matches → create Union
+        Types::Union.new(matching_types)
+      rescue StandardError => e
+        warn "Parameter type inference error: #{e.class}: #{e.message}" if ENV["DEBUG"]
+        Types::Unknown.instance
+      end
+
+      # Collect method calls on a parameter from method body
+      # @param param_name [String] the parameter name
+      # @param def_node [Prism::DefNode] the method definition node
+      # @return [Array<String>] array of method names called on the parameter
+      def collect_parameter_method_calls(param_name, def_node)
+        return [] unless def_node.body
+
+        calls = []
+        visitor = ParameterMethodCallVisitor.new(param_name, calls)
+        def_node.body.accept(visitor)
+        calls.uniq
+      end
+
+      # Visitor to collect method calls on a specific variable
+      class ParameterMethodCallVisitor < Prism::Visitor
+        def initialize(var_name, calls_collector)
+          @var_name = var_name
+          @calls = calls_collector
+          super()
+        end
+
+        def visit_call_node(node)
+          # Check if receiver is our target variable
+          @calls << node.name.to_s if node.receiver.is_a?(Prism::LocalVariableReadNode) && node.receiver.name.to_s == @var_name
+
+          # Continue traversing
+          super
         end
       end
 
@@ -416,6 +501,21 @@ module RubyLsp
         Types::Union.new(types_only)
       rescue StandardError => e
         warn "Heuristic inference error: #{e.class}: #{e.message}" if ENV["DEBUG"]
+        nil
+      end
+
+      # Try to infer parameter type from usage in method body (Phase 8.5)
+      # @param node [Prism::RequiredParameterNode, Prism::RequiredKeywordParameterNode] the parameter node
+      # @return [TypeGuessr::Core::Types::Type, nil] the inferred type or nil
+      def try_parameter_type_inference(node)
+        # Find the containing method definition
+        method_node = find_containing_method(node)
+        return nil unless method_node
+
+        # Infer type from usage
+        infer_parameter_type_from_usage(node, method_node)
+      rescue StandardError => e
+        warn "Parameter type inference error: #{e.class}: #{e.message}" if ENV["DEBUG"]
         nil
       end
 
