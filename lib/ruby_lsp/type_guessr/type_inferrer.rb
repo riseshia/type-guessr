@@ -67,7 +67,7 @@ module RubyLsp
         # Only return when exactly one type matches (unambiguous)
         return nil if matching_types.size != 1
 
-        Type.new(matching_types.first)
+        Type.new(TypeFormatter.format(matching_types.first))
       end
 
       # Extract the variable node from a CallNode's receiver

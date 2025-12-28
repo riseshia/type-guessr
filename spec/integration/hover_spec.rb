@@ -758,6 +758,35 @@ RSpec.describe "Hover Integration" do
       # This prevents infinite recursion and performance issues
       expect(response).to be_nil
     end
+
+    it "shows RBS signature when receiver type is inferred from method calls" do
+      source = <<~RUBY
+        class Recipe
+          def ingredients
+            []
+          end
+          def steps
+            []
+          end
+        end
+
+        class Recipe2 < Recipe
+        end
+
+        def process(recipe)
+          recipe.ingredients
+          recipe.steps
+        end
+      RUBY
+
+      # Hover on "ingredients" method name in recipe.ingredients
+      response = hover_on_source(source, { line: 13, character: 9 })
+
+      # Should NOT crash with "undefined method 'delete_prefix' for Types::ClassInstance"
+      # Should return method signature for Array#ingredients (or Recipe#ingredients)
+      expect(response).not_to be_nil
+      expect(response.contents.value).to match(/ingredients/)
+    end
   end
 
   describe "Def Node Hover" do
