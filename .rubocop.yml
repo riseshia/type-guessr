@@ -53,8 +53,4 @@ RSpec/SpecFilePathFormat:
   Enabled: false
 
 RSpec/ContextWording:
-  Prefixes:
-    - when
-    - with
-    - without
-    - for
+  Enabled: false
