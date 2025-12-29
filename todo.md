@@ -7,29 +7,20 @@
 
 > Must fix for production deployment. These issues can cause data corruption, crashes, or memory exhaustion.
 
-### 1. Thread Safety Issues
+### 1. Thread Safety Issues (RBSProvider)
 
-**Problem:** Multiple singleton classes lack proper thread synchronization.
+**Problem:** RBSProvider singleton lacks proper thread synchronization for lazy loading.
 
 **Locations:**
-- `lib/type_guessr/core/constant_index.rb` - No Mutex protection
 - `lib/type_guessr/core/rbs_provider.rb:174-188` - Race condition in lazy loading
 
 **Why Critical:**
 - Ruby LSP runs in multi-threaded environment (worker threads for AST analysis)
 - RuntimeAdapter uses WORKER_COUNT=4 threads (`runtime_adapter.rb:76`)
-- Race conditions can cause data corruption or crashes
+- Race conditions can cause double initialization or crashes
 
 **Current Code:**
 ```ruby
-# ConstantIndex - Missing Mutex
-class ConstantIndex
-  include Singleton
-  def initialize
-    @aliases = {}  # ⚠️ Not thread-safe
-  end
-end
-
 # RBSProvider - Race condition
 def ensure_environment_loaded
   return if @env  # ⚠️ Two threads can both pass this check
@@ -39,27 +30,38 @@ end
 ```
 
 **Impact:**
-- Data corruption in constant alias resolution
-- Double initialization of RBS environment
+- Double initialization of RBS environment (expensive operation)
 - Potential crashes under concurrent access
+- Wasted resources loading environment multiple times
 
 **Solution:**
-- [ ] Add Mutex to ConstantIndex (follow VariableIndex pattern)
 - [ ] Implement thread-safe lazy loading in RBSProvider:
   ```ruby
+  def initialize
+    @mutex = Mutex.new
+    @env = nil
+    @loader = nil
+  end
+
   def ensure_environment_loaded
     @mutex.synchronize do
       return if @env
       @loader = RBS::EnvironmentLoader.new
-      @env = RBS::Environment.from_loader(@loader)
+      @env = RBS::Environment.from_loader(@loader).resolve_type_names
     end
+  rescue StandardError => e
+    warn "Failed to load RBS environment: #{e.class}: #{e.message}" if ENV["DEBUG"]
+    @env = RBS::Environment.new
   end
   ```
-- [ ] Add concurrent access tests (`spec/concurrency/constant_index_spec.rb`, `rbs_provider_spec.rb`)
+- [ ] Add concurrent access tests (`spec/concurrency/rbs_provider_spec.rb`)
 
 **References:**
+- ConstantIndex.rb:26 - Example of proper Mutex usage (already fixed)
 - VariableIndex.rb:34 - Example of proper Mutex usage
 - RuntimeAdapter.rb:76-100 - Worker thread pool implementation
+
+**Note:** ConstantIndex already has proper Mutex protection (verified 2025-12-29)
 
 ---
 

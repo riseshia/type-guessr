@@ -29,32 +29,7 @@ module TypeGuessr
 
       # Track local variable assignments
       def visit_local_variable_write_node(node)
-        var_name = node.name.to_s
-        location = node.name_loc
-        line = location.start_line
-        column = location.start_column
-        register_variable(var_name, line, column)
-
-        # Analyze and store the type of the assigned value
-        if node.value
-          type = analyze_value_type(node.value)
-          if type
-            scope_type = determine_scope_type(var_name)
-            scope_id = generate_scope_id(scope_type)
-            @index.add_variable_type(
-              file_path: @file_path,
-              scope_type: scope_type,
-              scope_id: scope_id,
-              var_name: var_name,
-              def_line: line,
-              def_column: column,
-              type: type
-            )
-          else
-            store_call_assignment_if_applicable(var_name: var_name, def_line: line, def_column: column, value: node.value)
-          end
-        end
-
+        handle_variable_write_node(node)
         super
       end
 
@@ -68,63 +43,13 @@ module TypeGuessr
 
       # Track instance variable assignments
       def visit_instance_variable_write_node(node)
-        var_name = node.name.to_s
-        location = node.name_loc
-        line = location.start_line
-        column = location.start_column
-        register_variable(var_name, line, column)
-
-        # Analyze and store the type of the assigned value
-        if node.value
-          type = analyze_value_type(node.value)
-          if type
-            scope_type = determine_scope_type(var_name)
-            scope_id = generate_scope_id(scope_type)
-            @index.add_variable_type(
-              file_path: @file_path,
-              scope_type: scope_type,
-              scope_id: scope_id,
-              var_name: var_name,
-              def_line: line,
-              def_column: column,
-              type: type
-            )
-          else
-            store_call_assignment_if_applicable(var_name: var_name, def_line: line, def_column: column, value: node.value)
-          end
-        end
-
+        handle_variable_write_node(node)
         super
       end
 
       # Track class variable assignments
       def visit_class_variable_write_node(node)
-        var_name = node.name.to_s
-        location = node.name_loc
-        line = location.start_line
-        column = location.start_column
-        register_variable(var_name, line, column)
-
-        # Analyze and store the type of the assigned value
-        if node.value
-          type = analyze_value_type(node.value)
-          if type
-            scope_type = determine_scope_type(var_name)
-            scope_id = generate_scope_id(scope_type)
-            @index.add_variable_type(
-              file_path: @file_path,
-              scope_type: scope_type,
-              scope_id: scope_id,
-              var_name: var_name,
-              def_line: line,
-              def_column: column,
-              type: type
-            )
-          else
-            store_call_assignment_if_applicable(var_name: var_name, def_line: line, def_column: column, value: node.value)
-          end
-        end
-
+        handle_variable_write_node(node)
         super
       end
 
@@ -311,6 +236,46 @@ module TypeGuessr
       end
 
       private
+
+      # Generic handler for all variable write nodes (local, instance, class)
+      # Extracts variable information and delegates to appropriate index methods
+      # @param node [Prism::LocalVariableWriteNode, Prism::InstanceVariableWriteNode, Prism::ClassVariableWriteNode]
+      def handle_variable_write_node(node)
+        var_name = node.name.to_s
+        location = node.name_loc
+        line = location.start_line
+        column = location.start_column
+        register_variable(var_name, line, column)
+
+        return unless node.value
+
+        # Analyze and store the type of the assigned value
+        type = analyze_value_type(node.value)
+        if type
+          store_variable_type(var_name, line, column, type)
+        else
+          store_call_assignment_if_applicable(var_name: var_name, def_line: line, def_column: column, value: node.value)
+        end
+      end
+
+      # Store variable type in the index
+      # @param var_name [String] the variable name
+      # @param line [Integer] the definition line
+      # @param column [Integer] the definition column
+      # @param type [Types::Type] the type to store
+      def store_variable_type(var_name, line, column, type)
+        scope_type = determine_scope_type(var_name)
+        scope_id = generate_scope_id(scope_type)
+        @index.add_variable_type(
+          file_path: @file_path,
+          scope_type: scope_type,
+          scope_id: scope_id,
+          var_name: var_name,
+          def_line: line,
+          def_column: column,
+          type: type
+        )
+      end
 
       # Analyze a value node and return its guessed type
       # @param node [Prism::Node] the value node to analyze
