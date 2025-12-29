@@ -1671,8 +1671,7 @@ RSpec.describe "Hover Integration" do
     end
 
     # Edge case: Hash#each with multiple block parameters
-    it "infers block parameter types from Hash#each" do
-      skip "Generic type variable substitution not yet implemented (Hash[K, V] → K, V)"
+    it "infers block parameter types from Hash#each - k parameter" do
       source = <<~RUBY
         def foo
           data = { name: "Alice", age: 30 }
@@ -1681,11 +1680,58 @@ RSpec.describe "Hover Integration" do
       RUBY
 
       # Hover on "k" parameter - should be Symbol
-      response = hover_on_source(source, { line: 2, character: 16 })
+      response = hover_on_source(source, { line: 2, character: 15 })
 
       expect(response).not_to be_nil
       # k should be Symbol (key type)
       expect(response.contents.value).to match(/Symbol/)
+    end
+
+    it "infers block parameter types from Hash#each - v parameter" do
+      source = <<~RUBY
+        def foo
+          data = { name: "Alice", age: 30 }
+          data.each { |k, v| puts v }
+        end
+      RUBY
+
+      # Hover on "v" parameter - should be Union of value types
+      response = hover_on_source(source, { line: 2, character: 18 })
+
+      expect(response).not_to be_nil
+      # v should be String | Integer (value types)
+      expect(response.contents.value).to match(/(String|Integer)/)
+    end
+
+    it "infers block parameter type from Hash#each_key" do
+      source = <<~RUBY
+        def foo
+          data = { name: "Alice", age: 30 }
+          data.each_key { |k| puts k }
+        end
+      RUBY
+
+      # Hover on "k" parameter - should be Symbol
+      response = hover_on_source(source, { line: 2, character: 19 })
+
+      expect(response).not_to be_nil
+      expect(response.contents.value).to match(/Symbol/)
+    end
+
+    it "infers block parameter type from Hash#each_value" do
+      source = <<~RUBY
+        def foo
+          data = { name: "Alice", age: 30 }
+          data.each_value { |v| puts v }
+        end
+      RUBY
+
+      # Hover on "v" parameter - should be Union of value types
+      response = hover_on_source(source, { line: 2, character: 21 })
+
+      expect(response).not_to be_nil
+      # v should be String | Integer (value types)
+      expect(response.contents.value).to match(/(String|Integer)/)
     end
 
     # Edge case: Enumerator chain

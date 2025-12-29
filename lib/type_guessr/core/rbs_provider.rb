@@ -81,13 +81,16 @@ module TypeGuessr
       # Get block parameter types with type variable substitution
       # @param class_name [String] the receiver class name
       # @param method_name [String] the method name
-      # @param elem [Types::Type, nil] the element type to substitute for Elem
+      # @param elem [Types::Type, nil] the element type to substitute for Elem (Array)
+      # @param key [Types::Type, nil] the key type to substitute for K (Hash)
+      # @param value [Types::Type, nil] the value type to substitute for V (Hash)
       # @return [Array<Types::Type>] array of block parameter types with substitution applied
-      def get_block_param_types_with_substitution(class_name, method_name, elem: nil)
+      def get_block_param_types_with_substitution(class_name, method_name, elem: nil, key: nil, value: nil)
         block_sig = find_block_signature(class_name, method_name)
         return [] unless block_sig
 
-        extract_block_param_types(block_sig, substitutions: { Elem: elem })
+        substitutions = { Elem: elem, K: key, V: value }.compact
+        extract_block_param_types(block_sig, substitutions: substitutions)
       end
 
       private
@@ -127,6 +130,10 @@ module TypeGuessr
         when RBS::Types::Variable
           # Check if we have a substitution for this type variable
           substitutions[rbs_type.name] || Types::Unknown.instance
+        when RBS::Types::Tuple
+          # Handle tuple types like [K, V] for Hash#each
+          element_types = rbs_type.types.map { |t| rbs_type_to_types_with_substitution(t, substitutions) }
+          Types::ArrayType.new(Types::Union.new(element_types))
         else
           rbs_type_to_types(rbs_type)
         end

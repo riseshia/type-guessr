@@ -196,5 +196,46 @@ RSpec.describe TypeGuessr::Core::RBSProvider do
 
       expect(types).to eq([])
     end
+
+    describe "Hash type variable substitution" do
+      it "substitutes K and V for Hash#each" do
+        key_type = TypeGuessr::Core::Types::ClassInstance.new("Symbol")
+        value_type = TypeGuessr::Core::Types::ClassInstance.new("Integer")
+        types = provider.get_block_param_types_with_substitution(
+          "Hash", "each", key: key_type, value: value_type
+        )
+
+        expect(types).to be_an(Array)
+        expect(types.size).to eq(1)
+        # Hash#each yields [K, V] as tuple, which becomes ArrayType with Union
+        expect(types.first).to be_a(TypeGuessr::Core::Types::ArrayType)
+      end
+
+      it "substitutes K for Hash#each_key" do
+        key_type = TypeGuessr::Core::Types::ClassInstance.new("Symbol")
+        value_type = TypeGuessr::Core::Types::ClassInstance.new("Integer")
+        types = provider.get_block_param_types_with_substitution(
+          "Hash", "each_key", key: key_type, value: value_type
+        )
+
+        expect(types).to be_an(Array)
+        expect(types.size).to eq(1)
+        expect(types.first).to be_a(TypeGuessr::Core::Types::ClassInstance)
+        expect(types.first.name).to eq("Symbol")
+      end
+
+      it "substitutes V for Hash#each_value" do
+        key_type = TypeGuessr::Core::Types::ClassInstance.new("Symbol")
+        value_type = TypeGuessr::Core::Types::ClassInstance.new("Integer")
+        types = provider.get_block_param_types_with_substitution(
+          "Hash", "each_value", key: key_type, value: value_type
+        )
+
+        expect(types).to be_an(Array)
+        expect(types.size).to eq(1)
+        expect(types.first).to be_a(TypeGuessr::Core::Types::ClassInstance)
+        expect(types.first.name).to eq("Integer")
+      end
+    end
   end
 end

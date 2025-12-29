@@ -231,6 +231,8 @@ module RubyLsp
           type_obj.name
         when Types::ArrayType
           "Array"
+        when Types::HashShape
+          "Hash"
         else
           TypeFormatter.format(type_obj)
         end
@@ -482,13 +484,9 @@ module RubyLsp
         call_node = @node_context.call_node
         return nil unless call_node
 
-        warn "BlockParam: found call_node #{call_node.name}" if ENV["DEBUG"]
-
         # Get the receiver type
         receiver_type = @call_chain_resolver.resolve(call_node.receiver)
         return nil if receiver_type.nil? || receiver_type == Types::Unknown.instance
-
-        warn "BlockParam: receiver_type = #{receiver_type.inspect}" if ENV["DEBUG"]
 
         # Get block parameter types from RBS with substitution
         method_name = call_node.name.to_s
@@ -497,17 +495,63 @@ module RubyLsp
         # Extract element type for substitution (if ArrayType)
         elem_type = receiver_type.is_a?(Types::ArrayType) ? receiver_type.element_type : nil
 
+        # Extract key and value types for HashShape
+        key_type = nil
+        value_type = nil
+
+        if receiver_type.is_a?(Types::HashShape)
+          key_type = Types::ClassInstance.new("Symbol")
+          field_types = receiver_type.fields.values
+          value_type = field_types.size == 1 ? field_types.first : Types::Union.new(field_types)
+        end
+
         block_param_types = rbs_provider.get_block_param_types_with_substitution(
           class_name,
           method_name,
-          elem: elem_type
+          elem: elem_type,
+          key: key_type,
+          value: value_type
         )
 
         return nil if block_param_types.empty?
 
         # Find the index of this parameter in the block
         param_index = find_block_param_index(node)
-        return nil if param_index.nil? || param_index >= block_param_types.size
+        return nil if param_index.nil?
+
+        # Handle tuple destructuring (e.g., Hash#each with |k, v|)
+        # RBS defines Hash#each as: () { ([K, V]) -> void } -> self
+        # Ruby destructures [K, V] into separate parameters |k, v|
+        if block_param_types.size == 1 && block_param_types.first.is_a?(Types::ArrayType)
+          tuple_type = block_param_types.first
+          if tuple_type.element_type.is_a?(Types::Union)
+            union_types = tuple_type.element_type.types
+
+            # Count the actual number of block parameters
+            call_node = @node_context.call_node
+            block_node = call_node&.block
+            num_params = if block_node.is_a?(Prism::BlockNode) && block_node.parameters
+                           block_node.parameters.parameters&.requireds&.size || 0
+                         else
+                           0
+                         end
+
+            # For Hash#each with |k, v| (2 params) and union [Symbol, String, Integer] (3 types):
+            # param 0 (k) -> union[0] = Symbol
+            # param 1 (v) -> Union[union[1], union[2]] = Union[String, Integer]
+            result = if num_params == 2 && param_index == 1 && union_types.size > 2
+                       # Reconstruct union for remaining types
+                       remaining_types = union_types[1..]
+                       remaining_types.size == 1 ? remaining_types.first : Types::Union.new(remaining_types)
+                     elsif param_index < union_types.size
+                       union_types[param_index]
+                     end
+
+            return result
+          end
+        end
+
+        return nil if param_index >= block_param_types.size
 
         block_param_types[param_index]
       rescue StandardError => e

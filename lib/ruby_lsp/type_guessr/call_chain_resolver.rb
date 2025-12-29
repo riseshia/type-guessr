@@ -129,6 +129,8 @@ module RubyLsp
           type_obj.name
         when Types::ArrayType
           "Array"
+        when Types::HashShape
+          "Hash"
         else
           ::TypeGuessr::Core::TypeFormatter.format(type_obj)
         end
