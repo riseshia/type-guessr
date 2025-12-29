@@ -560,9 +560,10 @@ module RubyLsp
         analyzer = FlowAnalyzer.new
         result = analyzer.analyze(source)
 
-        # Query type at the node's line for the specific variable
-        # Note: FlowAnalyzer uses 1-based line numbers
-        inferred_type = result.type_at(node.location.start_line, node.location.start_column, var_name)
+        # Calculate relative line number within the method slice
+        # FlowAnalyzer uses 1-based line numbers relative to the sliced source
+        relative_line = node.location.start_line - method_node.location.start_line + 1
+        inferred_type = result.type_at(relative_line, node.location.start_column, var_name)
         warn "FlowAnalyzer: inferred type = #{inferred_type.inspect}" if ENV["DEBUG"]
         inferred_type
       rescue StandardError => e

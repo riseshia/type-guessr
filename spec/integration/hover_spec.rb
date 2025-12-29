@@ -892,6 +892,28 @@ RSpec.describe "Hover Integration" do
       expect(response.contents.value).not_to match(/Integer/)
     end
 
+    it "tracks type changes through reassignment in non-first-line method" do
+      source = <<~RUBY
+        class MyClass
+          def some_other_method
+            # filler
+          end
+
+          def foo
+            x = 1
+            x = "string"
+            x
+          end
+        end
+      RUBY
+
+      # Hover on final "x" (0-indexed: line 8) - should show String (the last assignment)
+      response = hover_on_source(source, { line: 8, character: 4 })
+
+      expect(response.contents.value).to match(/String/)
+      expect(response.contents.value).not_to match(/Integer/)
+    end
+
     it "falls back to VariableTypeResolver when FlowAnalyzer fails" do
       source = <<~RUBY
         class Foo
