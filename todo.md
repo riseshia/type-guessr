@@ -377,123 +377,7 @@ end
 
 ---
 
-### 6. Code Duplication in AST Analyzer
-
-**Problem:** Nearly identical logic repeated 3 times for different variable types.
-
-**Location:** `lib/type_guessr/core/ast_analyzer.rb:30-129`
-
-**Why Important:**
-- Violates DRY principle
-- Changes require updating 3 places (error-prone)
-- Harder to understand and maintain
-- Increases test complexity
-
-**Current Code:**
-```ruby
-def visit_local_variable_write_node(node)
-  var_name = node.name.to_s
-  location = node.name_loc
-  line = location.start_line
-  column = location.start_column
-  register_variable(var_name, line, column)
-
-  if node.value
-    type = analyze_value_type(node.value)
-    if type
-      scope_type = determine_scope_type(var_name)
-      scope_id = generate_scope_id(scope_type)
-      @index.add_variable_type(...)
-    else
-      store_call_assignment_if_applicable(...)
-    end
-  end
-  super
-end
-
-def visit_instance_variable_write_node(node)
-  # ⚠️ Exact same logic, 100+ lines duplicated
-end
-
-def visit_class_variable_write_node(node)
-  # ⚠️ Exact same logic, 100+ lines duplicated
-end
-```
-
-**Impact:**
-- Bug fixes must be applied 3x
-- Inconsistent behavior if one copy is missed
-- ~200 lines of duplicated code
-
-**Solution:**
-- [ ] Extract common logic using Template Method pattern:
-  ```ruby
-  # Generic handler for all variable write nodes
-  def handle_variable_write_node(node)
-    var_name = node.name.to_s
-    location = node.name_loc
-    line = location.start_line
-    column = location.start_column
-
-    register_variable(var_name, line, column)
-
-    if node.value
-      type = analyze_value_type(node.value)
-      if type
-        store_variable_type(var_name, line, column, type)
-      else
-        store_call_assignment_if_applicable(
-          var_name: var_name,
-          def_line: line,
-          def_column: column,
-          value: node.value
-        )
-      end
-    end
-
-    super
-  end
-
-  def visit_local_variable_write_node(node)
-    handle_variable_write_node(node)
-  end
-
-  def visit_instance_variable_write_node(node)
-    handle_variable_write_node(node)
-  end
-
-  def visit_class_variable_write_node(node)
-    handle_variable_write_node(node)
-  end
-
-  private
-
-  def store_variable_type(var_name, line, column, type)
-    scope_type = determine_scope_type(var_name)
-    scope_id = generate_scope_id(scope_type)
-    @index.add_variable_type(
-      file_path: @file_path,
-      scope_type: scope_type,
-      scope_id: scope_id,
-      var_name: var_name,
-      def_line: line,
-      def_column: column,
-      type: type
-    )
-  end
-  ```
-- [ ] Update tests to verify all variable types behave consistently
-- [ ] Consider extracting to VariableWriteHandler if pattern grows
-
-**Benefits:**
-- Single source of truth
-- Easier to modify behavior
-- Reduced test complexity
-- ~200 lines reduced to ~50
-
----
-
-### 7. VariableIndex Structure Improvement
+### 6. VariableIndex Structure Improvement
 
 **Problem:** Deep nested hash structure is fragile and hard to reason about.
 
@@ -617,7 +501,7 @@ end
 
 ---
 
-### 8. Hover.rb Complexity Exceeds Limits
+### 7. Hover.rb Complexity Exceeds Limits
 
 **Problem:** Single file with too many responsibilities (605 lines).
 
@@ -706,41 +590,6 @@ end
 - Clear responsibilities
 - Easier to test
 - Better code navigation
-
----
-
-### 9. Variable Reassignment Type Not Updated
-
-**Problem:** Variable type not updated when reassigned to a different type.
-
-**Example:**
-```ruby
-a = [1,2,3]          # Array[Integer]
-a = { a: 1, b: 2 }   # Still shows Array[Integer] instead of Hash
-```
-
-**Why Important:**
-- Core functionality bug affecting type inference accuracy
-- Variable reassignment is common in Ruby code
-- Incorrect types lead to wrong Go to Definition targets
-
-**Potential Causes:**
-1. Scope ID mismatch between AST analysis and hover lookup
-2. Definition not being indexed for reassignment
-3. Method calls lookup overriding direct type lookup
-
-**Investigation Needed:**
-- [ ] Add debug logging to trace type lookup flow
-- [ ] Write failing test case reproducing the bug
-- [ ] Check if scope_id matches between storage and retrieval
-- [ ] Verify Hash literal is stored in `@types` index
-
-**Locations:**
-- `lib/type_guessr/core/variable_index.rb:232-255` - `find_variable_type_at_location`
-- `lib/type_guessr/core/type_resolver.rb:79-125` - `get_direct_type`
-- `lib/type_guessr/core/ast_analyzer.rb:30-130` - variable write visitors
-
----
 
 ## 🟡 P2: Quality Improvements
 
