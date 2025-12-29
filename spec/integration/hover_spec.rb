@@ -267,13 +267,11 @@ RSpec.describe "Hover Integration" do
     # Edge case: Symbol-keyed hash
     it "infers HashShape from symbol-keyed hash" do
       source = <<~RUBY
-        def foo
-          user = { name: "John", age: 20 }
-          user
-        end
+        user = { name: "John", age: 20 }
+        user
       RUBY
 
-      response = hover_on_source(source, { line: 2, character: 2 })
+      response = hover_on_source(source, { line: 1, character: 2 })
 
       expect(response.contents.value).to match(/Guessed type:.*\{/)
       expect(response.contents.value).to match(/name:/)
@@ -283,13 +281,11 @@ RSpec.describe "Hover Integration" do
     # Edge case: Non-symbol keys
     it "infers Hash from string-keyed hash" do
       source = <<~RUBY
-        def foo
-          data = { "key" => "value" }
-          data
-        end
+        data = { "key" => "value" }
+        data
       RUBY
 
-      response = hover_on_source(source, { line: 2, character: 2 })
+      response = hover_on_source(source, { line: 1, character: 2 })
 
       expect(response.contents.value).to match(/Guessed type:.*Hash/)
     end
@@ -297,13 +293,11 @@ RSpec.describe "Hover Integration" do
     # Edge case: Mixed keys
     it "infers Hash from hash with mixed keys" do
       source = <<~RUBY
-        def foo
-          mixed = { name: "John", "key" => 1 }
-          mixed
-        end
+        mixed = { name: "John", "key" => 1 }
+        mixed
       RUBY
 
-      response = hover_on_source(source, { line: 2, character: 2 })
+      response = hover_on_source(source, { line: 1, character: 2 })
 
       expect(response.contents.value).to match(/Guessed type:.*Hash/)
     end
@@ -311,13 +305,11 @@ RSpec.describe "Hover Integration" do
     # Edge case: Nested hash
     it "infers nested HashShape from nested symbol-keyed hash" do
       source = <<~RUBY
-        def foo
-          user = { name: "John", address: { city: "Seoul" } }
-          user
-        end
+        user = { name: "John", address: { city: "Seoul" } }
+        user
       RUBY
 
-      response = hover_on_source(source, { line: 2, character: 2 })
+      response = hover_on_source(source, { line: 1, character: 2 })
 
       expect(response.contents.value).to match(/Guessed type:.*\{/)
       expect(response.contents.value).to match(/name:/)
@@ -332,15 +324,13 @@ RSpec.describe "Hover Integration" do
           class User
           end
 
-          def foo
-            user = User.new
-            user
-          end
+          user = User.new
+          user
         RUBY
       end
 
       it "→ User" do
-        expect_hover_type(line: 6, column: 4, expected: "User")
+        expect_hover_type(line: 5, column: 3, expected: "User")
       end
     end
 
@@ -352,15 +342,13 @@ RSpec.describe "Hover Integration" do
             end
           end
 
-          def test_namespaced
-            admin = Admin::User.new
-            admin
-          end
+          admin = Admin::User.new
+          admin
         RUBY
       end
 
       it "→ Admin::User" do
-        expect_hover_type(line: 8, column: 4, expected: "Admin::User")
+        expect_hover_type(line: 7, column: 3, expected: "Admin::User")
       end
     end
 
@@ -370,15 +358,13 @@ RSpec.describe "Hover Integration" do
           class User
           end
 
-          def foo
-            user = User.new("name", 20)
-            user
-          end
+          user = User.new("name", 20)
+          user
         RUBY
       end
 
       it "→ User" do
-        expect_hover_type(line: 5, column: 4, expected: "User")
+        expect_hover_type(line: 4, column: 3, expected: "User")
       end
     end
 
@@ -394,15 +380,13 @@ RSpec.describe "Hover Integration" do
             end
           end
 
-          def foo
-            obj = A::B::C::D.new
-            obj
-          end
+          obj = A::B::C::D.new
+          obj
         RUBY
       end
 
       it "→ A::B::C::D" do
-        expect_hover_type(line: 11, column: 4, expected: "A::B::C::D")
+        expect_hover_type(line: 10, column: 3, expected: "A::B::C::D")
       end
     end
 

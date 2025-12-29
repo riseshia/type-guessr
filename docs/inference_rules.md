@@ -113,10 +113,8 @@ nested = [[1, 2], [3, 4]]
 class User
 end
 
-def foo
-  user = User.new
-  us[e]r  # Guessed Type: User
-end
+user = User.new
+use[r]  # Guessed Type: User
 ```
 
 ### Namespaced class
@@ -127,10 +125,8 @@ module Admin
   end
 end
 
-def test_namespaced
-  admin = Admin::User.new
-  ad[m]in  # Guessed Type: Admin::User
-end
+admin = Admin::User.new
+adm[i]n  # Guessed Type: Admin::User
 ```
 
 ### .new with arguments
@@ -139,10 +135,8 @@ end
 class User
 end
 
-def foo
-  us[e]r = User.new("name", 20)  # Guessed Type: User
-  user
-end
+use[r] = User.new("name", 20)  # Guessed Type: User
+user
 ```
 
 ### Deeply nested namespace
@@ -157,10 +151,8 @@ module A
   end
 end
 
-def foo
-  ob[j] = A::B::C::D.new  # Guessed Type: A::B::C::D
-  obj
-end
+obj[ ]= A::B::C::D.new  # Guessed Type: A::B::C::D
+obj
 ```
 
 ## FlowAnalyzer Integration
