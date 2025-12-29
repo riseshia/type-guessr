@@ -32,6 +32,12 @@ module RubyLsp
         load_config["debug"] == true
       end
 
+      def debug_server_enabled?
+        return false if %w[1 true].include?(ENV["TYPE_GUESSR_DISABLE_DEBUG_SERVER"])
+
+        debug?
+      end
+
       def load_config
         path = File.join(Dir.pwd, CONFIG_FILENAME)
         return default_config if !File.exist?(path)

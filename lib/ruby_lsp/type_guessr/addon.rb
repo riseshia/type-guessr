@@ -131,7 +131,7 @@ module RubyLsp
 
       def start_debug_server_if_enabled
         return if !@enabled
-        return if !debug_mode?
+        return if !Config.debug_server_enabled?
 
         @debug_server = DebugServer.new(@global_state)
         @debug_server.start

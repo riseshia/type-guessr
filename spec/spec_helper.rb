@@ -8,8 +8,9 @@ require "uri"
 # Ensure TypeInferrer is loaded for tests
 require "ruby_lsp/type_guessr/type_inferrer"
 
-# Enable debug mode for tests
+# Enable debug mode for tests (but disable debug server)
 ENV["TYPE_GUESSR_DEBUG"] = "1"
+ENV["TYPE_GUESSR_DISABLE_DEBUG_SERVER"] = "1"
 
 RSpec.configure do |config|
   # Enable flags like --only-failures and --next-failure
