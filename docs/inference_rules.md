@@ -64,7 +64,7 @@ pattern = /[a-z]+/
 
 ```ruby
 value = nil
-[v]alue  # Guessed Type: NilClass
+[v]alue  # Guessed Type: nil
 ```
 
 ### Interpolated string

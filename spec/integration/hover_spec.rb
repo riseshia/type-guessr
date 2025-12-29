@@ -133,9 +133,9 @@ RSpec.describe "Hover Integration" do
         RUBY
       end
 
-      it "→ TrueClass or FalseClass" do
+      it "→ true or false" do
         response = hover_on_source(source, { line: 1, character: 0 })
-        expect(response.contents.value).to match(/Guessed type:.*(TrueClass|FalseClass)/)
+        expect(response.contents.value).to match(/Guessed type:.*(true|false)/)
       end
     end
 
@@ -147,9 +147,9 @@ RSpec.describe "Hover Integration" do
         RUBY
       end
 
-      it "→ TrueClass or FalseClass" do
+      it "→ true or false" do
         response = hover_on_source(source, { line: 1, character: 0 })
-        expect(response.contents.value).to match(/Guessed type:.*(TrueClass|FalseClass)/)
+        expect(response.contents.value).to match(/Guessed type:.*(true|false)/)
       end
     end
 
@@ -161,8 +161,8 @@ RSpec.describe "Hover Integration" do
         RUBY
       end
 
-      it "→ NilClass" do
-        expect_hover_type(line: 2, column: 0, expected: "NilClass")
+      it "→ nil" do
+        expect_hover_type(line: 2, column: 0, expected: "nil")
       end
     end
 
@@ -1043,7 +1043,7 @@ RSpec.describe "Hover Integration" do
 
       response = hover_on_source(source, { line: 3, character: 2 })
 
-      expect(response.contents.value).to match(/Integer|NilClass/)
+      expect(response.contents.value).to match(/Integer|nil/)
     end
 
     # Edge case: Compound assignment &&=
@@ -1160,7 +1160,7 @@ RSpec.describe "Hover Integration" do
       expect(response.contents.value).to match(/String/)
     end
 
-    it "infers NilClass for empty method body" do
+    it "infers nil for empty method body" do
       skip "RubyIndexer does not index dynamically generated test sources"
       source = <<~RUBY
         class Animal
@@ -1175,10 +1175,10 @@ RSpec.describe "Hover Integration" do
         end
       RUBY
 
-      # Hover on "cc" - should infer NilClass from Animal#eat empty body
+      # Hover on "cc" - should infer nil from Animal#eat empty body
       response = hover_on_source(source, { line: 7, character: 2 })
 
-      expect(response.contents.value).to match(/NilClass/)
+      expect(response.contents.value).to match(/nil/)
     end
 
     it "infers return type from explicit return statement" do
@@ -1576,7 +1576,7 @@ RSpec.describe "Hover Integration" do
       expect(response.contents.value).to match(/String/)
     end
 
-    it "shows NilClass for empty method body" do
+    it "shows nil for empty method body" do
       source = <<~RUBY
         class Animal
           def eat
@@ -1588,7 +1588,7 @@ RSpec.describe "Hover Integration" do
       response = hover_on_source(source, { line: 1, character: 6 })
 
       expect(response).not_to be_nil
-      expect(response.contents.value).to match(/NilClass/)
+      expect(response.contents.value).to match(/nil/)
       expect(response.contents.value).not_to match(/untyped/)
     end
 

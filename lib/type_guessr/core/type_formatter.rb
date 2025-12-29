@@ -14,7 +14,7 @@ module TypeGuessr
         when Types::Unknown
           "untyped"
         when Types::ClassInstance
-          type.name
+          format_class_instance(type)
         when Types::Union
           # Format each type and join with pipe
           type.types.map { |t| format(t) }.join(" | ")
@@ -24,6 +24,22 @@ module TypeGuessr
           format_hash_shape(type)
         else
           "untyped"
+        end
+      end
+
+      # Format ClassInstance with special handling for singleton types
+      # @param type [Types::ClassInstance] the class instance to format
+      # @return [String] formatted type name
+      def self.format_class_instance(type)
+        case type.name
+        when "NilClass"
+          "nil"
+        when "TrueClass"
+          "true"
+        when "FalseClass"
+          "false"
+        else
+          type.name
         end
       end
 

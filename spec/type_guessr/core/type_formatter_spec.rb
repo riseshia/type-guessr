@@ -16,6 +16,21 @@ RSpec.describe TypeGuessr::Core::TypeFormatter do
       expect(described_class.format(type)).to eq("String")
     end
 
+    it "formats NilClass as nil" do
+      type = TypeGuessr::Core::Types::ClassInstance.new("NilClass")
+      expect(described_class.format(type)).to eq("nil")
+    end
+
+    it "formats TrueClass as true" do
+      type = TypeGuessr::Core::Types::ClassInstance.new("TrueClass")
+      expect(described_class.format(type)).to eq("true")
+    end
+
+    it "formats FalseClass as false" do
+      type = TypeGuessr::Core::Types::ClassInstance.new("FalseClass")
+      expect(described_class.format(type)).to eq("false")
+    end
+
     it "formats Union with pipe separator" do
       type1 = TypeGuessr::Core::Types::ClassInstance.new("String")
       type2 = TypeGuessr::Core::Types::ClassInstance.new("Integer")
