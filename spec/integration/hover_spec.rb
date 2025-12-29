@@ -914,6 +914,55 @@ RSpec.describe "Hover Integration" do
       expect(response.contents.value).not_to match(/Integer/)
     end
 
+    it "tracks type changes through reassignment at top-level (read node)" do
+      source = <<~RUBY
+        a = [1,2,3]
+        a = { a: 1, b: 2 }
+        a
+      RUBY
+
+      # Hover on final "a" read - should show Hash/HashShape (the last assignment), NOT Array
+      response = hover_on_source(source, { line: 2, character: 0 })
+
+      # Should show HashShape or Hash
+      expect(response.contents.value).to match(/\{|Hash/)
+      # Should NOT show Array from the first assignment
+      expect(response.contents.value).not_to match(/Array/)
+    end
+
+    it "tracks type changes through reassignment at top-level (write node)" do
+      source = <<~RUBY
+        a = [1,2,3]
+        a = { a: 1, b: 2 }
+      RUBY
+
+      # Hover on "a" in the second assignment line (the variable being reassigned)
+      response = hover_on_source(source, { line: 1, character: 0 })
+
+      # Should show HashShape or Hash (the new value being assigned)
+      expect(response.contents.value).to match(/\{|Hash/)
+      # Should NOT show Array from the first assignment
+      expect(response.contents.value).not_to match(/Array/)
+    end
+
+    it "tracks type changes through reassignment with method calls" do
+      source = <<~RUBY
+        a = [1,2,3]
+        b = a.map do |num|
+          num * 2
+        end
+        a = { a: 1, b: 2 }
+      RUBY
+
+      # Hover on "a" in the last assignment line
+      response = hover_on_source(source, { line: 4, character: 0 })
+
+      # Should show HashShape or Hash (the new value being assigned)
+      expect(response.contents.value).to match(/\{|Hash/)
+      # Should NOT show Array from the first assignment
+      expect(response.contents.value).not_to match(/Array/)
+    end
+
     it "falls back to VariableTypeResolver when FlowAnalyzer fails" do
       source = <<~RUBY
         class Foo

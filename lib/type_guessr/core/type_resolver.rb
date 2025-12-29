@@ -77,7 +77,33 @@ module TypeGuessr
       # @param file_path [String, nil] optional file path (reserved for future use)
       # @return [TypeGuessr::Core::Types::Type, nil] the guessed type object or nil
       def get_direct_type(variable_name:, hover_line:, scope_type:, scope_id:, file_path: nil)
-        # Find definitions matching the exact scope
+        # First, check if there's a type defined exactly at the hover line
+        # This handles reassignment cases where we hover on a write node
+        direct_at_line = find_direct_type_from_index(
+          variable_name: variable_name,
+          scope_type: scope_type,
+          scope_id: scope_id,
+          hover_line: hover_line
+        )
+
+        # If we found a type at the exact hover line, return it immediately
+        # This ensures reassignments show the new type, not the old one
+        if direct_at_line && direct_at_line != Types::Unknown.instance
+          # Verify this type is actually at the hover line, not just before it
+          definitions_at_line = @index.find_definitions(
+            var_name: variable_name,
+            file_path: file_path,
+            scope_type: scope_type,
+            scope_id: scope_id
+          ).select { |d| d[:def_line] == hover_line }
+
+          # If no definition at this exact line in method call index,
+          # it means this is a write node with a literal/new assignment
+          # Return the type we found
+          return direct_at_line if definitions_at_line.empty?
+        end
+
+        # Find definitions matching the exact scope (from method call index)
         definitions = @index.find_definitions(
           var_name: variable_name,
           file_path: file_path,
@@ -101,15 +127,8 @@ module TypeGuessr
           return type if type
         end
 
-        # Fallback: search type index directly (for variables with type but no method calls)
-        fallback_type = find_direct_type_from_index(
-          variable_name: variable_name,
-          scope_type: scope_type,
-          scope_id: scope_id,
-          hover_line: hover_line
-        )
-
-        return fallback_type if fallback_type && fallback_type != Types::Unknown.instance
+        # Return the direct type we found earlier
+        return direct_at_line if direct_at_line && direct_at_line != Types::Unknown.instance
 
         inferred_from_call = infer_type_from_call_assignment(
           variable_name: variable_name,
@@ -121,7 +140,7 @@ module TypeGuessr
 
         return inferred_from_call if inferred_from_call && inferred_from_call != Types::Unknown.instance
 
-        fallback_type
+        direct_at_line
       end
 
       def rbs_provider
