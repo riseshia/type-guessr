@@ -261,11 +261,17 @@ This project follows strict Test-Driven Development (TDD) practices based on Ken
    ```bash
    bundle exec rspec
    ```
-3. **Check for untracked files** - Add relevant new files
+3. **Regenerate documentation if integration tests changed** - Keep docs in sync
+   ```bash
+   # Only if spec/integration/hover_spec.rb was modified
+   bin/gen-doc
+   git add docs/inference_rules.md
+   ```
+4. **Check for untracked files** - Add relevant new files
    ```bash
    git status
    ```
-4. **Make ONE atomic commit** - Group all related changes together (code + linting + new files)
+5. **Make ONE atomic commit** - Group all related changes together (code + linting + docs + new files)
 
 ## Commit Strategy
 
@@ -321,6 +327,52 @@ bundle exec rubocop -a
 
 # Auto-fix all issues (use with caution)
 bundle exec rubocop -A
+```
+
+### Generating Documentation
+The project uses an automated documentation system that generates `docs/inference_rules.md` from integration tests.
+
+**When to regenerate:**
+- After modifying `spec/integration/hover_spec.rb`
+- After adding/changing tests tagged with `:doc`
+
+**How to regenerate:**
+```bash
+bin/gen-doc
+```
+
+**How it works:**
+- Tests tagged with `:doc` are automatically included in documentation
+- `expect_hover_type` helper records examples and validates behavior
+- Code examples show hover position with `[x]` brackets
+- Documentation is generated in defined order (not random)
+
+**Example documented test:**
+```ruby
+describe "Literal Type Inference", :doc do
+  context "String literal" do
+    let(:source) do
+      <<~RUBY
+        name = "John"
+        name
+      RUBY
+    end
+
+    it "→ String" do
+      expect_hover_type(line: 2, column: 0, expected: "String")
+    end
+  end
+end
+```
+
+**Generated output:**
+```markdown
+### String literal
+
+​```ruby
+name = "John"
+[n]ame  # Guessed Type: String
+​```
 ```
 
 ## Type Inference Strategy

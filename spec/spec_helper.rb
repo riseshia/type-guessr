@@ -8,6 +8,9 @@ require "uri"
 # Ensure TypeInferrer is loaded for tests
 require "ruby_lsp/type_guessr/type_inferrer"
 
+# Load doc collector for generating documentation from tests
+require_relative "support/doc_collector"
+
 # Enable debug mode for tests (but disable debug server)
 ENV["TYPE_GUESSR_DEBUG"] = "1"
 ENV["TYPE_GUESSR_DISABLE_DEBUG_SERVER"] = "1"
@@ -24,7 +27,8 @@ RSpec.configure do |config|
   end
 
   # Run specs in random order to surface order dependencies
-  config.order = :random
+  # But use defined order when generating docs for consistency
+  config.order = ENV["GENERATE_DOCS"] ? :defined : :random
 
   # Seed global randomization in this process using the `--seed` CLI option
   Kernel.srand config.seed

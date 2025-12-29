@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+echo "Generating inference rules documentation..."
+GENERATE_DOCS=1 bundle exec rspec spec/integration/hover_spec.rb --format progress
+
+if [ -f docs/inference_rules.md ]; then
+  echo "✓ Documentation generated at docs/inference_rules.md"
+else
+  echo "✗ Failed to generate documentation"
+  exit 1
+fi
