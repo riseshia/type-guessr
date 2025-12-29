@@ -247,7 +247,7 @@ module RubyLsp
           sig.method_type.to_s
         end
 
-        "**Method:** `#{method_name}`\n\n**Signatures:**\n```ruby\n#{sig_strings.join("\n")}\n```"
+        "**Method:** `#{method_name}`\n\n**RBS Signatures:**\n```ruby\n#{sig_strings.join("\n")}\n```"
       end
 
       # Infer parameter types from default values and usage patterns
@@ -406,7 +406,7 @@ module RubyLsp
         param_strings = format_parameters(parameters, param_types)
         return_str = TypeFormatter.format(return_type)
 
-        "**Signature:** `(#{param_strings.join(", ")}) -> #{return_str}`"
+        "**Guessed Signature:** `(#{param_strings.join(", ")}) -> #{return_str}`"
       end
 
       # Format parameters with types

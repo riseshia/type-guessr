@@ -1356,6 +1356,8 @@ RSpec.describe "Hover Integration" do
       response = hover_on_source(source, { line: 2, character: 6 })
 
       expect(response).not_to be_nil
+      expect(response.contents.value).to match(/\*\*RBS Signatures:\*\*/)
+      expect(response.contents.value).not_to match(/\*\*Signatures:\*\*/)
       expect(response.contents.value).to match(/upcase/)
       expect(response.contents.value).to match(/String/)
     end
@@ -1536,6 +1538,8 @@ RSpec.describe "Hover Integration" do
       response = hover_on_source(source, { line: 0, character: 4 })
 
       expect(response).not_to be_nil
+      expect(response.contents.value).to match(/\*\*Guessed Signature:\*\*/)
+      expect(response.contents.value).not_to match(/\*\*Signature:\*\*/)
       expect(response.contents.value).to match(/\(\)/)
       expect(response.contents.value).to match(/Integer/)
     end
