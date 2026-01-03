@@ -171,5 +171,50 @@ RSpec.describe TypeGuessr::Core::FlowAnalyzer do
 
       expect(return_type).to eq(TypeGuessr::Core::Types::ClassInstance.new("NilClass"))
     end
+
+    it "infers return type from stdlib method call" do
+      source = <<~RUBY
+        def foo
+          "hello".upcase
+        end
+      RUBY
+
+      result = analyzer.analyze(source)
+      return_type = result.return_type_for_method("foo")
+
+      expect(return_type).to eq(string_type)
+    end
+
+    it "infers return type from Array method call" do
+      source = <<~RUBY
+        def foo
+          [1, 2, 3].length
+        end
+      RUBY
+
+      result = analyzer.analyze(source)
+      return_type = result.return_type_for_method("foo")
+
+      expect(return_type).to eq(integer_type)
+    end
+
+    it "infers return type from parameter method call with initial types" do
+      source = <<~RUBY
+        def process(name)
+          name.upcase
+        end
+      RUBY
+
+      # Provide initial type information for the parameter
+      name_type = TypeGuessr::Core::Types::ClassInstance.new("String")
+      initial_types = { "name" => name_type }
+
+      analyzer_with_types = described_class.new(initial_types: initial_types)
+      result = analyzer_with_types.analyze(source)
+      return_type = result.return_type_for_method("process")
+
+      # String#upcase returns String
+      expect(return_type).to eq(string_type)
+    end
   end
 end

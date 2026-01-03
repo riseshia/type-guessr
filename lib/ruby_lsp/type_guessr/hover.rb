@@ -98,7 +98,7 @@ module RubyLsp
         param_types = infer_parameter_types(node.parameters, node)
 
         # 2. Infer return type using FlowAnalyzer
-        return_type = infer_return_type(node)
+        return_type = infer_return_type(node, param_types)
 
         # 3. Format and display signature
         signature = format_def_signature(node.parameters, param_types, return_type)
@@ -387,14 +387,54 @@ module RubyLsp
 
       # Infer return type using FlowAnalyzer
       # @param node [Prism::DefNode] the method definition node
+      # @param param_types [Array<TypeGuessr::Core::Types::Type>] parameter types
       # @return [TypeGuessr::Core::Types::Type] the inferred return type
-      def infer_return_type(node)
+      def infer_return_type(node, param_types = [])
         source = node.slice
-        analyzer = FlowAnalyzer.new
+
+        # Build initial types from parameters
+        initial_types = build_initial_types_from_parameters(node.parameters, param_types)
+
+        # Create analyzer with initial types
+        analyzer = FlowAnalyzer.new(initial_types: initial_types)
         result = analyzer.analyze(source)
         result.return_type_for_method(node.name.to_s)
       rescue StandardError
         Types::Unknown.instance
+      end
+
+      # Build initial type map from parameters
+      # @param parameters [Prism::ParametersNode, nil] the parameters node
+      # @param param_types [Array<TypeGuessr::Core::Types::Type>] parameter types
+      # @return [Hash{String => TypeGuessr::Core::Types::Type}] map of parameter names to types
+      def build_initial_types_from_parameters(parameters, param_types)
+        return {} if parameters.nil? || param_types.empty?
+
+        initial_types = {}
+        type_index = 0
+
+        # Required parameters
+        parameters.requireds&.each do |param|
+          initial_types[param.name.to_s] = param_types[type_index] if type_index < param_types.size
+          type_index += 1
+        end
+
+        # Optional parameters
+        parameters.optionals&.each do |param|
+          initial_types[param.name.to_s] = param_types[type_index] if type_index < param_types.size
+          type_index += 1
+        end
+
+        # Keyword parameters
+        parameters.keywords&.each do |param|
+          initial_types[param.name.to_s] = param_types[type_index] if type_index < param_types.size
+          type_index += 1
+        end
+
+        # Rest, keyword rest, and block parameters are not added to initial types
+        # as they're typically Unknown or not useful for flow analysis
+
+        initial_types
       end
 
       # Format method definition signature

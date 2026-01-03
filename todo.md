@@ -644,6 +644,170 @@ a  # → { x: Integer | String } (requires control flow analysis)
 
 ---
 
+### 9. FlowAnalyzer UserMethodReturnResolver Integration
+
+**Problem:** FlowAnalyzer can infer return types from stdlib methods (via RBS), but not from user-defined methods.
+
+**Current Behavior:**
+```ruby
+class Recipe
+  def ingredients
+    ["salt", "pepper"]
+  end
+
+  def steps
+    ["mix", "cook"]
+  end
+end
+
+def process(recipe)
+  recipe.steps  # FlowAnalyzer returns Unknown (no RBS for Recipe)
+end
+# Signature shows: (Recipe recipe) -> untyped
+# Expected: (Recipe recipe) -> Array[String]
+```
+
+**Why Important:**
+- User-defined methods are majority of application code
+- UserMethodReturnResolver infrastructure already exists
+- FlowAnalyzer already has RBS integration - just needs fallback
+- High practical value for real-world applications
+
+**Current Support:**
+- ✅ Stdlib method return types work (String#upcase → String)
+- ✅ UserMethodReturnResolver can analyze user methods in isolation
+- ❌ FlowAnalyzer doesn't use UserMethodReturnResolver as fallback
+
+**Locations:**
+- `lib/type_guessr/core/flow_analyzer.rb:229-244` - `infer_call_node_type` only queries RBS
+- `lib/type_guessr/core/user_method_return_resolver.rb:25-50` - Working but not integrated
+- `lib/ruby_lsp/type_guessr/hover.rb:392-404` - `infer_return_type` creates FlowAnalyzer
+
+**Solution:**
+
+1. **Add UserMethodReturnResolver to FlowAnalyzer:**
+   ```ruby
+   # In FlowAnalyzer
+   class FlowAnalyzer
+     def initialize(initial_types: {}, user_method_resolver: nil)
+       @initial_types = initial_types
+       @user_method_resolver = user_method_resolver
+     end
+   end
+
+   class FlowVisitor < Prism::Visitor
+     def initialize(initial_types = {}, user_method_resolver = nil)
+       # ... existing code ...
+       @user_method_resolver = user_method_resolver
+     end
+   end
+   ```
+
+2. **Update infer_call_node_type with fallback:**
+   ```ruby
+   def infer_call_node_type(node)
+     return Types::Unknown.instance unless node.receiver
+
+     # Infer receiver type
+     receiver_type = infer_type_from_node(node.receiver)
+     return Types::Unknown.instance if receiver_type == Types::Unknown.instance
+
+     # Extract class name from receiver type
+     class_name = extract_class_name(receiver_type)
+     return Types::Unknown.instance unless class_name
+
+     method_name = node.name.to_s
+
+     # 1. Try RBS first (stdlib, gems)
+     rbs_type = RBSProvider.instance.get_method_return_type(class_name, method_name)
+     return rbs_type if rbs_type != Types::Unknown.instance
+
+     # 2. Fallback to user-defined method analysis
+     if @user_method_resolver
+       user_type = @user_method_resolver.get_return_type(class_name, method_name)
+       return user_type if user_type != Types::Unknown.instance
+     end
+
+     Types::Unknown.instance
+   rescue StandardError
+     Types::Unknown.instance
+   end
+   ```
+
+3. **Integrate in Hover:**
+   ```ruby
+   def infer_return_type(node, param_types = [])
+     source = node.slice
+     initial_types = build_initial_types_from_parameters(node.parameters, param_types)
+
+     # Pass user_method_resolver to FlowAnalyzer
+     analyzer = FlowAnalyzer.new(
+       initial_types: initial_types,
+       user_method_resolver: user_method_resolver
+     )
+     result = analyzer.analyze(source)
+     result.return_type_for_method(node.name.to_s)
+   rescue StandardError
+     Types::Unknown.instance
+   end
+   ```
+
+**Tasks:**
+- [ ] Write failing integration test first (TDD)
+  - `spec/integration/hover_spec.rb` - User-defined method return type in FlowAnalyzer
+  - `spec/type_guessr/core/flow_analyzer_spec.rb` - Unit test with mock resolver
+- [ ] Update `FlowAnalyzer#initialize` to accept `user_method_resolver`
+- [ ] Update `FlowVisitor#initialize` to store and use resolver
+- [ ] Update `infer_call_node_type` with RBS → UserMethod fallback
+- [ ] Update `Hover#infer_return_type` to pass `user_method_resolver`
+- [ ] Run full test suite to ensure no regressions
+
+**Test Cases:**
+```ruby
+# Integration test
+class Recipe
+  def steps
+    ["mix", "cook"]
+  end
+end
+
+def process(recipe)
+  recipe.steps
+end
+# Hover on "process" should show: (Recipe recipe) -> Array[String]
+
+# Fallback order
+def foo(text)
+  text.upcase  # RBS: String#upcase → String
+end
+
+def bar(recipe)
+  recipe.steps  # UserMethod: Recipe#steps → Array[String]
+end
+
+def baz(unknown)
+  unknown.unknown_method  # Unknown: no RBS, no user definition
+end
+```
+
+**Expected Improvements:**
+- User-defined method return types properly inferred
+- Fallback chain: RBS → UserMethodReturnResolver → Unknown
+- No performance impact (UserMethodReturnResolver already cached)
+
+**Limitations:**
+- UserMethodReturnResolver has MAX_DEPTH = 5 for recursion
+- Circular dependencies return Unknown
+- External gem methods without RBS still Unknown
+
+**Files to Modify:**
+- `lib/type_guessr/core/flow_analyzer.rb`
+- `lib/ruby_lsp/type_guessr/hover.rb`
+- `spec/type_guessr/core/flow_analyzer_spec.rb`
+- `spec/integration/hover_spec.rb`
+
+---
+
 ## 🟡 P2: Quality Improvements
 
 > Code quality and maintainability improvements. Important but can be deferred after P0/P1.

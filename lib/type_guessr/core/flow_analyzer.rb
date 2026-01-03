@@ -3,18 +3,25 @@
 require "prism"
 require_relative "types"
 require_relative "literal_type_analyzer"
+require_relative "rbs_provider"
 
 module TypeGuessr
   module Core
     # FlowAnalyzer performs flow-sensitive type analysis
     # Analyzes method/block-local type flow for hover support
     class FlowAnalyzer
+      # Initialize FlowAnalyzer with optional initial type information
+      # @param initial_types [Hash{String => Types::Type}] initial type information for variables
+      def initialize(initial_types: {})
+        @initial_types = initial_types
+      end
+
       # Analyze source code and return analysis result
       # @param source [String] Ruby source code
       # @return [AnalysisResult] analysis result with type information
       def analyze(source)
         parsed = Prism.parse(source)
-        visitor = FlowVisitor.new
+        visitor = FlowVisitor.new(@initial_types)
         parsed.value.accept(visitor)
         AnalysisResult.new(visitor.type_env, visitor.return_types)
       end
@@ -57,12 +64,18 @@ module TypeGuessr
       class FlowVisitor < Prism::Visitor
         attr_reader :type_env, :return_types
 
-        def initialize
-          super
+        # Initialize visitor with optional initial type information
+        # @param initial_types [Hash{String => Types::Type}] initial type information
+        def initialize(initial_types = {})
+          super()
           @type_env = {} # { line => { var_name => type } }
           @return_types = {} # { method_name => type }
           @current_method = nil
           @method_returns = [] # Collect return types for current method
+          @initial_types = initial_types
+
+          # Store initial types at line 0 for lookups
+          @type_env[0] = initial_types.dup if initial_types.any?
         end
 
         def visit_def_node(node)
@@ -198,10 +211,50 @@ module TypeGuessr
             Types::Union.new([Types::ClassInstance.new("TrueClass"), Types::ClassInstance.new("FalseClass")])
           when Prism::IfNode
             infer_if_expression_type(node)
+          when Prism::CallNode
+            infer_call_node_type(node)
+          when Prism::LocalVariableReadNode
+            # Look up variable type from current environment
+            get_type(node.location.start_line, node.name.to_s)
           else
             # Try literal type inference
             type = LiteralTypeAnalyzer.infer(node)
             type || Types::Unknown.instance
+          end
+        end
+
+        # Infer the type of a call node by analyzing receiver and method
+        # @param node [Prism::CallNode] the call node
+        # @return [Types::Type] the inferred type
+        def infer_call_node_type(node)
+          return Types::Unknown.instance unless node.receiver
+
+          # Infer receiver type
+          receiver_type = infer_type_from_node(node.receiver)
+          return Types::Unknown.instance if receiver_type == Types::Unknown.instance
+
+          # Extract class name from receiver type
+          class_name = extract_class_name(receiver_type)
+          return Types::Unknown.instance unless class_name
+
+          # Query RBS for method return type
+          method_name = node.name.to_s
+          RBSProvider.instance.get_method_return_type(class_name, method_name)
+        rescue StandardError
+          Types::Unknown.instance
+        end
+
+        # Extract class name from a type object
+        # @param type [Types::Type] the type object
+        # @return [String, nil] the class name or nil
+        def extract_class_name(type)
+          case type
+          when Types::ClassInstance
+            type.name
+          when Types::ArrayType
+            "Array"
+          when Types::HashShape
+            "Hash"
           end
         end
 
@@ -261,7 +314,8 @@ module TypeGuessr
 
         def get_type(line, var_name)
           # Look backwards from line to find most recent type
-          (1..line).reverse_each do |l|
+          # Include line 0 for initial types
+          (0..line).reverse_each do |l|
             env = @type_env[l]
             return env[var_name] if env&.key?(var_name)
           end

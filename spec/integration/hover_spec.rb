@@ -1595,6 +1595,22 @@ RSpec.describe "Hover Integration" do
       expect(response.contents.value).to match(/timeout:/)
       expect(response.contents.value).to match(/Integer/)
     end
+
+    it "infers return type from method call on parameter with default value" do
+      source = <<~RUBY
+        def transform(text = "hello")
+          text.upcase
+        end
+      RUBY
+
+      # Hover on method name "transform"
+      response = hover_on_source(source, { line: 0, character: 4 })
+
+      expect(response).not_to be_nil
+      expect(response.contents.value).to match(/String text/)
+      expect(response.contents.value).to match(/-> String/)
+      expect(response.contents.value).not_to match(/untyped/)
+    end
   end
 
   describe "Block Parameter Type Inference" do
