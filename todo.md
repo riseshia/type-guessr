@@ -7,7 +7,7 @@
 
 ## 📊 Current Status (2026-01-03)
 
-**Test Results:** 343/349 tests passing (98.3%), 6 pending
+**Test Results:** 348/349 tests passing (99.7%), 1 pending
 
 ### ✅ Recently Completed
 
@@ -24,28 +24,23 @@
 - Type variable substitution for generics (`Array[Integer]#map` → `Enumerator[Integer]`)
 - Enumerator pattern support for block parameter inference
 
-**RubyIndexer Test Source Indexing** (2026-01-03)
+**RubyIndexer Test Source Indexing**
 - Test sources now indexed in ruby-lsp's RubyIndexer via `index_single()`
 - Type definition links work with inline class definitions in tests
 - `UserMethodReturnResolver` connected to `ChainResolver` for user-defined method analysis
 - Fixed `type_entries` key lookup in `HoverContentBuilder` (type object vs string)
 
+**Method Return Type Chain Storage** (2026-01-03)
+- Store method return type Chains during AST parsing in ChainIndex
+- ChainExtractor collects return Chains from method bodies (last expression + return statements)
+- Chain::Call fallback: RBS → UserMethodReturnResolver → ChainIndex
+- Empty method body correctly infers NilClass
+- Multiple return paths create Union types
+- All 5 user-defined method integration tests now passing ✅
+
 ### ⚠️ Known Limitations
 
-**User-Defined Method Tests (5 pending)**
-
-5 integration tests for user-defined method return type inference remain pending:
-- `infers return type from user-defined method with literal return`
-- `infers nil for empty method body`
-- `infers return type from explicit return statement`
-- `infers union type from multiple return paths`
-- `works with nested method calls`
-
-**Reason:** `UserMethodReturnResolver` reads source via `File.readlines()`, which doesn't work with in-memory test sources.
-
-**Status:** Core functionality is verified in `spec/type_guessr/core/user_method_return_resolver_spec.rb`. Feature works in production (real files).
-
-**Priority:** P3 (test infrastructure limitation, not a production issue)
+None currently - all planned features working as expected.
 
 ---
 
@@ -252,167 +247,56 @@ a  # → { x: Integer | String } (requires control flow analysis)
 
 ---
 
-### 5. FlowAnalyzer UserMethodReturnResolver Integration
+### 5. ✅ User-Defined Method Return Type Inference (COMPLETED)
 
-**Problem:** FlowAnalyzer can infer return types from stdlib methods (via RBS), but not from user-defined methods.
+**Status:** ✅ COMPLETED via ChainIndex-based approach (2026-01-03)
 
-**Current Behavior:**
+**Solution Implemented:**
+
+Instead of integrating UserMethodReturnResolver into FlowAnalyzer, we implemented a ChainIndex-based approach:
+
+1. **ChainExtractor** collects method return Chains during AST parsing:
+   - `visit_def_node`: Extracts last expression Chain + return statement Chains
+   - `visit_return_node`: Collects explicit return Chains
+   - Empty method bodies correctly infer NilClass
+
+2. **ChainIndex** stores method return Chains:
+   - Key: `ClassName#method_name`
+   - Value: Array of Chains (for multiple return paths)
+
+3. **Chain::Call** fallback resolution order:
+   - RBS (stdlib/gems) → UserMethodReturnResolver (file-based) → ChainIndex (AST-based)
+   - Multiple return Chains are merged into Union types
+
+**Results:**
+- ✅ All 5 integration tests passing
+- ✅ Works with in-memory test sources (no File.readlines dependency)
+- ✅ User-defined method return types correctly inferred
+- ✅ Union types for multiple return paths
+
+**Example:**
 ```ruby
-class Recipe
-  def ingredients
-    ["salt", "pepper"]
+class Animal
+  def name
+    "Dog"  # → String
   end
 
-  def steps
-    ["mix", "cook"]
+  def value
+    return "string" if condition
+    42  # → String | Integer
   end
 end
 
-def process(recipe)
-  recipe.steps  # FlowAnalyzer returns Unknown (no RBS for Recipe)
-end
-# Signature shows: (Recipe recipe) -> untyped
-# Expected: (Recipe recipe) -> Array[String]
+animal = Animal.new
+result = animal.name  # ✅ Infers String
 ```
 
-**Why Important:**
-- User-defined methods are majority of application code
-- UserMethodReturnResolver infrastructure already exists
-- FlowAnalyzer already has RBS integration - just needs fallback
-- High practical value for real-world applications
-
-**Current Support:**
-- ✅ Stdlib method return types work (String#upcase → String)
-- ✅ UserMethodReturnResolver can analyze user methods in isolation
-- ❌ FlowAnalyzer doesn't use UserMethodReturnResolver as fallback
-
-**Locations:**
-- `lib/type_guessr/core/flow_analyzer.rb:229-244` - `infer_call_node_type` only queries RBS
-- `lib/type_guessr/core/user_method_return_resolver.rb:25-50` - Working but not integrated
-- `lib/ruby_lsp/type_guessr/hover.rb:392-404` - `infer_return_type` creates FlowAnalyzer
-
-**Solution:**
-
-1. **Add UserMethodReturnResolver to FlowAnalyzer:**
-   ```ruby
-   # In FlowAnalyzer
-   class FlowAnalyzer
-     def initialize(initial_types: {}, user_method_resolver: nil)
-       @initial_types = initial_types
-       @user_method_resolver = user_method_resolver
-     end
-   end
-
-   class FlowVisitor < Prism::Visitor
-     def initialize(initial_types = {}, user_method_resolver = nil)
-       # ... existing code ...
-       @user_method_resolver = user_method_resolver
-     end
-   end
-   ```
-
-2. **Update infer_call_node_type with fallback:**
-   ```ruby
-   def infer_call_node_type(node)
-     return Types::Unknown.instance unless node.receiver
-
-     # Infer receiver type
-     receiver_type = infer_type_from_node(node.receiver)
-     return Types::Unknown.instance if receiver_type == Types::Unknown.instance
-
-     # Extract class name from receiver type
-     class_name = extract_class_name(receiver_type)
-     return Types::Unknown.instance unless class_name
-
-     method_name = node.name.to_s
-
-     # 1. Try RBS first (stdlib, gems)
-     rbs_type = RBSProvider.instance.get_method_return_type(class_name, method_name)
-     return rbs_type if rbs_type != Types::Unknown.instance
-
-     # 2. Fallback to user-defined method analysis
-     if @user_method_resolver
-       user_type = @user_method_resolver.get_return_type(class_name, method_name)
-       return user_type if user_type != Types::Unknown.instance
-     end
-
-     Types::Unknown.instance
-   rescue StandardError
-     Types::Unknown.instance
-   end
-   ```
-
-3. **Integrate in Hover:**
-   ```ruby
-   def infer_return_type(node, param_types = [])
-     source = node.slice
-     initial_types = build_initial_types_from_parameters(node.parameters, param_types)
-
-     # Pass user_method_resolver to FlowAnalyzer
-     analyzer = FlowAnalyzer.new(
-       initial_types: initial_types,
-       user_method_resolver: user_method_resolver
-     )
-     result = analyzer.analyze(source)
-     result.return_type_for_method(node.name.to_s)
-   rescue StandardError
-     Types::Unknown.instance
-   end
-   ```
-
-**Tasks:**
-- [ ] Write failing integration test first (TDD)
-  - `spec/integration/hover_spec.rb` - User-defined method return type in FlowAnalyzer
-  - `spec/type_guessr/core/flow_analyzer_spec.rb` - Unit test with mock resolver
-- [ ] Update `FlowAnalyzer#initialize` to accept `user_method_resolver`
-- [ ] Update `FlowVisitor#initialize` to store and use resolver
-- [ ] Update `infer_call_node_type` with RBS → UserMethod fallback
-- [ ] Update `Hover#infer_return_type` to pass `user_method_resolver`
-- [ ] Run full test suite to ensure no regressions
-
-**Test Cases:**
-```ruby
-# Integration test
-class Recipe
-  def steps
-    ["mix", "cook"]
-  end
-end
-
-def process(recipe)
-  recipe.steps
-end
-# Hover on "process" should show: (Recipe recipe) -> Array[String]
-
-# Fallback order
-def foo(text)
-  text.upcase  # RBS: String#upcase → String
-end
-
-def bar(recipe)
-  recipe.steps  # UserMethod: Recipe#steps → Array[String]
-end
-
-def baz(unknown)
-  unknown.unknown_method  # Unknown: no RBS, no user definition
-end
-```
-
-**Expected Improvements:**
-- User-defined method return types properly inferred
-- Fallback chain: RBS → UserMethodReturnResolver → Unknown
-- No performance impact (UserMethodReturnResolver already cached)
-
-**Limitations:**
-- UserMethodReturnResolver has MAX_DEPTH = 5 for recursion
-- Circular dependencies return Unknown
-- External gem methods without RBS still Unknown
-
-**Files to Modify:**
-- `lib/type_guessr/core/flow_analyzer.rb`
-- `lib/ruby_lsp/type_guessr/hover.rb`
-- `spec/type_guessr/core/flow_analyzer_spec.rb`
-- `spec/integration/hover_spec.rb`
+**Files Modified:**
+- `lib/type_guessr/core/chain_index.rb` - Method return Chain storage
+- `lib/type_guessr/core/chain_extractor.rb` - Return Chain extraction
+- `lib/type_guessr/core/chain_context.rb` - Interface for Chain lookup
+- `lib/type_guessr/core/chain/call.rb` - ChainIndex fallback
+- `spec/integration/hover_spec.rb` - Enabled 5 previously skipped tests
 
 ---
 
