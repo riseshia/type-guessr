@@ -12,7 +12,6 @@ module TypeGuessr
     class TypeResolver
       def initialize(variable_index = VariableIndex.instance)
         @index = variable_index
-        @rbs_provider = nil
       end
 
       # Resolve type information for a variable
@@ -144,7 +143,7 @@ module TypeGuessr
       end
 
       def rbs_provider
-        @rbs_provider ||= RBSProvider.new
+        RBSProvider.instance
       end
 
       def infer_type_from_call_assignment(variable_name:, hover_line:, scope_type:, scope_id:, file_path: nil)

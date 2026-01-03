@@ -122,10 +122,10 @@ module RubyLsp
 
       private
 
-      # Cached RBSProvider instance for querying method signatures
+      # RBSProvider singleton instance for querying method signatures
       # @return [TypeGuessr::Core::RBSProvider]
       def rbs_provider
-        @rbs_provider ||= RBSProvider.new
+        RBSProvider.instance
       end
 
       # Cached IndexAdapter instance for accessing RubyIndexer

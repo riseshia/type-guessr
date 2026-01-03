@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require "singleton"
 require "rbs"
 require_relative "types"
 
@@ -8,6 +9,8 @@ module TypeGuessr
     # RBSProvider loads and queries RBS signature information
     # Provides lazy loading of RBS environment for method signatures
     class RBSProvider
+      include Singleton
+
       # Represents a method signature from RBS
       class Signature
         attr_reader :method_type
@@ -20,6 +23,13 @@ module TypeGuessr
       def initialize
         @env = nil
         @loader = nil
+      end
+
+      # Preload RBS environment (for eager loading during addon activation)
+      # @return [self]
+      def preload
+        ensure_environment_loaded
+        self
       end
 
       # Get method signatures for a class and method name

@@ -4,7 +4,7 @@ require "spec_helper"
 require "type_guessr/core/rbs_provider"
 
 RSpec.describe TypeGuessr::Core::RBSProvider do
-  let(:provider) { described_class.new }
+  let(:provider) { described_class.instance }
 
   describe "#get_method_signatures" do
     it "returns method signatures from RBS for known stdlib classes" do

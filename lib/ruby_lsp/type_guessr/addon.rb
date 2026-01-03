@@ -7,6 +7,7 @@ require_relative "config"
 require_relative "runtime_adapter"
 require_relative "debug_server"
 require_relative "../../type_guessr/version" if !defined?(TypeGuessr::VERSION)
+require_relative "../../type_guessr/core/rbs_provider"
 
 module RubyLsp
   module TypeGuessr
@@ -73,6 +74,10 @@ module RubyLsp
 
         @runtime_adapter.swap_type_inferrer
         extend_hover_targets
+
+        # Preload RBS environment before worker threads start
+        ::TypeGuessr::Core::RBSProvider.instance.preload
+
         @runtime_adapter.start_ast_traversal
         start_debug_server_if_enabled
       end
