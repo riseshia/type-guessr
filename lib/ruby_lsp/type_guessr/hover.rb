@@ -73,8 +73,8 @@ module RubyLsp
       def on_call_node_enter(node)
         return unless node.receiver
 
-        receiver_type = @chain_resolver.resolve(node.receiver)
-        return if receiver_type.nil? || receiver_type == Types::Unknown.instance
+        receiver_type = resolve_receiver_chain(node.receiver)
+        return if receiver_type == Types::Unknown.instance
 
         # 2. Query RBS signatures
         signatures = rbs_provider.get_method_signatures(
@@ -160,6 +160,61 @@ module RubyLsp
         # Dynamically generate listener method names from HOVER_NODE_TYPES
         listener_methods = HOVER_NODE_TYPES.map { |node_type| :"on_#{node_type}_node_enter" }
         dispatcher.register(self, *listener_methods)
+      end
+
+      # Recursively resolve type for method chain receivers
+      # Handles CallNode receivers (e.g., str.chars.first -> resolve "str.chars" type)
+      # @param node [Prism::Node] the receiver node to resolve
+      # @param depth [Integer] current recursion depth (to prevent infinite loops)
+      # @return [Types::Type] the resolved type (Unknown if cannot resolve)
+      def resolve_receiver_chain(node, depth = 0)
+        return Types::Unknown.instance if depth > 5
+
+        case node
+        when Prism::LocalVariableReadNode, Prism::InstanceVariableReadNode, Prism::ClassVariableReadNode
+          @chain_resolver.resolve(node) || Types::Unknown.instance
+        when Prism::CallNode
+          # Recursively resolve the base receiver type
+          base_type = if node.receiver
+                        resolve_receiver_chain(node.receiver, depth + 1)
+                      else
+                        # No receiver means method call on self
+                        infer_self_type || Types::Unknown.instance
+                      end
+
+          return Types::Unknown.instance if base_type == Types::Unknown.instance
+
+          # Get the return type of the method call using RBS
+          # Check if the call has a block - affects method signature selection
+          has_block = !node.block.nil?
+          class_name = extract_type_name(base_type)
+          method_name = node.name.to_s
+
+          # Get all signatures and select the appropriate one based on block presence
+          signatures = rbs_provider.get_method_signatures(class_name, method_name)
+          return Types::Unknown.instance if signatures.empty?
+
+          # Select signature based on whether call has a block
+          selected_sig = if has_block
+                           # Prefer signature with block requirement
+                           signatures.find { |sig| sig.method_type.block } || signatures.first
+                         else
+                           # Prefer signature without block requirement
+                           signatures.find { |sig| !sig.method_type.block } || signatures.first
+                         end
+
+          return_type = selected_sig.method_type.type.return_type
+
+          # Extract element type for substitution (if receiver is Array)
+          substitutions = {}
+          substitutions[:Elem] = base_type.element_type if base_type.is_a?(Types::ArrayType) && base_type.element_type
+
+          convert_rbs_type_to_types(return_type, substitutions)
+        when Prism::SelfNode
+          infer_self_type || Types::Unknown.instance
+        else
+          Types::Unknown.instance
+        end
       end
 
       def add_hover_content(node)
@@ -558,13 +613,26 @@ module RubyLsp
         call_node = @node_context.call_node
         return Types::Unknown.instance unless call_node
 
-        # Get the receiver type
-        receiver_type = @chain_resolver.resolve(call_node.receiver)
-        return Types::Unknown.instance if receiver_type.nil? || receiver_type == Types::Unknown.instance
+        # Get the receiver type using chain resolution
+        receiver_type = if call_node.receiver
+                          resolve_receiver_chain(call_node.receiver)
+                        else
+                          infer_self_type || Types::Unknown.instance
+                        end
+
+        return Types::Unknown.instance if receiver_type == Types::Unknown.instance
 
         # Get block parameter types from RBS with substitution
         method_name = call_node.name.to_s
-        class_name = extract_type_name(receiver_type)
+
+        # Determine the class name for RBS lookup
+        # Special case: if receiver is a CallNode without block (e.g., arr.map),
+        # it likely returns an Enumerator, so use "Enumerator" for RBS lookup
+        class_name = if call_node.receiver.is_a?(Prism::CallNode) && call_node.receiver.block.nil?
+                       "Enumerator"
+                     else
+                       extract_type_name(receiver_type)
+                     end
 
         # Extract element type for substitution (if ArrayType)
         elem_type = receiver_type.is_a?(Types::ArrayType) ? receiver_type.element_type : nil
@@ -787,6 +855,42 @@ module RubyLsp
 
         matcher = TypeMatcher.new(index)
         matcher.find_matching_types(method_calls)
+      end
+
+      # Convert RBS type to our Types system (simplified version)
+      # @param rbs_type [RBS::Types::t] the RBS type
+      # @param substitutions [Hash] type variable substitutions (e.g., { Elem: Integer })
+      # @return [Types::Type] our type representation
+      def convert_rbs_type_to_types(rbs_type, substitutions = {})
+        case rbs_type
+        when RBS::Types::ClassInstance
+          class_name = rbs_type.name.to_s.delete_prefix("::")
+
+          # Handle Array with type parameter
+          if class_name == "Array" && rbs_type.args.size == 1
+            element_type = convert_rbs_type_to_types(rbs_type.args.first, substitutions)
+            return Types::ArrayType.new(element_type)
+          end
+
+          # Handle Enumerator with type parameter
+          # Enumerator[Elem, Return] -> we care about Elem (the element type)
+          # Temporarily use ArrayType to preserve element_type info (TODO: add EnumeratorType)
+          if class_name == "Enumerator" && rbs_type.args.size >= 1
+            element_type = convert_rbs_type_to_types(rbs_type.args.first, substitutions)
+            return Types::ArrayType.new(element_type)
+          end
+
+          # For other generic types, just return ClassInstance
+          Types::ClassInstance.new(class_name)
+        when RBS::Types::Union
+          types = rbs_type.types.map { |t| convert_rbs_type_to_types(t, substitutions) }
+          Types::Union.new(types)
+        when RBS::Types::Variable
+          # Type variable (e.g., Elem, U) - check substitutions first
+          substitutions[rbs_type.name] || Types::Unknown.instance
+        else
+          Types::Unknown.instance
+        end
       end
 
       # Infer type for self node
