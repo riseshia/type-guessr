@@ -44,13 +44,15 @@ module RubyLsp
         direct_type = type_info[:direct_type]
 
         # Priority 1: Use direct type inference (from literal or .new call)
-        # Skip if direct_type is Unknown - let it fall through to method-based inference
         if direct_type && direct_type != Types::Unknown.instance
           type_name = extract_type_name(direct_type)
           formatted_type = format_type_with_link(direct_type, type_entries[type_name])
           content = "**Guessed type:** #{formatted_type}"
           return [content, :direct_type, direct_type]
         end
+
+        # Priority 2: Use Unknown type if explicitly provided (e.g., for parameters)
+        return ["**Guessed type:** untyped", :unknown, direct_type] if direct_type == Types::Unknown.instance
 
         if !matching_types.empty?
           content = format_guessed_types(matching_types, type_entries)

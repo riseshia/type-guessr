@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 require "ruby_lsp/type_inferrer"
-require_relative "variable_type_resolver"
+require_relative "chain_resolver"
 require_relative "variable_node_types"
 require_relative "../../type_guessr/core/type_formatter"
 
@@ -14,6 +14,12 @@ module RubyLsp
       # Core layer shortcut
       TypeFormatter = ::TypeGuessr::Core::TypeFormatter
       private_constant :TypeFormatter
+
+      def initialize(index, global_state)
+        super(index)
+        @global_state = global_state
+      end
+
       # Infers the type of a node based on its context.
       # Override this method to add heuristic type inference.
       # Falls back to super when type cannot be uniquely determined.
@@ -29,11 +35,11 @@ module RubyLsp
 
       private
 
-      # Attempt to guess type using VariableTypeResolver
-      # Returns GuessedType only when exactly one type matches
+      # Attempt to guess type using ChainResolver
+      # Returns GuessedType only when type can be resolved
       #
       # @param node_context [RubyLsp::NodeContext] The context of the node
-      # @return [GuessedType, nil] The guessed type or nil if ambiguous/unknown
+      # @return [GuessedType, nil] The guessed type or nil if unknown
       def guess_type_from_variable(node_context)
         node = node_context.node
 
@@ -46,28 +52,14 @@ module RubyLsp
 
         return nil if !target_node || !variable_node?(target_node)
 
-        resolver = VariableTypeResolver.new(node_context, @index)
-        type_info = resolver.resolve_type(target_node)
-        return nil if !type_info
+        # Use ChainResolver for lazy type resolution
+        resolver = ChainResolver.new(node_context: node_context, global_state: @global_state)
+        resolved_type = resolver.resolve(target_node)
+        return nil if !resolved_type || resolved_type == ::TypeGuessr::Core::Types::Unknown.instance
 
-        # Check for direct type first
-        direct_type = type_info[:direct_type]
-        if direct_type
-          # Convert Types object to string format for ruby-lsp's Type.new
-          type_string = TypeFormatter.format(direct_type)
-          return Type.new(type_string)
-        end
-
-        # Try to infer from method calls
-        method_calls = type_info[:method_calls]
-        return nil if method_calls.empty?
-
-        matching_types = resolver.infer_type_from_methods(method_calls)
-
-        # Only return when exactly one type matches (unambiguous)
-        return nil if matching_types.size != 1
-
-        Type.new(TypeFormatter.format(matching_types.first))
+        # Convert Types object to string format for ruby-lsp's Type.new
+        type_string = TypeFormatter.format(resolved_type)
+        Type.new(type_string)
       end
 
       # Extract the variable node from a CallNode's receiver

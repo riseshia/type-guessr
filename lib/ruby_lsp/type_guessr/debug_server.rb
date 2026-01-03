@@ -3,7 +3,7 @@
 require "socket"
 require "json"
 require "uri"
-require_relative "../../type_guessr/core/variable_index"
+require_relative "../../type_guessr/core/chain_index"
 
 module RubyLsp
   module TypeGuessr
@@ -11,8 +11,8 @@ module RubyLsp
     # Only runs when debug mode is enabled
     class DebugServer
       # Core layer shortcut
-      VariableIndex = ::TypeGuessr::Core::VariableIndex
-      private_constant :VariableIndex
+      ChainIndex = ::TypeGuessr::Core::ChainIndex
+      private_constant :ChainIndex
 
       DEFAULT_PORT = 7010
 
@@ -120,7 +120,7 @@ module RubyLsp
       end
 
       def api_search(query)
-        index = VariableIndex.instance
+        index = ChainIndex.instance
         result = query && !query.empty? ? index.search(query) : { index: {}, types: {} }
         {
           status: "200 OK",
@@ -130,7 +130,7 @@ module RubyLsp
       end
 
       def api_stats
-        index = VariableIndex.instance
+        index = ChainIndex.instance
         stats = index.stats
         {
           status: "200 OK",

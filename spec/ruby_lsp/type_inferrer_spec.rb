@@ -4,9 +4,10 @@ require "spec_helper"
 require "ruby_lsp/internal"
 
 RSpec.describe RubyLsp::TypeGuessr::TypeInferrer do
-  subject(:inferrer) { described_class.new(index) }
+  subject(:inferrer) { described_class.new(index, global_state) }
 
   let(:index) { RubyIndexer::Index.new }
+  let(:global_state) { double("GlobalState", index: index) }
 
   describe "inheritance" do
     it "inherits from RubyLsp::TypeInferrer" do

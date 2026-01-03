@@ -34,7 +34,8 @@ module TypeGuessr
       # Check if debug mode is enabled
       # @return [Boolean] true if TYPE_GUESSR_DEBUG is set
       def debug_enabled?
-        @debug_enabled ||= %w[1 true].include?(ENV.fetch("TYPE_GUESSR_DEBUG", nil))
+        # Don't cache - check ENV every time during tests
+        %w[1 true].include?(ENV.fetch("TYPE_GUESSR_DEBUG", nil))
       end
     end
   end

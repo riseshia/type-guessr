@@ -2,10 +2,10 @@
 
 require "prism"
 require_relative "config"
-require_relative "variable_type_resolver"
+require_relative "chain_resolver"
 require_relative "hover_content_builder"
 require_relative "index_adapter"
-require_relative "call_chain_resolver"
+require_relative "type_matcher"
 require_relative "../../type_guessr/core/rbs_provider"
 require_relative "../../type_guessr/core/flow_analyzer"
 require_relative "../../type_guessr/core/literal_type_analyzer"
@@ -57,14 +57,9 @@ module RubyLsp
         @response_builder = response_builder
         @node_context = node_context
         @global_state = global_state
-        @type_resolver = VariableTypeResolver.new(node_context, global_state)
+        @chain_resolver = ChainResolver.new(node_context: node_context, global_state: global_state)
         @content_builder = HoverContentBuilder.new(global_state)
         @constant_index = ::TypeGuessr::Core::ConstantIndex.instance
-        @call_chain_resolver = CallChainResolver.new(
-          type_resolver: @type_resolver,
-          rbs_provider: rbs_provider,
-          user_method_resolver: user_method_resolver
-        )
 
         register_listeners(dispatcher)
       end
@@ -78,7 +73,7 @@ module RubyLsp
       def on_call_node_enter(node)
         return unless node.receiver
 
-        receiver_type = @call_chain_resolver.resolve(node.receiver)
+        receiver_type = @chain_resolver.resolve(node.receiver)
         return if receiver_type.nil? || receiver_type == Types::Unknown.instance
 
         # 2. Query RBS signatures
@@ -169,30 +164,43 @@ module RubyLsp
 
       def add_hover_content(node)
         block_param_type = try_block_parameter_inference(node)
-        if block_param_type && block_param_type != Types::Unknown.instance
+        if block_param_type
+          # Show hover for block parameters (including Unknown type as "untyped")
           type_info = { direct_type: block_param_type, method_calls: [] }
-          content = @content_builder.build(type_info, matching_types: [], type_entries: {})
+          type_entries = block_param_type.is_a?(Types::ClassInstance) ? get_type_entries_for_types(block_param_type) : {}
+          content = @content_builder.build(type_info, matching_types: [], type_entries: type_entries)
           @response_builder.push(content, category: :documentation) if content
           return
         end
 
-        if node.is_a?(Prism::RequiredParameterNode) || node.is_a?(Prism::RequiredKeywordParameterNode)
+        # Handle all parameter types (except block parameters which are handled above)
+        parameter_node_types = [
+          Prism::RequiredParameterNode, Prism::OptionalParameterNode,
+          Prism::RequiredKeywordParameterNode, Prism::OptionalKeywordParameterNode,
+          Prism::RestParameterNode, Prism::KeywordRestParameterNode,
+          Prism::BlockParameterNode, Prism::ForwardingParameterNode
+        ]
+
+        if parameter_node_types.any? { |type| node.is_a?(type) } && !block_parameter?(node)
+          # Find containing method to collect method calls on the parameter
+          method_node = find_containing_method(node)
+          method_calls = if method_node && node.respond_to?(:name)
+                           collect_parameter_method_calls(node.name.to_s, method_node)
+                         else
+                           []
+                         end
+
           param_type = try_parameter_type_inference(node)
-          if param_type && param_type != Types::Unknown.instance
-            type_info = { direct_type: param_type, method_calls: [] }
+          # For parameters, show content even if type is unknown
+          type_to_show = param_type && param_type != Types::Unknown.instance ? param_type : Types::Unknown.instance
+          type_info = { direct_type: type_to_show, method_calls: method_calls }
 
-            # Get type entries for linking if it's a ClassInstance
-            type_entries = {}
-            if param_type.is_a?(Types::ClassInstance)
-              type_entries = @type_resolver.get_type_entries([param_type])
-            elsif param_type.is_a?(Types::Union)
-              type_entries = @type_resolver.get_type_entries(param_type.types)
-            end
+          # Get type entries for linking if it's a ClassInstance
+          type_entries = param_type ? get_type_entries_for_types(param_type) : {}
 
-            content = @content_builder.build(type_info, matching_types: [], type_entries: type_entries)
-            @response_builder.push(content, category: :documentation) if content
-            return
-          end
+          content = @content_builder.build(type_info, matching_types: [], type_entries: type_entries)
+          @response_builder.push(content, category: :documentation) if content
+          return
         end
 
         flow_type = try_flow_analysis(node)
@@ -204,21 +212,44 @@ module RubyLsp
           return
         end
 
-        # Fallback to existing VariableTypeResolver
-        type_info = @type_resolver.resolve_type(node)
-        return if !type_info
+        # Handle self node
+        if node.is_a?(Prism::SelfNode)
+          self_type = infer_self_type
+          if self_type
+            type_info = { direct_type: self_type, method_calls: [] }
+            type_entries = self_type.is_a?(Types::ClassInstance) ? get_type_entries_for_types(self_type) : {}
+            content = @content_builder.build(type_info, matching_types: [], type_entries: type_entries)
+            @response_builder.push(content, category: :documentation) if content
+          end
+          return
+        end
 
-        # Try to infer type from method calls if available
-        matching_types = @type_resolver.infer_type_from_methods(type_info[:method_calls])
+        # Fallback to ChainResolver
+        resolved_type = @chain_resolver.resolve(node)
+        return if !resolved_type
 
-        # Collect all type names that need entries (both direct_type and matching_types)
-        all_type_names = matching_types.dup
-        all_type_names << type_info[:direct_type] if type_info[:direct_type]
+        # Collect method calls for debug display (for local variables)
+        method_calls = []
+        if node.is_a?(Prism::LocalVariableReadNode)
+          method_node = find_containing_method(node)
+          method_calls = collect_parameter_method_calls(node.name.to_s, method_node) if method_node
+        end
+
+        # Build type_info structure for content builder (including Unknown types for parameters)
+        type_info = { direct_type: resolved_type, method_calls: method_calls }
 
         # Get entries for linking to type definitions
-        type_entries = @type_resolver.get_type_entries(all_type_names)
+        type_entries = {}
+        if resolved_type.is_a?(Types::ClassInstance)
+          index = extract_index(@global_state)
+          if index
+            adapter = IndexAdapter.new(index)
+            entries = adapter.resolve_constant(resolved_type.name)
+            type_entries[resolved_type] = entries.first if entries&.any?
+          end
+        end
 
-        content = @content_builder.build(type_info, matching_types: matching_types, type_entries: type_entries)
+        content = @content_builder.build(type_info, matching_types: [], type_entries: type_entries)
         @response_builder.push(content, category: :documentation) if content
       end
 
@@ -339,7 +370,7 @@ module RubyLsp
         return Types::Unknown.instance if method_calls.empty?
 
         # Use TypeMatcher to find candidate types
-        matching_types = @type_resolver.infer_type_from_methods(method_calls)
+        matching_types = infer_type_from_methods(method_calls)
 
         # No matches or truncated → Unknown
         return Types::Unknown.instance if matching_types.empty?
@@ -520,13 +551,16 @@ module RubyLsp
         # Only handle block parameters (RequiredParameterNode inside a block)
         return nil unless node.is_a?(Prism::RequiredParameterNode)
 
+        # Check if this is actually a block parameter (not a method parameter)
+        return nil unless block_parameter?(node)
+
         # Check if we have a surrounding CallNode via node_context
         call_node = @node_context.call_node
-        return nil unless call_node
+        return Types::Unknown.instance unless call_node
 
         # Get the receiver type
-        receiver_type = @call_chain_resolver.resolve(call_node.receiver)
-        return nil if receiver_type.nil? || receiver_type == Types::Unknown.instance
+        receiver_type = @chain_resolver.resolve(call_node.receiver)
+        return Types::Unknown.instance if receiver_type.nil? || receiver_type == Types::Unknown.instance
 
         # Get block parameter types from RBS with substitution
         method_name = call_node.name.to_s
@@ -600,6 +634,28 @@ module RubyLsp
       end
 
       # Find the index of a block parameter in its block
+      # Check if a parameter node is a block parameter
+      # @param node [Prism::Node] the parameter node
+      # @return [Boolean] true if this is a block parameter
+      def block_parameter?(node)
+        return false unless node.is_a?(Prism::RequiredParameterNode)
+
+        call_node = @node_context.call_node
+        return false unless call_node
+
+        block_node = call_node.block
+        return false unless block_node.is_a?(Prism::BlockNode)
+
+        block_params = block_node.parameters
+        return false unless block_params
+
+        params_node = block_params.parameters
+        return false unless params_node
+
+        # Check if this parameter is in the block's parameter list
+        params_node.requireds.any? { |p| p.name == node.name }
+      end
+
       # @param node [Prism::RequiredParameterNode] the parameter node
       # @return [Integer, nil] the parameter index or nil
       def find_block_param_index(node)
@@ -692,6 +748,64 @@ module RubyLsp
       rescue StandardError => e
         ::TypeGuessr::Core::Logger.error("find_containing_method error", e)
         nil
+      end
+
+      # Get type entries for linking to type definitions
+      # @param type [Types::Type] the type to get entries for
+      # @return [Hash] map of type to entry
+      def get_type_entries_for_types(type)
+        type_entries = {}
+        index = extract_index(@global_state)
+        return type_entries unless index
+
+        adapter = IndexAdapter.new(index)
+
+        case type
+        when Types::ClassInstance
+          entries = adapter.resolve_constant(type.name)
+          type_entries[type] = entries.first if entries&.any?
+        when Types::Union
+          type.types.each do |t|
+            next unless t.is_a?(Types::ClassInstance)
+
+            entries = adapter.resolve_constant(t.name)
+            type_entries[t] = entries.first if entries&.any?
+          end
+        end
+
+        type_entries
+      end
+
+      # Infer types from method calls using TypeMatcher
+      # @param method_calls [Array<String>] method names
+      # @return [Array<Types::Type>] matching types
+      def infer_type_from_methods(method_calls)
+        return [] if method_calls.empty?
+
+        index = extract_index(@global_state)
+        return [] unless index
+
+        matcher = TypeMatcher.new(index)
+        matcher.find_matching_types(method_calls)
+      end
+
+      # Infer type for self node
+      # @return [Types::Type, nil] the inferred type for self
+      def infer_self_type
+        nesting = @node_context.nesting
+        return nil if nesting.empty?
+
+        # Get the innermost class/module from nesting
+        innermost = nesting.last
+        class_name = if innermost.respond_to?(:name)
+                       innermost.name.to_s
+                     else
+                       innermost.to_s
+                     end
+
+        return nil if class_name.empty?
+
+        Types::ClassInstance.new(class_name)
       end
     end
   end

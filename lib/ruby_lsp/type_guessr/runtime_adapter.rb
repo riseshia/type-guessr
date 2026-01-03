@@ -3,8 +3,8 @@
 require "prism"
 
 require_relative "../../type_guessr/version" if !defined?(TypeGuessr::VERSION)
-require_relative "../../type_guessr/core/ast_analyzer"
-require_relative "../../type_guessr/core/variable_index"
+require_relative "../../type_guessr/core/chain_extractor"
+require_relative "../../type_guessr/core/chain_index"
 require_relative "../../type_guessr/core/constant_index"
 require_relative "type_inferrer"
 
@@ -15,9 +15,9 @@ module RubyLsp
     # @api private
     class RuntimeAdapter
       # Core layer shortcuts
-      ASTAnalyzer = ::TypeGuessr::Core::ASTAnalyzer
-      VariableIndex = ::TypeGuessr::Core::VariableIndex
-      private_constant :ASTAnalyzer, :VariableIndex
+      ChainExtractor = ::TypeGuessr::Core::ChainExtractor
+      ChainIndex = ::TypeGuessr::Core::ChainIndex
+      private_constant :ChainExtractor, :ChainIndex
 
       # Number of worker threads for parallel AST analysis
       WORKER_COUNT = 4
@@ -36,7 +36,7 @@ module RubyLsp
 
       def swap_type_inferrer
         @original_type_inferrer = @global_state.type_inferrer
-        custom_inferrer = ::RubyLsp::TypeGuessr::TypeInferrer.new(@global_state.index)
+        custom_inferrer = ::RubyLsp::TypeGuessr::TypeInferrer.new(@global_state.index, @global_state)
         @global_state.instance_variable_set(:@type_inferrer, custom_inferrer)
         log_message("Swapped TypeInferrer with RubyLsp::TypeGuessr::TypeInferrer")
       end
@@ -121,7 +121,7 @@ module RubyLsp
         source = File.read(file_path)
         result = Prism.parse(source)
 
-        visitor = ASTAnalyzer.new(file_path)
+        visitor = ChainExtractor.new(file_path)
         result.value.accept(visitor)
 
         log_message("Re-indexed file: #{file_path}")
@@ -136,7 +136,7 @@ module RubyLsp
 
         # Then, traverse the source's AST
         result = Prism.parse(source)
-        visitor = ASTAnalyzer.new(file_path)
+        visitor = ChainExtractor.new(file_path)
         result.value.accept(visitor)
 
         log_message("Indexed source for: #{file_path}")
@@ -145,7 +145,7 @@ module RubyLsp
       end
 
       def clear_file_index(file_path)
-        VariableIndex.instance.clear_file(file_path)
+        ChainIndex.instance.clear_file(file_path)
         ::TypeGuessr::Core::ConstantIndex.instance.clear_file(file_path)
         log_message("Cleared index for file: #{file_path}")
       rescue StandardError => e
@@ -162,7 +162,7 @@ module RubyLsp
         result = Prism.parse(source)
 
         # Use a visitor to traverse the AST
-        visitor = ASTAnalyzer.new(file_path)
+        visitor = ChainExtractor.new(file_path)
         result.value.accept(visitor)
       rescue StandardError => e
         log_message("Error parsing #{uri}: #{e.message}")
