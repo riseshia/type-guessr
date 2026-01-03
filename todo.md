@@ -7,84 +7,7 @@
 
 > Direct impact on user experience. Performance improvements, new features, and critical refactoring.
 
-### 4. Performance Optimization (FlowAnalyzer Caching)
-
-**Problem:** FlowAnalyzer re-parses AST on every hover without caching.
-
-**Locations:**
-- `lib/ruby_lsp/type_guessr/hover.rb:541-572` - Repeated AST parsing
-- `lib/type_guessr/core/flow_analyzer.rb:15-19` - No result caching
-
-**Why Important:**
-- Hover latency target is <100ms (see Reference Documents)
-- Current implementation may exceed target on large files
-- User experience degrades with slow hover
-
-**Current Issues:**
-
-**FlowAnalyzer Repeated Parsing:**
-```ruby
-def try_flow_analysis(node)
-  method_node = find_containing_method(node)
-  source = method_node.slice
-  analyzer = FlowAnalyzer.new
-  result = analyzer.analyze(source)  # ⚠️ Re-parses every hover
-end
-```
-
-**Impact:**
-- Hover can take 100-200ms on large methods
-- CPU usage spikes during typing
-- Poor user experience
-
-**Solution:**
-
-**Add FlowAnalyzer Result Cache:**
-```ruby
-class FlowAnalyzerCache
-  def initialize
-    @cache = {}  # method_location => AnalysisResult
-    @mutex = Mutex.new
-  end
-
-  def analyze(method_node)
-    cache_key = [
-      method_node.location.start_line,
-      method_node.location.end_line,
-      method_node.name
-    ]
-
-    @mutex.synchronize do
-      @cache[cache_key] ||= FlowAnalyzer.new.analyze(method_node.slice)
-    end
-  end
-
-  def clear_file(file_path)
-    @mutex.synchronize do
-      @cache.delete_if { |key, _| key[0].include?(file_path) }
-    end
-  end
-end
-```
-
-**Tasks:**
-- [ ] Add FlowAnalyzerCache with file-based invalidation
-- [ ] Add TypeDB caching with AST node location as key
-- [ ] Add `MethodSummary` cache (`MethodRef → MethodSummary`)
-- [ ] Consider scope-level summary caching
-- [ ] Implement timeout handling (see Reference Documents)
-- [ ] Add performance benchmarks (`spec/performance/hover_response_spec.rb`)
-- [ ] Measure before/after performance on real projects
-- [ ] Benchmark hover response time in real projects
-- [ ] Document cache invalidation strategy
-
-**Expected Improvements:**
-- FlowAnalyzer: 100-200ms → 1-5ms (cached)
-- Overall hover: <100ms in 95% of cases
-
----
-
-### 5. Block Return Type Analysis
+### 4. Block Return Type Analysis
 
 **Problem:** Methods with blocks like `map`, `select` return `Unknown` instead of proper types.
 
@@ -189,7 +112,7 @@ b #=> Actual: Unknown, Expected: Array[Integer]
 
 ---
 
-### 6. VariableIndex Structure Improvement
+### 5. VariableIndex Structure Improvement
 
 **Problem:** Deep nested hash structure is fragile and hard to reason about.
 
@@ -313,7 +236,7 @@ b #=> Actual: Unknown, Expected: Array[Integer]
 
 ---
 
-### 7. Hover.rb Complexity Exceeds Limits
+### 6. Hover.rb Complexity Exceeds Limits
 
 **Problem:** Single file with too many responsibilities (605 lines).
 
@@ -405,7 +328,7 @@ b #=> Actual: Unknown, Expected: Array[Integer]
 
 ---
 
-### 8. Hash Incremental Field Addition
+### 7. Hash Incremental Field Addition
 
 **Problem:** Cannot track hash field additions via `[]=` assignments.
 
@@ -604,7 +527,7 @@ a  # → { x: Integer | String } (requires control flow analysis)
 
 ---
 
-### 9. FlowAnalyzer UserMethodReturnResolver Integration
+### 8. FlowAnalyzer UserMethodReturnResolver Integration
 
 **Problem:** FlowAnalyzer can infer return types from stdlib methods (via RBS), but not from user-defined methods.
 
@@ -771,6 +694,83 @@ end
 ## 🟡 P2: Quality Improvements
 
 > Code quality and maintainability improvements. Important but can be deferred after P0/P1.
+
+### 9. Performance Optimization (FlowAnalyzer Caching)
+
+**Problem:** FlowAnalyzer re-parses AST on every hover without caching.
+
+**Locations:**
+- `lib/ruby_lsp/type_guessr/hover.rb:541-572` - Repeated AST parsing
+- `lib/type_guessr/core/flow_analyzer.rb:15-19` - No result caching
+
+**Why Important:**
+- Hover latency target is <100ms (see Reference Documents)
+- Current implementation may exceed target on large files
+- User experience degrades with slow hover
+
+**Current Issues:**
+
+**FlowAnalyzer Repeated Parsing:**
+```ruby
+def try_flow_analysis(node)
+  method_node = find_containing_method(node)
+  source = method_node.slice
+  analyzer = FlowAnalyzer.new
+  result = analyzer.analyze(source)  # ⚠️ Re-parses every hover
+end
+```
+
+**Impact:**
+- Hover can take 100-200ms on large methods
+- CPU usage spikes during typing
+- Poor user experience
+
+**Solution:**
+
+**Add FlowAnalyzer Result Cache:**
+```ruby
+class FlowAnalyzerCache
+  def initialize
+    @cache = {}  # method_location => AnalysisResult
+    @mutex = Mutex.new
+  end
+
+  def analyze(method_node)
+    cache_key = [
+      method_node.location.start_line,
+      method_node.location.end_line,
+      method_node.name
+    ]
+
+    @mutex.synchronize do
+      @cache[cache_key] ||= FlowAnalyzer.new.analyze(method_node.slice)
+    end
+  end
+
+  def clear_file(file_path)
+    @mutex.synchronize do
+      @cache.delete_if { |key, _| key[0].include?(file_path) }
+    end
+  end
+end
+```
+
+**Tasks:**
+- [ ] Add FlowAnalyzerCache with file-based invalidation
+- [ ] Add TypeDB caching with AST node location as key
+- [ ] Add `MethodSummary` cache (`MethodRef → MethodSummary`)
+- [ ] Consider scope-level summary caching
+- [ ] Implement timeout handling (see Reference Documents)
+- [ ] Add performance benchmarks (`spec/performance/hover_response_spec.rb`)
+- [ ] Measure before/after performance on real projects
+- [ ] Benchmark hover response time in real projects
+- [ ] Document cache invalidation strategy
+
+**Expected Improvements:**
+- FlowAnalyzer: 100-200ms → 1-5ms (cached)
+- Overall hover: <100ms in 95% of cases
+
+---
 
 ### 10. Test Coverage Gaps
 
