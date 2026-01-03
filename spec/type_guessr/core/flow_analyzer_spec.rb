@@ -294,4 +294,84 @@ RSpec.describe TypeGuessr::Core::FlowAnalyzer do
       expect(type_at_line5.element_type).to eq(integer_type)
     end
   end
+
+  describe "block scope support" do
+    let(:array_type) { TypeGuessr::Core::Types::ArrayType }
+
+    it "correctly infers block parameter type inside block" do
+      source = <<~RUBY
+        a = [1, 2, 3]
+        a.map do |num|
+          num
+        end
+      RUBY
+
+      result = analyzer.analyze(source)
+      # Line 3 is inside the block where num should be Integer
+      type_at_line3 = result.type_at(3, 0, "num")
+
+      expect(type_at_line3).to eq(integer_type)
+    end
+
+    it "block parameter shadows outer variable" do
+      source = <<~RUBY
+        x = "outer"
+        [1].each do |x|
+          x
+        end
+        x
+      RUBY
+
+      result = analyzer.analyze(source)
+
+      # Inside block (line 3), x should be Integer (the block parameter)
+      type_inside_block = result.type_at(3, 0, "x")
+      expect(type_inside_block).to eq(integer_type)
+
+      # Outside block (line 5), x should still be String (the outer variable)
+      type_outside_block = result.type_at(5, 0, "x")
+      expect(type_outside_block).to eq(string_type)
+    end
+
+    it "nested blocks have independent scopes" do
+      source = <<~RUBY
+        [[1]].each do |arr|
+          arr.each do |x|
+            x
+          end
+          arr
+        end
+      RUBY
+
+      result = analyzer.analyze(source)
+
+      # Inner block x (line 3) should be Integer
+      type_inner_x = result.type_at(3, 0, "x")
+      expect(type_inner_x).to eq(integer_type)
+
+      # Outer block arr (line 5) should be Array[Integer]
+      type_outer_arr = result.type_at(5, 0, "arr")
+      expect(type_outer_arr).to be_a(array_type)
+      expect(type_outer_arr.element_type).to eq(integer_type)
+    end
+
+    it "block parameter not visible outside block" do
+      source = <<~RUBY
+        [1].each do |num|
+          num
+        end
+        num
+      RUBY
+
+      result = analyzer.analyze(source)
+
+      # Inside block (line 2), num should be Integer
+      type_inside = result.type_at(2, 0, "num")
+      expect(type_inside).to eq(integer_type)
+
+      # Outside block (line 4), num should be Unknown
+      type_outside = result.type_at(4, 0, "num")
+      expect(type_outside).to eq(unknown_type)
+    end
+  end
 end

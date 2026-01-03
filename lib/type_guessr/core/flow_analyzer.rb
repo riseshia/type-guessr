@@ -25,14 +25,15 @@ module TypeGuessr
         parsed = Prism.parse(source)
         visitor = FlowVisitor.new(@initial_types)
         parsed.value.accept(visitor)
-        AnalysisResult.new(visitor.type_env, visitor.return_types)
+        AnalysisResult.new(visitor.type_env, visitor.return_types, visitor.scope_snapshots)
       end
 
       # AnalysisResult holds the results of flow analysis
       class AnalysisResult
-        def initialize(type_env, return_types)
+        def initialize(type_env, return_types, scope_snapshots = [])
           @type_env = type_env # { line => { var_name => type } }
           @return_types = return_types # { method_name => type }
+          @scope_snapshots = scope_snapshots # Array of completed scopes
         end
 
         # Get type at a specific line and column for a specific variable
@@ -41,14 +42,35 @@ module TypeGuessr
         # @param var_name [String] variable name to look up
         # @return [Types::Type] the inferred type
         def type_at(line, _column, var_name)
-          # Find the most recent type assignment for this variable
-          # Look backwards from the current line
+          # First check scope snapshots (for block parameters and scoped variables)
+          # Find all scopes that contain this line
+          applicable_scopes = @scope_snapshots.select do |scope|
+            line.between?(scope.start_line, scope.end_line)
+          end.sort_by(&:start_line).reverse # Innermost first
+
+          # Check scopes from innermost to outermost
+          applicable_scopes.each do |scope|
+            type = scope.lookup(var_name)
+            return type if type
+          end
+
+          # Fallback to line-based lookup for backward compatibility
+          # But skip variables that are in block scopes that don't contain the current line
           (1..line).reverse_each do |l|
             env = @type_env[l]
             next unless env
+            next unless env.key?(var_name)
 
-            # Look for the specific variable
-            return env[var_name] if env.key?(var_name)
+            # Check if this line is inside a block scope that doesn't contain the current line
+            # If so, skip this variable (it's a block-local variable)
+            in_inapplicable_block = @scope_snapshots.any? do |scope|
+              scope.kind == :block &&
+                l.between?(scope.start_line, scope.end_line) &&
+                !line.between?(scope.start_line, scope.end_line) &&
+                scope.binding?(var_name)
+            end
+
+            return env[var_name] unless in_inapplicable_block
           end
 
           Types::Unknown.instance
@@ -62,22 +84,65 @@ module TypeGuessr
         end
       end
 
+      # Scope represents a lexical scope (method, block, etc.) for type tracking
+      class Scope
+        attr_reader :types, :start_line, :kind
+        attr_accessor :end_line
+
+        # Initialize a new scope
+        # @param start_line [Integer] the starting line number of the scope
+        # @param kind [Symbol] the kind of scope (:root, :method, :block)
+        def initialize(start_line:, kind:)
+          @types = {} # { var_name => type }
+          @start_line = start_line
+          @end_line = nil # Set when scope is closed
+          @kind = kind
+        end
+
+        # Bind a variable to a type in this scope
+        # @param var_name [String] the variable name
+        # @param type [Types::Type] the type
+        def bind(var_name, type)
+          @types[var_name] = type
+        end
+
+        # Look up a variable's type in this scope
+        # @param var_name [String] the variable name
+        # @return [Types::Type, nil] the type or nil if not found
+        def lookup(var_name)
+          @types[var_name]
+        end
+
+        # Check if a variable is bound in this scope
+        # @param var_name [String] the variable name
+        # @return [Boolean] true if the variable is bound in this scope
+        def binding?(var_name)
+          @types.key?(var_name)
+        end
+      end
+
       # FlowVisitor traverses AST and tracks type flow
       class FlowVisitor < Prism::Visitor
-        attr_reader :type_env, :return_types
+        attr_reader :type_env, :return_types, :scope_snapshots
 
         # Initialize visitor with optional initial type information
         # @param initial_types [Hash{String => Types::Type}] initial type information
         def initialize(initial_types = {})
           super()
-          @type_env = {} # { line => { var_name => type } }
+          @type_env = {} # { line => { var_name => type } } - kept for backward compatibility
           @return_types = {} # { method_name => type }
           @current_method = nil
           @method_returns = [] # Collect return types for current method
           @initial_types = initial_types
+          @scope_stack = [] # Active scope stack
+          @scope_snapshots = [] # Completed scopes for type_at
 
-          # Store initial types at line 0 for lookups
+          # Store initial types at line 0 for lookups (backward compatibility)
           @type_env[0] = initial_types.dup if initial_types.any?
+
+          # Create root scope with initial types
+          push_scope(start_line: 0, kind: :root)
+          initial_types.each { |var_name, type| bind_in_current_scope(var_name, type) }
         end
 
         def visit_def_node(node)
@@ -87,7 +152,13 @@ module TypeGuessr
           @current_method = node.name.to_s
           @method_returns = []
 
+          # Push method scope
+          push_scope(start_line: node.location.start_line, kind: :method)
+
           super
+
+          # Pop method scope
+          pop_scope(end_line: node.location.end_line)
 
           # Add implicit return from last expression
           if node.body.is_a?(Prism::StatementsNode) && node.body.body.any?
@@ -118,6 +189,44 @@ module TypeGuessr
             type = infer_type_from_node(node.arguments.arguments.first)
             @method_returns << type
           end
+          super
+        end
+
+        def visit_call_node(node)
+          # If the call has a block, push block scope before visiting
+          has_block_scope = false
+
+          if node.block.is_a?(Prism::BlockNode)
+            block = node.block
+
+            # Infer receiver type and get block parameter types
+            receiver_type = node.receiver ? infer_type_from_node(node.receiver) : Types::Unknown.instance
+            class_name = extract_class_name(receiver_type)
+            method_name = node.name.to_s
+
+            if class_name
+              # Get element type for Array receiver
+              elem_type = extract_element_type(receiver_type)
+
+              # Get block parameter types from RBS
+              param_types = RBSProvider.instance.get_block_param_types_with_substitution(
+                class_name, method_name, elem: elem_type
+              )
+
+              # Push block scope and bind parameters
+              push_scope(start_line: block.location.start_line, kind: :block)
+              bind_block_params(block.parameters, param_types) if block.parameters && param_types
+              has_block_scope = true
+            end
+          end
+
+          super
+
+          # Pop block scope after visiting
+          pop_scope(end_line: node.block.location.end_line) if has_block_scope
+        rescue StandardError
+          # Pop scope if we pushed one
+          pop_scope(end_line: node.block.location.end_line) if has_block_scope
           super
         end
 
@@ -190,6 +299,51 @@ module TypeGuessr
         end
 
         private
+
+        # Scope management methods
+
+        # Push a new scope onto the scope stack
+        # @param start_line [Integer] the starting line of the scope
+        # @param kind [Symbol] the kind of scope (:root, :method, :block)
+        def push_scope(start_line:, kind:)
+          scope = Scope.new(start_line: start_line, kind: kind)
+          @scope_stack.push(scope)
+        end
+
+        # Pop the current scope from the stack and save it to snapshots
+        # @param end_line [Integer] the ending line of the scope
+        # @return [Scope] the popped scope
+        def pop_scope(end_line:)
+          scope = @scope_stack.pop
+          scope.end_line = end_line
+          @scope_snapshots << scope
+          scope
+        end
+
+        # Get the current (innermost) scope
+        # @return [Scope, nil] the current scope or nil if stack is empty
+        def current_scope
+          @scope_stack.last
+        end
+
+        # Bind a variable to a type in the current scope
+        # @param var_name [String] the variable name
+        # @param type [Types::Type] the type
+        def bind_in_current_scope(var_name, type)
+          current_scope&.bind(var_name, type)
+        end
+
+        # Look up a variable through the scope chain
+        # @param var_name [String] the variable name
+        # @return [Types::Type] the type or Unknown if not found
+        def lookup_through_scopes(var_name)
+          @scope_stack.reverse_each do |scope|
+            return scope.lookup(var_name) if scope.binding?(var_name)
+          end
+          Types::Unknown.instance
+        end
+
+        # Type inference and assignment methods
 
         def handle_compound_assignment(node)
           var_name = node.name.to_s
@@ -352,17 +506,19 @@ module TypeGuessr
             class_name, method_name, elem: elem_type
           )
 
-          # 3. Bind block parameters to their types
-          saved_env = @type_env.dup
+          # 3. Push block scope
+          push_scope(start_line: block.location.start_line, kind: :block)
+
+          # 4. Bind block parameters to their types
           bind_block_params(block.parameters, param_types) if block.parameters
 
-          # 4. Analyze block body to infer return type
+          # 5. Analyze block body to infer return type
           block_return_type = infer_block_return_type(block)
 
-          # 5. Restore environment (block parameters are local to block)
-          @type_env = saved_env
+          # 6. Pop block scope (parameters no longer visible outside block)
+          pop_scope(end_line: block.location.end_line)
 
-          # 6. Get method return type with substitution
+          # 7. Get method return type with substitution
           substitutions = { U: block_return_type, Elem: elem_type }.compact
           RBSProvider.instance.get_method_return_type_with_substitution(
             class_name, method_name, substitutions
@@ -403,6 +559,11 @@ module TypeGuessr
 
             # Assign type to parameter
             param_type = param_types[index] || Types::Unknown.instance
+
+            # Bind in current (block) scope
+            bind_in_current_scope(param_name, param_type)
+
+            # Also store in line-based env for backward compatibility
             store_type(param.location.start_line, param_name, param_type)
           end
         end
