@@ -4,6 +4,8 @@ require "prism"
 require_relative "types"
 require_relative "literal_type_analyzer"
 require_relative "rbs_provider"
+require_relative "chain_index"
+require_relative "chain/literal"
 
 module TypeGuessr
   module Core
@@ -243,11 +245,44 @@ module TypeGuessr
           if node.block.is_a?(Prism::BlockNode)
             infer_call_with_block(node, class_name, method_name, receiver_type)
           else
-            # Query RBS for method return type
-            RBSProvider.instance.get_method_return_type(class_name, method_name)
+            # 1. Try RBS first
+            rbs_type = RBSProvider.instance.get_method_return_type(class_name, method_name)
+            return rbs_type if rbs_type && rbs_type != Types::Unknown.instance
+
+            # 2. Try ChainIndex for user-defined methods
+            infer_from_chain_index(class_name, method_name)
           end
         rescue StandardError
           Types::Unknown.instance
+        end
+
+        # Infer type from ChainIndex for user-defined methods
+        # @param class_name [String] the class name
+        # @param method_name [String] the method name
+        # @return [Types::Type] the inferred type
+        def infer_from_chain_index(class_name, method_name)
+          chains = ChainIndex.instance.get_method_return_chains(class_name, method_name)
+          return Types::Unknown.instance if chains.empty?
+
+          # Collect all types from chains
+          types = []
+          chains.each do |chain|
+            # For simple cases (single literal return), extract type directly
+            return Types::Unknown.instance unless chain.links.size == 1 && chain.links.first.is_a?(Chain::Literal)
+
+            types << chain.links.first.type
+
+            # For complex cases, we can't resolve without full ChainContext
+            # Return Unknown to avoid incorrect inference
+          end
+
+          return Types::Unknown.instance if types.empty?
+
+          # If all return paths have the same type, return it
+          return types.first if types.uniq.size == 1
+
+          # Multiple different types -> create Union
+          Types::Union.new(types.uniq)
         end
 
         # Extract class name from a type object

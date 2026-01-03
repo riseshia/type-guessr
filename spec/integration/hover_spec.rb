@@ -1635,6 +1635,33 @@ RSpec.describe "Hover Integration" do
         expect_hover_method_signature(line: 1, column: 4, expected_signature: "(?String text) -> String")
       end
     end
+
+    context "infer return type from user-defined method call" do
+      let(:source) do
+        <<~RUBY
+          class Recipe
+            def ingredients
+              []
+            end
+
+            def steps
+              []
+            end
+          end
+
+          def process(recipe)
+            recipe.ingredients
+            recipe.steps
+          end
+        RUBY
+      end
+
+      it "→ (Recipe recipe) -> Array" do
+        # Hover on method name "process"
+        # Last expression is recipe.steps which returns Array from Recipe#steps
+        expect_hover_method_signature(line: 11, column: 4, expected_signature: "(Recipe recipe) -> Array")
+      end
+    end
   end
 
   describe "Block Parameter Type Inference" do
