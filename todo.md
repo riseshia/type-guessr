@@ -527,6 +527,207 @@ b #=> Actual: Unknown, Expected: Array[Integer]
 - Easier to test
 - Better code navigation
 
+---
+
+### 8. Hash Incremental Field Addition
+
+**Problem:** Cannot track hash field additions via `[]=` assignments.
+
+**Current Behavior:**
+```ruby
+a = { a: 1 }   # → { a: Integer }
+a[:b] = 3      # Type not updated
+a              # Still shows { a: Integer }, should be { a: Integer, b: Integer }
+```
+
+**Why Important:**
+- Hashes are fundamental data structures in Ruby
+- Common pattern: building hashes incrementally
+- HashShape infrastructure already exists
+- High practical value for real-world code
+
+**Current Support:**
+- ✅ Hash literal inference works: `{ a: 1, b: "str" }` → `{ a: Integer, b: String }`
+- ❌ No tracking of element writes via `[]=`
+- ❌ No type updates after initial definition
+
+**Locations:**
+- `lib/type_guessr/core/ast_analyzer.rb` - No visitor for index writes
+- `lib/type_guessr/core/variable_index.rb` - No type merge/update logic
+- `lib/type_guessr/core/types.rb` - HashShape exists but immutable
+
+**Solution (Phase 2 - Sequential Writes):**
+
+Scope: Handle simple sequential assignments in same scope, no control flow.
+
+1. **Add AST visitor for index writes:**
+   ```ruby
+   # In ASTAnalyzer
+   def visit_index_operator_write_node(node)
+     # a[:b] = 3
+     # - receiver: LocalVariableReadNode (a)
+     # - index: SymbolNode (:b)
+     # - value: IntegerNode (3)
+
+     return super unless node.index.is_a?(Prism::SymbolNode)  # Only symbol keys
+
+     receiver_var = extract_variable_name(node.receiver)
+     return super unless receiver_var
+
+     key = node.index.value.to_sym
+     value_type = analyze_value_type(node.value)
+
+     # Store field addition info
+     store_hash_field_addition(
+       var_name: receiver_var,
+       key: key,
+       value_type: value_type,
+       line: node.location.start_line,
+       column: node.location.start_column
+     )
+
+     super
+   end
+   ```
+
+2. **Add field addition tracking to VariableIndex:**
+   ```ruby
+   # New storage for hash field additions
+   @hash_field_additions = {
+     instance_variables: {},
+     local_variables: {},
+     class_variables: {}
+   }
+
+   # Structure: { file_path => { scope_id => { var_name => [additions] } } }
+   # additions = [{ key: :b, type: Integer, line: 2, column: 0 }]
+
+   def add_hash_field_addition(file_path:, scope_type:, scope_id:, var_name:, key:, value_type:, line:, column:)
+     # Store field addition chronologically
+   end
+
+   def get_hash_fields_at_location(file_path:, scope_type:, scope_id:, var_name:, max_line:)
+     # Collect all field additions up to max_line
+     # Merge with base HashShape from initial assignment
+   end
+   ```
+
+3. **Add type merging logic:**
+   ```ruby
+   # In TypeResolver or new HashTypeMerger class
+   def merge_hash_type(base_type, field_additions)
+     return base_type unless base_type.is_a?(Types::HashShape)
+
+     # Start with base fields
+     merged_fields = base_type.fields.dup
+
+     # Apply field additions chronologically
+     field_additions.each do |addition|
+       merged_fields[addition[:key]] = addition[:type]
+     end
+
+     Types::HashShape.new(merged_fields)
+   end
+   ```
+
+4. **Integrate into TypeResolver:**
+   ```ruby
+   def get_direct_type(variable_name:, hover_line:, scope_type:, scope_id:, file_path: nil)
+     # ... existing logic to get base type
+
+     # If base type is HashShape, check for field additions
+     if base_type.is_a?(Types::HashShape)
+       field_additions = @index.get_hash_fields_at_location(
+         file_path: file_path,
+         scope_type: scope_type,
+         scope_id: scope_id,
+         var_name: variable_name,
+         max_line: hover_line
+       )
+
+       base_type = merge_hash_type(base_type, field_additions) if field_additions.any?
+     end
+
+     base_type
+   end
+   ```
+
+**Limitations (Intentional):**
+- ❌ Control flow not analyzed (if/else branches)
+- ❌ String/dynamic keys not supported (only Symbol keys)
+- ❌ Field deletions not tracked (`hash.delete(:key)`)
+- ❌ Spread/merge operations not tracked (`hash.merge(...)`)
+- ✅ Simple sequential additions in same scope: SUPPORTED
+
+**Test Cases:**
+```ruby
+# Basic sequential addition
+a = {}
+a[:x] = 1
+a[:y] = "str"
+a  # → { x: Integer, y: String }
+
+# With initial fields
+a = { a: 1 }
+a[:b] = "str"
+a  # → { a: Integer, b: String }
+
+# Field override
+a = { x: 1 }
+a[:x] = "str"
+a  # → { x: String } (last write wins)
+
+# Symbol keys only
+a = {}
+a["str_key"] = 1  # NOT tracked, fall back to Hash
+a  # → Hash
+
+# Scope isolation
+def foo
+  a = {}
+  a[:x] = 1
+end
+
+def bar
+  a = {}
+  a[:y] = 2
+end
+# Each method has separate hash types
+```
+
+**Tasks:**
+- [ ] Write failing integration tests (TDD)
+  - `spec/integration/hover_spec.rb` - Add hash field addition examples
+  - `spec/type_guessr/core/ast_analyzer_spec.rb` - Index write visitor
+  - `spec/type_guessr/core/variable_index_spec.rb` - Field addition storage
+- [ ] Add `visit_index_operator_write_node` to ASTAnalyzer
+- [ ] Add hash field addition storage to VariableIndex
+- [ ] Implement type merging logic
+- [ ] Integrate into TypeResolver
+- [ ] Document limitations in docs/inference_rules.md
+
+**Future (Phase 3 - Control Flow):**
+```ruby
+# Not in scope for Phase 2
+a = {}
+if condition
+  a[:x] = 1
+else
+  a[:x] = "str"
+end
+a  # → { x: Integer | String } (requires control flow analysis)
+```
+
+**Files to Modify:**
+- `lib/type_guessr/core/ast_analyzer.rb`
+- `lib/type_guessr/core/variable_index.rb`
+- `lib/type_guessr/core/type_resolver.rb`
+- `spec/integration/hover_spec.rb`
+- `spec/type_guessr/core/ast_analyzer_spec.rb`
+- `spec/type_guessr/core/variable_index_spec.rb`
+
+---
+
 ## 🟡 P2: Quality Improvements
 
 > Code quality and maintainability improvements. Important but can be deferred after P0/P1.
