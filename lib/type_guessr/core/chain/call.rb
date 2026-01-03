@@ -12,7 +12,7 @@ module TypeGuessr
 
         def initialize(word, arguments: [], has_block: false)
           super(word)
-          @arguments = arguments.freeze  # Array of Chain for arguments
+          @arguments = arguments.freeze # Array of Chain for arguments
           @has_block = has_block
         end
 
@@ -31,11 +31,24 @@ module TypeGuessr
           rbs_type = context.get_method_return_type(class_name, @word)
           return rbs_type if rbs_type != Types::Unknown.instance
 
-          # 2. Try user-defined methods
+          # 2. Try user-defined methods via UserMethodReturnResolver (file-based)
           user_type = context.get_user_method_return_type(class_name, @word)
           return user_type if user_type != Types::Unknown.instance
 
-          # 3. Return Unknown if neither works
+          # 3. Try ChainIndex (AST-based method return chains)
+          return_chains = context.get_method_return_chains(class_name, @word)
+          if return_chains.any?
+            types = return_chains.map { |chain| chain.resolve(context) }
+            types = types.reject { |t| t == Types::Unknown.instance }.uniq
+
+            return case types.size
+                   when 0 then Types::Unknown.instance
+                   when 1 then types.first
+                   else Types::Union.new(types)
+                   end
+          end
+
+          # 4. Return Unknown if nothing works
           Types::Unknown.instance
         end
 

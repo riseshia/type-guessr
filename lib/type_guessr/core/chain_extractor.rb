@@ -113,10 +113,33 @@ module TypeGuessr
         @method_stack.push(method_name)
         @scopes.push({})
 
+        # Collect return value chains
+        @current_return_chains = []
+
         super
+
+        # Extract chain from last expression
+        if node.body
+          last_chain = extract_chain_from_statements(node.body)
+          if last_chain
+            @current_return_chains << last_chain
+          else
+            # Empty statements in body return nil implicitly
+            nil_chain = Chain.new([Chain::Literal.new(Types::ClassInstance.new("NilClass"))])
+            @current_return_chains << nil_chain
+          end
+        else
+          # Empty method body returns nil implicitly
+          nil_chain = Chain.new([Chain::Literal.new(Types::ClassInstance.new("NilClass"))])
+          @current_return_chains << nil_chain
+        end
+
+        # Store method return chains
+        store_method_return_chains(method_name, @current_return_chains) if @current_return_chains.any?
       ensure
         @method_stack.pop
         @scopes.pop
+        @current_return_chains = nil
       end
 
       # Parameter visitors - register parameters as variables with optional type inference
@@ -200,6 +223,17 @@ module TypeGuessr
         var_name = node.name.to_s
         location = node.location
         register_variable(var_name, location.start_line, location.start_column)
+        super
+      end
+
+      # Collect return statement chains for method return type inference
+      def visit_return_node(node)
+        if @current_return_chains && node.arguments
+          # Extract chain from first argument
+          arg = node.arguments.arguments.first
+          chain = extract_chain(arg) if arg
+          @current_return_chains << chain if chain
+        end
         super
       end
 
@@ -379,6 +413,23 @@ module TypeGuessr
           def_line: line,
           def_column: column,
           chain: chain
+        )
+      end
+
+      # Store method return chains in index
+      # @param method_name [String] the method name
+      # @param chains [Array<Chain>] array of return value chains
+      def store_method_return_chains(method_name, chains)
+        return if chains.empty?
+
+        class_name = current_class_path
+        # Skip top-level methods (not in a class)
+        return if class_name.empty?
+
+        @chain_index.add_method_return_chains(
+          class_name: class_name,
+          method_name: method_name,
+          chains: chains
         )
       end
 

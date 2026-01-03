@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 require "singleton"
-require "set"
 
 module TypeGuessr
   module Core
@@ -21,6 +20,7 @@ module TypeGuessr
           local_variables: {},
           class_variables: {}
         }
+        @method_returns = {} # { "ClassName#method_name" => [Chain, Chain, ...] }
         @mutex = Mutex.new
       end
 
@@ -121,7 +121,7 @@ module TypeGuessr
       # @param scope_type [Symbol]
       # @param scope_id [String]
       # @return [Array<Hash>]
-      def find_definitions(var_name:, file_path: nil, scope_type:, scope_id:)
+      def find_definitions(var_name:, scope_type:, scope_id:, file_path: nil)
         @mutex.synchronize do
           definitions = []
           scopes_hash = @chains[scope_type]
@@ -151,11 +151,34 @@ module TypeGuessr
         end
       end
 
+      # Store method return chains
+      # @param class_name [String]
+      # @param method_name [String]
+      # @param chains [Array<Chain>] array of return value chains
+      def add_method_return_chains(class_name:, method_name:, chains:)
+        @mutex.synchronize do
+          key = "#{class_name}##{method_name}"
+          @method_returns[key] = chains.compact
+        end
+      end
+
+      # Get method return chains
+      # @param class_name [String]
+      # @param method_name [String]
+      # @return [Array<Chain>]
+      def get_method_return_chains(class_name, method_name)
+        @mutex.synchronize do
+          key = "#{class_name}##{method_name}"
+          @method_returns[key] || []
+        end
+      end
+
       # Clear all data
       def clear
         @mutex.synchronize do
           @chains.each_value(&:clear)
           @method_calls.each_value(&:clear)
+          @method_returns.clear
         end
       end
 
@@ -224,7 +247,7 @@ module TypeGuessr
               result_index[scope_type][file_path] = scopes.transform_values do |vars|
                 vars.transform_values do |defs|
                   # Convert Chain objects to simple hash for JSON serialization
-                  defs.transform_values { |_chain| [] }  # Empty array for compatibility
+                  defs.transform_values { |_chain| [] } # Empty array for compatibility
                 end
               end
             end

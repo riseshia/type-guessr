@@ -12,7 +12,7 @@ module TypeGuessr
 
         def initialize(condition:, then_chain:, else_chain: nil)
           super("if")
-          @condition = condition  # Chain for condition (not used for type inference)
+          @condition = condition # Chain for condition (not used for type inference)
           @then_chain = then_chain
           @else_chain = else_chain
         end

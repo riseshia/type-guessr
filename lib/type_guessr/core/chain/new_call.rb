@@ -13,7 +13,7 @@ module TypeGuessr
         def initialize(class_name, arguments: [])
           super("new")
           @class_name = class_name
-          @arguments = arguments.freeze  # Array of Chain for arguments
+          @arguments = arguments.freeze # Array of Chain for arguments
         end
 
         # .new always returns an instance of the class

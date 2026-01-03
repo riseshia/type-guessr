@@ -17,7 +17,7 @@ module TypeGuessr
         # @param receiver_type [Types::Type, nil] type from previous link (nil for head)
         # @param is_head [Boolean] true if this is the first link in chain
         # @return [Types::Type] resolved type
-        def resolve(context, receiver_type, is_head)
+        def resolve(_context, _receiver_type, _is_head)
           Types::Unknown.instance
         end
 

@@ -7,7 +7,7 @@ module TypeGuessr
     class ChainContext
       attr_reader :scope_type, :scope_id, :max_line, :depth, :file_path
 
-      MAX_DEPTH = 5  # Depth limit for method signature inference
+      MAX_DEPTH = 5 # Depth limit for method signature inference
 
       def initialize(
         chain_index:,
@@ -39,7 +39,7 @@ module TypeGuessr
       # @param new_file_path [String, nil]
       # @return [ChainContext, nil]
       def child(new_scope_type: nil, new_scope_id: nil, new_max_line: nil, new_file_path: nil)
-        return nil if @depth >= MAX_DEPTH  # Depth limit reached
+        return nil if @depth >= MAX_DEPTH # Depth limit reached
 
         ChainContext.new(
           chain_index: @chain_index,
@@ -89,6 +89,14 @@ module TypeGuessr
         return Types::Unknown.instance unless @user_method_resolver
 
         @user_method_resolver.get_return_type(class_name, method_name)
+      end
+
+      # Get method return chains from ChainIndex
+      # @param class_name [String]
+      # @param method_name [String]
+      # @return [Array<Chain>]
+      def get_method_return_chains(class_name, method_name)
+        @chain_index.get_method_return_chains(class_name, method_name)
       end
 
       # Heuristic type matching from method calls

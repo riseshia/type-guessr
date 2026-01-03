@@ -1133,7 +1133,6 @@ RSpec.describe "Hover Integration" do
     # The core functionality is also verified in spec/type_guessr/core/user_method_return_resolver_spec.rb
 
     it "infers return type from user-defined method with literal return" do
-      skip "UserMethodReturnResolver requires file-based sources (reads via File.readlines)"
       source = <<~RUBY
         class Animal
           def name
@@ -1155,7 +1154,6 @@ RSpec.describe "Hover Integration" do
     end
 
     it "infers nil for empty method body" do
-      skip "UserMethodReturnResolver requires file-based sources (reads via File.readlines)"
       source = <<~RUBY
         class Animal
           def eat
@@ -1176,7 +1174,6 @@ RSpec.describe "Hover Integration" do
     end
 
     it "infers return type from explicit return statement" do
-      skip "UserMethodReturnResolver requires file-based sources (reads via File.readlines)"
       source = <<~RUBY
         class Calculator
           def compute
@@ -1198,7 +1195,6 @@ RSpec.describe "Hover Integration" do
     end
 
     it "infers union type from multiple return paths" do
-      skip "UserMethodReturnResolver requires file-based sources (reads via File.readlines)"
       source = <<~RUBY
         class Conditional
           def value
@@ -1225,7 +1221,6 @@ RSpec.describe "Hover Integration" do
     end
 
     it "works with nested method calls" do
-      skip "UserMethodReturnResolver requires file-based sources (reads via File.readlines)"
       source = <<~RUBY
         class StringWrapper
           def value
