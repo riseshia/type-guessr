@@ -169,3 +169,19 @@ def foo(flag)
 end
 ```
 
+## Method Signature Display
+
+### String#upcase
+
+```ruby
+str = "hello"
+str.[u]pcase  # Signature: () -> ::String
+```
+
+### Array#map
+
+```ruby
+arr = [1, 2, 3]
+arr.[m]ap { |x| x * 2 }  # Signature: [U] () { (Elem item) -> U } -> ::Array[U]
+```
+

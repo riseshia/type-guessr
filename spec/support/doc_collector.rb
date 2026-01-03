@@ -11,10 +11,23 @@ module DocCollector
 
     def record(source:, line:, column:, expected:, group_hierarchy:, description:)
       entries << {
+        type: :type_inference,
         source: source,
         line: line,
         column: column,
         expected: expected,
+        group_hierarchy: group_hierarchy,
+        description: description
+      }
+    end
+
+    def record_method_signature(source:, line:, column:, expected_signature:, group_hierarchy:, description:)
+      entries << {
+        type: :method_signature,
+        source: source,
+        line: line,
+        column: column,
+        expected: expected_signature,
         group_hierarchy: group_hierarchy,
         description: description
       }
@@ -76,7 +89,11 @@ module DocCollector
 
     def format_example(example)
       output = "```ruby\n"
-      output += add_hover_marker(example[:source], example[:line], example[:column], example[:expected])
+      output += if example[:type] == :method_signature
+                  add_signature_marker(example[:source], example[:line], example[:column], example[:expected])
+                else
+                  add_hover_marker(example[:source], example[:line], example[:column], example[:expected])
+                end
       output += "```\n\n"
       output
     end
@@ -98,6 +115,29 @@ module DocCollector
         marked = "#{before}[#{char}]#{after}  # Guessed Type: #{expected_type}\n"
       else
         marked = "#{content}  # Guessed Type: #{expected_type}\n"
+      end
+
+      lines[line - 1] = marked
+      lines.join
+    end
+
+    def add_signature_marker(source, line, column, expected_signature)
+      lines = source.lines
+      return source if line > lines.size
+
+      target_line = lines[line - 1]
+      return source unless target_line
+
+      content = target_line.rstrip
+
+      # Insert brackets around the character at column position
+      if column < content.length
+        before = content[0...column]
+        char = content[column] || ""
+        after = content[(column + 1)..] || ""
+        marked = "#{before}[#{char}]#{after}  # Signature: #{expected_signature}\n"
+      else
+        marked = "#{content}  # Signature: #{expected_signature}\n"
       end
 
       lines[line - 1] = marked
@@ -135,6 +175,33 @@ module TypeGuessrDocHelper
       escaped_type = Regexp.escape(type).gsub("\\[", "\\[").gsub("\\]", "\\]")
       expect(response.contents.value).to match(/#{escaped_type}/)
     end
+  end
+
+  def expect_hover_method_signature(line:, column:, expected_signature:)
+    source = self.source
+
+    # Record if this is a documented example
+    if RSpec.current_example.metadata[:doc]
+      group_hierarchy = extract_group_hierarchy
+      DocCollector.record_method_signature(
+        source: source,
+        line: line,
+        column: column,
+        expected_signature: expected_signature,
+        group_hierarchy: group_hierarchy,
+        description: RSpec.current_example.description
+      )
+    end
+
+    # Perform actual hover test
+    response = hover_on_source(source, { line: line - 1, character: column })
+
+    # Validate response exists
+    expect(response).not_to be_nil
+
+    # Match expected signature
+    escaped_signature = Regexp.escape(expected_signature)
+    expect(response.contents.value).to match(/#{escaped_signature}/)
   end
 
   def parse_top_level_union(type_string)

@@ -1328,22 +1328,20 @@ RSpec.describe "Hover Integration" do
   end
 
   describe "Call Node Hover" do
-    it "shows RBS signature when hovering on method call with variable receiver" do
-      source = <<~RUBY
-        def foo
-          str = "hello"
-          str.upcase
-        end
-      RUBY
+    context "method call with variable receiver" do
+      let(:source) do
+        <<~RUBY
+          def foo
+            str = "hello"
+            str.upcase
+          end
+        RUBY
+      end
 
-      # Hover on "upcase" method call
-      response = hover_on_source(source, { line: 2, character: 6 })
-
-      expect(response).not_to be_nil
-      expect(response.contents.value).to match(/\*\*RBS Signatures:\*\*/)
-      expect(response.contents.value).not_to match(/\*\*Signatures:\*\*/)
-      expect(response.contents.value).to match(/upcase/)
-      expect(response.contents.value).to match(/String/)
+      it "shows RBS signature" do
+        # Hover on "upcase" method call
+        expect_hover_method_signature(line: 3, column: 6, expected_signature: "() -> ::String")
+      end
     end
 
     it "returns nil when receiver type is unknown" do
@@ -1361,70 +1359,70 @@ RSpec.describe "Hover Integration" do
       expect(response).to be_nil
     end
 
-    it "shows RBS signature for instance variable receiver" do
-      source = <<~RUBY
-        def foo
-          @name = "Alice"
-          @name.downcase
-        end
-      RUBY
+    context "instance variable receiver" do
+      let(:source) do
+        <<~RUBY
+          def foo
+            @name = "Alice"
+            @name.downcase
+          end
+        RUBY
+      end
 
-      # Hover on "downcase" method call
-      response = hover_on_source(source, { line: 2, character: 8 })
-
-      expect(response).not_to be_nil
-      expect(response.contents.value).to match(/downcase/)
-      expect(response.contents.value).to match(/String/)
+      it "shows RBS signature" do
+        # Hover on "downcase" method call
+        expect_hover_method_signature(line: 3, column: 8, expected_signature: "() -> ::String")
+      end
     end
 
-    it "shows RBS signature for method chain (variable receiver)" do
-      source = <<~RUBY
-        def foo
-          str = "hello"
-          str.chars.first
-        end
-      RUBY
+    context "method chain (variable receiver)" do
+      let(:source) do
+        <<~RUBY
+          def foo
+            str = "hello"
+            str.chars.first
+          end
+        RUBY
+      end
 
-      # Hover on "first" in the chain
-      response = hover_on_source(source, { line: 2, character: 12 })
-
-      expect(response).not_to be_nil
-      expect(response.contents.value).to match(/first/)
-      # chars returns Array[String], so first returns String | nil
-      expect(response.contents.value).to match(/Array/)
+      it "shows RBS signature" do
+        # Hover on "first" in the chain
+        # chars returns Array[String], so first returns String | nil
+        expect_hover_method_signature(line: 3, column: 12, expected_signature: "() -> Elem")
+      end
     end
 
-    it "shows RBS signature for map to first chain" do
-      source = <<~RUBY
-        def foo
-          arr = [1, 2, 3]
-          arr.map { |x| x * 2 }.first
-        end
-      RUBY
+    context "map to first chain" do
+      let(:source) do
+        <<~RUBY
+          def foo
+            arr = [1, 2, 3]
+            arr.map { |x| x * 2 }.first
+          end
+        RUBY
+      end
 
-      # Hover on "first" after map chain
-      response = hover_on_source(source, { line: 2, character: 24 })
-
-      expect(response).not_to be_nil
-      expect(response.contents.value).to match(/first/)
-      # map returns Array, so first should show Array signatures
-      expect(response.contents.value).to match(/Array/)
+      it "shows RBS signature" do
+        # Hover on "first" after map chain
+        # map returns Array, so first should show Array signatures
+        expect_hover_method_signature(line: 3, column: 24, expected_signature: "() -> Elem")
+      end
     end
 
-    it "shows RBS signature for chained enumerable methods" do
-      source = <<~RUBY
-        def foo
-          arr = [1, 2, 3]
-          arr.select { |x| x.even? }.map { |x| x * 2 }.compact
-        end
-      RUBY
+    context "chained enumerable methods" do
+      let(:source) do
+        <<~RUBY
+          def foo
+            arr = [1, 2, 3]
+            arr.select { |x| x.even? }.map { |x| x * 2 }.compact
+          end
+        RUBY
+      end
 
-      # Hover on "compact"
-      response = hover_on_source(source, { line: 2, character: 53 })
-
-      expect(response).not_to be_nil
-      expect(response.contents.value).to match(/compact/)
-      expect(response.contents.value).to match(/Array/)
+      it "shows RBS signature" do
+        # Hover on "compact"
+        expect_hover_method_signature(line: 3, column: 53, expected_signature: "() -> ::Array[Elem]")
+      end
     end
 
     it "returns nil for excessively deep method chains" do
@@ -1493,123 +1491,145 @@ RSpec.describe "Hover Integration" do
     end
 
     # Edge case: Method with block
-    it "handles method call with block" do
-      source = <<~RUBY
-        def foo
+    context "method call with block" do
+      let(:source) do
+        <<~RUBY
+          def foo
+            arr = [1, 2, 3]
+            arr.map { |x| x * 2 }
+          end
+        RUBY
+      end
+
+      it "shows RBS signature" do
+        # Hover on "map"
+        expect_hover_method_signature(line: 3, column: 6, expected_signature: "[U] () { (Elem item) -> U } -> ::Array[U]")
+      end
+    end
+  end
+
+  describe "Method Signature Display", :doc do
+    context "String#upcase" do
+      let(:source) do
+        <<~RUBY
+          str = "hello"
+          str.upcase
+        RUBY
+      end
+
+      it "→ () -> ::String" do
+        expect_hover_method_signature(line: 2, column: 4, expected_signature: "() -> ::String")
+      end
+    end
+
+    context "Array#map" do
+      let(:source) do
+        <<~RUBY
           arr = [1, 2, 3]
           arr.map { |x| x * 2 }
-        end
-      RUBY
+        RUBY
+      end
 
-      # Hover on "map"
-      response = hover_on_source(source, { line: 2, character: 6 })
-
-      expect(response).not_to be_nil
-      expect(response.contents.value).to match(/map/)
-      expect(response.contents.value).to match(/Array/)
+      it "→ [U] () { (Elem item) -> U } -> ::Array[U]" do
+        expect_hover_method_signature(line: 2, column: 4, expected_signature: "[U] () { (Elem item) -> U } -> ::Array[U]")
+      end
     end
   end
 
   describe "Def Node Hover" do
-    it "shows signature for simple method with no parameters" do
-      source = <<~RUBY
-        def foo
-          42
-        end
-      RUBY
-
-      # Hover on method name "foo"
-      response = hover_on_source(source, { line: 0, character: 4 })
-
-      expect(response).not_to be_nil
-      expect(response.contents.value).to match(/\*\*Guessed Signature:\*\*/)
-      expect(response.contents.value).not_to match(/\*\*Signature:\*\*/)
-      expect(response.contents.value).to match(/\(\)/)
-      expect(response.contents.value).to match(/Integer/)
-    end
-
-    it "shows signature with parameter types inferred from defaults" do
-      source = <<~RUBY
-        def greet(name, age = 20)
-          "Hello, \#{name}! You are \#{age}."
-        end
-      RUBY
-
-      # Hover on method name "greet"
-      response = hover_on_source(source, { line: 0, character: 4 })
-
-      expect(response).not_to be_nil
-      expect(response.contents.value).to match(/name/)
-      expect(response.contents.value).to match(/age/)
-      expect(response.contents.value).to match(/Integer/)
-      expect(response.contents.value).to match(/String/)
-    end
-
-    it "shows union type for multiple return paths" do
-      source = <<~RUBY
-        def get_value(flag)
-          if flag
+    context "simple method with no parameters" do
+      let(:source) do
+        <<~RUBY
+          def foo
             42
-          else
-            "not a number"
           end
-        end
-      RUBY
+        RUBY
+      end
 
-      # Hover on method name "get_value"
-      response = hover_on_source(source, { line: 0, character: 4 })
-
-      expect(response).not_to be_nil
-      expect(response.contents.value).to match(/Integer/)
-      expect(response.contents.value).to match(/String/)
+      it "→ () -> Integer" do
+        # Hover on method name "foo"
+        expect_hover_method_signature(line: 1, column: 4, expected_signature: "() -> Integer")
+      end
     end
 
-    it "shows nil for empty method body" do
-      source = <<~RUBY
-        class Animal
-          def eat
+    context "signature with parameter types inferred from defaults" do
+      let(:source) do
+        <<~RUBY
+          def greet(name, age = 20)
+            "Hello, \#{name}! You are \#{age}."
           end
-        end
-      RUBY
+        RUBY
+      end
 
-      # Hover on method name "eat"
-      response = hover_on_source(source, { line: 1, character: 6 })
-
-      expect(response).not_to be_nil
-      expect(response.contents.value).to match(/nil/)
-      expect(response.contents.value).not_to match(/untyped/)
+      it "→ (untyped name, ?Integer age) -> String" do
+        # Hover on method name "greet"
+        expect_hover_method_signature(line: 1, column: 4, expected_signature: "(untyped name, ?Integer age) -> String")
+      end
     end
 
-    it "handles keyword parameters" do
-      source = <<~RUBY
-        def configure(name:, timeout: 30)
-          # configuration logic
-        end
-      RUBY
+    context "union type for multiple return paths" do
+      let(:source) do
+        <<~RUBY
+          def get_value(flag)
+            if flag
+              42
+            else
+              "not a number"
+            end
+          end
+        RUBY
+      end
 
-      # Hover on method name "configure"
-      response = hover_on_source(source, { line: 0, character: 4 })
-
-      expect(response).not_to be_nil
-      expect(response.contents.value).to match(/name:/)
-      expect(response.contents.value).to match(/timeout:/)
-      expect(response.contents.value).to match(/Integer/)
+      it "→ (untyped flag) -> Integer | String" do
+        # Hover on method name "get_value"
+        expect_hover_method_signature(line: 1, column: 4, expected_signature: "(untyped flag) -> Integer | String")
+      end
     end
 
-    it "infers return type from method call on parameter with default value" do
-      source = <<~RUBY
-        def transform(text = "hello")
-          text.upcase
-        end
-      RUBY
+    context "empty method body" do
+      let(:source) do
+        <<~RUBY
+          class Animal
+            def eat
+            end
+          end
+        RUBY
+      end
 
-      # Hover on method name "transform"
-      response = hover_on_source(source, { line: 0, character: 4 })
+      it "→ () -> nil" do
+        # Hover on method name "eat"
+        expect_hover_method_signature(line: 2, column: 6, expected_signature: "() -> nil")
+      end
+    end
 
-      expect(response).not_to be_nil
-      expect(response.contents.value).to match(/String text/)
-      expect(response.contents.value).to match(/-> String/)
-      expect(response.contents.value).not_to match(/untyped/)
+    context "keyword parameters" do
+      let(:source) do
+        <<~RUBY
+          def configure(name:, timeout: 30)
+            # configuration logic
+          end
+        RUBY
+      end
+
+      it "→ (name: untyped, timeout: ?Integer) -> nil" do
+        # Hover on method name "configure"
+        expect_hover_method_signature(line: 1, column: 4, expected_signature: "(name: untyped, timeout: ?Integer) -> nil")
+      end
+    end
+
+    context "infer return type from method call on parameter with default value" do
+      let(:source) do
+        <<~RUBY
+          def transform(text = "hello")
+            text.upcase
+          end
+        RUBY
+      end
+
+      it "→ (?String text) -> String" do
+        # Hover on method name "transform"
+        expect_hover_method_signature(line: 1, column: 4, expected_signature: "(?String text) -> String")
+      end
     end
   end
 
@@ -1755,31 +1775,32 @@ RSpec.describe "Hover Integration" do
   end
 
   describe "Method Parameter Type Inference" do
-    it "infers required parameter type from method calls in method body" do
-      source = <<~RUBY
-        class Recipe
-          def validate!
+    context "required parameter type from method calls" do
+      let(:source) do
+        <<~RUBY
+          class Recipe
+            def validate!
+            end
+
+            def update(attrs)
+            end
+
+            def notify_followers
+            end
           end
 
-          def update(attrs)
+          def publish(recipe)
+            recipe.validate!
+            recipe.update(status: :published)
+            recipe.notify_followers
           end
+        RUBY
+      end
 
-          def notify_followers
-          end
-        end
-
-        def publish(recipe)
-          recipe.validate!
-          recipe.update(status: :published)
-          recipe.notify_followers
-        end
-      RUBY
-
-      # Hover on "recipe" parameter in def line
-      response = hover_on_source(source, { line: 11, character: 13 })
-
-      expect(response).not_to be_nil
-      expect(response.contents.value).to match(/Recipe/)
+      it "→ Recipe" do
+        # Hover on "recipe" parameter in def line
+        expect_hover_type(line: 12, column: 13, expected: "Recipe")
+      end
     end
 
     it "shows Unknown when no method calls on parameter" do
@@ -1798,33 +1819,34 @@ RSpec.describe "Hover Integration" do
       expect(response).to be_nil.or(be_a(RubyLsp::Interface::Hover))
     end
 
-    it "infers type when multiple parameters have different types" do
-      source = <<~RUBY
-        class Account
-          def withdraw(amount)
+    context "multiple parameters with different types" do
+      let(:source) do
+        <<~RUBY
+          class Account
+            def withdraw(amount)
+            end
+
+            def deposit(amount)
+            end
           end
 
-          def deposit(amount)
+          class Transaction
+            def self.create(attrs)
+            end
           end
-        end
 
-        class Transaction
-          def self.create(attrs)
+          def transfer(from_account, to_account, amount)
+            from_account.withdraw(amount)
+            to_account.deposit(amount)
+            Transaction.create(from: from_account, to: to_account)
           end
-        end
+        RUBY
+      end
 
-        def transfer(from_account, to_account, amount)
-          from_account.withdraw(amount)
-          to_account.deposit(amount)
-          Transaction.create(from: from_account, to: to_account)
-        end
-      RUBY
-
-      # Hover on "from_account" parameter
-      response = hover_on_source(source, { line: 13, character: 15 })
-
-      expect(response).not_to be_nil
-      expect(response.contents.value).to match(/Account/)
+      it "→ Account" do
+        # Hover on "from_account" parameter
+        expect_hover_type(line: 14, column: 15, expected: "Account")
+      end
     end
 
     it "shows ambiguous when multiple types match" do
@@ -1862,98 +1884,99 @@ RSpec.describe "Hover Integration" do
   end
 
   describe "Constant Alias Support" do
-    it "resolves simple constant alias in .new calls" do
-      source = <<~RUBY
-        class Recipe
-          def validate!
-          end
-        end
-
-        RecipeAlias = Recipe
-
-        def create_recipe
-          result = RecipeAlias.new
-          result
-        end
-      RUBY
-
-      # Hover on "result" variable
-      response = hover_on_source(source, { line: 9, character: 2 })
-
-      expect(response).not_to be_nil
-      # Should show Recipe type (resolved from alias)
-      expect(response.contents.value).to match(/Recipe/)
-    end
-
-    it "resolves constant alias with full path" do
-      source = <<~RUBY
-        module MyApp
-          class Service
-            def perform
+    context "simple constant alias in .new calls" do
+      let(:source) do
+        <<~RUBY
+          class Recipe
+            def validate!
             end
           end
-        end
 
-        ServiceAlias = MyApp::Service
+          RecipeAlias = Recipe
 
-        def execute
-          svc = ServiceAlias.new
-          svc
-        end
-      RUBY
+          def create_recipe
+            result = RecipeAlias.new
+            result
+          end
+        RUBY
+      end
 
-      # Hover on "svc" variable
-      response = hover_on_source(source, { line: 11, character: 2 })
-
-      expect(response).not_to be_nil
-      # Should show Service type
-      expect(response.contents.value).to match(/Service/)
+      it "→ Recipe" do
+        # Hover on "result" variable - should show Recipe type (resolved from alias)
+        expect_hover_type(line: 10, column: 2, expected: "Recipe")
+      end
     end
 
-    it "resolves chained constant aliases" do
-      source = <<~RUBY
-        class Worker
+    context "constant alias with full path" do
+      let(:source) do
+        <<~RUBY
+          module MyApp
+            class Service
+              def perform
+              end
+            end
+          end
+
+          ServiceAlias = MyApp::Service
+
           def execute
+            svc = ServiceAlias.new
+            svc
           end
-        end
+        RUBY
+      end
 
-        WorkerAlias1 = Worker
-        WorkerAlias2 = WorkerAlias1
-
-        def start
-          w = WorkerAlias2.new
-          w
-        end
-      RUBY
-
-      # Hover on "w" variable
-      response = hover_on_source(source, { line: 10, character: 2 })
-
-      expect(response).not_to be_nil
-      # Should show Worker type (resolved through chain)
-      expect(response.contents.value).to match(/Worker/)
+      it "→ Service" do
+        # Hover on "svc" variable - should show Service type
+        expect_hover_type(line: 12, column: 2, expected: "Service")
+      end
     end
 
-    it "handles non-alias constants normally" do
-      source = <<~RUBY
-        CONFIG = Rails.configuration
-
-        class Task
-          def run
+    context "chained constant aliases" do
+      let(:source) do
+        <<~RUBY
+          class Worker
+            def execute
+            end
           end
-        end
 
-        def perform
-          t = Task.new
-          t
-        end
-      RUBY
+          WorkerAlias1 = Worker
+          WorkerAlias2 = WorkerAlias1
 
-      # Hover on "t" - Task is not an alias
-      response = hover_on_source(source, { line: 9, character: 2 })
+          def start
+            w = WorkerAlias2.new
+            w
+          end
+        RUBY
+      end
 
-      expect(response).not_to be_nil
-      expect(response.contents.value).to match(/Task/)
+      it "→ Worker" do
+        # Hover on "w" variable - should show Worker type (resolved through chain)
+        expect_hover_type(line: 11, column: 2, expected: "Worker")
+      end
+    end
+
+    context "non-alias constants" do
+      let(:source) do
+        <<~RUBY
+          CONFIG = Rails.configuration
+
+          class Task
+            def run
+            end
+          end
+
+          def perform
+            t = Task.new
+            t
+          end
+        RUBY
+      end
+
+      it "→ Task" do
+        # Hover on "t" - Task is not an alias
+        expect_hover_type(line: 10, column: 2, expected: "Task")
+      end
     end
 
     # Edge case: Circular reference protection
