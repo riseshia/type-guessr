@@ -756,6 +756,17 @@ RSpec.describe "Hover Integration" do
   end
 
   describe "Debug Mode" do
+    around do |example|
+      # Enable debug mode for this test
+      ENV["TYPE_GUESSR_DEBUG"] = "1"
+      TypeGuessr::Core::Logger.instance_variable_set(:@debug_enabled, nil)
+      example.run
+    ensure
+      # Clean up debug mode
+      ENV.delete("TYPE_GUESSR_DEBUG")
+      TypeGuessr::Core::Logger.instance_variable_set(:@debug_enabled, nil)
+    end
+
     it "shows debug info when enabled" do
       source = <<~RUBY
         def process(item)
