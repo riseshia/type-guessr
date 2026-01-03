@@ -28,6 +28,7 @@ module TypeGuessr
         @class_variables = [{}]
         @class_stack = []
         @method_stack = []
+        @return_chains_stack = []
       end
 
       # Extract chain from local variable assignment
@@ -112,34 +113,34 @@ module TypeGuessr
         method_name = node.name.to_s
         @method_stack.push(method_name)
         @scopes.push({})
-
-        # Collect return value chains
-        @current_return_chains = []
+        @return_chains_stack.push([])
 
         super
+
+        current_return_chains = @return_chains_stack.last
 
         # Extract chain from last expression
         if node.body
           last_chain = extract_chain_from_statements(node.body)
           if last_chain
-            @current_return_chains << last_chain
+            current_return_chains << last_chain
           else
             # Empty statements in body return nil implicitly
             nil_chain = Chain.new([Chain::Literal.new(Types::ClassInstance.new("NilClass"))])
-            @current_return_chains << nil_chain
+            current_return_chains << nil_chain
           end
         else
           # Empty method body returns nil implicitly
           nil_chain = Chain.new([Chain::Literal.new(Types::ClassInstance.new("NilClass"))])
-          @current_return_chains << nil_chain
+          current_return_chains << nil_chain
         end
 
         # Store method return chains
-        store_method_return_chains(method_name, @current_return_chains) if @current_return_chains.any?
+        store_method_return_chains(method_name, current_return_chains) if current_return_chains.any?
       ensure
         @method_stack.pop
         @scopes.pop
-        @current_return_chains = nil
+        @return_chains_stack.pop
       end
 
       # Parameter visitors - register parameters as variables with optional type inference
@@ -228,11 +229,12 @@ module TypeGuessr
 
       # Collect return statement chains for method return type inference
       def visit_return_node(node)
-        if @current_return_chains && node.arguments
+        current_return_chains = @return_chains_stack.last
+        if current_return_chains && node.arguments
           # Extract chain from first argument
           arg = node.arguments.arguments.first
           chain = extract_chain(arg) if arg
-          @current_return_chains << chain if chain
+          current_return_chains << chain if chain
         end
         super
       end
