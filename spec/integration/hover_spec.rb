@@ -1848,6 +1848,28 @@ RSpec.describe "Hover Integration" do
       end
     end
 
+    context "Array#map with Integer arithmetic" do
+      let(:source) do
+        <<~RUBY
+          a = [1, 2, 3]
+          b = a.map do |num|
+            num * 2
+          end
+          b
+        RUBY
+      end
+
+      it "→ Array[Integer] at assignment" do
+        # Hover on 'b' at the assignment line (line 2, col 0)
+        expect_hover_type(line: 2, column: 0, expected: "Array[Integer]")
+      end
+
+      it "→ Array[Integer] at reference" do
+        # Hover on 'b' at the reference line (line 5, col 0)
+        expect_hover_type(line: 5, column: 0, expected: "Array[Integer]")
+      end
+    end
+
     context "Array#map with do-end block" do
       let(:source) do
         <<~RUBY

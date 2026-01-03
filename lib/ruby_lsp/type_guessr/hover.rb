@@ -766,8 +766,8 @@ module RubyLsp
       # @param node [Prism::Node] the node to analyze
       # @return [TypeGuessr::Core::Types::Type, nil] the inferred type or nil
       def try_flow_analysis(node)
-        # Only analyze local variable reads
-        return nil unless node.is_a?(Prism::LocalVariableReadNode)
+        # Analyze local variable reads and writes
+        return nil unless node.is_a?(Prism::LocalVariableReadNode) || node.is_a?(Prism::LocalVariableWriteNode)
 
         # Extract variable name
         var_name = node.name.to_s
