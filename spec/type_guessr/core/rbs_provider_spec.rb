@@ -296,4 +296,70 @@ RSpec.describe TypeGuessr::Core::RBSProvider do
       expect(type.name).to eq("String")
     end
   end
+
+  describe "#get_method_return_type_for_args" do
+    describe "Integer arithmetic overload resolution" do
+      let(:int_type) { TypeGuessr::Core::Types::ClassInstance.new("Integer") }
+      let(:float_type) { TypeGuessr::Core::Types::ClassInstance.new("Float") }
+
+      it "returns Integer for Integer#* with Integer argument" do
+        type = provider.get_method_return_type_for_args("Integer", "*", [int_type])
+
+        expect(type).to be_a(TypeGuessr::Core::Types::ClassInstance)
+        expect(type.name).to eq("Integer")
+      end
+
+      it "returns Float for Integer#* with Float argument" do
+        type = provider.get_method_return_type_for_args("Integer", "*", [float_type])
+
+        expect(type).to be_a(TypeGuessr::Core::Types::ClassInstance)
+        expect(type.name).to eq("Float")
+      end
+
+      it "returns Integer for Integer#+ with Integer argument" do
+        type = provider.get_method_return_type_for_args("Integer", "+", [int_type])
+
+        expect(type).to be_a(TypeGuessr::Core::Types::ClassInstance)
+        expect(type.name).to eq("Integer")
+      end
+
+      it "returns Float for Integer#+ with Float argument" do
+        type = provider.get_method_return_type_for_args("Integer", "+", [float_type])
+
+        expect(type).to be_a(TypeGuessr::Core::Types::ClassInstance)
+        expect(type.name).to eq("Float")
+      end
+    end
+
+    describe "with no arguments" do
+      it "falls back to first overload" do
+        # Integer#* first overload is (Float) -> Float
+        type = provider.get_method_return_type_for_args("Integer", "*", [])
+
+        expect(type).to be_a(TypeGuessr::Core::Types::ClassInstance)
+        # First overload might be any type, just verify it returns something
+        expect(type).not_to eq(TypeGuessr::Core::Types::Unknown.instance)
+      end
+    end
+
+    describe "with Unknown argument types" do
+      it "falls back to first overload when argument type is Unknown" do
+        unknown_type = TypeGuessr::Core::Types::Unknown.instance
+        type = provider.get_method_return_type_for_args("Integer", "*", [unknown_type])
+
+        # Falls back to first overload since Unknown doesn't match any specific type
+        expect(type).to be_a(TypeGuessr::Core::Types::ClassInstance)
+        expect(type).not_to eq(TypeGuessr::Core::Types::Unknown.instance)
+      end
+    end
+
+    describe "with non-existent method" do
+      it "returns Unknown for non-existent method" do
+        int_type = TypeGuessr::Core::Types::ClassInstance.new("Integer")
+        type = provider.get_method_return_type_for_args("String", "non_existent", [int_type])
+
+        expect(type).to eq(TypeGuessr::Core::Types::Unknown.instance)
+      end
+    end
+  end
 end

@@ -399,8 +399,11 @@ module TypeGuessr
           if node.block.is_a?(Prism::BlockNode)
             infer_call_with_block(node, class_name, method_name, receiver_type)
           else
-            # 1. Try RBS first
-            rbs_type = RBSProvider.instance.get_method_return_type(class_name, method_name)
+            # Infer argument types for overload resolution
+            arg_types = infer_argument_types(node)
+
+            # 1. Try RBS with argument types for overload resolution
+            rbs_type = RBSProvider.instance.get_method_return_type_for_args(class_name, method_name, arg_types)
             return rbs_type if rbs_type && rbs_type != Types::Unknown.instance
 
             # 2. Try ChainIndex for user-defined methods
@@ -437,6 +440,17 @@ module TypeGuessr
 
           # Multiple different types -> create Union
           Types::Union.new(types.uniq)
+        end
+
+        # Infer types for method call arguments
+        # @param node [Prism::CallNode] the call node
+        # @return [Array<Types::Type>] array of argument types
+        def infer_argument_types(node)
+          return [] unless node.arguments
+
+          node.arguments.arguments.map do |arg|
+            infer_type_from_node(arg)
+          end
         end
 
         # Extract class name from a type object

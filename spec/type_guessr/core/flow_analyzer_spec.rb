@@ -374,4 +374,63 @@ RSpec.describe TypeGuessr::Core::FlowAnalyzer do
       expect(type_outside).to eq(unknown_type)
     end
   end
+
+  describe "method call return type inference with overload resolution" do
+    it "selects correct overload based on argument type for Integer#*" do
+      source = <<~RUBY
+        num = 5
+        result = num * 2
+        result
+      RUBY
+
+      result = analyzer.analyze(source)
+      type = result.type_at(3, 0, "result")
+
+      expect(type).to be_a(TypeGuessr::Core::Types::ClassInstance)
+      expect(type.name).to eq("Integer")
+    end
+
+    it "returns Float when multiplying Integer by Float" do
+      source = <<~RUBY
+        num = 5
+        result = num * 2.5
+        result
+      RUBY
+
+      result = analyzer.analyze(source)
+      type = result.type_at(3, 0, "result")
+
+      expect(type).to be_a(TypeGuessr::Core::Types::ClassInstance)
+      expect(type.name).to eq("Float")
+    end
+
+    it "selects correct overload for Integer#+" do
+      source = <<~RUBY
+        a = 10
+        b = 20
+        result = a + b
+        result
+      RUBY
+
+      result = analyzer.analyze(source)
+      type = result.type_at(4, 0, "result")
+
+      expect(type).to be_a(TypeGuessr::Core::Types::ClassInstance)
+      expect(type.name).to eq("Integer")
+    end
+
+    it "returns Float for Integer#+ with Float argument" do
+      source = <<~RUBY
+        a = 10
+        result = a + 3.14
+        result
+      RUBY
+
+      result = analyzer.analyze(source)
+      type = result.type_at(3, 0, "result")
+
+      expect(type).to be_a(TypeGuessr::Core::Types::ClassInstance)
+      expect(type.name).to eq("Float")
+    end
+  end
 end

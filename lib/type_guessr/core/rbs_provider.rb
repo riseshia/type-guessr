@@ -121,6 +121,22 @@ module TypeGuessr
         rbs_type_to_types_with_substitution(return_type, substitutions)
       end
 
+      # Get the return type of a method call considering argument types for overload resolution
+      # @param class_name [String] the receiver class name
+      # @param method_name [String] the method name
+      # @param arg_types [Array<Types::Type>] the argument types
+      # @return [Types::Type] the return type (Unknown if not found)
+      def get_method_return_type_for_args(class_name, method_name, arg_types)
+        signatures = get_method_signatures(class_name, method_name)
+        return Types::Unknown.instance if signatures.empty?
+
+        # Find best matching overload based on argument types
+        best_match = find_best_overload(signatures, arg_types)
+        return_type = best_match.method_type.type.return_type
+
+        rbs_type_to_types(return_type)
+      end
+
       private
 
       # Find a method signature that has a block
@@ -262,6 +278,97 @@ module TypeGuessr
                     end
 
         RBS::TypeName.new(name: name.to_sym, namespace: namespace)
+      end
+
+      # Find the best matching overload for given argument types
+      # @param signatures [Array<Signature>] available overloads
+      # @param arg_types [Array<Types::Type>] argument types
+      # @return [Signature] best matching signature (first if no match)
+      def find_best_overload(signatures, arg_types)
+        return signatures.first if arg_types.empty?
+
+        # Score each overload
+        scored = signatures.map do |sig|
+          score = calculate_overload_score(sig.method_type, arg_types)
+          [sig, score]
+        end
+
+        # Return best scoring overload, or first if all scores are 0
+        best = scored.max_by { |_sig, score| score }
+        best[1].positive? ? best[0] : signatures.first
+      end
+
+      # Calculate match score for an overload
+      # @param method_type [RBS::MethodType] the method type
+      # @param arg_types [Array<Types::Type>] argument types
+      # @return [Integer] score (higher = better match)
+      def calculate_overload_score(method_type, arg_types)
+        func = method_type.type
+        required = func.required_positionals
+        optional = func.optional_positionals
+        rest = func.rest_positionals
+
+        # Check argument count
+        min_args = required.size
+        max_args = rest ? Float::INFINITY : required.size + optional.size
+        return 0 unless arg_types.size.between?(min_args, max_args)
+
+        # Score each argument match
+        score = 0
+        arg_types.each_with_index do |arg_type, i|
+          param = if i < required.size
+                    required[i]
+                  elsif i < required.size + optional.size
+                    optional[i - required.size]
+                  else
+                    rest
+                  end
+
+          break unless param
+
+          score += type_match_score(arg_type, param.type)
+        end
+
+        score
+      end
+
+      # Calculate match score between our type and RBS parameter type
+      # @param our_type [Types::Type] our type representation
+      # @param rbs_type [RBS::Types::t] RBS type
+      # @return [Integer] score (0 = no match, 1 = weak match, 2 = exact match)
+      def type_match_score(our_type, rbs_type)
+        case rbs_type
+        when RBS::Types::ClassInstance
+          # Exact class match
+          class_name = rbs_type.name.to_s.delete_prefix("::")
+          return 2 if types_match_class?(our_type, class_name)
+
+          0
+        when RBS::Types::Union
+          # Check if our type matches any member
+          max_score = rbs_type.types.map { |t| type_match_score(our_type, t) }.max || 0
+          max_score.positive? ? 1 : 0
+        else
+          # Unknown RBS type - give weak match to avoid penalizing
+          1
+        end
+      end
+
+      # Check if our type matches a class name
+      # @param our_type [Types::Type] our type
+      # @param class_name [String] class name to match
+      # @return [Boolean] true if types match
+      def types_match_class?(our_type, class_name)
+        case our_type
+        when Types::ClassInstance
+          our_type.name == class_name
+        when Types::ArrayType
+          class_name == "Array"
+        when Types::HashShape
+          class_name == "Hash"
+        else
+          false
+        end
       end
     end
   end
