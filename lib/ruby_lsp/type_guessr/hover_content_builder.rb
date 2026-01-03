@@ -45,8 +45,7 @@ module RubyLsp
 
         # Priority 1: Use direct type inference (from literal or .new call)
         if direct_type && direct_type != Types::Unknown.instance
-          type_name = extract_type_name(direct_type)
-          formatted_type = format_type_with_link(direct_type, type_entries[type_name])
+          formatted_type = format_type_with_link(direct_type, type_entries[direct_type])
           content = "**Guessed type:** #{formatted_type}"
           return [content, :direct_type, direct_type]
         end
@@ -91,8 +90,7 @@ module RubyLsp
         case matching_types.size
         when 1
           type_obj = matching_types.first
-          type_name = extract_type_name(type_obj)
-          formatted_type = format_type_with_link(type_obj, type_entries[type_name])
+          formatted_type = format_type_with_link(type_obj, type_entries[type_obj])
           "**Guessed type:** #{formatted_type}"
         else
           # 2-3 matches - ambiguous (no links needed)

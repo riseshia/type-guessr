@@ -53,6 +53,9 @@ module TypeGuessrTestHelper
       # This works with in-memory test sources and doesn't require actual files
       addon.runtime_adapter.index_source(uri.to_s, source)
 
+      # Index the source in ruby-lsp's RubyIndexer for type definition links
+      server.global_state.index.index_single(uri, source)
+
       begin
         block.call(server, uri)
       ensure

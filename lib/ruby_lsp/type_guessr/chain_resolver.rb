@@ -4,7 +4,9 @@ require_relative "../../type_guessr/core/chain_context"
 require_relative "../../type_guessr/core/chain_index"
 require_relative "../../type_guessr/core/rbs_provider"
 require_relative "../../type_guessr/core/scope_resolver"
+require_relative "../../type_guessr/core/user_method_return_resolver"
 require_relative "type_matcher"
+require_relative "index_adapter"
 
 module RubyLsp
   module TypeGuessr
@@ -22,6 +24,7 @@ module RubyLsp
         @chain_index = ChainIndex.instance
         @rbs_provider = ::TypeGuessr::Core::RBSProvider.instance
         @type_matcher = create_type_matcher
+        @user_method_resolver = create_user_method_resolver
       end
 
       # Resolve type for a variable node
@@ -40,7 +43,7 @@ module RubyLsp
           chain_index: @chain_index,
           rbs_provider: @rbs_provider,
           type_matcher: @type_matcher,
-          user_method_resolver: nil, # TODO: Implement UserMethodResolver
+          user_method_resolver: @user_method_resolver,
           scope_type: scope_type,
           scope_id: scope_id,
           file_path: file_path,
@@ -152,6 +155,11 @@ module RubyLsp
       # Create TypeMatcher instance
       def create_type_matcher
         TypeMatcher.new(@global_state.index)
+      end
+
+      def create_user_method_resolver
+        adapter = IndexAdapter.new(@global_state.index)
+        ::TypeGuessr::Core::UserMethodReturnResolver.new(adapter)
       end
     end
   end

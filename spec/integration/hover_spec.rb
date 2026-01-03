@@ -1128,13 +1128,12 @@ RSpec.describe "Hover Integration" do
   end
 
   describe "User-Defined Method Return Type" do
-    # NOTE: These tests require RubyIndexer to have indexed the test classes.
-    # Currently, RubyIndexer is not updated with dynamically generated test sources.
-    # The core functionality is verified in spec/type_guessr/core/user_method_return_resolver_spec.rb
-    # TODO: Update test setup to properly index test sources in RubyIndexer
+    # NOTE: These tests use spec_helper's with_server_and_addon which indexes test sources
+    # in both TypeGuessr's VariableIndex and ruby-lsp's RubyIndexer.
+    # The core functionality is also verified in spec/type_guessr/core/user_method_return_resolver_spec.rb
 
     it "infers return type from user-defined method with literal return" do
-      skip "RubyIndexer does not index dynamically generated test sources"
+      skip "UserMethodReturnResolver requires file-based sources (reads via File.readlines)"
       source = <<~RUBY
         class Animal
           def name
@@ -1156,7 +1155,7 @@ RSpec.describe "Hover Integration" do
     end
 
     it "infers nil for empty method body" do
-      skip "RubyIndexer does not index dynamically generated test sources"
+      skip "UserMethodReturnResolver requires file-based sources (reads via File.readlines)"
       source = <<~RUBY
         class Animal
           def eat
@@ -1177,7 +1176,7 @@ RSpec.describe "Hover Integration" do
     end
 
     it "infers return type from explicit return statement" do
-      skip "RubyIndexer does not index dynamically generated test sources"
+      skip "UserMethodReturnResolver requires file-based sources (reads via File.readlines)"
       source = <<~RUBY
         class Calculator
           def compute
@@ -1199,7 +1198,7 @@ RSpec.describe "Hover Integration" do
     end
 
     it "infers union type from multiple return paths" do
-      skip "RubyIndexer does not index dynamically generated test sources"
+      skip "UserMethodReturnResolver requires file-based sources (reads via File.readlines)"
       source = <<~RUBY
         class Conditional
           def value
@@ -1226,7 +1225,7 @@ RSpec.describe "Hover Integration" do
     end
 
     it "works with nested method calls" do
-      skip "RubyIndexer does not index dynamically generated test sources"
+      skip "UserMethodReturnResolver requires file-based sources (reads via File.readlines)"
       source = <<~RUBY
         class StringWrapper
           def value
@@ -1248,7 +1247,6 @@ RSpec.describe "Hover Integration" do
     end
 
     it "falls back to RBS when available" do
-      skip "RubyIndexer does not index dynamically generated test sources"
       source = <<~RUBY
         def example
           arr = [1, 2, 3]
