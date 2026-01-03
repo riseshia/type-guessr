@@ -2103,5 +2103,94 @@ RSpec.describe "Hover Integration" do
       expect(response).to be_nil.or(be_a(RubyLsp::Interface::Hover))
     end
   end
+
+  describe "Method Signature Display on Call Site" do
+    context "Simple return type" do
+      let(:source) do
+        <<~RUBY
+          class Recipe
+            def ingredients
+              []
+            end
+
+            def steps
+              []
+            end
+          end
+
+          def process(recipe)
+            recipe.ingredients
+            recipe.steps
+          end
+        RUBY
+      end
+
+      it "→ () -> Array" do
+        expect_hover_method_signature(line: 12, column: 9, expected_signature: "() -> Array")
+      end
+    end
+
+    context "Integer return type" do
+      let(:source) do
+        <<~RUBY
+          class Calculator
+            def compute
+              42
+            end
+          end
+
+          def example(calc)
+            calc.compute
+          end
+        RUBY
+      end
+
+      it "→ () -> Integer" do
+        expect_hover_method_signature(line: 8, column: 7, expected_signature: "() -> Integer")
+      end
+    end
+
+    context "Union return type" do
+      let(:source) do
+        <<~RUBY
+          class Conditional
+            def value
+              if true
+                "string"
+              else
+                42
+              end
+            end
+          end
+
+          def example(obj)
+            obj.value
+          end
+        RUBY
+      end
+
+      it "→ () -> String | Integer" do
+        response = hover_on_source(source, { line: 11, character: 6 })
+
+        expect(response).not_to be_nil
+        expect(response.contents.value).to match(/Guessed Signature/)
+        expect(response.contents.value).to match(/String.*Integer|Integer.*String/)
+      end
+    end
+
+    it "does not crash when method definition not found" do
+      source = <<~RUBY
+        def example(obj)
+          obj.unknown_method
+        end
+      RUBY
+
+      # Hover on "unknown_method" - should not crash
+      response = hover_on_source(source, { line: 1, character: 6 })
+
+      # Should handle gracefully (may be nil or have RBS signature if available)
+      expect { response }.not_to raise_error
+    end
+  end
 end
 # rubocop:enable RSpec/DescribeClass

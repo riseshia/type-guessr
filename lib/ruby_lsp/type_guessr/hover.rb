@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "prism"
+require "uri"
 require_relative "config"
 require_relative "chain_resolver"
 require_relative "hover_content_builder"
@@ -81,11 +82,27 @@ module RubyLsp
           extract_type_name(receiver_type),
           node.name.to_s
         )
-        return if signatures.empty?
 
-        # 3. Format and output
-        content = format_method_signatures(node.name, signatures)
-        @response_builder.push(content, category: :documentation)
+        # 3. If RBS signatures exist, show them
+        unless signatures.empty?
+          content = format_method_signatures(node.name, signatures)
+          @response_builder.push(content, category: :documentation)
+          return
+        end
+
+        # 4. Try to infer user-defined method signature from ChainIndex
+        return unless receiver_type.is_a?(Types::ClassInstance)
+
+        return_type = infer_user_method_return_type(receiver_type.name, node.name.to_s)
+        return unless return_type && return_type != Types::Unknown.instance
+
+        # 5. Format simple signature (return type only, no parameter info)
+        signature = "**Guessed Signature:** `() -> #{TypeFormatter.format(return_type)}`"
+        @response_builder.push(signature, category: :documentation)
+      rescue StandardError => e
+        # Gracefully handle errors - don't show anything on failure
+        ::TypeGuessr::Core::Logger.error("CallNodeHover error", e)
+        nil
       end
 
       def on_def_node_enter(node)
@@ -910,6 +927,45 @@ module RubyLsp
         return nil if class_name.empty?
 
         Types::ClassInstance.new(class_name)
+      end
+
+      # Infer return type for a user-defined method using ChainIndex
+      # @param class_name [String] the class name containing the method
+      # @param method_name [String] the method name
+      # @return [Types::Type, nil] the inferred return type or nil
+      def infer_user_method_return_type(class_name, method_name)
+        chain_index = ::TypeGuessr::Core::ChainIndex.instance
+        chains = chain_index.get_method_return_chains(class_name, method_name)
+        return nil if chains.empty?
+
+        # Create a ChainContext for resolving chains to types
+        context = ::TypeGuessr::Core::ChainContext.new(
+          chain_index: chain_index,
+          rbs_provider: rbs_provider,
+          type_matcher: create_type_matcher_for_chain,
+          user_method_resolver: user_method_resolver,
+          scope_type: :local_variables,
+          scope_id: "#{class_name}##{method_name}",
+          file_path: nil,
+          max_line: Float::INFINITY
+        )
+
+        # Resolve all chains and merge into union if multiple
+        types = chains.map { |chain| chain.resolve(context) }.compact.uniq
+        return nil if types.empty?
+        return types.first if types.size == 1
+
+        Types::Union.new(types)
+      rescue StandardError => e
+        ::TypeGuessr::Core::Logger.error("infer_user_method_return_type error", e)
+        nil
+      end
+
+      # Create a TypeMatcher instance for chain resolution
+      # @return [TypeMatcher, nil]
+      def create_type_matcher_for_chain
+        index = extract_index(@global_state)
+        index ? TypeMatcher.new(index) : nil
       end
     end
   end
