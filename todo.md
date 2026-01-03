@@ -7,108 +7,74 @@
 
 > Direct impact on user experience. Performance improvements, new features, and critical refactoring.
 
-### 4. Block Return Type Analysis
+### 4. Type Variable Substitution for Block Methods
 
 **Problem:** Methods with blocks like `map`, `select` return `Unknown` instead of proper types.
 
 ```ruby
 a = [1,2,3]
-b = a.map do |num|
-  num * 2
-end
+b = a.map { |n| n * 2 }
 b #=> Actual: Unknown, Expected: Array[Integer]
 ```
 
 **Root Cause:**
 - RBS defines `Array#map` as `[U] { (Elem) -> U } -> Array[U]`
-- Type variable `U` cannot be resolved without analyzing the block's return type
-- `RBSProvider.rbs_type_to_types` returns `Unknown` for type variables
+- `rbs_type_to_types_with_substitution` exists but doesn't handle `ClassInstance` args
+- `Array[U]` → `U` is not substituted because `convert_class_instance` calls `rbs_type_to_types` (no substitution)
 
-**Locations:**
-- `lib/type_guessr/core/rbs_provider.rb:152-154` - Type variable handling
-- `lib/type_guessr/core/type_resolver.rb:194-205` - `apply_method_chain`
-- `lib/type_guessr/core/ast_analyzer.rb:419-438` - Call assignment tracking
-
-**Why Important:**
-- `map`, `select`, `filter` are extremely common in Ruby
-- Current inference misses many type opportunities
-- Block parameter types already work (via `get_block_param_types_with_substitution`)
+**Approach:** Extend existing infrastructure instead of creating new analyzers.
 
 **Solution:**
 
-1. **Create BlockReturnAnalyzer** (new file):
+1. **Fix `rbs_type_to_types_with_substitution`** (RBSProvider):
+   - Add `convert_class_instance_with_substitution`
+   - Handle `Array[U]` by substituting `U` in type args
+
+2. **Add `get_method_return_type_with_substitution`** (RBSProvider):
    ```ruby
-   # lib/type_guessr/core/block_return_analyzer.rb
-   class BlockReturnAnalyzer
-     # Analyze block's last expression to infer return type
-     def analyze(block_node, context = {})
-       # - Extract last expression from block body
-       # - Use LiteralTypeAnalyzer for literals
-       # - Use RBS for method calls on block parameters
-       # - Return NilClass for empty blocks
-     end
+   def get_method_return_type_with_substitution(class_name, method_name, substitutions = {})
+     # Get signature, convert return type with substitution
    end
    ```
 
-2. **Extend RBSProvider** with `get_method_return_type_with_block`:
-   ```ruby
-   def get_method_return_type_with_block(class_name, method_name, block_return_type:, elem: nil)
-     # 1. Get method signature
-     # 2. Substitute type variable U with block_return_type
-     # 3. Substitute Elem with receiver's element type
-   end
-   ```
-
-3. **Extend VariableIndex** for block call assignments:
-   - `add_block_call_assignment(receiver_var:, method_name:, block_return_type:)`
-   - `find_block_call_assignment_at_location(...)`
-
-4. **Extend ASTAnalyzer** to detect blocks:
-   ```ruby
-   def store_call_assignment_if_applicable(...)
-     if value.block.is_a?(Prism::BlockNode)
-       store_block_call_assignment(...)  # NEW path
-     else
-       # existing logic
-     end
-   end
-   ```
-
-5. **Extend TypeResolver** with `infer_type_from_block_call_assignment`:
-   - Resolve receiver type
-   - Call `RBSProvider.get_method_return_type_with_block`
+3. **Extend FlowAnalyzer** for block analysis:
+   - Modify `infer_call_node_type` to detect blocks
+   - Add `infer_call_with_block` helper
+   - Analyze block body using existing `infer_type_from_node`
 
 **Tasks:**
 - [ ] Write failing tests first (TDD)
-  - `spec/type_guessr/core/block_return_analyzer_spec.rb`
-  - `spec/type_guessr/core/rbs_provider_spec.rb` (additions)
-  - `spec/integration/hover_spec.rb` (additions)
-- [ ] Create `lib/type_guessr/core/block_return_analyzer.rb`
-- [ ] Add `get_method_return_type_with_block` to RBSProvider
-- [ ] Add block call assignment storage to VariableIndex
-- [ ] Update ASTAnalyzer to detect and track blocks
-- [ ] Integrate into TypeResolver
+  - `spec/type_guessr/core/rbs_provider_spec.rb` (substitution tests)
+  - `spec/type_guessr/core/flow_analyzer_spec.rb` (block analysis tests)
+  - `spec/integration/hover_spec.rb` (E2E tests)
+- [ ] Fix `rbs_type_to_types_with_substitution` in RBSProvider
+- [ ] Add `get_method_return_type_with_substitution` to RBSProvider
+- [ ] Extend FlowAnalyzer with block analysis
 
 **Test Cases:**
 ```ruby
-# Integration tests
 "b = a.map { |n| n * 2 }" → Array[Integer]
 "b = a.map { |n| n.to_s }" → Array[String]
 "b = a.select { |n| n > 0 }" → Array[Integer]  # select preserves element type
 "b = a.map { }" → Array[NilClass]
 ```
 
+**Phase 1 Scope:**
+| Method | Handling |
+|--------|----------|
+| `map` | U = block return type |
+| `select`/`filter` | Preserve Elem |
+| `find`/`detect` | Elem \| nil |
+| `compact` | Preserve Elem (no block) |
+
 **Limitations:**
-- Conditional returns (if/else branches) → Union not supported
-- Complex control flow (loop, exception) → Not analyzed
-- User-defined method calls in block → Unknown if no RBS
+- Conditional returns (if/else) → Union not supported
+- Nested blocks → Not supported (Phase 2)
+- Complex patterns like `reduce` → Not supported (Phase 2)
 
 **Files to Modify:**
-- `lib/type_guessr/core/block_return_analyzer.rb` (NEW)
 - `lib/type_guessr/core/rbs_provider.rb`
-- `lib/type_guessr/core/variable_index.rb`
-- `lib/type_guessr/core/ast_analyzer.rb`
-- `lib/type_guessr/core/type_resolver.rb`
+- `lib/type_guessr/core/flow_analyzer.rb`
 
 ---
 

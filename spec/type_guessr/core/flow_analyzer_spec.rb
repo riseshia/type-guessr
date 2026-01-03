@@ -217,4 +217,81 @@ RSpec.describe TypeGuessr::Core::FlowAnalyzer do
       expect(return_type).to eq(string_type)
     end
   end
+
+  describe "block return type inference" do
+    let(:array_type) { TypeGuessr::Core::Types::ArrayType }
+
+    it "infers Array[Integer] for map with next_value block" do
+      source = <<~RUBY
+        a = [1, 2, 3]
+        b = a.map { |n| n.next }
+        b
+      RUBY
+
+      result = analyzer.analyze(source)
+      type_at_line3 = result.type_at(3, 0, "b")
+
+      expect(type_at_line3).to be_a(array_type)
+      expect(type_at_line3.element_type).to eq(integer_type)
+    end
+
+    it "infers Array[String] for map with method call block" do
+      source = <<~RUBY
+        a = [1, 2, 3]
+        b = a.map { |n| n.to_s }
+        b
+      RUBY
+
+      result = analyzer.analyze(source)
+      type_at_line3 = result.type_at(3, 0, "b")
+
+      expect(type_at_line3).to be_a(array_type)
+      expect(type_at_line3.element_type).to eq(string_type)
+    end
+
+    it "preserves element type for select" do
+      source = <<~RUBY
+        a = [1, 2, 3]
+        b = a.select { |n| n > 0 }
+        b
+      RUBY
+
+      result = analyzer.analyze(source)
+      type_at_line3 = result.type_at(3, 0, "b")
+
+      expect(type_at_line3).to be_a(array_type)
+      expect(type_at_line3.element_type).to eq(integer_type)
+    end
+
+    it "infers Array[NilClass] for empty block" do
+      source = <<~RUBY
+        a = [1, 2, 3]
+        b = a.map { }
+        b
+      RUBY
+
+      result = analyzer.analyze(source)
+      type_at_line3 = result.type_at(3, 0, "b")
+
+      expect(type_at_line3).to be_a(array_type)
+      expect(type_at_line3.element_type).to be_a(TypeGuessr::Core::Types::ClassInstance)
+      expect(type_at_line3.element_type.name).to eq("NilClass")
+    end
+
+    it "works with do-end block syntax" do
+      source = <<~RUBY
+        a = [1, 2, 3]
+        b = a.map do |n|
+          n.next
+        end
+        b
+      RUBY
+
+      result = analyzer.analyze(source)
+      type_at_line5 = result.type_at(5, 0, "b")
+
+      expect(type_at_line5).to be_a(array_type)
+      expect(type_at_line5.element_type).to eq(integer_type)
+    end
+  end
 end

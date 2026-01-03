@@ -237,9 +237,15 @@ module TypeGuessr
           class_name = extract_class_name(receiver_type)
           return Types::Unknown.instance unless class_name
 
-          # Query RBS for method return type
           method_name = node.name.to_s
-          RBSProvider.instance.get_method_return_type(class_name, method_name)
+
+          # Check if there's a block
+          if node.block.is_a?(Prism::BlockNode)
+            infer_call_with_block(node, class_name, method_name, receiver_type)
+          else
+            # Query RBS for method return type
+            RBSProvider.instance.get_method_return_type(class_name, method_name)
+          end
         rescue StandardError
           Types::Unknown.instance
         end
@@ -292,6 +298,96 @@ module TypeGuessr
           else
             Types::Union.new([then_type, else_type])
           end
+        end
+
+        # Infer the type of a method call with a block
+        # @param node [Prism::CallNode] the call node
+        # @param class_name [String] the receiver class name
+        # @param method_name [String] the method name
+        # @param receiver_type [Types::Type] the receiver type
+        # @return [Types::Type] the inferred return type
+        def infer_call_with_block(node, class_name, method_name, receiver_type)
+          block = node.block
+
+          # 1. Extract element type from receiver (for Array)
+          elem_type = extract_element_type(receiver_type)
+
+          # 2. Get block parameter types from RBS
+          param_types = RBSProvider.instance.get_block_param_types_with_substitution(
+            class_name, method_name, elem: elem_type
+          )
+
+          # 3. Bind block parameters to their types
+          saved_env = @type_env.dup
+          bind_block_params(block.parameters, param_types) if block.parameters
+
+          # 4. Analyze block body to infer return type
+          block_return_type = infer_block_return_type(block)
+
+          # 5. Restore environment (block parameters are local to block)
+          @type_env = saved_env
+
+          # 6. Get method return type with substitution
+          substitutions = { U: block_return_type, Elem: elem_type }.compact
+          RBSProvider.instance.get_method_return_type_with_substitution(
+            class_name, method_name, substitutions
+          )
+        rescue StandardError
+          Types::Unknown.instance
+        end
+
+        # Extract element type from Array type
+        # @param type [Types::Type] the type
+        # @return [Types::Type, nil] the element type or nil
+        def extract_element_type(type)
+          case type
+          when Types::ArrayType
+            type.element_type
+          end
+        end
+
+        # Bind block parameters to their types
+        # @param params_node [Prism::BlockParametersNode, nil] the block parameters node
+        # @param param_types [Array<Types::Type>] the parameter types
+        def bind_block_params(params_node, param_types)
+          return unless params_node
+          return unless params_node.parameters
+
+          required_params = params_node.parameters.requireds
+          required_params.each_with_index do |param, index|
+            # Extract parameter name
+            param_name = case param
+                         when Prism::RequiredParameterNode
+                           param.name.to_s
+                         when Prism::MultiTargetNode
+                           # Skip complex parameter patterns
+                           next
+                         else
+                           next
+                         end
+
+            # Assign type to parameter
+            param_type = param_types[index] || Types::Unknown.instance
+            store_type(param.location.start_line, param_name, param_type)
+          end
+        end
+
+        # Infer the return type of a block
+        # @param block [Prism::BlockNode] the block node
+        # @return [Types::Type] the inferred return type
+        def infer_block_return_type(block)
+          # Empty block returns NilClass
+          return Types::ClassInstance.new("NilClass") if block.body.nil?
+
+          # Get block body statements
+          body = block.body
+          statements = body.is_a?(Prism::StatementsNode) ? body.body : [body]
+
+          return Types::ClassInstance.new("NilClass") if statements.empty?
+
+          # Analyze last expression
+          last_expr = statements.last
+          infer_type_from_node(last_expr)
         end
 
         def store_type(line, var_name, type)

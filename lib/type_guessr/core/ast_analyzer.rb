@@ -426,6 +426,9 @@ module TypeGuessr
         scope_type = determine_scope_type(var_name)
         scope_id = generate_scope_id(scope_type)
 
+        # Check if the call has a block
+        has_block = value.block.is_a?(Prism::BlockNode)
+
         @index.add_call_assignment(
           file_path: @file_path,
           scope_type: scope_type,
@@ -434,7 +437,8 @@ module TypeGuessr
           def_line: def_line,
           def_column: def_column,
           receiver_var: call_info[:receiver_var],
-          methods: call_info[:methods]
+          methods: call_info[:methods],
+          has_block: has_block
         )
       end
 

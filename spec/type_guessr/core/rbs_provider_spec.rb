@@ -238,4 +238,62 @@ RSpec.describe TypeGuessr::Core::RBSProvider do
       end
     end
   end
+
+  describe "#get_method_return_type_with_substitution" do
+    it "substitutes U in Array#map return type" do
+      # Array#map: [U] { (Elem) -> U } -> Array[U]
+      # If block returns String, then return type is Array[String]
+      block_return_type = TypeGuessr::Core::Types::ClassInstance.new("String")
+      type = provider.get_method_return_type_with_substitution(
+        "Array", "map", { U: block_return_type }
+      )
+
+      expect(type).to be_a(TypeGuessr::Core::Types::ArrayType)
+      expect(type.element_type).to be_a(TypeGuessr::Core::Types::ClassInstance)
+      expect(type.element_type.name).to eq("String")
+    end
+
+    it "substitutes Elem in Array#select return type" do
+      # Array#select: { (Elem) -> boolish } -> Array[Elem]
+      # Preserves element type
+      element_type = TypeGuessr::Core::Types::ClassInstance.new("Integer")
+      type = provider.get_method_return_type_with_substitution(
+        "Array", "select", { Elem: element_type }
+      )
+
+      expect(type).to be_a(TypeGuessr::Core::Types::ArrayType)
+      expect(type.element_type).to be_a(TypeGuessr::Core::Types::ClassInstance)
+      expect(type.element_type.name).to eq("Integer")
+    end
+
+    it "substitutes Elem in Array#compact return type" do
+      # Array#compact: -> Array[Elem]
+      element_type = TypeGuessr::Core::Types::ClassInstance.new("String")
+      type = provider.get_method_return_type_with_substitution(
+        "Array", "compact", { Elem: element_type }
+      )
+
+      expect(type).to be_a(TypeGuessr::Core::Types::ArrayType)
+      expect(type.element_type).to be_a(TypeGuessr::Core::Types::ClassInstance)
+      expect(type.element_type.name).to eq("String")
+    end
+
+    it "returns Unknown for non-existent method" do
+      type = provider.get_method_return_type_with_substitution(
+        "Array", "non_existent", { U: TypeGuessr::Core::Types::ClassInstance.new("String") }
+      )
+
+      expect(type).to eq(TypeGuessr::Core::Types::Unknown.instance)
+    end
+
+    it "handles methods without type variables" do
+      # String#upcase: -> String (no type variables)
+      type = provider.get_method_return_type_with_substitution(
+        "String", "upcase", {}
+      )
+
+      expect(type).to be_a(TypeGuessr::Core::Types::ClassInstance)
+      expect(type.name).to eq("String")
+    end
+  end
 end

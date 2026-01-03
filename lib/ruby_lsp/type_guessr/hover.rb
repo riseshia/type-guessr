@@ -634,9 +634,19 @@ module RubyLsp
 
         # Find the containing method definition
         method_node = find_containing_method(node)
+
+        # If no containing method, try analyzing the entire file (top-level code)
         unless method_node
-          ::TypeGuessr::Core::Logger.debug("FlowAnalyzer: no containing method found")
-          return nil
+          ::TypeGuessr::Core::Logger.debug("FlowAnalyzer: no containing method, trying top-level")
+          source_object = node.location.__send__(:source)
+          source = source_object.source
+          analyzer = FlowAnalyzer.new
+          result = analyzer.analyze(source)
+
+          # Use absolute line number for top-level code
+          inferred_type = result.type_at(node.location.start_line, node.location.start_column, var_name)
+          ::TypeGuessr::Core::Logger.debug("FlowAnalyzer: inferred type (top-level) = #{inferred_type.inspect}")
+          return inferred_type
         end
 
         # Analyze the method body

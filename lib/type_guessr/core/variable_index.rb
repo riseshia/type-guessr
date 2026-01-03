@@ -45,14 +45,16 @@ module TypeGuessr
       # @param def_column [Integer] the column where the variable is defined
       # @param receiver_var [String] the receiver variable name (e.g., "name")
       # @param methods [Array<String>] method chain (e.g., ["upcase", "length"])
+      # @param has_block [Boolean] whether the call has a block (default: false)
       def add_call_assignment(file_path:, scope_type:, scope_id:, var_name:, def_line:, def_column:, receiver_var:,
-                              methods:)
+                              methods:, has_block: false)
         @mutex.synchronize do
           nested = ensure_nested_hash(@call_assignments[scope_type], file_path, scope_id, var_name)
           def_key = "#{def_line}:#{def_column}"
           nested[def_key] = {
             receiver_var: receiver_var,
-            methods: methods
+            methods: methods,
+            has_block: has_block
           }
         end
       end

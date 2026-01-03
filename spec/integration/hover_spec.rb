@@ -1785,6 +1785,80 @@ RSpec.describe "Hover Integration" do
     end
   end
 
+  describe "Block Return Type Inference", :doc do
+    context "Array#map with block" do
+      let(:source) do
+        <<~RUBY
+          numbers = [1, 2, 3]
+          strings = numbers.map { |n| n.to_s }
+          strings
+        RUBY
+      end
+
+      it "→ Array[String]" do
+        expect_hover_type(line: 3, column: 0, expected: "Array[String]")
+      end
+    end
+
+    context "Array#select with block" do
+      let(:source) do
+        <<~RUBY
+          numbers = [1, 2, 3, 4, 5]
+          evens = numbers.select { |n| n.even? }
+          evens
+        RUBY
+      end
+
+      it "→ Array[Integer]" do
+        expect_hover_type(line: 3, column: 0, expected: "Array[Integer]")
+      end
+    end
+
+    context "Array#map with empty block" do
+      let(:source) do
+        <<~RUBY
+          numbers = [1, 2, 3]
+          result = numbers.map { }
+          result
+        RUBY
+      end
+
+      it "→ Array[nil]" do
+        expect_hover_type(line: 3, column: 0, expected: "Array[nil]")
+      end
+    end
+
+    context "Array#map with do-end block" do
+      let(:source) do
+        <<~RUBY
+          numbers = [1, 2, 3]
+          result = numbers.map do |n|
+            n.next
+          end
+          result
+        RUBY
+      end
+
+      it "→ Array[Integer]" do
+        expect_hover_type(line: 5, column: 0, expected: "Array[Integer]")
+      end
+    end
+
+    context "Array#map with Integer#next" do
+      let(:source) do
+        <<~RUBY
+          numbers = [1, 2, 3]
+          result = numbers.map { |n| n.next }
+          result
+        RUBY
+      end
+
+      it "→ Array[Integer]" do
+        expect_hover_type(line: 3, column: 0, expected: "Array[Integer]")
+      end
+    end
+  end
+
   describe "Method Parameter Type Inference" do
     context "required parameter type from method calls" do
       let(:source) do
