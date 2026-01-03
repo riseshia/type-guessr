@@ -7,78 +7,7 @@
 
 > Direct impact on user experience. Performance improvements, new features, and critical refactoring.
 
-### 4. Type Variable Substitution for Block Methods
-
-**Problem:** Methods with blocks like `map`, `select` return `Unknown` instead of proper types.
-
-```ruby
-a = [1,2,3]
-b = a.map { |n| n * 2 }
-b #=> Actual: Unknown, Expected: Array[Integer]
-```
-
-**Root Cause:**
-- RBS defines `Array#map` as `[U] { (Elem) -> U } -> Array[U]`
-- `rbs_type_to_types_with_substitution` exists but doesn't handle `ClassInstance` args
-- `Array[U]` → `U` is not substituted because `convert_class_instance` calls `rbs_type_to_types` (no substitution)
-
-**Approach:** Extend existing infrastructure instead of creating new analyzers.
-
-**Solution:**
-
-1. **Fix `rbs_type_to_types_with_substitution`** (RBSProvider):
-   - Add `convert_class_instance_with_substitution`
-   - Handle `Array[U]` by substituting `U` in type args
-
-2. **Add `get_method_return_type_with_substitution`** (RBSProvider):
-   ```ruby
-   def get_method_return_type_with_substitution(class_name, method_name, substitutions = {})
-     # Get signature, convert return type with substitution
-   end
-   ```
-
-3. **Extend FlowAnalyzer** for block analysis:
-   - Modify `infer_call_node_type` to detect blocks
-   - Add `infer_call_with_block` helper
-   - Analyze block body using existing `infer_type_from_node`
-
-**Tasks:**
-- [ ] Write failing tests first (TDD)
-  - `spec/type_guessr/core/rbs_provider_spec.rb` (substitution tests)
-  - `spec/type_guessr/core/flow_analyzer_spec.rb` (block analysis tests)
-  - `spec/integration/hover_spec.rb` (E2E tests)
-- [ ] Fix `rbs_type_to_types_with_substitution` in RBSProvider
-- [ ] Add `get_method_return_type_with_substitution` to RBSProvider
-- [ ] Extend FlowAnalyzer with block analysis
-
-**Test Cases:**
-```ruby
-"b = a.map { |n| n * 2 }" → Array[Integer]
-"b = a.map { |n| n.to_s }" → Array[String]
-"b = a.select { |n| n > 0 }" → Array[Integer]  # select preserves element type
-"b = a.map { }" → Array[NilClass]
-```
-
-**Phase 1 Scope:**
-| Method | Handling |
-|--------|----------|
-| `map` | U = block return type |
-| `select`/`filter` | Preserve Elem |
-| `find`/`detect` | Elem \| nil |
-| `compact` | Preserve Elem (no block) |
-
-**Limitations:**
-- Conditional returns (if/else) → Union not supported
-- Nested blocks → Not supported (Phase 2)
-- Complex patterns like `reduce` → Not supported (Phase 2)
-
-**Files to Modify:**
-- `lib/type_guessr/core/rbs_provider.rb`
-- `lib/type_guessr/core/flow_analyzer.rb`
-
----
-
-### 5. VariableIndex Structure Improvement
+### 4. VariableIndex Structure Improvement
 
 **Problem:** Deep nested hash structure is fragile and hard to reason about.
 
@@ -202,7 +131,7 @@ b #=> Actual: Unknown, Expected: Array[Integer]
 
 ---
 
-### 6. Hover.rb Complexity Exceeds Limits
+### 5. Hover.rb Complexity Exceeds Limits
 
 **Problem:** Single file with too many responsibilities (605 lines).
 
@@ -294,7 +223,7 @@ b #=> Actual: Unknown, Expected: Array[Integer]
 
 ---
 
-### 7. Hash Incremental Field Addition
+### 6. Hash Incremental Field Addition
 
 **Problem:** Cannot track hash field additions via `[]=` assignments.
 
@@ -493,7 +422,7 @@ a  # → { x: Integer | String } (requires control flow analysis)
 
 ---
 
-### 8. FlowAnalyzer UserMethodReturnResolver Integration
+### 7. FlowAnalyzer UserMethodReturnResolver Integration
 
 **Problem:** FlowAnalyzer can infer return types from stdlib methods (via RBS), but not from user-defined methods.
 
@@ -661,7 +590,7 @@ end
 
 > Code quality and maintainability improvements. Important but can be deferred after P0/P1.
 
-### 9. Performance Optimization (FlowAnalyzer Caching)
+### 8. Performance Optimization (FlowAnalyzer Caching)
 
 **Problem:** FlowAnalyzer re-parses AST on every hover without caching.
 
@@ -738,7 +667,7 @@ end
 
 ---
 
-### 10. Test Coverage Gaps
+### 9. Test Coverage Gaps
 
 **Problem:** Missing critical test scenarios for production readiness.
 
@@ -846,7 +775,7 @@ end
 
 ---
 
-### 11. Variable Name-Based Type Inference
+### 10. Variable Name-Based Type Inference
 
 **Problem:** Not using variable naming conventions for type hints.
 
@@ -873,7 +802,7 @@ end
 
 ---
 
-### 13. Extended Inference (Operations)
+### 11. Extended Inference (Operations)
 
 **Problem:** No type inference for operations like `+`, `*`, etc.
 
@@ -896,7 +825,7 @@ end
 
 ---
 
-### 14. UX Improvements
+### 12. UX Improvements
 
 **Problem:** Hover can show too much information or miss useful information.
 
@@ -916,7 +845,7 @@ end
 
 ---
 
-### 15. Replace `__send__` Protected Method Access
+### 13. Replace `__send__` Protected Method Access
 
 **Problem:** `node.location.__send__(:source)` accesses protected method - fragile.
 
@@ -935,7 +864,7 @@ end
 
 > Long-term vision and extensibility. Can be deferred until core functionality is solid.
 
-### 16. Memory Management Strategy (Deferred)
+### 14. Memory Management Strategy (Deferred)
 
 **Problem:** No memory limits for unbounded index growth.
 
@@ -962,7 +891,7 @@ end
 
 ---
 
-### 17. Documentation Improvements
+### 15. Documentation Improvements
 
 **Problem:** Missing architecture decisions and performance characteristics.
 
@@ -1110,7 +1039,7 @@ end
 
 ---
 
-### 18. DSL Support
+### 16. DSL Support
 
 **Problem:** Limited support for Ruby DSLs.
 
@@ -1128,7 +1057,7 @@ end
 
 ---
 
-### 19. Standalone API
+### 17. Standalone API
 
 **Problem:** Core library only usable within Ruby LSP.
 
