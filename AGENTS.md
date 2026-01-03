@@ -182,12 +182,12 @@ bundle exec rspec
 
 ### Running Linter
 ```bash
-bundle exec rubocop
+bundle exec rubocop -a
 ```
 
 ### Running All Checks
 ```bash
-bundle exec rspec && bundle exec rubocop
+bundle exec rspec && bundle exec rubocop -a
 ```
 
 ### Console
@@ -248,14 +248,14 @@ This project follows strict Test-Driven Development (TDD) practices based on Ken
    ```
 3. **Check RuboCop:**
    ```bash
-   bundle exec rubocop
+   bundle exec rubocop -a
    ```
 
 **Pre-Commit Checklist:**
 
 1. **Run linter on changed files FIRST** - Fix violations before committing
    ```bash
-   bundle exec rubocop <changed_files>
+   bundle exec rubocop -a <changed_files>
    ```
 2. **Run all tests** - Ensure nothing breaks
    ```bash
@@ -300,7 +300,7 @@ This project follows strict Test-Driven Development (TDD) practices based on Ken
 **CRITICAL:** Run linter BEFORE committing to avoid separate "fix linting" commits.
 
 **Workflow:**
-1. After editing any Ruby file, run: `bundle exec rubocop <file_path>`
+1. After editing any Ruby file, run: `bundle exec rubocop -a <file_path>`
 2. If violations found, fix them immediately
 3. Commit once with all changes together (code + linting fixes)
 
@@ -463,7 +463,7 @@ Type guessing is performed through:
 ### Development Process
 
 - **TDD is mandatory:** Follow Red-Green-Refactor cycle
-- **Linter-first:** Run `bundle exec rubocop` on changed files BEFORE committing
+- **Linter-first:** Run `bundle exec rubocop -a` on changed files BEFORE committing
 - **Atomic commits:** Group related changes (code + tests + linting) into single commits
 - **Test-driven:** Run `bundle exec rspec` before and after making changes
 - **AST traversal:** When working with Prism nodes, be careful with node types and methods
