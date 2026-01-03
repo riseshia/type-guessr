@@ -7,131 +7,7 @@
 
 > Direct impact on user experience. Performance improvements, new features, and critical refactoring.
 
-### 4. VariableIndex Structure Improvement
-
-**Problem:** Deep nested hash structure is fragile and hard to reason about.
-
-**Location:** `lib/type_guessr/core/variable_index.rb:19-28`
-
-**Why Important:**
-- Complex data structure increases bug risk
-- No type safety
-- Hard to refactor
-- Performance characteristics unclear
-- Prerequisite for #2 (Memory Management)
-
-**Current Structure:**
-```ruby
-@index = {
-  instance_variables: {
-    "/path/to/file.rb" => {
-      "ClassName#method" => {
-        "var_name" => {
-          "10:5" => [
-            { method: "foo", line: 11, column: 3 },
-            { method: "bar", line: 12, column: 3 }
-          ]
-        }
-      }
-    }
-  },
-  local_variables: { ... },
-  class_variables: { ... }
-}
-```
-
-**Problems:**
-- 5 levels of nesting
-- Easy to make nil-access errors
-- Verbose access patterns: `@index.dig(scope_type, file_path, scope_id, var_name, def_key)`
-- Hard to add indexes (e.g., by line number)
-
-**Impact:**
-- Bugs in edge cases (missing nil checks)
-- Performance issues (can't add secondary indexes)
-- Hard to evolve data model
-
-**Solution:**
-- [ ] Introduce Value Objects for type safety:
-  ```ruby
-  # New classes
-  class VariableDefinition
-    attr_reader :file_path, :scope_type, :scope_id, :var_name, :line, :column
-
-    def initialize(file_path:, scope_type:, scope_id:, var_name:, line:, column:)
-      @file_path = file_path
-      @scope_type = scope_type
-      @scope_id = scope_id
-      @var_name = var_name
-      @line = line
-      @column = column
-      freeze
-    end
-
-    def key
-      "#{file_path}:#{scope_type}:#{scope_id}:#{var_name}:#{line}:#{column}"
-    end
-
-    def ==(other)
-      key == other.key
-    end
-
-    def hash
-      key.hash
-    end
-  end
-
-  class MethodCall
-    attr_reader :method_name, :line, :column
-
-    def initialize(method_name:, line:, column:)
-      @method_name = method_name
-      @line = line
-      @column = column
-      freeze
-    end
-  end
-
-  # Simplified index structure
-  class VariableIndex
-    def initialize
-      @definitions = {}        # VariableDefinition => true (set)
-      @method_calls = {}       # VariableDefinition => [MethodCall]
-      @types = {}              # VariableDefinition => Types::Type
-      @call_assignments = {}   # VariableDefinition => CallAssignmentInfo
-
-      # Secondary indexes for fast lookup
-      @by_file = Hash.new { |h, k| h[k] = Set.new }  # file_path => Set[VariableDefinition]
-      @by_location = {}        # "file:line:var" => VariableDefinition
-
-      @mutex = Mutex.new
-    end
-  end
-  ```
-
-**Benefits:**
-- Type safety (can't mix up parameters)
-- Clear data model
-- Easy to add indexes
-- Simpler lookup code
-- Immutable value objects (thread-safe)
-
-**Tasks:**
-- [ ] Create VariableDefinition, MethodCall, CallAssignmentInfo classes
-- [ ] Refactor VariableIndex to use value objects
-- [ ] Update all callers to use new API
-- [ ] Add tests for new structure
-- [ ] Measure performance impact
-
-**Migration Strategy:**
-1. Add new classes alongside existing code
-2. Deprecate old methods
-3. Update callers incrementally
-4. Remove old code after full migration
-
----
-
-### 5. Hover.rb Complexity Exceeds Limits
+### 4. Hover.rb Complexity Exceeds Limits
 
 **Problem:** Single file with too many responsibilities (605 lines).
 
@@ -223,7 +99,7 @@
 
 ---
 
-### 6. Hash Incremental Field Addition
+### 5. Hash Incremental Field Addition
 
 **Problem:** Cannot track hash field additions via `[]=` assignments.
 
@@ -422,7 +298,7 @@ a  # → { x: Integer | String } (requires control flow analysis)
 
 ---
 
-### 7. FlowAnalyzer UserMethodReturnResolver Integration
+### 6. FlowAnalyzer UserMethodReturnResolver Integration
 
 **Problem:** FlowAnalyzer can infer return types from stdlib methods (via RBS), but not from user-defined methods.
 
