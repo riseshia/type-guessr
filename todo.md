@@ -7,12 +7,11 @@
 
 > Direct impact on user experience. Performance improvements, new features, and critical refactoring.
 
-### 4. Performance Optimization (Inverted Index + Caching)
+### 4. Performance Optimization (FlowAnalyzer Caching)
 
-**Problem:** Multiple performance bottlenecks without caching.
+**Problem:** FlowAnalyzer re-parses AST on every hover without caching.
 
 **Locations:**
-- `lib/ruby_lsp/type_guessr/type_matcher.rb:31-69` - O(n) linear search
 - `lib/ruby_lsp/type_guessr/hover.rb:541-572` - Repeated AST parsing
 - `lib/type_guessr/core/flow_analyzer.rb:15-19` - No result caching
 
@@ -23,17 +22,7 @@
 
 **Current Issues:**
 
-1. **TypeMatcher Linear Search:**
-```ruby
-def find_matching_types(method_names)
-  all_owners = method_names.flat_map do |method_name|
-    entries = @adapter.method_entries(method_name)  # ⚠️ O(n) search per method
-    entries.filter_map { |entry| entry.owner&.name }
-  end.uniq
-end
-```
-
-2. **FlowAnalyzer Repeated Parsing:**
+**FlowAnalyzer Repeated Parsing:**
 ```ruby
 def try_flow_analysis(node)
   method_node = find_containing_method(node)
@@ -44,40 +33,13 @@ end
 ```
 
 **Impact:**
-- Hover can take 200-500ms on large methods
+- Hover can take 100-200ms on large methods
 - CPU usage spikes during typing
 - Poor user experience
 
 **Solution:**
 
-1. **Add Inverted Index to TypeMatcher:**
-```ruby
-class TypeMatcher
-  def initialize(index)
-    @adapter = IndexAdapter.new(index)
-    @method_to_owners = build_inverted_index  # Build once
-  end
-
-  private
-
-  def build_inverted_index
-    # Create: method_name => Set[owner_name]
-    # O(m) build time, O(1) lookup
-    index = Hash.new { |h, k| h[k] = Set.new }
-    # ... populate from @adapter
-    index
-  end
-
-  def find_matching_types(method_names)
-    # Use pre-built index instead of linear search
-    candidates = method_names.map { |m| @method_to_owners[m] }
-                              .reduce(&:&)  # Set intersection
-    # ... rest of logic
-  end
-end
-```
-
-2. **Add FlowAnalyzer Result Cache:**
+**Add FlowAnalyzer Result Cache:**
 ```ruby
 class FlowAnalyzerCache
   def initialize
@@ -106,7 +68,6 @@ end
 ```
 
 **Tasks:**
-- [ ] Implement inverted index in TypeMatcher
 - [ ] Add FlowAnalyzerCache with file-based invalidation
 - [ ] Add TypeDB caching with AST node location as key
 - [ ] Add `MethodSummary` cache (`MethodRef → MethodSummary`)
@@ -118,7 +79,6 @@ end
 - [ ] Document cache invalidation strategy
 
 **Expected Improvements:**
-- TypeMatcher: 50-100ms → 5-10ms
 - FlowAnalyzer: 100-200ms → 1-5ms (cached)
 - Overall hover: <100ms in 95% of cases
 
