@@ -7,77 +7,7 @@
 
 > Must fix for production deployment. These issues can cause data corruption, crashes, or memory exhaustion.
 
-### 2. Memory Management Strategy Missing
-
-**Problem:** No memory limits or eviction strategy for unbounded index growth.
-
-**Location:** `lib/type_guessr/core/variable_index.rb`
-
-**Why Critical:**
-- Index grows unbounded: stores ALL variables from ALL files
-- Large projects (10k+ files) can consume gigabytes of memory
-- No cleanup mechanism for unused/old data
-- LSP process runs for hours/days without restart
-
-**Current Structure:**
-```ruby
-@index = {
-  instance_variables: {
-    file_path => { scope_id => { var_name => { "line:col" => [calls] } } }
-  },
-  # ... similar for local_variables, class_variables
-}
-# No size limits, no eviction, no TTL
-```
-
-**Impact:**
-- Memory exhaustion in large projects
-- Performance degradation as index grows
-- Potential OOM kills of LSP process
-
-**Solution:**
-- [ ] Implement LRU cache with configurable limits:
-  ```ruby
-  class VariableIndex
-    MAX_FILES = ENV.fetch("TYPE_GUESSR_MAX_FILES", 1000).to_i
-    MAX_MEMORY_MB = ENV.fetch("TYPE_GUESSR_MAX_MEMORY_MB", 500).to_i
-
-    def initialize
-      @index = { ... }
-      @file_access_times = {}  # Track LRU
-      @mutex = Mutex.new
-    end
-
-    def add_method_call(...)
-      @mutex.synchronize do
-        evict_if_needed
-        # ... existing logic
-      end
-    end
-
-    private
-
-    def evict_if_needed
-      return if total_files < MAX_FILES
-
-      # Evict least recently used files
-      oldest_files = @file_access_times.sort_by { |_, time| time }.first(100)
-      oldest_files.each { |file, _| clear_file(file) }
-    end
-  end
-  ```
-- [ ] Add memory usage monitoring and logging
-- [ ] Add configuration options to `.type-guessr.yml`
-- [ ] Document memory characteristics in README
-
-**Alternatives Considered:**
-- Time-based TTL: Rejected - files don't become "stale" over time
-- Fixed-size hash: Rejected - need flexible eviction policy
-- Weak references: Rejected - Ruby GC doesn't support this well
-
----
-
-### 3. Error Handling Inconsistency
+### 2. Error Handling Inconsistency
 
 **Problem:** Inconsistent return values and logging across codebase.
 
@@ -798,7 +728,34 @@ end
 
 > Long-term vision and extensibility. Can be deferred until core functionality is solid.
 
-### 16. Documentation Improvements
+### 16. Memory Management Strategy (Deferred)
+
+**Problem:** No memory limits for unbounded index growth.
+
+**Location:** `lib/type_guessr/core/variable_index.rb`
+
+**Current Status:** Deferred - needs real-world validation first.
+
+**Why Deferred:**
+- ruby-lsp's RubyIndexer is also unbounded - same approach
+- TypeGuessr's additional memory overhead is minimal per variable (~300-500 bytes)
+- No production evidence of memory issues yet
+- LRU eviction would break index accuracy (incomplete index = broken type inference)
+
+**If Needed Later:**
+- sqlite3 offload preferred over LRU cache
+  - Preserves data integrity (no eviction = no lost type info)
+  - Enables warm start after process restart
+  - Trade-off: I/O latency, increased complexity
+
+**Prerequisites:**
+- [ ] Measure actual memory usage in large projects (10k+ files)
+- [ ] Compare overhead vs ruby-lsp base memory
+- [ ] Document findings before implementation decision
+
+---
+
+### 17. Documentation Improvements
 
 **Problem:** Missing architecture decisions and performance characteristics.
 
@@ -946,7 +903,7 @@ end
 
 ---
 
-### 17. DSL Support
+### 18. DSL Support
 
 **Problem:** Limited support for Ruby DSLs.
 
@@ -964,7 +921,7 @@ end
 
 ---
 
-### 18. Standalone API
+### 19. Standalone API
 
 **Problem:** Core library only usable within Ruby LSP.
 
