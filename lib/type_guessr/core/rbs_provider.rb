@@ -3,6 +3,7 @@
 require "singleton"
 require "rbs"
 require_relative "types"
+require_relative "logger"
 
 module TypeGuessr
   module Core
@@ -57,7 +58,7 @@ module TypeGuessr
         []
       rescue StandardError => e
         # If anything goes wrong, return empty array
-        warn "RBSProvider error: #{e.class}: #{e.message}" if ENV["DEBUG"]
+        Logger.error("RBSProvider error", e)
         []
       end
 
@@ -199,7 +200,7 @@ module TypeGuessr
         # Load environment (this automatically loads core/stdlib)
         @env = RBS::Environment.from_loader(@loader).resolve_type_names
       rescue StandardError => e
-        warn "Failed to load RBS environment: #{e.class}: #{e.message}" if ENV["DEBUG"]
+        Logger.error("Failed to load RBS environment", e)
         # Fallback to empty environment
         @env = RBS::Environment.new
       end

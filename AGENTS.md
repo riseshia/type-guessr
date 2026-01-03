@@ -329,6 +329,37 @@ bundle exec rubocop -a
 bundle exec rubocop -A
 ```
 
+### Environment Variables
+
+**TYPE_GUESSR_DEBUG**
+
+Controls all debugging features in TypeGuessr:
+- Enables debug logging to stderr
+- Shows inference basis in hover UI
+- Includes full backtraces in error logs
+
+```bash
+# Enable debug mode
+TYPE_GUESSR_DEBUG=1 bundle exec ruby-lsp
+
+# Or in .type-guessr.yml
+debug: true
+```
+
+**Debug output format:**
+```
+[TypeGuessr:DEBUG] FlowAnalyzer: trying for variable user
+[TypeGuessr:ERROR] RBSProvider error
+  RuntimeError: Unknown name for build_instance: ::User
+    /path/to/file.rb:48:in 'TypeGuessr::Core::RBSProvider#get_method_signatures'
+    /path/to/file.rb:70:in 'TypeGuessr::Core::RBSProvider#get_method_return_type'
+    /path/to/file.rb:80:in 'block in ...'
+    /path/to/file.rb:90:in 'call'
+    /path/to/file.rb:100:in 'perform'
+```
+
+**Note:** LSP progress logs (AST traversal, file indexing) are always shown in LSP Output Panel regardless of debug mode.
+
 ### Generating Documentation
 The project uses an automated documentation system that generates `docs/inference_rules.md` from integration tests.
 

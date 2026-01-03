@@ -12,6 +12,7 @@ require_relative "../../type_guessr/core/literal_type_analyzer"
 require_relative "../../type_guessr/core/def_node_finder"
 require_relative "../../type_guessr/core/constant_index"
 require_relative "../../type_guessr/core/user_method_return_resolver"
+require_relative "../../type_guessr/core/logger"
 
 module RubyLsp
   module TypeGuessr
@@ -104,8 +105,7 @@ module RubyLsp
         @response_builder.push(signature, category: :documentation)
       rescue StandardError => e
         # Gracefully handle errors - don't show anything on failure
-        warn "DefNodeHover error: #{e.class}: #{e.message}" if ENV["DEBUG"]
-        warn e.backtrace.join("\n") if ENV["DEBUG"]
+        ::TypeGuessr::Core::Logger.error("DefNodeHover error", e)
         nil
       end
 
@@ -351,7 +351,7 @@ module RubyLsp
         # Multiple matches → create Union
         Types::Union.new(matching_types)
       rescue StandardError => e
-        warn "Parameter type inference error: #{e.class}: #{e.message}" if ENV["DEBUG"]
+        ::TypeGuessr::Core::Logger.error("Parameter type inference error", e)
         Types::Unknown.instance
       end
 
@@ -469,7 +469,7 @@ module RubyLsp
         # Infer type from usage
         infer_parameter_type_from_usage(node, method_node)
       rescue StandardError => e
-        warn "Parameter type inference error: #{e.class}: #{e.message}" if ENV["DEBUG"]
+        ::TypeGuessr::Core::Logger.error("Parameter type inference error", e)
         nil
       end
 
@@ -555,7 +555,7 @@ module RubyLsp
 
         block_param_types[param_index]
       rescue StandardError => e
-        warn "BlockParam inference error: #{e.class}: #{e.message}" if ENV["DEBUG"]
+        ::TypeGuessr::Core::Logger.error("BlockParam inference error", e)
         nil
       end
 
@@ -590,12 +590,12 @@ module RubyLsp
 
         # Extract variable name
         var_name = node.name.to_s
-        warn "FlowAnalyzer: trying for variable #{var_name}" if ENV["DEBUG"]
+        ::TypeGuessr::Core::Logger.debug("FlowAnalyzer: trying for variable #{var_name}")
 
         # Find the containing method definition
         method_node = find_containing_method(node)
         unless method_node
-          warn "FlowAnalyzer: no containing method found" if ENV["DEBUG"]
+          ::TypeGuessr::Core::Logger.debug("FlowAnalyzer: no containing method found")
           return nil
         end
 
@@ -608,10 +608,10 @@ module RubyLsp
         # FlowAnalyzer uses 1-based line numbers relative to the sliced source
         relative_line = node.location.start_line - method_node.location.start_line + 1
         inferred_type = result.type_at(relative_line, node.location.start_column, var_name)
-        warn "FlowAnalyzer: inferred type = #{inferred_type.inspect}" if ENV["DEBUG"]
+        ::TypeGuessr::Core::Logger.debug("FlowAnalyzer: inferred type = #{inferred_type.inspect}")
         inferred_type
       rescue StandardError => e
-        warn "FlowAnalyzer: error #{e.class}: #{e.message}" if ENV["DEBUG"]
+        ::TypeGuessr::Core::Logger.error("FlowAnalyzer error", e)
         # Fall back to existing resolver on any error
         nil
       end
@@ -626,7 +626,7 @@ module RubyLsp
         target_line = node.location.start_line
         target_column = node.location.start_column
 
-        warn "Finding method containing line #{target_line}, col #{target_column}" if ENV["DEBUG"]
+        ::TypeGuessr::Core::Logger.debug("Finding method containing line #{target_line}, col #{target_column}")
 
         # Parse the full source
         parsed = Prism.parse(source_code)
@@ -635,13 +635,12 @@ module RubyLsp
         finder = DefNodeFinder.new(target_line, target_column)
         parsed.value.accept(finder)
 
-        warn "Found method: #{finder.result&.name}" if ENV["DEBUG"] && finder.result
-        warn "No containing method found" if ENV["DEBUG"] && !finder.result
+        ::TypeGuessr::Core::Logger.debug("Found method: #{finder.result&.name}") if finder.result
+        ::TypeGuessr::Core::Logger.debug("No containing method found") unless finder.result
 
         finder.result
       rescue StandardError => e
-        warn "find_containing_method error: #{e.class}: #{e.message}" if ENV["DEBUG"]
-        warn e.backtrace.join("\n") if ENV["DEBUG"]
+        ::TypeGuessr::Core::Logger.error("find_containing_method error", e)
         nil
       end
     end

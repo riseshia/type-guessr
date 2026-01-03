@@ -3,6 +3,7 @@
 require "uri"
 require_relative "flow_analyzer"
 require_relative "types"
+require_relative "logger"
 
 module TypeGuessr
   module Core
@@ -44,7 +45,7 @@ module TypeGuessr
         type
       rescue StandardError => e
         # If anything goes wrong, return Unknown
-        warn "UserMethodReturnResolver error: #{e.class}: #{e.message}" if ENV["DEBUG"]
+        Logger.error("UserMethodReturnResolver error", e)
         Types::Unknown.instance
       end
 

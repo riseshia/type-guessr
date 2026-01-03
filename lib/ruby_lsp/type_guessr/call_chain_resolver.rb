@@ -3,6 +3,7 @@
 require_relative "config"
 require_relative "type_matcher"
 require_relative "../../type_guessr/core/literal_type_analyzer"
+require_relative "../../type_guessr/core/logger"
 
 module RubyLsp
   module TypeGuessr
@@ -116,7 +117,7 @@ module RubyLsp
         # Return Union for multiple matches
         Types::Union.new(types_only)
       rescue StandardError => e
-        warn "Heuristic inference error: #{e.class}: #{e.message}" if ENV["DEBUG"]
+        ::TypeGuessr::Core::Logger.error("Heuristic inference error", e)
         nil
       end
 
