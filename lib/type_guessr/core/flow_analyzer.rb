@@ -220,6 +220,9 @@ module TypeGuessr
             end
           end
 
+          # Handle hash indexed assignment (a[:key] = value)
+          handle_hash_indexed_assignment(node) if hash_indexed_assignment?(node)
+
           super
 
           # Pop block scope after visiting
@@ -357,6 +360,58 @@ module TypeGuessr
                         end
 
           store_type(node.location.start_line, var_name, merged_type)
+        end
+
+        # Check if this is a hash indexed assignment call
+        # a[:key] = value or a["key"] = value -> CallNode with name :[]=
+        def hash_indexed_assignment?(node)
+          return false unless node.name == :[]=
+          return false unless node.receiver.is_a?(Prism::LocalVariableReadNode)
+          return false unless node.arguments&.arguments&.size == 2
+
+          # Handle both symbol and string keys
+          key_node = node.arguments.arguments[0]
+          key_node.is_a?(Prism::SymbolNode) || key_node.is_a?(Prism::StringNode)
+        end
+
+        # Handle hash field addition: a[:key] = value or a["key"] = value
+        def handle_hash_indexed_assignment(node)
+          var_name = node.receiver.name.to_s
+          key_node = node.arguments.arguments[0]
+          value_node = node.arguments.arguments[1]
+          value_type = infer_type_from_node(value_node)
+
+          # Get current type of the hash variable
+          current_type = get_type(node.location.start_line - 1, var_name)
+
+          # String keys cause widening to generic Hash
+          if key_node.is_a?(Prism::StringNode)
+            # Widen to generic Hash (cannot track dynamic string keys)
+            new_type = Types::ClassInstance.new("Hash")
+            store_type(node.location.start_line, var_name, new_type)
+            return
+          end
+
+          # Symbol keys: maintain HashShape
+          key = key_node.unescaped.to_sym
+
+          # Handle both HashShape and generic Hash
+          new_type = case current_type
+                     when Types::HashShape
+                       # Add field to existing HashShape
+                       current_type.merge_field(key, value_type)
+                     when Types::ClassInstance
+                       # Convert generic Hash to HashShape with first field
+                       return unless current_type.name == "Hash"
+
+                       Types::HashShape.new({ key => value_type })
+                     else
+                       # Not a hash type, skip
+                       return
+                     end
+
+          # Store updated type at current line
+          store_type(node.location.start_line, var_name, new_type)
         end
 
         def infer_type_from_node(node)

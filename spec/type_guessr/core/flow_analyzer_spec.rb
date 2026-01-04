@@ -433,4 +433,96 @@ RSpec.describe TypeGuessr::Core::FlowAnalyzer do
       expect(type.name).to eq("Float")
     end
   end
+
+  describe "hash indexed assignment tracking" do
+    let(:hash_shape) { TypeGuessr::Core::Types::HashShape }
+
+    it "tracks field addition to empty hash" do
+      source = <<~RUBY
+        a = {}
+        a[:x] = 1
+        a
+      RUBY
+
+      result = analyzer.analyze(source)
+      type_at_line3 = result.type_at(3, 0, "a")
+
+      expect(type_at_line3).to be_a(hash_shape)
+      expect(type_at_line3.fields[:x]).to eq(integer_type)
+    end
+
+    it "tracks field addition to existing hash" do
+      source = <<~RUBY
+        a = { a: 1 }
+        a[:b] = "str"
+        a
+      RUBY
+
+      result = analyzer.analyze(source)
+      type_at_line3 = result.type_at(3, 0, "a")
+
+      expect(type_at_line3).to be_a(hash_shape)
+      expect(type_at_line3.fields[:a]).to eq(integer_type)
+      expect(type_at_line3.fields[:b]).to eq(string_type)
+    end
+
+    it "overwrites existing field" do
+      source = <<~RUBY
+        a = { x: 1 }
+        a[:x] = "str"
+        a
+      RUBY
+
+      result = analyzer.analyze(source)
+      type_at_line3 = result.type_at(3, 0, "a")
+
+      expect(type_at_line3).to be_a(hash_shape)
+      expect(type_at_line3.fields[:x]).to eq(string_type)
+    end
+
+    it "widens to Hash for string keys" do
+      source = <<~RUBY
+        a = { a: 1 }
+        a["str_key"] = 2
+        a
+      RUBY
+
+      result = analyzer.analyze(source)
+      type_at_line3 = result.type_at(3, 0, "a")
+
+      # String keys cause widening to generic Hash
+      expect(type_at_line3).to be_a(TypeGuessr::Core::Types::ClassInstance)
+      expect(type_at_line3.name).to eq("Hash")
+    end
+
+    it "widens to Hash when mixing symbol and string keys" do
+      source = <<~RUBY
+        a = { a: 1 }
+        a[:b] = 2
+        a["str_key"] = 3
+        a
+      RUBY
+
+      result = analyzer.analyze(source)
+      type_at_line4 = result.type_at(4, 0, "a")
+
+      # String keys cause widening to generic Hash
+      expect(type_at_line4).to be_a(TypeGuessr::Core::Types::ClassInstance)
+      expect(type_at_line4.name).to eq("Hash")
+    end
+
+    it "does not track when receiver is not HashShape" do
+      source = <<~RUBY
+        a = [1, 2, 3]
+        a[0] = 99
+        a
+      RUBY
+
+      result = analyzer.analyze(source)
+      type_at_line3 = result.type_at(3, 0, "a")
+
+      expect(type_at_line3).to be_a(TypeGuessr::Core::Types::ArrayType)
+      expect(type_at_line3.element_type).to eq(integer_type)
+    end
+  end
 end

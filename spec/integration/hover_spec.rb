@@ -86,6 +86,51 @@ RSpec.describe "Hover Integration" do
       end
     end
 
+    context "Hash indexed assignment - empty hash" do
+      let(:source) do
+        <<~RUBY
+          a = {}
+          a[:x] = 1
+          a
+        RUBY
+      end
+
+      it "→ { x: Integer }" do
+        expect_hover_type(line: 3, column: 0, expected: "{ x: Integer }")
+      end
+    end
+
+    context "Hash indexed assignment - existing hash" do
+      let(:source) do
+        <<~RUBY
+          a = { a: 1 }
+          a[:b] = 3
+          a
+        RUBY
+      end
+
+      it "has both fields a and b" do
+        response = hover_on_source(source, { line: 2, character: 0 })
+        # Check that both fields are present, regardless of order
+        expect(response.contents.value).to include("a: Integer")
+        expect(response.contents.value).to include("b: Integer")
+      end
+    end
+
+    context "Hash indexed assignment - string key widens to Hash" do
+      let(:source) do
+        <<~RUBY
+          a = { a: 1 }
+          a["str_key"] = 2
+          a
+        RUBY
+      end
+
+      it "→ Hash" do
+        expect_hover_type(line: 3, column: 0, expected: "Hash")
+      end
+    end
+
     context "Symbol literal" do
       let(:source) do
         <<~RUBY

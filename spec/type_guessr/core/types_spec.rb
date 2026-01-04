@@ -229,5 +229,51 @@ RSpec.describe TypeGuessr::Core::Types do
       hash_shape = TypeGuessr::Core::Types::HashShape.new(fields, max_fields: 10)
       expect(hash_shape).to be_a(TypeGuessr::Core::Types::HashShape)
     end
+
+    describe "#merge_field" do
+      it "returns new HashShape with merged field" do
+        fields = { a: TypeGuessr::Core::Types::ClassInstance.new("Integer") }
+        hash_shape = TypeGuessr::Core::Types::HashShape.new(fields)
+
+        new_type = TypeGuessr::Core::Types::ClassInstance.new("String")
+        merged = hash_shape.merge_field(:b, new_type)
+
+        expect(merged).to be_a(TypeGuessr::Core::Types::HashShape)
+        expect(merged.fields[:a]).to eq(TypeGuessr::Core::Types::ClassInstance.new("Integer"))
+        expect(merged.fields[:b]).to eq(new_type)
+      end
+
+      it "overwrites existing field" do
+        fields = { a: TypeGuessr::Core::Types::ClassInstance.new("Integer") }
+        hash_shape = TypeGuessr::Core::Types::HashShape.new(fields)
+
+        new_type = TypeGuessr::Core::Types::ClassInstance.new("String")
+        merged = hash_shape.merge_field(:a, new_type)
+
+        expect(merged.fields[:a]).to eq(new_type)
+      end
+
+      it "widens to Hash when exceeding max_fields" do
+        fields = (1..14).to_h { |i| [:"key#{i}", TypeGuessr::Core::Types::ClassInstance.new("Integer")] }
+        hash_shape = TypeGuessr::Core::Types::HashShape.new(fields)
+
+        new_type = TypeGuessr::Core::Types::ClassInstance.new("String")
+        merged = hash_shape.merge_field(:key15, new_type)
+        merged2 = merged.merge_field(:key16, new_type) if merged.is_a?(TypeGuessr::Core::Types::HashShape)
+
+        expect(merged2).to be_a(TypeGuessr::Core::Types::ClassInstance)
+        expect(merged2.name).to eq("Hash")
+      end
+
+      it "does not modify original HashShape" do
+        fields = { a: TypeGuessr::Core::Types::ClassInstance.new("Integer") }
+        hash_shape = TypeGuessr::Core::Types::HashShape.new(fields)
+
+        new_type = TypeGuessr::Core::Types::ClassInstance.new("String")
+        hash_shape.merge_field(:b, new_type)
+
+        expect(hash_shape.fields.keys).to eq([:a])
+      end
+    end
   end
 end

@@ -165,6 +165,11 @@ module TypeGuessr
           fields_str = @fields.map { |k, v| "#{k}: #{v}" }.join(", ")
           "{ #{fields_str} }"
         end
+
+        def merge_field(key, value_type, max_fields: DEFAULT_MAX_FIELDS)
+          new_fields = @fields.merge(key => value_type)
+          HashShape.new(new_fields, max_fields: max_fields)
+        end
       end
     end
   end
