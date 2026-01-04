@@ -39,6 +39,22 @@ data = {}
 [d]ata  # Guessed Type: Hash
 ```
 
+### Hash indexed assignment - empty hash
+
+```ruby
+a = {}
+a[:x] = 1
+[a]  # Guessed Type: { x: Integer }
+```
+
+### Hash indexed assignment - string key widens to Hash
+
+```ruby
+a = { a: 1 }
+a["str_key"] = 2
+[a]  # Guessed Type: Hash
+```
+
 ### Symbol literal
 
 ```ruby
@@ -58,6 +74,20 @@ numbers = 1..10
 ```ruby
 pattern = /[a-z]+/
 [p]attern  # Guessed Type: Regexp
+```
+
+### TrueClass literal
+
+```ruby
+flag = true
+[f]lag  # Guessed Type: true
+```
+
+### FalseClass literal
+
+```ruby
+flag = false
+[f]lag  # Guessed Type: false
 ```
 
 ### NilClass literal
@@ -98,11 +128,25 @@ mixed = [1, "a", :sym]
 [m]ixed  # Guessed Type: Array[Integer | String | Symbol]
 ```
 
+### Array with 4+ types
+
+```ruby
+mixed = [1, "a", :sym, 1.0]
+[m]ixed  # Guessed Type: Array[Integer | String | Symbol | Float]
+```
+
 ### Nested array
 
 ```ruby
 nested = [[1, 2], [3, 4]]
 [n]ested  # Guessed Type: Array[Array[Integer]]
+```
+
+### Deeply nested array
+
+```ruby
+deep = [[[1]]]
+[d]eep  # Guessed Type: Array[Array[Array[Integer]]]
 ```
 
 ## .new Call Type Inference
@@ -183,5 +227,67 @@ str.[u]pcase  # Signature: () -> ::String
 ```ruby
 arr = [1, 2, 3]
 arr.[m]ap { |x| x * 2 }  # Signature: [U] () { (Elem item) -> U } -> ::Array[U]
+```
+
+## Block Return Type Inference
+
+### Array#map with block
+
+```ruby
+numbers = [1, 2, 3]
+strings = numbers.map { |n| n.to_s }
+[s]trings  # Guessed Type: Array[String]
+```
+
+### Array#select with block
+
+```ruby
+numbers = [1, 2, 3, 4, 5]
+evens = numbers.select { |n| n.even? }
+[e]vens  # Guessed Type: Array[Integer]
+```
+
+### Array#map with empty block
+
+```ruby
+numbers = [1, 2, 3]
+result = numbers.map { }
+[r]esult  # Guessed Type: Array[nil]
+```
+
+### Array#map with Integer arithmetic
+
+```ruby
+a = [1, 2, 3]
+[b] = a.map do |num|  # Guessed Type: Array[Integer]
+  num * 2
+end
+b
+```
+
+```ruby
+a = [1, 2, 3]
+b = a.map do |num|
+  num * 2
+end
+[b]  # Guessed Type: Array[Integer]
+```
+
+### Array#map with do-end block
+
+```ruby
+numbers = [1, 2, 3]
+result = numbers.map do |n|
+  n.next
+end
+[r]esult  # Guessed Type: Array[Integer]
+```
+
+### Array#map with Integer#next
+
+```ruby
+numbers = [1, 2, 3]
+result = numbers.map { |n| n.next }
+[r]esult  # Guessed Type: Array[Integer]
 ```
 

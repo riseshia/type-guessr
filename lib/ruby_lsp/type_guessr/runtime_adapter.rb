@@ -205,7 +205,7 @@ module RubyLsp
           sleep(0.1) until index.initial_indexing_completed
           log_message("Ruby LSP indexing completed. Starting TypeGuessr file indexing.")
 
-          # Get all indexable URIs from RubyIndexer configuration
+          # Get all indexable files (project + gems)
           indexable_uris = index.configuration.indexable_uris
           total = indexable_uris.size
           log_message("Found #{total} files to process.")
@@ -213,19 +213,21 @@ module RubyLsp
           # Index each file with progress reporting
           processed = 0
           last_report = 0
-          report_interval = [total / 10, 50].max # Report every 10% or 50 files
+          report_interval = [total / 10, 50].max
 
           indexable_uris.each do |uri|
             traverse_file(uri)
             processed += 1
 
-            # Report progress periodically
             next unless processed - last_report >= report_interval
 
             percent = (processed * 100.0 / total).round(1)
             log_message("Indexing progress: #{processed}/#{total} (#{percent}%)")
             last_report = processed
           end
+
+          # Finalize the index ONCE after all files are processed
+          @location_index.finalize!
 
           log_message("File indexing completed. Processed #{total} files.")
           @indexing_completed = true
@@ -269,8 +271,7 @@ module RubyLsp
           node = @converter.convert(stmt, context)
           index_node_recursively(file_path, node) if node
         end
-
-        @location_index.finalize!
+        # Note: finalize! is called once after ALL files are indexed in start_indexing
       rescue StandardError => e
         bt = e.backtrace&.first(5)&.join("\n") || "(no backtrace)"
         log_message("Error indexing #{uri}: #{e.class}: #{e.message}\n#{bt}")

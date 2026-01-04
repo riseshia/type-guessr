@@ -91,5 +91,48 @@ RSpec.describe "IR-based Hover", :doc do
       end
     end
   end
+
+  describe "Hash Indexed Assignment" do
+    context "after single indexed assignment" do
+      let(:source) do
+        <<~RUBY
+          a = { x: 1 }
+          a[:y] = 2
+          a
+        RUBY
+      end
+
+      it "shows updated type at assignment line" do
+        expect_hover_type(line: 2, column: 0, expected: "{ x: Integer, y: Integer }")
+      end
+
+      it "shows updated type at read" do
+        expect_hover_type(line: 3, column: 0, expected: "{ x: Integer, y: Integer }")
+      end
+    end
+
+    context "after multiple indexed assignments" do
+      let(:source) do
+        <<~RUBY
+          a = { a: 1 }
+          a[:b] = 3
+          a[:c] = "x"
+          a
+        RUBY
+      end
+
+      it "shows type after first assignment" do
+        expect_hover_type(line: 2, column: 0, expected: "{ a: Integer, b: Integer }")
+      end
+
+      it "shows type after second assignment" do
+        expect_hover_type(line: 3, column: 0, expected: "{ a: Integer, b: Integer, c: String }")
+      end
+
+      it "shows final type" do
+        expect_hover_type(line: 4, column: 0, expected: "{ a: Integer, b: Integer, c: String }")
+      end
+    end
+  end
 end
 # rubocop:enable RSpec/DescribeClass
