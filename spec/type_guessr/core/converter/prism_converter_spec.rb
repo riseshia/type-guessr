@@ -41,7 +41,7 @@ RSpec.describe TypeGuessr::Core::Converter::PrismConverter do
       node = converter.convert(parsed.value.statements.body.first)
 
       expect(node).to be_a(TypeGuessr::Core::IR::LiteralNode)
-      expect(node.type.name).to eq("Hash")
+      expect(node.type).to be_a(TypeGuessr::Core::Types::HashType)
     end
   end
 
@@ -99,7 +99,11 @@ RSpec.describe TypeGuessr::Core::Converter::PrismConverter do
       read = parsed.value.statements.body[1]
       read_node = converter.convert(read, context)
 
-      expect(read_node).to eq(var_node)
+      # Read creates a new node but points to the assignment via dependency
+      expect(read_node).to be_a(TypeGuessr::Core::IR::VariableNode)
+      expect(read_node.dependency).to eq(var_node)
+      # Should share called_methods array for duck typing
+      expect(read_node.called_methods).to be(var_node.called_methods)
     end
   end
 
@@ -241,6 +245,70 @@ RSpec.describe TypeGuessr::Core::Converter::PrismConverter do
       expect(node).to be_a(TypeGuessr::Core::IR::DefNode)
       param = node.params.first
       expect(param.called_methods).to contain_exactly(:comments, :title)
+    end
+
+    describe "destructuring parameters" do
+      it "converts simple destructuring (a, b)" do
+        source = <<~RUBY
+          def foo((a, b))
+            a + b
+          end
+        RUBY
+        parsed = Prism.parse(source)
+        context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+        node = converter.convert(parsed.value.statements.body.first, context)
+
+        expect(node).to be_a(TypeGuessr::Core::IR::DefNode)
+        expect(node.params.size).to eq(2)
+        expect(node.params.map(&:name)).to contain_exactly(:a, :b)
+      end
+
+      it "converts destructuring with regular params" do
+        source = <<~RUBY
+          def foo((a, b), c)
+            a + b + c
+          end
+        RUBY
+        parsed = Prism.parse(source)
+        context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+        node = converter.convert(parsed.value.statements.body.first, context)
+
+        expect(node).to be_a(TypeGuessr::Core::IR::DefNode)
+        expect(node.params.size).to eq(3)
+        expect(node.params.map(&:name)).to eq(%i[a b c])
+      end
+
+      it "registers destructured params in context for body reference" do
+        source = <<~RUBY
+          def foo((a, b))
+            a
+          end
+        RUBY
+        parsed = Prism.parse(source)
+        context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+        node = converter.convert(parsed.value.statements.body.first, context)
+
+        # The return_node should reference the param 'a' from destructuring
+        expect(node.return_node).to be_a(TypeGuessr::Core::IR::VariableNode)
+        expect(node.return_node.name).to eq(:a)
+        # Should have a dependency since it was registered from destructuring
+        expect(node.return_node.dependency).to be_a(TypeGuessr::Core::IR::ParamNode)
+      end
+
+      it "handles nested destructuring" do
+        source = <<~RUBY
+          def foo(((a, b), c))
+            a + b + c
+          end
+        RUBY
+        parsed = Prism.parse(source)
+        context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+        node = converter.convert(parsed.value.statements.body.first, context)
+
+        expect(node).to be_a(TypeGuessr::Core::IR::DefNode)
+        # Nested destructuring should extract all inner params
+        expect(node.params.map(&:name)).to contain_exactly(:a, :b, :c)
+      end
     end
   end
 

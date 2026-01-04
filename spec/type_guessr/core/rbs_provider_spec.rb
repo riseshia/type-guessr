@@ -210,9 +210,10 @@ RSpec.describe TypeGuessr::Core::RBSProvider do
         )
 
         expect(types).to be_an(Array)
-        expect(types.size).to eq(1)
-        # Hash#each yields [K, V] as tuple, which becomes ArrayType with Union
-        expect(types.first).to be_a(TypeGuessr::Core::Types::ArrayType)
+        # Hash#each yields [K, V] as tuple, flattened for destructuring |k, v|
+        expect(types.size).to eq(2)
+        expect(types[0].name).to eq("Symbol")
+        expect(types[1].name).to eq("Integer")
       end
 
       it "substitutes K for Hash#each_key" do

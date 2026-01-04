@@ -80,12 +80,14 @@ RSpec.describe TypeGuessr::Core::IR do
       default = described_class::LiteralNode.new(type: string_type, loc: loc)
       node = described_class::ParamNode.new(
         name: :name,
+        kind: :optional,
         default_value: default,
         called_methods: [],
         loc: loc
       )
 
       expect(node.name).to eq(:name)
+      expect(node.kind).to eq(:optional)
       expect(node.default_value).to eq(default)
     end
 
@@ -93,6 +95,7 @@ RSpec.describe TypeGuessr::Core::IR do
       default = described_class::LiteralNode.new(type: string_type, loc: loc)
       node = described_class::ParamNode.new(
         name: :name,
+        kind: :optional,
         default_value: default,
         called_methods: [],
         loc: loc
@@ -104,6 +107,7 @@ RSpec.describe TypeGuessr::Core::IR do
     it "returns empty dependencies when no default_value" do
       node = described_class::ParamNode.new(
         name: :name,
+        kind: :required,
         default_value: nil,
         called_methods: [],
         loc: loc
@@ -127,6 +131,8 @@ RSpec.describe TypeGuessr::Core::IR do
         receiver: receiver,
         args: [],
         block_params: [],
+        block_body: nil,
+        has_block: false,
         loc: loc
       )
 
@@ -149,6 +155,8 @@ RSpec.describe TypeGuessr::Core::IR do
         receiver: receiver,
         args: [arg],
         block_params: [],
+        block_body: nil,
+        has_block: false,
         loc: loc
       )
 
@@ -163,9 +171,11 @@ RSpec.describe TypeGuessr::Core::IR do
         receiver: nil,
         args: [],
         block_params: [],
+        block_body: nil,
+        has_block: true,
         loc: loc
       )
-      slot = described_class::BlockParamSlot.new(index: 0, call_node: call)
+      slot = described_class::BlockParamSlot.new(index: 0, call_node: call, loc: loc)
 
       expect(slot.index).to eq(0)
       expect(slot.call_node).to eq(call)
@@ -177,24 +187,29 @@ RSpec.describe TypeGuessr::Core::IR do
         receiver: nil,
         args: [],
         block_params: [],
+        block_body: nil,
+        has_block: true,
         loc: loc
       )
-      slot = described_class::BlockParamSlot.new(index: 0, call_node: call)
+      slot = described_class::BlockParamSlot.new(index: 0, call_node: call, loc: loc)
 
       expect(slot.dependencies).to eq([call])
     end
 
-    it "delegates loc to call_node" do
+    it "has its own loc" do
       call = described_class::CallNode.new(
         method: :each,
         receiver: nil,
         args: [],
         block_params: [],
+        block_body: nil,
+        has_block: true,
         loc: loc
       )
-      slot = described_class::BlockParamSlot.new(index: 0, call_node: call)
+      slot_loc = described_class::Loc.new(line: 1, col_range: 10...15)
+      slot = described_class::BlockParamSlot.new(index: 0, call_node: call, loc: slot_loc)
 
-      expect(slot.loc).to eq(loc)
+      expect(slot.loc).to eq(slot_loc)
     end
   end
 
@@ -226,6 +241,7 @@ RSpec.describe TypeGuessr::Core::IR do
     it "stores method definition information" do
       param = described_class::ParamNode.new(
         name: :x,
+        kind: :required,
         default_value: nil,
         called_methods: [],
         loc: loc
@@ -235,6 +251,7 @@ RSpec.describe TypeGuessr::Core::IR do
         name: :foo,
         params: [param],
         return_node: return_node,
+        body_nodes: [return_node],
         loc: loc
       )
 
@@ -243,9 +260,10 @@ RSpec.describe TypeGuessr::Core::IR do
       expect(def_node.return_node).to eq(return_node)
     end
 
-    it "includes params and return_node in dependencies" do
+    it "includes params, return_node, and body_nodes in dependencies" do
       param = described_class::ParamNode.new(
         name: :x,
+        kind: :required,
         default_value: nil,
         called_methods: [],
         loc: loc
@@ -255,10 +273,14 @@ RSpec.describe TypeGuessr::Core::IR do
         name: :foo,
         params: [param],
         return_node: return_node,
+        body_nodes: [return_node],
         loc: loc
       )
 
-      expect(def_node.dependencies).to contain_exactly(param, return_node)
+      # param, return_node, and body_nodes (which contains return_node again)
+      expect(def_node.dependencies).to include(param)
+      expect(def_node.dependencies).to include(return_node)
+      expect(def_node.dependencies.count(return_node)).to eq(2) # once in return_node, once in body_nodes
     end
   end
 end

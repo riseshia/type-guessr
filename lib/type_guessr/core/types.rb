@@ -133,6 +133,29 @@ module TypeGuessr
         end
       end
 
+      # HashType - hash with key and value types
+      class HashType < Type
+        attr_reader :key_type, :value_type
+
+        def initialize(key_type = Unknown.instance, value_type = Unknown.instance)
+          super()
+          @key_type = key_type
+          @value_type = value_type
+        end
+
+        def eql?(other)
+          super && @key_type == other.key_type && @value_type == other.value_type
+        end
+
+        def hash
+          [self.class, @key_type, @value_type].hash
+        end
+
+        def to_s
+          "Hash[#{@key_type}, #{@value_type}]"
+        end
+      end
+
       # HashShape - hash with known field types (Symbol/String keys only)
       class HashShape < Type
         attr_reader :fields
@@ -191,6 +214,37 @@ module TypeGuessr
 
         def to_s
           @name.to_s
+        end
+      end
+
+      # DuckType - represents a type inferred from method calls (duck typing)
+      class DuckType < Type
+        attr_reader :methods
+
+        def initialize(methods)
+          super()
+          @methods = methods.sort
+        end
+
+        def eql?(other)
+          super && @methods == other.methods
+        end
+
+        def hash
+          [self.class, @methods].hash
+        end
+
+        def to_s
+          "responds_to(#{@methods.map { |m| ":#{m}" }.join(", ")})"
+        end
+      end
+
+      # ForwardingArgs - represents the forwarding parameter (...)
+      class ForwardingArgs < Type
+        include Singleton
+
+        def to_s
+          "..."
         end
       end
     end

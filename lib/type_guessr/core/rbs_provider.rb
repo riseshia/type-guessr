@@ -163,8 +163,13 @@ module TypeGuessr
         return [] unless method_type.block
 
         block_func = method_type.block.type
-        block_func.required_positionals.map do |param|
-          @converter.convert(param.type, substitutions)
+        block_func.required_positionals.flat_map do |param|
+          # Handle Tuple types (e.g., [K, V] in Hash#each) by flattening
+          if param.type.is_a?(RBS::Types::Tuple)
+            param.type.types.map { |t| @converter.convert(t, substitutions) }
+          else
+            @converter.convert(param.type, substitutions)
+          end
         end
       end
 

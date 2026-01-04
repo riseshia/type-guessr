@@ -12,10 +12,14 @@ module TypeGuessr
       class PrismConverter
         # Context for tracking variable bindings during conversion
         class Context
+          attr_reader :variables
+          attr_accessor :current_class
+
           def initialize(parent = nil)
             @parent = parent
             @variables = {} # name => node
             @scope_type = nil # :class, :method, :block, :top_level
+            @current_class = nil
           end
 
           def register_variable(name, node)
@@ -29,11 +33,22 @@ module TypeGuessr
           def fork(scope_type)
             child = Context.new(self)
             child.instance_variable_set(:@scope_type, scope_type)
+            child.current_class = current_class_name
             child
           end
 
           def scope_type
             @scope_type || @parent&.scope_type
+          end
+
+          # Get the current class name (from this context or parent)
+          def current_class_name
+            @current_class || @parent&.current_class_name
+          end
+
+          # Get variables that were defined/modified in this context (not from parent)
+          def local_variables
+            @variables.keys
           end
         end
 
@@ -49,7 +64,9 @@ module TypeGuessr
           case prism_node
           when Prism::IntegerNode, Prism::FloatNode, Prism::StringNode,
                Prism::SymbolNode, Prism::TrueNode, Prism::FalseNode,
-               Prism::NilNode, Prism::ArrayNode, Prism::HashNode
+               Prism::NilNode, Prism::ArrayNode, Prism::HashNode,
+               Prism::InterpolatedStringNode, Prism::RangeNode,
+               Prism::RegularExpressionNode, Prism::InterpolatedRegularExpressionNode
             convert_literal(prism_node)
 
           when Prism::LocalVariableWriteNode
@@ -85,11 +102,36 @@ module TypeGuessr
           when Prism::DefNode
             convert_def(prism_node, context)
 
-          when Prism::ConstantReadNode
+          when Prism::ConstantReadNode, Prism::ConstantPathNode
             convert_constant_read(prism_node, context)
 
           when Prism::ConstantWriteNode
             convert_constant_write(prism_node, context)
+
+          when Prism::ClassNode, Prism::ModuleNode
+            convert_class_or_module(prism_node, context)
+
+          when Prism::SingletonClassNode
+            convert_singleton_class(prism_node, context)
+
+          when Prism::ReturnNode
+            # Return statement - convert its arguments
+            if prism_node.arguments&.arguments&.first
+              convert(prism_node.arguments.arguments.first, context)
+            else
+              # return with no value returns nil
+              IR::LiteralNode.new(
+                type: Types::ClassInstance.new("NilClass"),
+                loc: convert_loc(prism_node.location)
+              )
+            end
+
+          when Prism::SelfNode
+            # self keyword - returns the current class instance
+            IR::SelfNode.new(
+              class_name: context.current_class_name || "Object",
+              loc: convert_loc(prism_node.location)
+            )
           end
         end
 
@@ -109,22 +151,25 @@ module TypeGuessr
             Types::ClassInstance.new("Integer")
           when Prism::FloatNode
             Types::ClassInstance.new("Float")
-          when Prism::StringNode
+          when Prism::StringNode, Prism::InterpolatedStringNode
             Types::ClassInstance.new("String")
           when Prism::SymbolNode
             Types::ClassInstance.new("Symbol")
-          when Prism::TrueNode, Prism::FalseNode
-            Types::ClassInstance.new("TrueClass") # or FalseClass, using TrueClass for simplicity
+          when Prism::TrueNode
+            Types::ClassInstance.new("TrueClass")
+          when Prism::FalseNode
+            Types::ClassInstance.new("FalseClass")
           when Prism::NilNode
             Types::ClassInstance.new("NilClass")
           when Prism::ArrayNode
-            # For now, return Array without element type
-            # TODO: infer element type from array contents
-            Types::ArrayType.new
+            # Infer element type from array contents
+            infer_array_element_type(prism_node)
           when Prism::HashNode
-            # For now, return Hash
-            # TODO: infer HashShape from hash contents
-            Types::ClassInstance.new("Hash")
+            infer_hash_element_types(prism_node)
+          when Prism::RangeNode
+            Types::ClassInstance.new("Range")
+          when Prism::RegularExpressionNode, Prism::InterpolatedRegularExpressionNode
+            Types::ClassInstance.new("Regexp")
           else
             Types::Unknown.instance
           end
@@ -145,7 +190,22 @@ module TypeGuessr
 
         def convert_local_variable_read(prism_node, context)
           # Look up the most recent assignment
-          context.lookup_variable(prism_node.name)
+          dependency = context.lookup_variable(prism_node.name)
+          # Create a new node with the read location pointing to the assignment
+          # Share called_methods array with the assignment/parameter for duck typing
+          called_methods = if dependency.is_a?(IR::VariableNode) || dependency.is_a?(IR::ParamNode)
+                             dependency.called_methods
+                           else
+                             []
+                           end
+
+          IR::VariableNode.new(
+            name: prism_node.name,
+            kind: :local,
+            dependency: dependency,
+            called_methods: called_methods,
+            loc: convert_loc(prism_node.location)
+          )
         end
 
         def convert_instance_variable_write(prism_node, context)
@@ -162,7 +222,20 @@ module TypeGuessr
         end
 
         def convert_instance_variable_read(prism_node, context)
-          context.lookup_variable(prism_node.name)
+          dependency = context.lookup_variable(prism_node.name)
+          called_methods = if dependency.is_a?(IR::VariableNode) || dependency.is_a?(IR::ParamNode)
+                             dependency.called_methods
+                           else
+                             []
+                           end
+
+          IR::VariableNode.new(
+            name: prism_node.name,
+            kind: :instance,
+            dependency: dependency,
+            called_methods: called_methods,
+            loc: convert_loc(prism_node.location)
+          )
         end
 
         def convert_class_variable_write(prism_node, context)
@@ -179,7 +252,20 @@ module TypeGuessr
         end
 
         def convert_class_variable_read(prism_node, context)
-          context.lookup_variable(prism_node.name)
+          dependency = context.lookup_variable(prism_node.name)
+          called_methods = if dependency.is_a?(IR::VariableNode) || dependency.is_a?(IR::ParamNode)
+                             dependency.called_methods
+                           else
+                             []
+                           end
+
+          IR::VariableNode.new(
+            name: prism_node.name,
+            kind: :class,
+            dependency: dependency,
+            called_methods: called_methods,
+            loc: convert_loc(prism_node.location)
+          )
         end
 
         def convert_call(prism_node, context)
@@ -187,21 +273,152 @@ module TypeGuessr
 
           args = prism_node.arguments&.arguments&.map { |arg| convert(arg, context) } || []
 
+          has_block = !prism_node.block.nil?
+
           call_node = IR::CallNode.new(
             method: prism_node.name,
             receiver: receiver_node,
             args: args,
             block_params: [],
+            block_body: nil,
+            has_block: has_block,
             loc: convert_loc(prism_node.location)
           )
 
           # Track method call on receiver for duck typing
           receiver_node.called_methods << prism_node.name if receiver_node.is_a?(IR::VariableNode) || receiver_node.is_a?(IR::ParamNode)
 
-          # Handle block if present
-          convert_block(prism_node.block, call_node, context) if prism_node.block
+          # Handle indexed assignment: a[:key] = value
+          handle_indexed_assignment(prism_node, receiver_node, args, context) if prism_node.name == :[]= && receiver_node.is_a?(IR::VariableNode)
+
+          # Handle block if present (but not block arguments like &block)
+          if prism_node.block.is_a?(Prism::BlockNode)
+            block_body = convert_block(prism_node.block, call_node, context)
+            # Recreate CallNode with block_body since Data.define is immutable
+            call_node = IR::CallNode.new(
+              method: prism_node.name,
+              receiver: receiver_node,
+              args: args,
+              block_params: call_node.block_params,
+              block_body: block_body,
+              has_block: true,
+              loc: convert_loc(prism_node.location)
+            )
+          end
 
           call_node
+        end
+
+        def handle_indexed_assignment(prism_node, receiver_node, args, context)
+          # a[:key] = value -> update a's type to include the new field
+          return unless args.size == 2
+
+          value_node = args[1]
+          key_arg = prism_node.arguments.arguments[0]
+
+          # Get the original variable
+          original_var = context.lookup_variable(receiver_node.name)
+          return unless original_var
+
+          value_type = extract_literal_type(value_node)
+
+          # Determine how to update the type based on key type
+          updated_type = if key_arg.is_a?(Prism::SymbolNode)
+                           key_name = key_arg.value.to_sym
+                           merge_hash_field(original_var, key_name, value_type)
+                         else
+                           # Non-symbol key: widen to HashType
+                           widen_to_hash_type(original_var, key_arg, value_type)
+                         end
+          return unless updated_type
+
+          # Create new variable node with updated dependency
+          updated_var = IR::VariableNode.new(
+            name: receiver_node.name,
+            kind: receiver_node.kind,
+            dependency: IR::LiteralNode.new(type: updated_type, loc: receiver_node.loc),
+            called_methods: receiver_node.called_methods,
+            loc: convert_loc(prism_node.location)
+          )
+          context.register_variable(receiver_node.name, updated_var)
+        end
+
+        def extract_literal_type(ir_node)
+          case ir_node
+          when IR::LiteralNode
+            ir_node.type
+          else
+            Types::Unknown.instance
+          end
+        end
+
+        def merge_hash_field(original_var, key_name, value_type)
+          # Get original type
+          original_type = case original_var
+                          when IR::VariableNode
+                            original_var.dependency.is_a?(IR::LiteralNode) ? original_var.dependency.type : nil
+                          when IR::LiteralNode
+                            original_var.type
+                          end
+
+          case original_type
+          when Types::HashShape
+            # Add new field to existing shape
+            new_fields = original_type.fields.merge(key_name => value_type)
+            Types::HashShape.new(new_fields)
+          when Types::HashType
+            # Empty hash (Unknown types) becomes HashShape with one field
+            Types::HashShape.new({ key_name => value_type }) if empty_hash_type?(original_type)
+            # Otherwise keep as HashType (mixed keys)
+          end
+        end
+
+        def empty_hash_type?(hash_type)
+          (hash_type.key_type.nil? || hash_type.key_type.is_a?(Types::Unknown)) &&
+            (hash_type.value_type.nil? || hash_type.value_type.is_a?(Types::Unknown))
+        end
+
+        def widen_to_hash_type(_original_var, key_arg, value_type)
+          # When mixing key types, widen to generic HashType
+          key_type = infer_key_type(key_arg)
+          # HashShape with symbol keys + non-symbol key -> widen to Hash
+          Types::HashType.new(key_type, value_type)
+        end
+
+        def infer_key_type(key_arg)
+          case key_arg
+          when Prism::SymbolNode
+            Types::ClassInstance.new("Symbol")
+          when Prism::StringNode
+            Types::ClassInstance.new("String")
+          when Prism::IntegerNode
+            Types::ClassInstance.new("Integer")
+          else
+            Types::Unknown.instance
+          end
+        end
+
+        # Extract IR param nodes from a Prism parameter node
+        # Handles destructuring (MultiTargetNode) by flattening nested params
+        def extract_param_nodes(param, kind, context, default_value: nil)
+          case param
+          when Prism::MultiTargetNode
+            # Destructuring parameter like (a, b) - extract all nested params
+            param.lefts.flat_map { |p| extract_param_nodes(p, kind, context) } +
+              param.rights.flat_map { |p| extract_param_nodes(p, kind, context) }
+          when Prism::RequiredParameterNode, Prism::OptionalParameterNode
+            param_node = IR::ParamNode.new(
+              name: param.name,
+              kind: kind,
+              default_value: default_value,
+              called_methods: [],
+              loc: convert_loc(param.location)
+            )
+            context.register_variable(param.name, param_node)
+            [param_node]
+          else
+            []
+          end
         end
 
         def convert_block(block_node, call_node, context)
@@ -210,35 +427,39 @@ module TypeGuessr
 
           if block_node.parameters.is_a?(Prism::BlockParametersNode)
             parameters_node = block_node.parameters.parameters
-            return unless parameters_node
+            if parameters_node
+              # Collect all parameters in order
+              params = []
+              params.concat(parameters_node.requireds) if parameters_node.requireds
+              params.concat(parameters_node.optionals) if parameters_node.optionals
 
-            # Collect all parameters in order
-            params = []
-            params.concat(parameters_node.requireds) if parameters_node.requireds
-            params.concat(parameters_node.optionals) if parameters_node.optionals
+              params.each_with_index do |param, index|
+                param_name, param_loc = case param
+                                        when Prism::RequiredParameterNode
+                                          [param.name, param.location]
+                                        when Prism::OptionalParameterNode
+                                          [param.name, param.location]
+                                        when Prism::MultiTargetNode
+                                          # Destructuring parameters like |a, (b, c)|
+                                          # For now, skip complex cases
+                                          next
+                                        else
+                                          next
+                                        end
 
-            params.each_with_index do |param, index|
-              param_name = case param
-                           when Prism::RequiredParameterNode
-                             param.name
-                           when Prism::OptionalParameterNode
-                             param.name
-                           when Prism::MultiTargetNode
-                             # Destructuring parameters like |a, (b, c)|
-                             # For now, skip complex cases
-                             next
-                           else
-                             next
-                           end
-
-              slot = IR::BlockParamSlot.new(index: index, call_node: call_node)
-              call_node.block_params << slot
-              block_context.register_variable(param_name, slot)
+                slot = IR::BlockParamSlot.new(
+                  index: index,
+                  call_node: call_node,
+                  loc: convert_loc(param_loc)
+                )
+                call_node.block_params << slot
+                block_context.register_variable(param_name, slot)
+              end
             end
           end
 
-          # Convert block body
-          convert(block_node.body, block_context) if block_node.body
+          # Convert block body and return it for block return type inference
+          block_node.body ? convert(block_node.body, block_context) : nil
         end
 
         def convert_if(prism_node, context)
@@ -297,14 +518,9 @@ module TypeGuessr
 
             # Required parameters
             parameters_node.requireds&.each do |param|
-              param_node = IR::ParamNode.new(
-                name: param.name,
-                default_value: nil,
-                called_methods: [],
-                loc: convert_loc(param.location)
-              )
-              params << param_node
-              def_context.register_variable(param.name, param_node)
+              extract_param_nodes(param, :required, def_context).each do |param_node|
+                params << param_node
+              end
             end
 
             # Optional parameters
@@ -312,6 +528,7 @@ module TypeGuessr
               default_node = convert(param.value, def_context)
               param_node = IR::ParamNode.new(
                 name: param.name,
+                kind: :optional,
                 default_value: default_node,
                 called_methods: [],
                 loc: convert_loc(param.location)
@@ -319,24 +536,126 @@ module TypeGuessr
               params << param_node
               def_context.register_variable(param.name, param_node)
             end
+
+            # Rest parameter (*args)
+            if parameters_node.rest.is_a?(Prism::RestParameterNode)
+              rest = parameters_node.rest
+              param_node = IR::ParamNode.new(
+                name: rest.name || :*,
+                kind: :rest,
+                default_value: nil,
+                called_methods: [],
+                loc: convert_loc(rest.location)
+              )
+              params << param_node
+              def_context.register_variable(rest.name, param_node) if rest.name
+            end
+
+            # Required keyword parameters (name:)
+            parameters_node.keywords&.each do |kw|
+              case kw
+              when Prism::RequiredKeywordParameterNode
+                param_node = IR::ParamNode.new(
+                  name: kw.name,
+                  kind: :keyword_required,
+                  default_value: nil,
+                  called_methods: [],
+                  loc: convert_loc(kw.location)
+                )
+                params << param_node
+                def_context.register_variable(kw.name, param_node)
+              when Prism::OptionalKeywordParameterNode
+                default_node = convert(kw.value, def_context)
+                param_node = IR::ParamNode.new(
+                  name: kw.name,
+                  kind: :keyword_optional,
+                  default_value: default_node,
+                  called_methods: [],
+                  loc: convert_loc(kw.location)
+                )
+                params << param_node
+                def_context.register_variable(kw.name, param_node)
+              end
+            end
+
+            # Keyword rest parameter (**kwargs)
+            if parameters_node.keyword_rest.is_a?(Prism::KeywordRestParameterNode)
+              kwrest = parameters_node.keyword_rest
+              param_node = IR::ParamNode.new(
+                name: kwrest.name || :**,
+                kind: :keyword_rest,
+                default_value: nil,
+                called_methods: [],
+                loc: convert_loc(kwrest.location)
+              )
+              params << param_node
+              def_context.register_variable(kwrest.name, param_node) if kwrest.name
+            elsif parameters_node.keyword_rest.is_a?(Prism::ForwardingParameterNode)
+              # Forwarding parameter (...)
+              fwd = parameters_node.keyword_rest
+              param_node = IR::ParamNode.new(
+                name: :"...",
+                kind: :forwarding,
+                default_value: nil,
+                called_methods: [],
+                loc: convert_loc(fwd.location)
+              )
+              params << param_node
+            end
+
+            # Block parameter (&block)
+            if parameters_node.block
+              block = parameters_node.block
+              param_node = IR::ParamNode.new(
+                name: block.name || :&,
+                kind: :block,
+                default_value: nil,
+                called_methods: [],
+                loc: convert_loc(block.location)
+              )
+              params << param_node
+              def_context.register_variable(block.name, param_node) if block.name
+            end
           end
 
-          # Convert method body
-          return_node = (convert(prism_node.body, def_context) if prism_node.body)
+          # Convert method body - collect all body nodes
+          body_nodes = []
+          return_node = nil
+
+          if prism_node.body.is_a?(Prism::StatementsNode)
+            prism_node.body.body.each do |stmt|
+              node = convert(stmt, def_context)
+              body_nodes << node if node
+            end
+            return_node = body_nodes.last
+          elsif prism_node.body
+            return_node = convert(prism_node.body, def_context)
+            body_nodes << return_node if return_node
+          end
 
           IR::DefNode.new(
             name: prism_node.name,
             params: params,
             return_node: return_node,
-            loc: convert_loc(prism_node.location)
+            body_nodes: body_nodes,
+            loc: convert_loc(prism_node.name_loc)
           )
         end
 
         def convert_constant_read(prism_node, _context)
           # For now, we don't have constant definition tracking
           # Return a constant node with no dependency
+          name = case prism_node
+                 when Prism::ConstantReadNode
+                   prism_node.name.to_s
+                 when Prism::ConstantPathNode
+                   prism_node.slice
+                 else
+                   prism_node.to_s
+                 end
+
           IR::ConstantNode.new(
-            name: prism_node.name.to_s,
+            name: name,
             dependency: nil,
             loc: convert_loc(prism_node.location)
           )
@@ -351,14 +670,52 @@ module TypeGuessr
           )
         end
 
-        def merge_modified_variables(_parent_context, _then_context, _else_context, then_node, else_node, location)
-          # For now, return the last node from then branch as the merge result
-          # In a full implementation, we would:
-          # 1. Track which variables were modified in each branch
-          # 2. Create MergeNode for each modified variable
-          # 3. Register merged variables in parent context
+        def merge_modified_variables(parent_context, then_context, else_context, then_node, else_node, location)
+          # Track which variables were modified in each branch
+          then_vars = then_context&.local_variables || []
+          else_vars = else_context&.local_variables || []
 
-          # Simple implementation: if both branches exist, create a merge node
+          # All variables modified in either branch
+          modified_vars = (then_vars + else_vars).uniq
+
+          # Create MergeNode for each modified variable
+          modified_vars.each do |var_name|
+            then_val = then_context&.variables&.[](var_name)
+            else_val = else_context&.variables&.[](var_name)
+
+            # Get the original value from parent context (before if statement)
+            original_val = parent_context.lookup_variable(var_name)
+
+            # Determine branches for merge
+            branches = []
+            if then_val
+              branches << then_val
+            elsif original_val
+              # Variable not modified in then branch, use original
+              branches << original_val
+            end
+
+            if else_val
+              branches << else_val
+            elsif original_val
+              # Variable not modified in else branch, use original
+              branches << original_val
+            end
+
+            # Create MergeNode only if we have multiple branches
+            if branches.size > 1
+              merge_node = IR::MergeNode.new(
+                branches: branches.uniq,
+                loc: convert_loc(location)
+              )
+              parent_context.register_variable(var_name, merge_node)
+            elsif branches.size == 1
+              # Only one branch has a value, use it directly
+              parent_context.register_variable(var_name, branches.first)
+            end
+          end
+
+          # Return MergeNode for the if expression value
           if then_node && else_node
             IR::MergeNode.new(
               branches: [then_node, else_node].compact,
@@ -366,6 +723,141 @@ module TypeGuessr
             )
           else
             then_node || else_node
+          end
+        end
+
+        def convert_class_or_module(prism_node, context)
+          # Get class/module name first
+          name = case prism_node.constant_path
+                 when Prism::ConstantReadNode
+                   prism_node.constant_path.name.to_s
+                 when Prism::ConstantPathNode
+                   prism_node.constant_path.slice
+                 else
+                   "Anonymous"
+                 end
+
+          # Create a new context for class/module scope with the class name set
+          class_context = context.fork(:class)
+          class_context.current_class = name
+
+          # Collect all method definitions from the body (including from nested singleton classes)
+          methods = []
+          if prism_node.body.is_a?(Prism::StatementsNode)
+            prism_node.body.body.each do |stmt|
+              node = convert(stmt, class_context)
+              if node.is_a?(IR::DefNode)
+                methods << node
+              elsif node.is_a?(IR::ClassModuleNode)
+                # Include methods from nested classes (like singleton classes)
+                methods.concat(node.methods) if node.methods
+              end
+            end
+          end
+
+          IR::ClassModuleNode.new(
+            name: name,
+            methods: methods,
+            loc: convert_loc(prism_node.constant_path&.location || prism_node.location)
+          )
+        end
+
+        def convert_singleton_class(prism_node, context)
+          # Create a new context for singleton class scope
+          singleton_context = context.fork(:class)
+
+          # Collect all method definitions from the body
+          methods = []
+          if prism_node.body.is_a?(Prism::StatementsNode)
+            prism_node.body.body.each do |stmt|
+              node = convert(stmt, singleton_context)
+              methods << node if node.is_a?(IR::DefNode)
+            end
+          end
+
+          IR::ClassModuleNode.new(
+            name: "singleton",
+            methods: methods,
+            loc: convert_loc(prism_node.location)
+          )
+        end
+
+        def infer_array_element_type(array_node)
+          return Types::ArrayType.new if array_node.elements.empty?
+
+          element_types = array_node.elements.filter_map do |elem|
+            infer_literal_type(elem) unless elem.nil?
+          end
+
+          return Types::ArrayType.new if element_types.empty?
+
+          # Deduplicate types
+          unique_types = element_types.uniq
+
+          element_type = if unique_types.size == 1
+                           unique_types.first
+                         else
+                           Types::Union.new(unique_types)
+                         end
+
+          Types::ArrayType.new(element_type)
+        end
+
+        def infer_hash_element_types(hash_node)
+          return Types::HashType.new if hash_node.elements.empty?
+
+          # Check if all keys are symbols for HashShape
+          all_symbol_keys = hash_node.elements.all? do |elem|
+            elem.is_a?(Prism::AssocNode) && elem.key.is_a?(Prism::SymbolNode)
+          end
+
+          if all_symbol_keys
+            # Build HashShape with field types
+            fields = {}
+            hash_node.elements.each do |elem|
+              next unless elem.is_a?(Prism::AssocNode) && elem.key.is_a?(Prism::SymbolNode)
+
+              field_name = elem.key.value.to_sym
+              field_type = infer_literal_type(elem.value)
+              fields[field_name] = field_type
+            end
+            Types::HashShape.new(fields)
+          else
+            # Non-symbol keys or mixed keys - return HashType
+            key_types = []
+            value_types = []
+
+            hash_node.elements.each do |elem|
+              case elem
+              when Prism::AssocNode
+                key_types << infer_literal_type(elem.key) if elem.key
+                value_types << infer_literal_type(elem.value) if elem.value
+              end
+            end
+
+            return Types::HashType.new if key_types.empty? && value_types.empty?
+
+            # Deduplicate types
+            unique_key_types = key_types.uniq
+            unique_value_types = value_types.uniq
+
+            key_type = if unique_key_types.size == 1
+                         unique_key_types.first
+                       elsif unique_key_types.empty?
+                         Types::Unknown.instance
+                       else
+                         Types::Union.new(unique_key_types)
+                       end
+
+            value_type = if unique_value_types.size == 1
+                           unique_value_types.first
+                         elsif unique_value_types.empty?
+                           Types::Unknown.instance
+                         else
+                           Types::Union.new(unique_value_types)
+                         end
+
+            Types::HashType.new(key_type, value_type)
           end
         end
 

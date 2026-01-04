@@ -15,7 +15,8 @@ RSpec.describe "IR-based Hover", :doc do
         params: { textDocument: { uri: uri }, position: position }
       )
 
-      server.pop_response
+      result = pop_result(server)
+      result.response
     end
   end
 

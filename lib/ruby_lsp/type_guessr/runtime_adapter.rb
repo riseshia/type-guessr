@@ -11,11 +11,16 @@ module RubyLsp
     # RuntimeAdapter manages the IR graph and inference for TypeGuessr
     # Converts files to IR graphs and provides type inference
     class RuntimeAdapter
-      def initialize(global_state)
+      def initialize(global_state, message_queue = nil)
         @global_state = global_state
+        @message_queue = message_queue
         @converter = ::TypeGuessr::Core::Converter::PrismConverter.new
         @location_index = ::TypeGuessr::Core::Index::LocationIndex.new
         @resolver = ::TypeGuessr::Core::Inference::Resolver.new(::TypeGuessr::Core::RBSProvider.instance)
+        @indexing_completed = false
+
+        # Set up duck type resolver callback
+        @resolver.duck_type_resolver = ->(duck_type) { resolve_duck_type_to_class(duck_type) }
       end
 
       # Index a file by converting its Prism AST to IR graph
@@ -47,7 +52,10 @@ module RubyLsp
       # @param uri_string [String] File URI as string
       # @param source [String] Source code to index
       def index_source(uri_string, source)
-        file_path = URI(uri_string).to_standardized_path || uri_string
+        require "uri"
+        uri = URI(uri_string)
+        file_path = uri.respond_to?(:to_standardized_path) ? uri.to_standardized_path : uri.path
+        file_path ||= uri_string.sub(%r{^file://}, "")
         return unless file_path
 
         # Clear existing index for this file
@@ -58,10 +66,13 @@ module RubyLsp
         parsed = Prism.parse(source)
         return unless parsed.value
 
+        # Create a shared context for all statements
+        context = ::TypeGuessr::Core::Converter::PrismConverter::Context.new
+
         # Convert statements to IR nodes
         parsed.value.statements&.body&.each do |stmt|
-          node = @converter.convert(stmt)
-          @location_index.add(file_path, node) if node
+          node = @converter.convert(stmt, context)
+          index_node_recursively(file_path, node) if node
         end
 
         # Finalize the index for efficient lookups
@@ -69,13 +80,12 @@ module RubyLsp
       end
 
       # Find IR node at the given position
-      # @param uri [URI::Generic] File URI
+      # @param uri [URI::Generic, nil] File URI (if nil, searches all files)
       # @param line [Integer] Line number (0-indexed)
       # @param column [Integer] Column number (0-indexed)
       # @return [TypeGuessr::Core::IR::Node, nil] IR node at position
       def find_node_at(uri, line, column)
-        file_path = uri.to_standardized_path
-        return nil unless file_path
+        file_path = uri&.to_standardized_path
 
         # Convert from 0-indexed to 1-indexed line
         @location_index.find(file_path, line + 1, column)
@@ -85,13 +95,220 @@ module RubyLsp
       # @param node [TypeGuessr::Core::IR::Node] IR node
       # @return [TypeGuessr::Core::Inference::Result] Inference result
       def infer_type(node)
-        @resolver.infer(node)
+        result = @resolver.infer(node)
+
+        # Post-process DuckType to resolve to actual classes
+        if result.type.is_a?(::TypeGuessr::Core::Types::DuckType)
+          resolve_duck_type(result)
+        else
+          result
+        end
+      end
+
+      # Resolve DuckType to ClassInstance(s) by looking up classes that define all methods
+      def resolve_duck_type(result)
+        duck_type = result.type
+        methods = duck_type.methods
+
+        # Find classes that define all the methods
+        matching_classes = find_classes_defining_methods(methods)
+
+        case matching_classes.size
+        when 0
+          # No matching classes, keep the DuckType
+          result
+        when 1
+          # Exactly one class matches - return ClassInstance
+          ::TypeGuessr::Core::Inference::Result.new(
+            ::TypeGuessr::Core::Types::ClassInstance.new(matching_classes.first),
+            "inferred from method calls: #{methods.join(", ")}",
+            :inference
+          )
+        when 2, 3
+          # 2-3 matches - return union of classes
+          types = matching_classes.map { |c| ::TypeGuessr::Core::Types::ClassInstance.new(c) }
+          ::TypeGuessr::Core::Inference::Result.new(
+            ::TypeGuessr::Core::Types::Union.new(types),
+            "ambiguous: #{matching_classes.join(" | ")} from method calls",
+            :inference
+          )
+        else
+          # 4+ matches - return untyped (too ambiguous)
+          ::TypeGuessr::Core::Inference::Result.new(
+            ::TypeGuessr::Core::Types::Unknown.instance,
+            "too many matching types for method calls",
+            :unknown
+          )
+        end
+      end
+
+      # Resolve DuckType to a type (for use during inference)
+      # Returns the resolved type or nil if not resolvable
+      def resolve_duck_type_to_class(duck_type)
+        methods = duck_type.methods
+        matching_classes = find_classes_defining_methods(methods)
+
+        case matching_classes.size
+        when 0
+          nil # Keep as DuckType
+        when 1
+          ::TypeGuessr::Core::Types::ClassInstance.new(matching_classes.first)
+        when 2, 3
+          types = matching_classes.map { |c| ::TypeGuessr::Core::Types::ClassInstance.new(c) }
+          ::TypeGuessr::Core::Types::Union.new(types)
+          # 4+ matches → nil (too ambiguous), case returns nil by default
+        end
+      end
+
+      # Find classes that define all given methods
+      def find_classes_defining_methods(methods)
+        return [] if methods.empty?
+
+        index = @global_state.index
+        return [] unless index
+
+        # For each method, find classes that define it using fuzzy_search
+        method_sets = methods.map do |method_name|
+          entries = index.fuzzy_search(method_name.to_s) do |entry|
+            entry.is_a?(RubyIndexer::Entry::Method) && entry.name == method_name.to_s
+          end
+          entries.filter_map do |entry|
+            entry.owner.name if entry.respond_to?(:owner) && entry.owner
+          end.uniq
+        end
+
+        return [] if method_sets.empty? || method_sets.any?(&:empty?)
+
+        # Find intersection - classes that define ALL methods
+        method_sets.reduce(:&) || []
+      end
+
+      # Start background indexing of all project files
+      def start_indexing
+        Thread.new do
+          index = @global_state.index
+
+          # Wait for Ruby LSP's initial indexing to complete
+          log_message("Waiting for Ruby LSP initial indexing to complete...")
+          sleep(0.1) until index.initial_indexing_completed
+          log_message("Ruby LSP indexing completed. Starting TypeGuessr file indexing.")
+
+          # Get all indexable URIs from RubyIndexer configuration
+          indexable_uris = index.configuration.indexable_uris
+          log_message("Found #{indexable_uris.size} indexed files to process.")
+
+          # Index each file
+          indexable_uris.each do |uri|
+            traverse_file(uri)
+          end
+
+          log_message("File indexing completed. Processed #{indexable_uris.size} files.")
+          @indexing_completed = true
+        rescue StandardError => e
+          log_message("Error during file indexing: #{e.message}")
+          @indexing_completed = true
+        end
+      end
+
+      # Check if initial indexing has completed
+      def indexing_completed?
+        @indexing_completed
       end
 
       # Get statistics about the index
       # @return [Hash] Statistics
       def stats
         @location_index.stats
+      end
+
+      private
+
+      # Traverse and index a single file
+      def traverse_file(uri)
+        file_path = uri.full_path
+        return unless file_path && File.exist?(file_path)
+
+        source = File.read(file_path)
+        parsed = Prism.parse(source)
+        return unless parsed.value
+
+        # Clear existing index for this file
+        @location_index.remove_file(file_path)
+        @resolver.clear_cache
+
+        # Create a shared context for all statements
+        context = ::TypeGuessr::Core::Converter::PrismConverter::Context.new
+
+        # Convert statements to IR nodes
+        parsed.value.statements&.body&.each do |stmt|
+          node = @converter.convert(stmt, context)
+          index_node_recursively(file_path, node) if node
+        end
+
+        @location_index.finalize!
+      rescue StandardError => e
+        log_message("Error indexing #{uri}: #{e.message}")
+      end
+
+      # Recursively index a node and all its children
+      def index_node_recursively(file_path, node)
+        return unless node
+
+        # Add the node itself
+        @location_index.add(file_path, node)
+
+        # Recursively add children based on node type
+        case node
+        when ::TypeGuessr::Core::IR::DefNode
+          # Index parameters
+          node.params&.each { |param| index_node_recursively(file_path, param) }
+          # Index all body nodes (including intermediate statements)
+          node.body_nodes&.each { |body_node| index_node_recursively(file_path, body_node) }
+
+        when ::TypeGuessr::Core::IR::VariableNode
+          # Index dependency
+          index_node_recursively(file_path, node.dependency) if node.dependency
+
+        when ::TypeGuessr::Core::IR::CallNode
+          # Index receiver
+          index_node_recursively(file_path, node.receiver) if node.receiver
+          # Index arguments
+          node.args&.each { |arg| index_node_recursively(file_path, arg) }
+          # Index block params
+          node.block_params&.each { |param| index_node_recursively(file_path, param) }
+          # Index block body
+          index_node_recursively(file_path, node.block_body) if node.block_body
+
+        when ::TypeGuessr::Core::IR::ParamNode
+          # Index default value
+          index_node_recursively(file_path, node.default_value) if node.default_value
+
+        when ::TypeGuessr::Core::IR::MergeNode
+          # Index branches
+          node.branches&.each { |branch| index_node_recursively(file_path, branch) }
+
+        when ::TypeGuessr::Core::IR::ConstantNode
+          # Index dependency
+          index_node_recursively(file_path, node.dependency) if node.dependency
+
+        when ::TypeGuessr::Core::IR::ClassModuleNode
+          # Index all methods in the class/module and register them for lookup
+          node.methods&.each do |method|
+            index_node_recursively(file_path, method)
+            # Register method for project method lookup
+            @resolver.register_method(node.name, method.name.to_s, method)
+          end
+        end
+      end
+
+      def log_message(message)
+        return unless @message_queue
+        return if @message_queue.closed?
+
+        @message_queue << RubyLsp::Notification.window_log_message(
+          "[TypeGuessr] #{message}",
+          type: RubyLsp::Constant::MessageType::LOG
+        )
       end
     end
   end

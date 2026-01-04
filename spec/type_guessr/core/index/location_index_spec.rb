@@ -52,6 +52,8 @@ RSpec.describe TypeGuessr::Core::Index::LocationIndex do
         receiver: nil,
         args: [],
         block_params: [],
+        block_body: nil,
+        has_block: false,
         loc: TypeGuessr::Core::IR::Loc.new(line: 1, col_range: 0...20)
       )
 

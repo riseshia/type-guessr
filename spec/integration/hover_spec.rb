@@ -178,9 +178,8 @@ RSpec.describe "Hover Integration" do
         RUBY
       end
 
-      it "→ true or false" do
-        response = hover_on_source(source, { line: 1, character: 0 })
-        expect(response.contents.value).to match(/Guessed type:.*(true|false)/)
+      it "→ true" do
+        expect_hover_type(line: 2, column: 0, expected: "true")
       end
     end
 
@@ -192,9 +191,8 @@ RSpec.describe "Hover Integration" do
         RUBY
       end
 
-      it "→ true or false" do
-        response = hover_on_source(source, { line: 1, character: 0 })
-        expect(response.contents.value).to match(/Guessed type:.*(true|false)/)
+      it "→ false" do
+        expect_hover_type(line: 2, column: 0, expected: "false")
       end
     end
 
@@ -274,9 +272,8 @@ RSpec.describe "Hover Integration" do
         RUBY
       end
 
-      it "→ Array[untyped]" do
-        response = hover_on_source(source, { line: 1, character: 0 })
-        expect(response.contents.value).to match(/Guessed type:.*Array(\[untyped\])?/)
+      it "→ Array[Integer | String | Symbol | Float]" do
+        expect_hover_type(line: 2, column: 0, expected: "Array[Integer | String | Symbol | Float]")
       end
     end
 
@@ -301,9 +298,8 @@ RSpec.describe "Hover Integration" do
         RUBY
       end
 
-      it "→ Array[untyped] or Array[Array]" do
-        response = hover_on_source(source, { line: 1, character: 0 })
-        expect(response.contents.value).to match(/Guessed type:.*Array(\[untyped\]|\[Array\])?/)
+      it "→ Array[Array[Array[Integer]]]" do
+        expect_hover_type(line: 2, column: 0, expected: "Array[Array[Array[Integer]]]")
       end
     end
   end
@@ -318,7 +314,7 @@ RSpec.describe "Hover Integration" do
 
       response = hover_on_source(source, { line: 1, character: 2 })
 
-      expect(response.contents.value).to match(/Guessed type:.*\{/)
+      expect(response.contents.value).to match(/Guessed Type:.*\{/)
       expect(response.contents.value).to match(/name:/)
       expect(response.contents.value).to match(/age:/)
     end
@@ -332,7 +328,7 @@ RSpec.describe "Hover Integration" do
 
       response = hover_on_source(source, { line: 1, character: 2 })
 
-      expect(response.contents.value).to match(/Guessed type:.*Hash/)
+      expect(response.contents.value).to match(/Guessed Type:.*Hash/)
     end
 
     # Edge case: Mixed keys
@@ -344,7 +340,7 @@ RSpec.describe "Hover Integration" do
 
       response = hover_on_source(source, { line: 1, character: 2 })
 
-      expect(response.contents.value).to match(/Guessed type:.*Hash/)
+      expect(response.contents.value).to match(/Guessed Type:.*Hash/)
     end
 
     # Edge case: Nested hash
@@ -356,7 +352,7 @@ RSpec.describe "Hover Integration" do
 
       response = hover_on_source(source, { line: 1, character: 2 })
 
-      expect(response.contents.value).to match(/Guessed type:.*\{/)
+      expect(response.contents.value).to match(/Guessed Type:.*\{/)
       expect(response.contents.value).to match(/name:/)
       expect(response.contents.value).to match(/address:/)
     end
@@ -481,7 +477,7 @@ RSpec.describe "Hover Integration" do
 
       response = hover_on_source(source, { line: 16, character: 12 })
 
-      expect(response.contents.value).to match(/Guessed type:.*Recipe/)
+      expect(response.contents.value).to match(/Guessed Type:.*Recipe/)
       expect(response.contents.value).not_to match(/Article/)
     end
 
@@ -795,7 +791,7 @@ RSpec.describe "Hover Integration" do
 
       response = hover_on_source(source, { line: 11, character: 4 })
 
-      expect(response.contents.value).to match(/Guessed type:/)
+      expect(response.contents.value).to match(/Guessed Type:/)
       expect(response.contents.value).to match(/\[`Recipe`\]\(file:/)
     end
   end
@@ -1348,8 +1344,7 @@ RSpec.describe "Hover Integration" do
       expect(response.contents.value).to match(/Widget/)
     end
 
-    it "shows ambiguous when multiple types match" do
-      skip "ambiguous type display not yet implemented"
+    it "shows union type when multiple classes match duck typing" do
       source = <<~RUBY
         class Parser
           def process
@@ -1369,10 +1364,11 @@ RSpec.describe "Hover Integration" do
       RUBY
 
       # Hover on "obj" at line 14
-      # obj has process → both Parser and Compiler have it
+      # obj has process → both Parser and Compiler match
       response = hover_on_source(source, { line: 14, character: 2 })
 
-      expect(response.contents.value).to match(/Ambiguous|Parser|Compiler/)
+      # Shows union type when 2-3 classes match
+      expect(response.contents.value).to match(/Parser.*Compiler|Compiler.*Parser/)
     end
   end
 
@@ -1393,7 +1389,7 @@ RSpec.describe "Hover Integration" do
       end
     end
 
-    it "returns nil when receiver type is unknown" do
+    it "returns nil or untyped when receiver type is unknown" do
       source = <<~RUBY
         def foo
           unknown_var.some_method
@@ -1403,9 +1399,9 @@ RSpec.describe "Hover Integration" do
       # Hover on "some_method"
       response = hover_on_source(source, { line: 1, character: 14 })
 
-      # Should not crash, may return nil or minimal info
+      # Should not crash, may return nil or untyped info
       # This is acceptable behavior for unknown types
-      expect(response).to be_nil
+      expect(response).to be_nil.or(have_attributes(contents: have_attributes(value: include("untyped"))))
     end
 
     context "instance variable receiver" do
@@ -1474,19 +1470,20 @@ RSpec.describe "Hover Integration" do
       end
     end
 
-    it "returns nil for excessively deep method chains" do
+    it "handles deep method chains gracefully" do
       source = <<~RUBY
         def foo
           "a".upcase.downcase.upcase.downcase.upcase.downcase.upcase
         end
       RUBY
 
-      # Hover on the last "upcase" (7th level - exceeds MAX_DEPTH of 5)
+      # Hover on the last "upcase" (7th level)
+      # IR-based inference handles deep chains without recursion issues
       response = hover_on_source(source, { line: 1, character: 54 })
 
-      # Should return nil or handle gracefully when depth limit exceeded
-      # This prevents infinite recursion and performance issues
-      expect(response).to be_nil
+      # IR-based approach successfully infers type for deep chains
+      expect(response).not_to be_nil
+      expect(response.contents.value).to include("String")
     end
 
     it "shows RBS signature when receiver type is inferred from method calls" do

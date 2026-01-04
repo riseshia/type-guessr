@@ -40,28 +40,36 @@ module TypeGuessr
         end
 
         # Find IR node at the given position
-        # @param file_path [String] Absolute file path
+        # @param file_path [String, nil] Absolute file path (if nil, searches all files)
         # @param line [Integer] Line number (1-indexed)
         # @param column [Integer] Column number (0-indexed)
         # @return [TypeGuessr::Core::IR::Node, nil] IR node at position, or nil if not found
         def find(file_path, line, column)
-          entries = @index[file_path]
-          return nil unless entries
+          # If file_path is nil, search all files
+          files_to_search = file_path ? [file_path] : @index.keys
 
-          # Find all entries on the target line
-          line_entries = entries.select { |e| e.line == line }
-          return nil if line_entries.empty?
+          files_to_search.each do |path|
+            entries = @index[path]
+            next unless entries
 
-          # Find the most specific entry that contains the column
-          # (smallest range that contains the position)
-          matching_entries = line_entries.select do |e|
-            e.col_range.cover?(column)
+            # Find all entries on the target line
+            line_entries = entries.select { |e| e.line == line }
+            next if line_entries.empty?
+
+            # Find the most specific entry that contains the column
+            # (smallest range that contains the position)
+            matching_entries = line_entries.select do |e|
+              e.col_range.cover?(column)
+            end
+
+            next if matching_entries.empty?
+
+            # Return the entry with the smallest range (most specific)
+            result = matching_entries.min_by { |e| e.col_range.size }&.node
+            return result if result
           end
 
-          return nil if matching_entries.empty?
-
-          # Return the entry with the smallest range (most specific)
-          matching_entries.min_by { |e| e.col_range.size }&.node
+          nil
         end
 
         # Get all indexed nodes for a file

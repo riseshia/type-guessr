@@ -20,10 +20,16 @@ module TypeGuessr
           type.types.map { |t| format(t) }.join(" | ")
         when Types::ArrayType
           "Array[#{format(type.element_type)}]"
+        when Types::HashType
+          "Hash[#{format(type.key_type)}, #{format(type.value_type)}]"
         when Types::HashShape
           format_hash_shape(type)
         when Types::TypeVariable
           type.name.to_s
+        when Types::DuckType
+          format_duck_type(type)
+        when Types::ForwardingArgs
+          "..."
         else
           "untyped"
         end
@@ -55,7 +61,15 @@ module TypeGuessr
         "{ #{fields_str} }"
       end
 
-      private_class_method :format_hash_shape
+      # Format DuckType showing methods it responds to
+      # @param duck_type [Types::DuckType] the duck type to format
+      # @return [String] formatted duck type
+      def self.format_duck_type(duck_type)
+        methods_str = duck_type.methods.map { |m| "##{m}" }.join(", ")
+        "(responds to #{methods_str})"
+      end
+
+      private_class_method :format_hash_shape, :format_duck_type
     end
   end
 end

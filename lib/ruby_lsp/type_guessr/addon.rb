@@ -12,6 +12,33 @@ module RubyLsp
     # TypeGuessr addon for Ruby LSP
     # Provides heuristic type inference without requiring type annotations
     class Addon < ::RubyLsp::Addon
+      # Node types to add to Ruby LSP's ALLOWED_TARGETS for hover support
+      HOVER_TARGET_NODES = [
+        Prism::LocalVariableReadNode,
+        Prism::LocalVariableWriteNode,
+        Prism::LocalVariableTargetNode,
+        Prism::InstanceVariableReadNode,
+        Prism::InstanceVariableWriteNode,
+        Prism::InstanceVariableTargetNode,
+        Prism::ClassVariableReadNode,
+        Prism::ClassVariableWriteNode,
+        Prism::ClassVariableTargetNode,
+        Prism::GlobalVariableReadNode,
+        Prism::GlobalVariableWriteNode,
+        Prism::GlobalVariableTargetNode,
+        Prism::SelfNode,
+        Prism::RequiredParameterNode,
+        Prism::OptionalParameterNode,
+        Prism::RestParameterNode,
+        Prism::RequiredKeywordParameterNode,
+        Prism::OptionalKeywordParameterNode,
+        Prism::KeywordRestParameterNode,
+        Prism::BlockParameterNode,
+        Prism::ForwardingParameterNode,
+        Prism::CallNode,
+        Prism::DefNode,
+      ].freeze
+
       attr_reader :runtime_adapter
 
       def name
@@ -21,17 +48,20 @@ module RubyLsp
       def activate(global_state, message_queue)
         @global_state = global_state
         @message_queue = message_queue
-        @runtime_adapter = RuntimeAdapter.new(global_state)
+        @runtime_adapter = RuntimeAdapter.new(global_state, message_queue)
         @debug_server = nil
+
+        # Extend Ruby LSP's hover targets to include variables and parameters
+        extend_hover_targets
 
         # Preload RBS environment
         ::TypeGuessr::Core::RBSProvider.instance.preload
 
+        # Start background indexing
+        @runtime_adapter.start_indexing
+
         # Start debug server if enabled
         start_debug_server if debug_enabled?
-
-        # Index all files on activation
-        index_all_files
 
         message_queue.push(
           method: "window/showMessage",
@@ -49,7 +79,7 @@ module RubyLsp
       def create_hover_listener(response_builder, node_context, dispatcher)
         return unless Config.enabled?
 
-        Hover.new(@runtime_adapter, response_builder, node_context, dispatcher)
+        Hover.new(@runtime_adapter, response_builder, node_context, dispatcher, @global_state)
       end
 
       # Handle file changes
@@ -73,10 +103,12 @@ module RubyLsp
 
       private
 
-      def index_all_files
-        # Skip auto-indexing for now
-        # Files will be indexed on-demand via workspace_did_change_watched_files
-        # or manually via index_source for tests
+      def extend_hover_targets
+        targets = RubyLsp::Listeners::Hover::ALLOWED_TARGETS
+
+        HOVER_TARGET_NODES.each do |target|
+          targets << target unless targets.include?(target)
+        end
       end
 
       def reindex_file(uri)

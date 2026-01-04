@@ -51,12 +51,14 @@ module TypeGuessr
 
       # Method parameter node
       # @param name [Symbol] Parameter name
+      # @param kind [Symbol] Parameter kind (:required, :optional, :rest, :keyword_required,
+      #                      :keyword_optional, :keyword_rest, :block, :forwarding)
       # @param default_value [Node, nil] Default value node (nil if no default)
       # @param called_methods [Array<Symbol>] Methods called on this parameter (for duck typing)
       # @param loc [Loc] Location information
       #
       # Note: called_methods is a shared array object that can be mutated during parsing
-      ParamNode = Data.define(:name, :default_value, :called_methods, :loc) do
+      ParamNode = Data.define(:name, :kind, :default_value, :called_methods, :loc) do
         def dependencies
           default_value ? [default_value] : []
         end
@@ -77,12 +79,15 @@ module TypeGuessr
       # @param receiver [Node, nil] Receiver node (nil for implicit self)
       # @param args [Array<Node>] Argument nodes
       # @param block_params [Array<BlockParamSlot>] Block parameter slots
+      # @param block_body [Node, nil] Block body return node (for inferring block return type)
+      # @param has_block [Boolean] Whether a block was provided (even if empty)
       # @param loc [Loc] Location information
-      CallNode = Data.define(:method, :receiver, :args, :block_params, :loc) do
+      CallNode = Data.define(:method, :receiver, :args, :block_params, :block_body, :has_block, :loc) do
         def dependencies
           deps = []
           deps << receiver if receiver
           deps.concat(args)
+          deps << block_body if block_body
           deps
         end
       end
@@ -91,13 +96,10 @@ module TypeGuessr
       # Represents a parameter slot in a block (e.g., |user| in users.each { |user| ... })
       # @param index [Integer] Parameter index (0-based)
       # @param call_node [CallNode] The call node this slot belongs to
-      BlockParamSlot = Data.define(:index, :call_node) do
+      # @param loc [Loc] Location information for the parameter itself
+      BlockParamSlot = Data.define(:index, :call_node, :loc) do
         def dependencies
           [call_node]
-        end
-
-        def loc
-          call_node.loc
         end
       end
 
@@ -117,11 +119,31 @@ module TypeGuessr
       # @param params [Array<ParamNode>] Parameter nodes
       # @param return_node [Node] Node representing the return value
       # @param loc [Loc] Location information
-      DefNode = Data.define(:name, :params, :return_node, :loc) do
+      DefNode = Data.define(:name, :params, :return_node, :body_nodes, :loc) do
         def dependencies
           deps = params.dup
           deps << return_node if return_node
+          deps.concat(body_nodes || [])
           deps
+        end
+      end
+
+      # Class/Module node - container for methods and other definitions
+      # @param name [String] Class or module name
+      # @param methods [Array<DefNode>] Method definitions in this class/module
+      # @param loc [Loc] Location information
+      ClassModuleNode = Data.define(:name, :methods, :loc) do
+        def dependencies
+          methods
+        end
+      end
+
+      # Self reference node
+      # @param class_name [String] Name of the enclosing class/module
+      # @param loc [Loc] Location information
+      SelfNode = Data.define(:class_name, :loc) do
+        def dependencies
+          []
         end
       end
     end

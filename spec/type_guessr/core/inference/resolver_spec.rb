@@ -75,6 +75,7 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
         )
         param = TypeGuessr::Core::IR::ParamNode.new(
           name: :name,
+          kind: :optional,
           default_value: default,
           called_methods: [],
           loc: loc
@@ -88,6 +89,7 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
       it "returns Unknown for parameter without default or methods" do
         param = TypeGuessr::Core::IR::ParamNode.new(
           name: :x,
+          kind: :required,
           default_value: nil,
           called_methods: [],
           loc: loc
@@ -101,13 +103,15 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
       it "records called methods for duck typing" do
         param = TypeGuessr::Core::IR::ParamNode.new(
           name: :recipe,
+          kind: :required,
           default_value: nil,
           called_methods: %i[comments title],
           loc: loc
         )
 
         result = resolver.infer(param)
-        expect(result.reason).to include("comments, title")
+        expect(result.type).to be_a(TypeGuessr::Core::Types::DuckType)
+        expect(result.type.methods).to eq(%i[comments title])
       end
     end
 
@@ -146,6 +150,8 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
           receiver: receiver_var,
           args: [],
           block_params: [],
+          block_body: nil,
+          has_block: false,
           loc: loc
         )
 
@@ -174,6 +180,8 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
           receiver: receiver_var,
           args: [],
           block_params: [],
+          block_body: nil,
+          has_block: false,
           loc: loc
         )
 
@@ -203,9 +211,11 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
           receiver: receiver_var,
           args: [],
           block_params: [],
+          block_body: nil,
+          has_block: true,
           loc: loc
         )
-        slot = TypeGuessr::Core::IR::BlockParamSlot.new(index: 0, call_node: call)
+        slot = TypeGuessr::Core::IR::BlockParamSlot.new(index: 0, call_node: call, loc: loc)
 
         result = resolver.infer(slot)
         expect(result.type).to be_a(TypeGuessr::Core::Types::ClassInstance)
@@ -261,6 +271,7 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
           name: :foo,
           params: [],
           return_node: return_node,
+          body_nodes: [return_node],
           loc: loc
         )
 
@@ -270,17 +281,19 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
         expect(result.source).to eq(:project)
       end
 
-      it "returns Unknown for method without body" do
+      it "returns NilClass for method without body" do
         def_node = TypeGuessr::Core::IR::DefNode.new(
           name: :foo,
           params: [],
           return_node: nil,
+          body_nodes: [],
           loc: loc
         )
 
         result = resolver.infer(def_node)
-        expect(result.type).to be(TypeGuessr::Core::Types::Unknown.instance)
-        expect(result.reason).to eq("method without body")
+        expect(result.type).to be_a(TypeGuessr::Core::Types::ClassInstance)
+        expect(result.type.name).to eq("NilClass")
+        expect(result.reason).to include("returns nil (empty body)")
       end
     end
 
