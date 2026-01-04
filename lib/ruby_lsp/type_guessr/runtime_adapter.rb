@@ -18,6 +18,7 @@ module RubyLsp
         @location_index = ::TypeGuessr::Core::Index::LocationIndex.new
         @resolver = ::TypeGuessr::Core::Inference::Resolver.new(::TypeGuessr::Core::RBSProvider.instance)
         @indexing_completed = false
+        @mutex = Mutex.new
 
         # Set up duck type resolver callback
         @resolver.duck_type_resolver = ->(duck_type) { resolve_duck_type_to_class(duck_type) }
@@ -30,22 +31,24 @@ module RubyLsp
         file_path = uri.to_standardized_path
         return unless file_path
 
-        # Clear existing index for this file
-        @location_index.remove_file(file_path)
-        @resolver.clear_cache
+        @mutex.synchronize do
+          # Clear existing index for this file
+          @location_index.remove_file(file_path)
+          @resolver.clear_cache
 
-        # Parse and convert to IR
-        parsed = document.parse_result
-        return unless parsed.value
+          # Parse and convert to IR
+          parsed = document.parse_result
+          return unless parsed.value
 
-        # Convert statements to IR nodes
-        parsed.value.statements&.body&.each do |stmt|
-          node = @converter.convert(stmt)
-          @location_index.add(file_path, node) if node
+          # Convert statements to IR nodes
+          parsed.value.statements&.body&.each do |stmt|
+            node = @converter.convert(stmt)
+            @location_index.add(file_path, node) if node
+          end
+
+          # Finalize the index for efficient lookups
+          @location_index.finalize!
         end
-
-        # Finalize the index for efficient lookups
-        @location_index.finalize!
       rescue StandardError => e
         log_message("Error in index_file #{uri}: #{e.message}\n#{e.backtrace.first(5).join("\n")}")
       end
@@ -60,25 +63,27 @@ module RubyLsp
         file_path ||= uri_string.sub(%r{^file://}, "")
         return unless file_path
 
-        # Clear existing index for this file
-        @location_index.remove_file(file_path)
-        @resolver.clear_cache
+        @mutex.synchronize do
+          # Clear existing index for this file
+          @location_index.remove_file(file_path)
+          @resolver.clear_cache
 
-        # Parse source code
-        parsed = Prism.parse(source)
-        return unless parsed.value
+          # Parse source code
+          parsed = Prism.parse(source)
+          return unless parsed.value
 
-        # Create a shared context for all statements
-        context = ::TypeGuessr::Core::Converter::PrismConverter::Context.new
+          # Create a shared context for all statements
+          context = ::TypeGuessr::Core::Converter::PrismConverter::Context.new
 
-        # Convert statements to IR nodes
-        parsed.value.statements&.body&.each do |stmt|
-          node = @converter.convert(stmt, context)
-          index_node_recursively(file_path, node) if node
+          # Convert statements to IR nodes
+          parsed.value.statements&.body&.each do |stmt|
+            node = @converter.convert(stmt, context)
+            index_node_recursively(file_path, node) if node
+          end
+
+          # Finalize the index for efficient lookups
+          @location_index.finalize!
         end
-
-        # Finalize the index for efficient lookups
-        @location_index.finalize!
       end
 
       # Find IR node at the given position
@@ -90,20 +95,22 @@ module RubyLsp
         file_path = uri&.to_standardized_path
 
         # Convert from 0-indexed to 1-indexed line
-        @location_index.find(file_path, line + 1, column)
+        @mutex.synchronize { @location_index.find(file_path, line + 1, column) }
       end
 
       # Infer type for an IR node
       # @param node [TypeGuessr::Core::IR::Node] IR node
       # @return [TypeGuessr::Core::Inference::Result] Inference result
       def infer_type(node)
-        result = @resolver.infer(node)
+        @mutex.synchronize do
+          result = @resolver.infer(node)
 
-        # Post-process DuckType to resolve to actual classes
-        if result.type.is_a?(::TypeGuessr::Core::Types::DuckType)
-          resolve_duck_type(result)
-        else
-          result
+          # Post-process DuckType to resolve to actual classes
+          if result.type.is_a?(::TypeGuessr::Core::Types::DuckType)
+            resolve_duck_type(result)
+          else
+            result
+          end
         end
       end
 
@@ -227,7 +234,7 @@ module RubyLsp
           end
 
           # Finalize the index ONCE after all files are processed
-          @location_index.finalize!
+          @mutex.synchronize { @location_index.finalize! }
 
           log_message("File indexing completed. Processed #{total} files.")
           @indexing_completed = true
@@ -255,23 +262,23 @@ module RubyLsp
         file_path = uri.full_path.to_s # Ensure string
         return unless file_path && File.exist?(file_path)
 
+        # Parse outside mutex (CPU-bound, no shared state)
         source = File.read(file_path)
         parsed = Prism.parse(source)
         return unless parsed.value
 
-        # Clear existing index for this file
-        @location_index.remove_file(file_path)
-        @resolver.clear_cache
-
-        # Create a shared context for all statements
+        # Create context and convert nodes outside mutex
         context = ::TypeGuessr::Core::Converter::PrismConverter::Context.new
-
-        # Convert statements to IR nodes
-        parsed.value.statements&.body&.each do |stmt|
-          node = @converter.convert(stmt, context)
-          index_node_recursively(file_path, node) if node
+        nodes = parsed.value.statements&.body&.filter_map do |stmt|
+          @converter.convert(stmt, context)
         end
-        # Note: finalize! is called once after ALL files are indexed in start_indexing
+
+        # Only hold mutex while modifying shared state
+        @mutex.synchronize do
+          @location_index.remove_file(file_path)
+          nodes&.each { |node| index_node_recursively(file_path, node) }
+        end
+        # NOTE: finalize! is called once after ALL files are indexed in start_indexing
       rescue StandardError => e
         bt = e.backtrace&.first(5)&.join("\n") || "(no backtrace)"
         log_message("Error indexing #{uri}: #{e.class}: #{e.message}\n#{bt}")
