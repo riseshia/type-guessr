@@ -120,6 +120,8 @@ module RubyLsp
         end
 
         @response_builder.push(content, category: :documentation)
+      rescue StandardError => e
+        warn "[TypeGuessr] Error in add_hover_content: #{e.message}\n#{e.backtrace.first(5).join("\n")}"
       end
 
       def add_def_node_hover(def_node)

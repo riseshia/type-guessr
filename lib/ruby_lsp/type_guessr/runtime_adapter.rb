@@ -46,6 +46,8 @@ module RubyLsp
 
         # Finalize the index for efficient lookups
         @location_index.finalize!
+      rescue StandardError => e
+        log_message("Error in index_file #{uri}: #{e.message}\n#{e.backtrace.first(5).join("\n")}")
       end
 
       # Index source code directly (for testing)
@@ -205,7 +207,7 @@ module RubyLsp
           log_message("File indexing completed. Processed #{indexable_uris.size} files.")
           @indexing_completed = true
         rescue StandardError => e
-          log_message("Error during file indexing: #{e.message}")
+          log_message("Error during file indexing: #{e.message}\n#{e.backtrace.first(10).join("\n")}")
           @indexing_completed = true
         end
       end
@@ -225,7 +227,7 @@ module RubyLsp
 
       # Traverse and index a single file
       def traverse_file(uri)
-        file_path = uri.full_path
+        file_path = uri.full_path.to_s # Ensure string
         return unless file_path && File.exist?(file_path)
 
         source = File.read(file_path)
@@ -247,7 +249,8 @@ module RubyLsp
 
         @location_index.finalize!
       rescue StandardError => e
-        log_message("Error indexing #{uri}: #{e.message}")
+        bt = e.backtrace&.first(5)&.join("\n") || "(no backtrace)"
+        log_message("Error indexing #{uri}: #{e.class}: #{e.message}\n#{bt}")
       end
 
       # Recursively index a node and all its children
@@ -302,6 +305,9 @@ module RubyLsp
       end
 
       def log_message(message)
+        # Also log to stderr for debugging
+        warn "[TypeGuessr] #{message}" if ENV["TYPE_GUESSR_DEBUG"]
+
         return unless @message_queue
         return if @message_queue.closed?
 

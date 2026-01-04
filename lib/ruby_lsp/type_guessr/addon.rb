@@ -112,12 +112,16 @@ module RubyLsp
       end
 
       def reindex_file(uri)
-        document = @global_state.index[uri]
+        # Index expects string key, not URI object
+        key = uri.to_s
+        document = @global_state.index[key]
         return unless document
 
         @runtime_adapter.index_file(uri, document)
       rescue StandardError => e
         warn("[TypeGuessr] Error indexing #{uri}: #{e.message}")
+        bt = e.backtrace&.first(5)&.join("\n") || "(no backtrace)"
+        warn(bt)
       end
 
       def debug_enabled?
