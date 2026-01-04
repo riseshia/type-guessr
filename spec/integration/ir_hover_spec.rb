@@ -90,6 +90,28 @@ RSpec.describe "IR-based Hover", :doc do
         expect_hover_type(line: 2, column: 0, expected: "String")
       end
     end
+
+    context "Reassignment from Integer to Hash" do
+      let(:source) do
+        <<~RUBY
+          b = 1
+          b = { a: 1 }
+          b
+        RUBY
+      end
+
+      it "shows Integer at first assignment" do
+        expect_hover_type(line: 1, column: 0, expected: "Integer")
+      end
+
+      it "shows Hash at second assignment" do
+        expect_hover_type(line: 2, column: 0, expected: "{ a: Integer }")
+      end
+
+      it "shows Hash at read" do
+        expect_hover_type(line: 3, column: 0, expected: "{ a: Integer }")
+      end
+    end
   end
 
   describe "Hash Indexed Assignment" do
