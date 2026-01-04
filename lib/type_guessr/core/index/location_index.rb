@@ -64,13 +64,47 @@ module TypeGuessr
 
             next if matching_entries.empty?
 
-            # Return the entry with the smallest range (most specific)
-            result = matching_entries.min_by { |e| e.col_range.size }&.node
+            # For indexed assignments like a[:b] = 3, prefer the updated variable
+            # over the receiver (both are VariableNodes with same name)
+            result = select_best_match(matching_entries)
             return result if result
           end
 
           nil
         end
+
+        private
+
+        # Select the best matching node from a list of entries
+        # Prefers: assignments over reads for same-named variables
+        def select_best_match(entries)
+          nodes = entries.map(&:node)
+
+          # Group variable nodes by name
+          var_nodes = nodes.select { |n| n.is_a?(::TypeGuessr::Core::IR::VariableNode) }
+
+          if var_nodes.size > 1
+            # Check if any is an assignment (has non-variable dependency)
+            assignment_node = var_nodes.find { |n| assignment_node?(n) }
+            return assignment_node if assignment_node
+          end
+
+          # Default: return smallest range
+          entries.min_by { |e| e.col_range.size }&.node
+        end
+
+        # Check if a VariableNode represents an assignment (vs a read)
+        def assignment_node?(node)
+          return false unless node.is_a?(::TypeGuessr::Core::IR::VariableNode)
+
+          dep = node.dependency
+          # Assignment: dependency is a LiteralNode, CallNode, etc.
+          # Read: dependency is another VariableNode or ParamNode
+          !dep.is_a?(::TypeGuessr::Core::IR::VariableNode) &&
+            !dep.is_a?(::TypeGuessr::Core::IR::ParamNode)
+        end
+
+        public
 
         # Get all indexed nodes for a file
         # @param file_path [String] Absolute file path

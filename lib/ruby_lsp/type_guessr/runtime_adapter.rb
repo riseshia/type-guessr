@@ -112,7 +112,17 @@ module RubyLsp
         duck_type = result.type
         methods = duck_type.methods
 
-        # Find classes that define all the methods
+        # First try project methods (registered during indexing)
+        project_resolved = @resolver.send(:resolve_duck_type_from_project_methods, duck_type)
+        if project_resolved
+          return ::TypeGuessr::Core::Inference::Result.new(
+            project_resolved,
+            "inferred from method calls: #{methods.join(", ")} (project)",
+            :project
+          )
+        end
+
+        # Then try RubyIndexer for stdlib/gem classes
         matching_classes = find_classes_defining_methods(methods)
 
         case matching_classes.size
@@ -197,14 +207,27 @@ module RubyLsp
 
           # Get all indexable URIs from RubyIndexer configuration
           indexable_uris = index.configuration.indexable_uris
-          log_message("Found #{indexable_uris.size} indexed files to process.")
+          total = indexable_uris.size
+          log_message("Found #{total} files to process.")
 
-          # Index each file
+          # Index each file with progress reporting
+          processed = 0
+          last_report = 0
+          report_interval = [total / 10, 50].max # Report every 10% or 50 files
+
           indexable_uris.each do |uri|
             traverse_file(uri)
+            processed += 1
+
+            # Report progress periodically
+            next unless processed - last_report >= report_interval
+
+            percent = (processed * 100.0 / total).round(1)
+            log_message("Indexing progress: #{processed}/#{total} (#{percent}%)")
+            last_report = processed
           end
 
-          log_message("File indexing completed. Processed #{indexable_uris.size} files.")
+          log_message("File indexing completed. Processed #{total} files.")
           @indexing_completed = true
         rescue StandardError => e
           log_message("Error during file indexing: #{e.message}\n#{e.backtrace.first(10).join("\n")}")
