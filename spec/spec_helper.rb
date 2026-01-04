@@ -5,9 +5,6 @@ require "type-guessr"
 require "ruby_lsp/test_helper"
 require "uri"
 
-# Ensure TypeInferrer is loaded for tests
-require "ruby_lsp/type_guessr/type_inferrer"
-
 # Load doc collector for generating documentation from tests
 require_relative "support/doc_collector"
 

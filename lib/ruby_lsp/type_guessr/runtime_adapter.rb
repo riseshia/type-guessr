@@ -1,181 +1,97 @@
 # frozen_string_literal: true
 
 require "prism"
-
-require_relative "../../type_guessr/version" if !defined?(TypeGuessr::VERSION)
-require_relative "../../type_guessr/core/chain_extractor"
-require_relative "../../type_guessr/core/chain_index"
-require_relative "../../type_guessr/core/constant_index"
-require_relative "type_inferrer"
+require_relative "../../type_guessr/core/converter/prism_converter"
+require_relative "../../type_guessr/core/index/location_index"
+require_relative "../../type_guessr/core/inference/resolver"
+require_relative "../../type_guessr/core/rbs_provider"
 
 module RubyLsp
   module TypeGuessr
-    # Provides runtime functionality for TypeGuessr LSP addon.
-    # Handles AST traversal, indexing, and type inferrer management.
-    # @api private
+    # RuntimeAdapter manages the IR graph and inference for TypeGuessr
+    # Converts files to IR graphs and provides type inference
     class RuntimeAdapter
-      # Core layer shortcuts
-      ChainExtractor = ::TypeGuessr::Core::ChainExtractor
-      ChainIndex = ::TypeGuessr::Core::ChainIndex
-      private_constant :ChainExtractor, :ChainIndex
-
-      # Number of worker threads for parallel AST analysis
-      WORKER_COUNT = 4
-
-      def initialize(global_state, message_queue)
+      def initialize(global_state)
         @global_state = global_state
-        @message_queue = message_queue
-        @original_type_inferrer = nil
-        @indexing_completed = false
+        @converter = ::TypeGuessr::Core::Converter::PrismConverter.new
+        @location_index = ::TypeGuessr::Core::Index::LocationIndex.new
+        @resolver = ::TypeGuessr::Core::Inference::Resolver.new(::TypeGuessr::Core::RBSProvider.instance)
       end
 
-      # Check if initial AST indexing has completed
-      def indexing_completed?
-        @indexing_completed
-      end
+      # Index a file by converting its Prism AST to IR graph
+      # @param uri [URI::Generic] File URI
+      # @param document [RubyLsp::Document] Document to index
+      def index_file(uri, document)
+        file_path = uri.to_standardized_path
+        return unless file_path
 
-      def swap_type_inferrer
-        @original_type_inferrer = @global_state.type_inferrer
-        custom_inferrer = ::RubyLsp::TypeGuessr::TypeInferrer.new(@global_state.index, @global_state)
-        @global_state.instance_variable_set(:@type_inferrer, custom_inferrer)
-        log_message("Swapped TypeInferrer with RubyLsp::TypeGuessr::TypeInferrer")
-      end
+        # Clear existing index for this file
+        @location_index.remove_file(file_path)
+        @resolver.clear_cache
 
-      def restore_type_inferrer
-        return if !@global_state || !@original_type_inferrer
+        # Parse and convert to IR
+        parsed = document.parse_result
+        return unless parsed.value
 
-        @global_state.instance_variable_set(:@type_inferrer, @original_type_inferrer)
-        log_message("Restored original TypeInferrer")
-      end
-
-      def start_ast_traversal
-        Thread.new do
-          index = @global_state.index
-
-          # Wait for Ruby LSP's initial indexing to complete
-          log_message("Waiting for Ruby LSP initial indexing to complete...")
-          sleep(0.1) until index.initial_indexing_completed
-          log_message("Ruby LSP indexing completed. Starting TypeGuessr AST traversal.")
-
-          # Get indexable URIs from RubyIndexer configuration
-          indexable_uris = index.configuration.indexable_uris
-          log_message("Found #{indexable_uris.size} indexed files to traverse.")
-          log_message("Using #{WORKER_COUNT} worker threads.")
-
-          # Thread-safe progress tracking
-          progress_mutex = Mutex.new
-          processed_count = 0
-          progress_step = (indexable_uris.size / 10.0).ceil
-
-          # Create a thread pool with work queue
-          queue = Thread::Queue.new
-          indexable_uris.each { |uri| queue << uri }
-          WORKER_COUNT.times { queue << :stop } # Sentinel values to stop workers
-
-          # Start worker threads
-          workers = WORKER_COUNT.times.map do
-            Thread.new do
-              loop do
-                uri = queue.pop
-                break if uri == :stop
-
-                begin
-                  traverse_file_ast(uri)
-
-                  # Update progress in thread-safe manner
-                  progress_mutex.synchronize do
-                    processed_count += 1
-
-                    # Log progress every 10%
-                    if progress_step.positive? && (processed_count % progress_step).zero?
-                      progress = (processed_count / progress_step.to_f * 10).to_i
-                      log_message("Progress: #{progress}% (#{processed_count}/#{indexable_uris.size} files)")
-                    end
-                  end
-                rescue StandardError => e
-                  log_message("Error processing #{uri}: #{e.message}")
-                end
-              end
-            end
-          end
-
-          # Wait for all workers to complete
-          workers.each(&:join)
-
-          log_message("AST traversal completed. Processed #{processed_count} files.")
-          @indexing_completed = true
-        rescue StandardError => e
-          log_message("Error during AST traversal: #{e.message}")
-          log_message(e.backtrace.join("\n"))
-          @indexing_completed = true # Mark as completed even on error
+        # Convert statements to IR nodes
+        parsed.value.statements&.body&.each do |stmt|
+          node = @converter.convert(stmt)
+          @location_index.add(file_path, node) if node
         end
+
+        # Finalize the index for efficient lookups
+        @location_index.finalize!
       end
 
-      def reindex_file(file_path)
-        return if !File.exist?(file_path)
+      # Index source code directly (for testing)
+      # @param uri_string [String] File URI as string
+      # @param source [String] Source code to index
+      def index_source(uri_string, source)
+        file_path = URI(uri_string).to_standardized_path || uri_string
+        return unless file_path
 
-        # First, clear existing index entries for this file
-        clear_file_index(file_path)
+        # Clear existing index for this file
+        @location_index.remove_file(file_path)
+        @resolver.clear_cache
 
-        # Then, re-traverse the file's AST
-        source = File.read(file_path)
-        result = Prism.parse(source)
+        # Parse source code
+        parsed = Prism.parse(source)
+        return unless parsed.value
 
-        visitor = ChainExtractor.new(file_path)
-        result.value.accept(visitor)
+        # Convert statements to IR nodes
+        parsed.value.statements&.body&.each do |stmt|
+          node = @converter.convert(stmt)
+          @location_index.add(file_path, node) if node
+        end
 
-        log_message("Re-indexed file: #{file_path}")
-      rescue StandardError => e
-        log_message("Error re-indexing #{file_path}: #{e.message}")
+        # Finalize the index for efficient lookups
+        @location_index.finalize!
       end
 
-      # Index source code directly (useful for testing with in-memory sources)
-      def index_source(file_path, source)
-        # First, clear existing index entries for this file
-        clear_file_index(file_path)
+      # Find IR node at the given position
+      # @param uri [URI::Generic] File URI
+      # @param line [Integer] Line number (0-indexed)
+      # @param column [Integer] Column number (0-indexed)
+      # @return [TypeGuessr::Core::IR::Node, nil] IR node at position
+      def find_node_at(uri, line, column)
+        file_path = uri.to_standardized_path
+        return nil unless file_path
 
-        # Then, traverse the source's AST
-        result = Prism.parse(source)
-        visitor = ChainExtractor.new(file_path)
-        result.value.accept(visitor)
-
-        log_message("Indexed source for: #{file_path}")
-      rescue StandardError => e
-        log_message("Error indexing source for #{file_path}: #{e.message}")
+        # Convert from 0-indexed to 1-indexed line
+        @location_index.find(file_path, line + 1, column)
       end
 
-      def clear_file_index(file_path)
-        ChainIndex.instance.clear_file(file_path)
-        ::TypeGuessr::Core::ConstantIndex.instance.clear_file(file_path)
-        log_message("Cleared index for file: #{file_path}")
-      rescue StandardError => e
-        log_message("Error clearing index for #{file_path}: #{e.message}")
+      # Infer type for an IR node
+      # @param node [TypeGuessr::Core::IR::Node] IR node
+      # @return [TypeGuessr::Core::Inference::Result] Inference result
+      def infer_type(node)
+        @resolver.infer(node)
       end
 
-      private
-
-      def traverse_file_ast(uri)
-        file_path = uri.full_path
-        return if !file_path || !File.exist?(file_path)
-
-        source = File.read(file_path)
-        result = Prism.parse(source)
-
-        # Use a visitor to traverse the AST
-        visitor = ChainExtractor.new(file_path)
-        result.value.accept(visitor)
-      rescue StandardError => e
-        log_message("Error parsing #{uri}: #{e.message}")
-      end
-
-      def log_message(message)
-        return if !@message_queue
-        return if @message_queue.closed?
-
-        @message_queue << RubyLsp::Notification.window_log_message(
-          "[TypeGuessr] #{message}",
-          type: RubyLsp::Constant::MessageType::LOG
-        )
+      # Get statistics about the index
+      # @return [Hash] Statistics
+      def stats
+        @location_index.stats
       end
     end
   end

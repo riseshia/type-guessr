@@ -1,150 +1,103 @@
 # frozen_string_literal: true
 
 require "ruby_lsp/addon"
-require "prism"
-require_relative "hover"
 require_relative "config"
 require_relative "runtime_adapter"
+require_relative "hover"
 require_relative "debug_server"
-require_relative "../../type_guessr/version" if !defined?(TypeGuessr::VERSION)
 require_relative "../../type_guessr/core/rbs_provider"
 
 module RubyLsp
   module TypeGuessr
-    # Ruby LSP addon for TypeGuessr
-    # Provides hover tooltip functionality for Ruby code
+    # TypeGuessr addon for Ruby LSP
+    # Provides heuristic type inference without requiring type annotations
     class Addon < ::RubyLsp::Addon
-      # Node types to add to Ruby LSP's ALLOWED_TARGETS for hover support
-      HOVER_TARGET_NODES = [
-        Prism::LocalVariableReadNode,
-        Prism::LocalVariableWriteNode,
-        Prism::LocalVariableTargetNode,
-        Prism::InstanceVariableReadNode,
-        Prism::InstanceVariableWriteNode,
-        Prism::InstanceVariableTargetNode,
-        Prism::ClassVariableReadNode,
-        Prism::ClassVariableWriteNode,
-        Prism::ClassVariableTargetNode,
-        Prism::GlobalVariableReadNode,
-        Prism::GlobalVariableWriteNode,
-        Prism::GlobalVariableTargetNode,
-        Prism::RequiredParameterNode,
-        Prism::OptionalParameterNode,
-        Prism::RestParameterNode,
-        Prism::RequiredKeywordParameterNode,
-        Prism::OptionalKeywordParameterNode,
-        Prism::KeywordRestParameterNode,
-        Prism::BlockParameterNode,
-        Prism::ForwardingParameterNode,
-        Prism::SelfNode,
-        Prism::CallNode,
-        Prism::DefNode,
-      ].freeze
-
       attr_reader :runtime_adapter
-
-      def initialize
-        super
-        @runtime_adapter = nil
-        @debug_server = nil
-        @enabled = true
-      end
 
       def name
         "TypeGuessr"
       end
 
-      def version
-        ::TypeGuessr::VERSION
-      end
-
       def activate(global_state, message_queue)
         @global_state = global_state
         @message_queue = message_queue
-        @runtime_adapter = RuntimeAdapter.new(global_state, message_queue)
+        @config = Config.new
+        @runtime_adapter = RuntimeAdapter.new(global_state)
+        @debug_server = nil
 
-        @enabled = Config.enabled?
-
-        log_message(message_queue, "Activating TypeGuessr LSP addon #{::TypeGuessr::VERSION}.")
-
-        if !@enabled
-          log_message(message_queue, "TypeGuessr is disabled via .type-guessr.yml (enabled: false).")
-          return
-        end
-
-        @runtime_adapter.swap_type_inferrer
-        extend_hover_targets
-
-        # Preload RBS environment before worker threads start
+        # Preload RBS environment
         ::TypeGuessr::Core::RBSProvider.instance.preload
 
-        @runtime_adapter.start_ast_traversal
-        start_debug_server_if_enabled
+        # Start debug server if enabled
+        start_debug_server if debug_enabled?
+
+        # Index all files on activation
+        index_all_files
+
+        message_queue.push(
+          method: "window/showMessage",
+          params: {
+            type: RubyLsp::Constant::MessageType::INFO,
+            message: "TypeGuessr activated (IR-based inference)"
+          }
+        )
       end
 
       def deactivate
         @debug_server&.stop
-        @debug_server = nil
-        @runtime_adapter&.restore_type_inferrer
-        @runtime_adapter = nil
       end
 
-      # Handle file change notifications from LSP client
-      # Re-index files when they are created, updated, or deleted
+      def create_hover_listener(response_builder, node_context, dispatcher)
+        return unless @config.enabled?
+
+        Hover.new(@runtime_adapter, response_builder, node_context, dispatcher)
+      end
+
+      # Handle file changes
       def workspace_did_change_watched_files(changes)
+        return unless @config.enabled?
+
         changes.each do |change|
           uri = URI(change[:uri])
-          file_path = uri.to_standardized_path
-          next if file_path.nil? || File.directory?(file_path)
-          next if !file_path.end_with?(".rb")
+          next unless uri.path&.end_with?(".rb")
 
           case change[:type]
-          when Constant::FileChangeType::CREATED, Constant::FileChangeType::CHANGED
-            @runtime_adapter&.reindex_file(file_path)
-          when Constant::FileChangeType::DELETED
-            @runtime_adapter&.clear_file_index(file_path)
+          when RubyLsp::Constant::FileChangeType::CREATED,
+               RubyLsp::Constant::FileChangeType::CHANGED
+            reindex_file(uri)
+          when RubyLsp::Constant::FileChangeType::DELETED
+            file_path = uri.to_standardized_path
+            @runtime_adapter.instance_variable_get(:@location_index).remove_file(file_path) if file_path
           end
         end
       end
 
-      def create_hover_listener(response_builder, node_context, dispatcher)
-        return NoopHover.new if !@enabled
-
-        Hover.new(response_builder, node_context, dispatcher, @global_state)
-      end
-
       private
 
-      # Extend Ruby LSP's ALLOWED_TARGETS to support local variables, parameters, and self for hover
-      def extend_hover_targets
-        targets = RubyLsp::Listeners::Hover::ALLOWED_TARGETS
-
-        HOVER_TARGET_NODES.each do |target|
-          targets << target if !targets.include?(target)
+      def index_all_files
+        @global_state.index.indexed_uris.each do |uri|
+          reindex_file(uri)
         end
       end
 
-      def log_message(message_queue, message)
-        return if !message_queue
-        return if message_queue.closed?
+      def reindex_file(uri)
+        document = @global_state.index[uri]
+        return unless document
 
-        message_queue << RubyLsp::Notification.window_log_message(
-          "[TypeGuessr] #{message}",
-          type: RubyLsp::Constant::MessageType::LOG
-        )
+        @runtime_adapter.index_file(uri, document)
+      rescue StandardError => e
+        warn("[TypeGuessr] Error indexing #{uri}: #{e.message}")
       end
 
-      def start_debug_server_if_enabled
-        return if !@enabled
-        return if !Config.debug_server_enabled?
+      def debug_enabled?
+        %w[1 true].include?(ENV.fetch("TYPE_GUESSR_DEBUG", nil))
+      end
 
+      def start_debug_server
         @debug_server = DebugServer.new(@global_state)
         @debug_server.start
-        log_message(@message_queue, "Debug server started on http://127.0.0.1:#{DebugServer::DEFAULT_PORT}")
-      end
-
-      def debug_mode?
-        Config.debug?
+      rescue StandardError => e
+        warn("[TypeGuessr] Failed to start debug server: #{e.message}")
       end
     end
   end

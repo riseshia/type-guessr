@@ -5,28 +5,31 @@ module TypeGuessr
   class Error < StandardError; end
 end
 
-# Load core components
+# Load version
 require_relative "type_guessr/version"
-require_relative "type_guessr/core/scope_resolver"
-require_relative "type_guessr/core/chain_index"
-require_relative "type_guessr/core/chain_extractor"
+
+# Load core components (IR-based architecture)
+require_relative "type_guessr/core/types"
+require_relative "type_guessr/core/type_formatter"
+require_relative "type_guessr/core/ir/nodes"
+require_relative "type_guessr/core/index/location_index"
+require_relative "type_guessr/core/converter/prism_converter"
+require_relative "type_guessr/core/converter/rbs_converter"
+require_relative "type_guessr/core/inference/result"
+require_relative "type_guessr/core/inference/resolver"
+require_relative "type_guessr/core/rbs_provider"
+require_relative "type_guessr/core/logger"
 
 # Load Ruby LSP integration
-require_relative "ruby_lsp/type_guessr/index_adapter"
-require_relative "ruby_lsp/type_guessr/type_matcher"
-require_relative "ruby_lsp/type_guessr/chain_resolver"
+require_relative "ruby_lsp/type_guessr/config"
+require_relative "ruby_lsp/type_guessr/runtime_adapter"
 require_relative "ruby_lsp/type_guessr/hover"
+require_relative "ruby_lsp/type_guessr/debug_server"
 require_relative "ruby_lsp/type_guessr/addon"
 
-# Backward compatibility: Create aliases in old namespace
+# Backward compatibility: Create version alias in old namespace
 module RubyLsp
   module TypeGuessr
-    # Version
     VERSION = ::TypeGuessr::VERSION
-
-    # Core components
-    ScopeResolver = ::TypeGuessr::Core::ScopeResolver
-    ChainIndex = ::TypeGuessr::Core::ChainIndex
-    ChainExtractor = ::TypeGuessr::Core::ChainExtractor
   end
 end
