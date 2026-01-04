@@ -21,7 +21,6 @@ module RubyLsp
       def activate(global_state, message_queue)
         @global_state = global_state
         @message_queue = message_queue
-        @config = Config.new
         @runtime_adapter = RuntimeAdapter.new(global_state)
         @debug_server = nil
 
@@ -48,14 +47,14 @@ module RubyLsp
       end
 
       def create_hover_listener(response_builder, node_context, dispatcher)
-        return unless @config.enabled?
+        return unless Config.enabled?
 
         Hover.new(@runtime_adapter, response_builder, node_context, dispatcher)
       end
 
       # Handle file changes
       def workspace_did_change_watched_files(changes)
-        return unless @config.enabled?
+        return unless Config.enabled?
 
         changes.each do |change|
           uri = URI(change[:uri])
@@ -75,9 +74,9 @@ module RubyLsp
       private
 
       def index_all_files
-        @global_state.index.indexed_uris.each do |uri|
-          reindex_file(uri)
-        end
+        # Skip auto-indexing for now
+        # Files will be indexed on-demand via workspace_did_change_watched_files
+        # or manually via index_source for tests
       end
 
       def reindex_file(uri)
