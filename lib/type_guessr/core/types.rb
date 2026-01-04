@@ -171,6 +171,28 @@ module TypeGuessr
           HashShape.new(new_fields, max_fields: max_fields)
         end
       end
+
+      # TypeVariable - represents a type variable from RBS (e.g., Elem, K, V, U)
+      class TypeVariable < Type
+        attr_reader :name
+
+        def initialize(name)
+          super()
+          @name = name
+        end
+
+        def eql?(other)
+          super && @name == other.name
+        end
+
+        def hash
+          [self.class, @name].hash
+        end
+
+        def to_s
+          @name.to_s
+        end
+      end
     end
   end
 end

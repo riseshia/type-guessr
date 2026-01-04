@@ -4,11 +4,13 @@ require "singleton"
 require "rbs"
 require_relative "types"
 require_relative "logger"
+require_relative "converter/rbs_converter"
 
 module TypeGuessr
   module Core
     # RBSProvider loads and queries RBS signature information
     # Provides lazy loading of RBS environment for method signatures
+    # Uses RBSConverter to convert RBS types to internal type system
     class RBSProvider
       include Singleton
 
@@ -24,6 +26,7 @@ module TypeGuessr
       def initialize
         @env = nil
         @loader = nil
+        @converter = Converter::RBSConverter.new
       end
 
       # Preload RBS environment (for eager loading during addon activation)
@@ -75,7 +78,7 @@ module TypeGuessr
         first_sig = signatures.first
         return_type = first_sig.method_type.type.return_type
 
-        rbs_type_to_types(return_type)
+        @converter.convert(return_type)
       end
 
       # Get block parameter types for a method
@@ -107,7 +110,7 @@ module TypeGuessr
       # Get the return type of a method call with type variable substitution
       # @param class_name [String] the receiver class name
       # @param method_name [String] the method name
-      # @param substitutions [Hash] type variable substitutions (e.g., { U: Integer, Elem: String })
+      # @param substitutions [Hash{Symbol => Types::Type}] type variable substitutions (e.g., { U: Integer, Elem: String })
       # @return [Types::Type] the return type with substitutions applied (Unknown if not found)
       def get_method_return_type_with_substitution(class_name, method_name, substitutions = {})
         signatures = get_method_signatures(class_name, method_name)
@@ -118,7 +121,7 @@ module TypeGuessr
         first_sig = signatures.first
         return_type = first_sig.method_type.type.return_type
 
-        rbs_type_to_types_with_substitution(return_type, substitutions)
+        @converter.convert(return_type, substitutions)
       end
 
       # Get the return type of a method call considering argument types for overload resolution
@@ -134,7 +137,7 @@ module TypeGuessr
         best_match = find_best_overload(signatures, arg_types)
         return_type = best_match.method_type.type.return_type
 
-        rbs_type_to_types(return_type)
+        @converter.convert(return_type)
       end
 
       private
@@ -154,99 +157,15 @@ module TypeGuessr
 
       # Extract block parameter types from a method type
       # @param method_type [RBS::MethodType] the method type
-      # @param substitutions [Hash] type variable substitutions (e.g., { Elem: Integer })
+      # @param substitutions [Hash{Symbol => Types::Type}] type variable substitutions (e.g., { Elem: Integer })
       # @return [Array<Types::Type>] array of parameter types
       def extract_block_param_types(method_type, substitutions: {})
         return [] unless method_type.block
 
         block_func = method_type.block.type
         block_func.required_positionals.map do |param|
-          rbs_type_to_types_with_substitution(param.type, substitutions)
+          @converter.convert(param.type, substitutions)
         end
-      end
-
-      # Convert RBS type to our Types system with substitution support
-      # @param rbs_type [RBS::Types::t] the RBS type
-      # @param substitutions [Hash] type variable substitutions
-      # @return [Types::Type] our type representation
-      def rbs_type_to_types_with_substitution(rbs_type, substitutions)
-        case rbs_type
-        when RBS::Types::Variable
-          # Check if we have a substitution for this type variable
-          substitutions[rbs_type.name] || Types::Unknown.instance
-        when RBS::Types::Tuple
-          # Handle tuple types like [K, V] for Hash#each
-          element_types = rbs_type.types.map { |t| rbs_type_to_types_with_substitution(t, substitutions) }
-          Types::ArrayType.new(Types::Union.new(element_types))
-        when RBS::Types::ClassInstance
-          # Handle ClassInstance with substitution for type arguments
-          convert_class_instance_with_substitution(rbs_type, substitutions)
-        when RBS::Types::Union
-          # Handle Union types by recursively substituting each type
-          types = rbs_type.types.map { |t| rbs_type_to_types_with_substitution(t, substitutions) }
-          Types::Union.new(types)
-        else
-          rbs_type_to_types(rbs_type)
-        end
-      end
-
-      # Convert RBS type to our Types system
-      # @param rbs_type [RBS::Types::t] the RBS type
-      # @return [Types::Type] our type representation
-      def rbs_type_to_types(rbs_type)
-        case rbs_type
-        when RBS::Types::ClassInstance
-          convert_class_instance(rbs_type)
-        when RBS::Types::Union
-          types = rbs_type.types.map { |t| rbs_type_to_types(t) }
-          Types::Union.new(types)
-        when RBS::Types::Variable
-          # Type variable (e.g., Elem, T) - can't resolve without context
-          Types::Unknown.instance
-        when RBS::Types::Bases::Self, RBS::Types::Bases::Instance
-          # Return Unknown for now - would need context to resolve
-          Types::Unknown.instance
-        else
-          Types::Unknown.instance
-        end
-      end
-
-      # Convert RBS ClassInstance to our type system with substitution support
-      # Handles generic types like Array[U], Array[Elem] with substitutions
-      # @param rbs_type [RBS::Types::ClassInstance] the RBS type
-      # @param substitutions [Hash] type variable substitutions
-      # @return [Types::Type] our type representation
-      def convert_class_instance_with_substitution(rbs_type, substitutions)
-        class_name = rbs_type.name.to_s.delete_prefix("::")
-
-        # Handle Array with type parameter
-        if class_name == "Array" && rbs_type.args.size == 1
-          # Recursively apply substitution to element type
-          element_type = rbs_type_to_types_with_substitution(rbs_type.args.first, substitutions)
-          return Types::ArrayType.new(element_type)
-        end
-
-        # For other generic types, just return ClassInstance (ignore args for now)
-        # TODO: Add HashType support in the future
-        Types::ClassInstance.new(class_name)
-      end
-
-      # Convert RBS ClassInstance to our type system
-      # Handles generic types like Array[String], Hash[Symbol, Integer]
-      # @param rbs_type [RBS::Types::ClassInstance] the RBS type
-      # @return [Types::Type] our type representation
-      def convert_class_instance(rbs_type)
-        class_name = rbs_type.name.to_s.delete_prefix("::")
-
-        # Handle Array with type parameter
-        if class_name == "Array" && rbs_type.args.size == 1
-          element_type = rbs_type_to_types(rbs_type.args.first)
-          return Types::ArrayType.new(element_type)
-        end
-
-        # For other generic types, just return ClassInstance (ignore args for now)
-        # TODO: Add HashType support in the future
-        Types::ClassInstance.new(class_name)
       end
 
       def ensure_environment_loaded

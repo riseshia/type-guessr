@@ -96,14 +96,15 @@ RSpec.describe TypeGuessr::Core::RBSProvider do
         expect(type.element_type.name).to eq("String")
       end
 
-      it "returns Array[untyped] for Array#compact (type variable Elem)" do
+      it "returns Array[Elem] for Array#compact (type variable Elem)" do
         # Array#compact returns Array[Elem], but Elem is a type variable
-        # Without substitution, we can't resolve it, so return Array[untyped]
+        # Without substitution, we preserve it as TypeVariable
         type = provider.get_method_return_type("Array", "compact")
 
         expect(type).to be_a(TypeGuessr::Core::Types::ArrayType)
-        # Type variable can't be resolved without context, so element is Unknown
-        expect(type.element_type).to eq(TypeGuessr::Core::Types::Unknown.instance)
+        # Type variable is preserved as TypeVariable when no substitution
+        expect(type.element_type).to be_a(TypeGuessr::Core::Types::TypeVariable)
+        expect(type.element_type.name).to eq(:Elem)
       end
 
       it "handles nested generic types" do
@@ -124,8 +125,9 @@ RSpec.describe TypeGuessr::Core::RBSProvider do
 
       expect(types).to be_an(Array)
       expect(types.size).to eq(1)
-      # Without substitution, Elem is Unknown
-      expect(types.first).to eq(TypeGuessr::Core::Types::Unknown.instance)
+      # Without substitution, Elem is preserved as TypeVariable
+      expect(types.first).to be_a(TypeGuessr::Core::Types::TypeVariable)
+      expect(types.first.name).to eq(:Elem)
     end
 
     it "returns block parameter types for Array#map" do
@@ -134,7 +136,9 @@ RSpec.describe TypeGuessr::Core::RBSProvider do
 
       expect(types).to be_an(Array)
       expect(types.size).to eq(1)
-      expect(types.first).to eq(TypeGuessr::Core::Types::Unknown.instance)
+      # Without substitution, Elem is preserved as TypeVariable
+      expect(types.first).to be_a(TypeGuessr::Core::Types::TypeVariable)
+      expect(types.first.name).to eq(:Elem)
     end
 
     it "returns empty array for method without block" do

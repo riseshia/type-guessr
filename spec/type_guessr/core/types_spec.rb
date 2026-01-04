@@ -160,6 +160,30 @@ RSpec.describe TypeGuessr::Core::Types do
     end
   end
 
+  describe "TypeVariable" do
+    it "stores the type variable name" do
+      type_var = described_class::TypeVariable.new(:Elem)
+      expect(type_var.name).to eq(:Elem)
+    end
+
+    it "has a string representation" do
+      type_var = described_class::TypeVariable.new(:U)
+      expect(type_var.to_s).to eq("U")
+    end
+
+    it "equals another TypeVariable with the same name" do
+      type_var1 = described_class::TypeVariable.new(:K)
+      type_var2 = described_class::TypeVariable.new(:K)
+      expect(type_var1).to eq(type_var2)
+    end
+
+    it "does not equal TypeVariable with different name" do
+      type_var1 = described_class::TypeVariable.new(:K)
+      type_var2 = described_class::TypeVariable.new(:V)
+      expect(type_var1).not_to eq(type_var2)
+    end
+  end
+
   describe "HashShape" do
     it "creates a hash shape with field types" do
       fields = {

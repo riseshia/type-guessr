@@ -22,6 +22,8 @@ module TypeGuessr
           "Array[#{format(type.element_type)}]"
         when Types::HashShape
           format_hash_shape(type)
+        when Types::TypeVariable
+          type.name.to_s
         else
           "untyped"
         end
