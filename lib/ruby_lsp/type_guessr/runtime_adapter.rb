@@ -31,20 +31,23 @@ module RubyLsp
         file_path = uri.to_standardized_path
         return unless file_path
 
+        # Parse and convert to IR outside mutex
+        parsed = document.parse_result
+        return unless parsed.value
+
+        # Create a shared context for all statements
+        context = ::TypeGuessr::Core::Converter::PrismConverter::Context.new
+        nodes = parsed.value.statements&.body&.filter_map do |stmt|
+          @converter.convert(stmt, context)
+        end
+
         @mutex.synchronize do
           # Clear existing index for this file
           @location_index.remove_file(file_path)
           @resolver.clear_cache
 
-          # Parse and convert to IR
-          parsed = document.parse_result
-          return unless parsed.value
-
-          # Convert statements to IR nodes
-          parsed.value.statements&.body&.each do |stmt|
-            node = @converter.convert(stmt)
-            @location_index.add(file_path, node) if node
-          end
+          # Index all nodes recursively
+          nodes&.each { |node| index_node_recursively(file_path, node) }
 
           # Finalize the index for efficient lookups
           @location_index.finalize!

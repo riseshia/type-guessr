@@ -155,6 +155,47 @@ RSpec.describe "IR-based Hover", :doc do
         expect_hover_type(line: 4, column: 0, expected: "{ a: Integer, b: Integer, c: String }")
       end
     end
+
+    context "with mixed key types (symbol and string)" do
+      let(:source) do
+        <<~RUBY
+          bb = { a: "1" }
+          bb[:e] = "a"
+          bb["f"] = "a"
+          bb
+        RUBY
+      end
+
+      it "widens to Hash[Symbol | String, String]" do
+        expect_hover_type(line: 4, column: 0, expected: "Hash[Symbol | String, String]")
+      end
+    end
+  end
+
+  describe "Block Parameter Inference" do
+    context "Array#map with block" do
+      let(:source) do
+        <<~RUBY
+          a = [1, 2, 3]
+          b = a.map do |num|
+            num * 2
+          end
+          b
+        RUBY
+      end
+
+      it "infers array type for a" do
+        expect_hover_type(line: 1, column: 0, expected: "Array[Integer]")
+      end
+
+      it "infers block result type for b" do
+        expect_hover_type(line: 5, column: 0, expected: "Array[Integer]")
+      end
+
+      it "infers element type for block param num" do
+        expect_hover_type(line: 2, column: 14, expected: "Integer")
+      end
+    end
   end
 end
 # rubocop:enable RSpec/DescribeClass

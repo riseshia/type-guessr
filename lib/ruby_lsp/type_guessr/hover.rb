@@ -107,17 +107,7 @@ module RubyLsp
 
         # Build hover content
         content = "**Guessed Type:** #{formatted_type}"
-
-        # Add debug info if enabled
-        if debug_enabled?
-          content += "\n\n**[TypeGuessr Debug]**"
-          content += "\n\n**Reason:** #{result.reason}"
-          content += "\n\n**Source:** #{result.source}"
-
-          # Add method calls info for variables/params with duck typing
-          called_methods = extract_called_methods(ir_node)
-          content += "\n\n**Method calls:** #{called_methods.join(", ")}" if called_methods.any?
-        end
+        content += build_debug_info(result, ir_node) if debug_enabled?
 
         @response_builder.push(content, category: :documentation)
       rescue StandardError => e
@@ -133,7 +123,7 @@ module RubyLsp
         signature = "(#{params_str}) -> #{return_type_str}"
         content = "**Method Signature:** `#{signature}`"
 
-        content += "\n\n**Reason:** #{return_result.reason}" if debug_enabled?
+        content += build_debug_info(return_result) if debug_enabled?
 
         @response_builder.push(content, category: :documentation)
       end
@@ -157,9 +147,13 @@ module RubyLsp
               sig_strs = signatures.map { |sig| sig.method_type.to_s }
               content = "**Method Signature:** `#{sig_strs.first}`"
 
-              if sig_strs.size > 1 && debug_enabled?
-                content += "\n\n**Overloads:**\n"
-                sig_strs.each { |s| content += "- `#{s}`\n" }
+              if debug_enabled?
+                content += "\n\n**[TypeGuessr Debug]**"
+                content += "\n\n**Receiver:** `#{TypeFormatter.format(receiver_type)}`"
+                if sig_strs.size > 1
+                  content += "\n\n**Overloads:**\n"
+                  sig_strs.each { |s| content += "- `#{s}`\n" }
+                end
               end
 
               @response_builder.push(content, category: :documentation)
@@ -178,6 +172,7 @@ module RubyLsp
                   else
                     "**Guessed Type:** `#{type_str}`"
                   end
+        content += build_debug_info(result) if debug_enabled?
         @response_builder.push(content, category: :documentation)
       end
 
@@ -229,6 +224,17 @@ module RubyLsp
 
       def debug_enabled?
         %w[1 true].include?(ENV.fetch("TYPE_GUESSR_DEBUG", nil))
+      end
+
+      def build_debug_info(result, ir_node = nil)
+        info = "\n\n**[TypeGuessr Debug]**"
+        info += "\n\n**Reason:** #{result.reason}"
+        info += "\n\n**Source:** #{result.source}"
+        if ir_node
+          called_methods = extract_called_methods(ir_node)
+          info += "\n\n**Method calls:** #{called_methods.join(", ")}" if called_methods.any?
+        end
+        info
       end
 
       def extract_called_methods(ir_node)

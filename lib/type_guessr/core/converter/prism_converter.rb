@@ -378,11 +378,48 @@ module TypeGuessr
             (hash_type.value_type.nil? || hash_type.value_type.is_a?(Types::Unknown))
         end
 
-        def widen_to_hash_type(_original_var, key_arg, value_type)
+        def widen_to_hash_type(original_var, key_arg, value_type)
           # When mixing key types, widen to generic HashType
-          key_type = infer_key_type(key_arg)
-          # HashShape with symbol keys + non-symbol key -> widen to Hash
-          Types::HashType.new(key_type, value_type)
+          new_key_type = infer_key_type(key_arg)
+
+          # Get original type to preserve existing key/value types
+          original_type = case original_var
+                          when IR::VariableNode
+                            original_var.dependency.is_a?(IR::LiteralNode) ? original_var.dependency.type : nil
+                          when IR::LiteralNode
+                            original_var.type
+                          end
+
+          case original_type
+          when Types::HashShape
+            # HashShape with symbol keys + non-symbol key -> widen to Hash[Symbol | NewKeyType, ValueUnion]
+            original_key_type = Types::ClassInstance.new("Symbol")
+            original_value_types = original_type.fields.values.uniq
+            all_value_types = (original_value_types + [value_type]).uniq
+
+            combined_key_type = Types::Union.new([original_key_type, new_key_type].uniq)
+            combined_value_type = all_value_types.size == 1 ? all_value_types.first : Types::Union.new(all_value_types)
+
+            Types::HashType.new(combined_key_type, combined_value_type)
+          when Types::HashType
+            # Already a HashType, just union the key and value types
+            combined_key_type = union_types(original_type.key_type, new_key_type)
+            combined_value_type = union_types(original_type.value_type, value_type)
+            Types::HashType.new(combined_key_type, combined_value_type)
+          else
+            Types::HashType.new(new_key_type, value_type)
+          end
+        end
+
+        def union_types(type1, type2)
+          return type2 if type1.nil? || type1.is_a?(Types::Unknown)
+          return type1 if type2.nil? || type2.is_a?(Types::Unknown)
+          return type1 if type1 == type2
+
+          types = []
+          types += type1.is_a?(Types::Union) ? type1.types : [type1]
+          types += type2.is_a?(Types::Union) ? type2.types : [type2]
+          Types::Union.new(types.uniq)
         end
 
         def infer_key_type(key_arg)
