@@ -41,6 +41,36 @@ RSpec.describe TypeGuessr::Core::TypeFormatter do
       expect(result).to match(/^(String \| Integer|Integer \| String)$/)
     end
 
+    it "formats optional type (Type | nil) as ?Type" do
+      int_type = TypeGuessr::Core::Types::ClassInstance.new("Integer")
+      nil_type = TypeGuessr::Core::Types::ClassInstance.new("NilClass")
+      union = TypeGuessr::Core::Types::Union.new([int_type, nil_type])
+
+      expect(described_class.format(union)).to eq("?Integer")
+    end
+
+    it "formats optional type with nil first as ?Type" do
+      nil_type = TypeGuessr::Core::Types::ClassInstance.new("NilClass")
+      str_type = TypeGuessr::Core::Types::ClassInstance.new("String")
+      union = TypeGuessr::Core::Types::Union.new([nil_type, str_type])
+
+      expect(described_class.format(union)).to eq("?String")
+    end
+
+    it "formats 3+ type union with nil using pipe separator" do
+      int_type = TypeGuessr::Core::Types::ClassInstance.new("Integer")
+      str_type = TypeGuessr::Core::Types::ClassInstance.new("String")
+      nil_type = TypeGuessr::Core::Types::ClassInstance.new("NilClass")
+      union = TypeGuessr::Core::Types::Union.new([int_type, str_type, nil_type])
+
+      result = described_class.format(union)
+      expect(result).to include("Integer")
+      expect(result).to include("String")
+      expect(result).to include("nil")
+      expect(result).to include("|")
+      expect(result).not_to start_with("?")
+    end
+
     it "formats ArrayType with element type" do
       element_type = TypeGuessr::Core::Types::ClassInstance.new("String")
       array_type = TypeGuessr::Core::Types::ArrayType.new(element_type)

@@ -1224,8 +1224,8 @@ RSpec.describe "Hover Integration" do
         RUBY
       end
 
-      it "infers union type" do
-        expect_hover_type(line: 4, column: 2, expected: "Integer | nil")
+      it "infers optional type" do
+        expect_hover_type(line: 4, column: 2, expected: "?Integer")
       end
     end
 
