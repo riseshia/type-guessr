@@ -293,6 +293,16 @@ module TypeGuessr
 
           has_block = !prism_node.block.nil?
 
+          # Track method call on receiver for duck typing
+          receiver_node.called_methods << prism_node.name if receiver_node.is_a?(IR::VariableNode) || receiver_node.is_a?(IR::ParamNode)
+
+          # Handle indexed assignment: a[:key] = value
+          # Replace receiver with updated node so it gets indexed with correct type
+          if prism_node.name == :[]= && receiver_node.is_a?(IR::VariableNode)
+            updated_receiver = handle_indexed_assignment(prism_node, receiver_node, args, context)
+            receiver_node = updated_receiver if updated_receiver
+          end
+
           call_node = IR::CallNode.new(
             method: prism_node.name,
             receiver: receiver_node,
@@ -302,12 +312,6 @@ module TypeGuessr
             has_block: has_block,
             loc: convert_loc(prism_node.location)
           )
-
-          # Track method call on receiver for duck typing
-          receiver_node.called_methods << prism_node.name if receiver_node.is_a?(IR::VariableNode) || receiver_node.is_a?(IR::ParamNode)
-
-          # Handle indexed assignment: a[:key] = value
-          handle_indexed_assignment(prism_node, receiver_node, args, context) if prism_node.name == :[]= && receiver_node.is_a?(IR::VariableNode)
 
           # Handle block if present (but not block arguments like &block)
           if prism_node.block.is_a?(Prism::BlockNode)
@@ -329,14 +333,14 @@ module TypeGuessr
 
         def handle_indexed_assignment(prism_node, receiver_node, args, context)
           # a[:key] = value -> update a's type to include the new field
-          return unless args.size == 2
+          return nil unless args.size == 2
 
           value_node = args[1]
           key_arg = prism_node.arguments.arguments[0]
 
           # Get the original variable
           original_var = context.lookup_variable(receiver_node.name)
-          return unless original_var
+          return nil unless original_var
 
           value_type = extract_literal_type(value_node)
 
@@ -348,7 +352,7 @@ module TypeGuessr
                            # Non-symbol key: widen to HashType
                            widen_to_hash_type(original_var, key_arg, value_type)
                          end
-          return unless updated_type
+          return nil unless updated_type
 
           # Create new variable node with updated dependency
           updated_var = IR::VariableNode.new(
@@ -359,6 +363,7 @@ module TypeGuessr
             loc: convert_loc(prism_node.location)
           )
           context.register_variable(receiver_node.name, updated_var)
+          updated_var
         end
 
         def extract_literal_type(ir_node)
