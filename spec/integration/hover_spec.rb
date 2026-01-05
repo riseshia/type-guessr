@@ -449,6 +449,84 @@ RSpec.describe "Hover Integration" do
     end
   end
 
+  describe "Class Method Calls", :doc do
+    context "File.read" do
+      let(:source) do
+        <<~RUBY
+          raw = File.read("dummy.txt")
+          raw
+        RUBY
+      end
+
+      it "→ String" do
+        expect_hover_type(line: 2, column: 0, expected: "String")
+      end
+    end
+
+    context "File.exist?" do
+      let(:source) do
+        <<~RUBY
+          exists = File.exist?("path")
+          exists
+        RUBY
+      end
+
+      it "→ bool" do
+        expect_hover_type(line: 2, column: 0, expected: "bool")
+      end
+    end
+
+    context "Dir.pwd" do
+      let(:source) do
+        <<~RUBY
+          path = Dir.pwd
+          path
+        RUBY
+      end
+
+      it "→ String" do
+        expect_hover_type(line: 2, column: 0, expected: "String")
+      end
+    end
+  end
+
+  describe "Explicit Return Handling", :doc do
+    context "early return with guard clause" do
+      let(:source) do
+        <<~RUBY
+          class Test
+            def flip(flag = true)
+              return false if flag
+              flag
+            end
+          end
+        RUBY
+      end
+
+      it "→ (?true flag) -> false | true" do
+        expect_hover_method_signature(line: 2, column: 6, expected_signature: "(?true flag) -> false | true")
+      end
+    end
+
+    context "multiple explicit returns" do
+      let(:source) do
+        <<~RUBY
+          class Test
+            def classify(n)
+              return "negative" if n < 0
+              return "zero" if n == 0
+              "positive"
+            end
+          end
+        RUBY
+      end
+
+      it "→ (untyped n) -> String" do
+        expect_hover_method_signature(line: 2, column: 6, expected_signature: "(untyped n) -> String")
+      end
+    end
+  end
+
   describe "Method-Call Based Inference" do
     it "infers single type when method is unique" do
       source = <<~RUBY

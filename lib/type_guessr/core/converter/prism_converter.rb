@@ -133,16 +133,20 @@ module TypeGuessr
             convert_singleton_class(prism_node, context)
 
           when Prism::ReturnNode
-            # Return statement - convert its arguments
-            if prism_node.arguments&.arguments&.first
-              convert(prism_node.arguments.arguments.first, context)
-            else
-              # return with no value returns nil
-              IR::LiteralNode.new(
-                type: Types::ClassInstance.new("NilClass"),
-                loc: convert_loc(prism_node.location)
-              )
-            end
+            # Return statement - wrap in ReturnNode to track explicit returns
+            value_node = if prism_node.arguments&.arguments&.first
+                           convert(prism_node.arguments.arguments.first, context)
+                         else
+                           # return with no value returns nil
+                           IR::LiteralNode.new(
+                             type: Types::ClassInstance.new("NilClass"),
+                             loc: convert_loc(prism_node.location)
+                           )
+                         end
+            IR::ReturnNode.new(
+              value: value_node,
+              loc: convert_loc(prism_node.location)
+            )
 
           when Prism::SelfNode
             # self keyword - returns the current class instance
@@ -743,23 +747,23 @@ module TypeGuessr
 
           # Convert method body - collect all body nodes
           body_nodes = []
-          return_node = nil
 
           if prism_node.body.is_a?(Prism::StatementsNode)
             prism_node.body.body.each do |stmt|
               node = convert(stmt, def_context)
               body_nodes << node if node
             end
-            return_node = body_nodes.last
           elsif prism_node.body.is_a?(Prism::BeginNode)
             # Method with rescue/ensure block
             begin_node = prism_node.body
             body_nodes = extract_begin_body_nodes(begin_node, def_context)
-            return_node = body_nodes.last
           elsif prism_node.body
-            return_node = convert(prism_node.body, def_context)
-            body_nodes << return_node if return_node
+            node = convert(prism_node.body, def_context)
+            body_nodes << node if node
           end
+
+          # Collect all return points: explicit returns + implicit last expression
+          return_node = compute_return_node(body_nodes, prism_node.name_loc)
 
           IR::DefNode.new(
             name: prism_node.name,
@@ -768,6 +772,50 @@ module TypeGuessr
             body_nodes: body_nodes,
             loc: convert_loc(prism_node.name_loc)
           )
+        end
+
+        # Compute the return node for a method by collecting all return points
+        # @param body_nodes [Array<IR::Node>] All nodes in the method body
+        # @param loc [Prism::Location] Location for the MergeNode if needed
+        # @return [IR::Node, nil] The return node (MergeNode if multiple returns)
+        def compute_return_node(body_nodes, loc)
+          return nil if body_nodes.empty?
+
+          # Collect all explicit returns from the body
+          explicit_returns = collect_returns(body_nodes)
+
+          # The implicit return is the last non-ReturnNode in body
+          implicit_return = body_nodes.reject { |n| n.is_a?(IR::ReturnNode) }.last
+
+          # Determine all return points
+          return_points = explicit_returns.dup
+          return_points << implicit_return if implicit_return && !last_node_returns?(body_nodes)
+
+          case return_points.size
+          when 0
+            nil
+          when 1
+            return_points.first
+          else
+            IR::MergeNode.new(
+              branches: return_points,
+              loc: convert_loc(loc)
+            )
+          end
+        end
+
+        # Collect all ReturnNode instances from body nodes (non-recursive)
+        # @param nodes [Array<IR::Node>] Nodes to search
+        # @return [Array<IR::ReturnNode>] All explicit return nodes
+        def collect_returns(nodes)
+          nodes.select { |n| n.is_a?(IR::ReturnNode) }
+        end
+
+        # Check if the last node in body is a ReturnNode
+        # @param body_nodes [Array<IR::Node>] Body nodes
+        # @return [Boolean]
+        def last_node_returns?(body_nodes)
+          body_nodes.last.is_a?(IR::ReturnNode)
         end
 
         def convert_constant_read(prism_node, _context)

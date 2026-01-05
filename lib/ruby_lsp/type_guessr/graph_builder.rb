@@ -52,12 +52,23 @@ module RubyLsp
           visited.add(current_key)
           nodes[current_key] = serialize_node(current, current_key)
 
+          # Get arg_keys for CallNode to skip redundant subgraph internal edges
+          arg_keys = if current.is_a?(::TypeGuessr::Core::IR::CallNode)
+                       current.args.compact.map { |arg| infer_dependency_key(arg, current_key, current) }
+                     else
+                       []
+                     end
+
           # Traverse dependencies
           current.dependencies.each do |dep_node|
             next unless dep_node
 
             dep_key = infer_dependency_key(dep_node, current_key, current)
-            edges << { from: current_key, to: dep_key }
+
+            # Skip edges to arguments that are inside the CallNode's subgraph
+            # These are visually redundant since the argument is already shown inside the subgraph
+            edges << { from: current_key, to: dep_key } unless arg_keys.include?(dep_key)
+
             queue << [dep_node, dep_key]
           end
         end

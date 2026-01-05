@@ -199,6 +199,54 @@ obj[ ]= A::B::C::D.new  # Guessed Type: A::B::C::D
 obj
 ```
 
+## Class Method Calls
+
+### File.read
+
+```ruby
+raw = File.read("dummy.txt")
+[r]aw  # Guessed Type: String
+```
+
+### File.exist?
+
+```ruby
+exists = File.exist?("path")
+[e]xists  # Guessed Type: bool
+```
+
+### Dir.pwd
+
+```ruby
+path = Dir.pwd
+[p]ath  # Guessed Type: String
+```
+
+## Explicit Return Handling
+
+### early return with guard clause
+
+```ruby
+class Test
+  def [f]lip(flag = true)  # Signature: (?true flag) -> false | true
+    return false if flag
+    flag
+  end
+end
+```
+
+### multiple explicit returns
+
+```ruby
+class Test
+  def [c]lassify(n)  # Signature: (untyped n) -> String
+    return "negative" if n < 0
+    return "zero" if n == 0
+    "positive"
+  end
+end
+```
+
 ## FlowAnalyzer Integration
 
 ### Conditional reassignment

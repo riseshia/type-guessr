@@ -398,6 +398,29 @@ module TypeGuessr
           [tree_field(:class_name, class_name, indent, last: true)]
         end
       end
+
+      # Explicit return statement node
+      # @param value [Node, nil] Return value node (nil for bare `return`)
+      # @param loc [Loc] Location information
+      ReturnNode = Data.define(:value, :loc) do
+        include TreeInspect
+
+        def dependencies
+          value ? [value] : []
+        end
+
+        def node_hash
+          "return:#{loc&.line}"
+        end
+
+        def node_key(scope_id)
+          "#{scope_id}:#{node_hash}"
+        end
+
+        def tree_inspect_fields(indent)
+          [tree_field(:value, value, indent, last: true)]
+        end
+      end
     end
   end
 end

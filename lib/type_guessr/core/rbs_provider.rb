@@ -140,6 +140,51 @@ module TypeGuessr
         @converter.convert(return_type)
       end
 
+      # Get class method signatures (singleton methods like File.read, Array.new)
+      # @param class_name [String] the class name
+      # @param method_name [String] the method name
+      # @return [Array<Signature>] array of method signatures
+      def get_class_method_signatures(class_name, method_name)
+        ensure_environment_loaded
+
+        # Build the type name
+        type_name = build_type_name(class_name)
+
+        # Use RBS::DefinitionBuilder to get singleton method definitions
+        builder = RBS::DefinitionBuilder.new(env: @env)
+        definition = builder.build_singleton(type_name)
+
+        # Get the method definition
+        method_def = definition.methods[method_name.to_sym]
+        return [] unless method_def
+
+        # Return all method types (overloads)
+        method_def.method_types.map { |mt| Signature.new(mt) }
+      rescue RBS::NoTypeFoundError, RBS::NoSuperclassFoundError, RBS::NoMixinFoundError => _e
+        # Class not found in RBS
+        []
+      rescue StandardError => e
+        # If anything goes wrong, return empty array
+        Logger.error("RBSProvider class method error", e)
+        []
+      end
+
+      # Get the return type of a class method call
+      # @param class_name [String] the class name
+      # @param method_name [String] the method name
+      # @param arg_types [Array<Types::Type>] the argument types
+      # @return [Types::Type] the return type (Unknown if not found)
+      def get_class_method_return_type(class_name, method_name, arg_types = [])
+        signatures = get_class_method_signatures(class_name, method_name)
+        return Types::Unknown.instance if signatures.empty?
+
+        # Find best matching overload based on argument types
+        best_match = find_best_overload(signatures, arg_types)
+        return_type = best_match.method_type.type.return_type
+
+        @converter.convert(return_type)
+      end
+
       private
 
       # Find a method signature that has a block

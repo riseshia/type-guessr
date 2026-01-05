@@ -18,38 +18,6 @@ The custom TypeInferrer swap mechanism was removed during Phase 4 & 5 rewrite (c
 - Adapt to current IR-based architecture
 - Hook into ruby-lsp's TypeInferrer to provide inferred types for Go to Definition
 
-## Explicit Return Statement Handling
-
-The return type inference doesn't handle explicit `return` statements correctly.
-
-```ruby
-def flip(flag = true)
-  return false if flag
-
-  flag
-end
-```
-
-**Expected:** Return type should be `TrueClass | FalseClass` (or `bool`)
-**Actual:** Only the last expression (`flag`) is considered
-
-**Proposed Solution:**
-- Create a virtual "method return" node that collects all return points
-- Track both explicit `return` statements and implicit last-expression returns
-- Compute union type from all collected return nodes
-
-## rbs finding fail?
-
-```
-raw = File.read("dummy.txt")
-```
-
-expected String, but untyped
-
-## Debug Mode Hover Missing Inference Reason
-
-When `debug: true` is set in `.type-guessr.yml`, the hover UI should show the inference reason/basis, but it's not displaying. Need to investigate the hover provider code path.
-
 ## VariableNode Split into WriteNode/ReadNode
 
 Currently `VariableNode` represents both variable assignment (write) and variable reference (read). This causes issues with:
@@ -83,15 +51,10 @@ The `info` variable's type should be `String` throughout, but inference may be f
 - Conditional modification inside `if` block
 - Need to investigate specific failure mode
 
-## Debug Graph: CallNode Subgraph Internal Edges
+## Refactor integration hover spec
 
-When a CallNode is rendered as a subgraph (because it has arguments), the argument nodes inside the subgraph still show edges pointing to the subgraph itself.
-
-**Example:** `foo(bar)` becomes subgraph, but `bar` node shows edge to `foo` subgraph which is redundant since `bar` is already inside the subgraph.
-
-**Proposed Fix:**
-- Skip rendering edges where the target is the parent subgraph
-- Or render these edges differently (dotted line, different color)
+- always use `let(:source)` even test is not doc test attaged
+- `Guessed Type` matching should use `expect_hover_type`
 
 ## Future Features
 

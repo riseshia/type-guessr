@@ -107,6 +107,8 @@ module TypeGuessr
             infer_def(node)
           when IR::SelfNode
             infer_self(node)
+          when IR::ReturnNode
+            infer_return(node)
           else
             Result.new(Types::Unknown.instance, "unknown node type", :unknown)
           end
@@ -167,14 +169,34 @@ module TypeGuessr
         end
 
         def infer_call(node)
-          # Special case: ClassName.new returns instance of that class
-          if node.method == :new && node.receiver.is_a?(IR::ConstantNode)
+          # Special case: Class method calls (ClassName.method)
+          if node.receiver.is_a?(IR::ConstantNode)
             class_name = node.receiver.name
-            return Result.new(
-              Types::ClassInstance.new(class_name),
-              "#{class_name}.new",
-              :inference
+
+            # ClassName.new returns instance of that class
+            if node.method == :new
+              return Result.new(
+                Types::ClassInstance.new(class_name),
+                "#{class_name}.new",
+                :inference
+              )
+            end
+
+            # For other class methods, query RBS singleton type
+            arg_types = node.args.map { |arg| infer(arg).type }
+            return_type = @rbs_provider.get_class_method_return_type(
+              class_name,
+              node.method.to_s,
+              arg_types
             )
+
+            unless return_type.is_a?(Types::Unknown)
+              return Result.new(
+                return_type,
+                "#{class_name}.#{node.method} (RBS)",
+                :rbs
+              )
+            end
           end
 
           # Infer receiver type first
@@ -375,6 +397,15 @@ module TypeGuessr
             "self in #{node.class_name}",
             :inference
           )
+        end
+
+        def infer_return(node)
+          if node.value
+            value_result = infer(node.value)
+            Result.new(value_result.type, "explicit return: #{value_result.reason}", value_result.source)
+          else
+            Result.new(Types::ClassInstance.new("NilClass"), "explicit return nil", :inference)
+          end
         end
 
         # Resolve DuckType to ClassInstance using registered project methods

@@ -23,6 +23,13 @@ module TypeGuessr
             convert_union(rbs_type, substitutions)
           when RBS::Types::Tuple
             convert_tuple(rbs_type, substitutions)
+          when RBS::Types::Bases::Bool
+            # bool is a type alias for TrueClass | FalseClass
+            Types::ClassInstance.new("bool")
+          when RBS::Types::Bases::Void
+            Types::ClassInstance.new("void")
+          when RBS::Types::Bases::Nil
+            Types::ClassInstance.new("NilClass")
           when RBS::Types::Bases::Self, RBS::Types::Bases::Instance
             # Cannot resolve without context - return Unknown
             Types::Unknown.instance
