@@ -5,11 +5,13 @@ require "ruby_lsp/type_guessr/graph_builder"
 
 RSpec.describe RubyLsp::TypeGuessr::GraphBuilder do
   let(:loc) { TypeGuessr::Core::IR::Loc.new(line: 10, col_range: 0...10) }
+  let(:nodes) { {} }
 
   # Create a minimal mock runtime adapter
   let(:runtime_adapter) do
-    adapter = instance_double("RuntimeAdapter")
-    allow(adapter).to receive(:find_node_by_key) { |key| @nodes[key] }
+    node_store = nodes
+    adapter = instance_double(RubyLsp::TypeGuessr::RuntimeAdapter)
+    allow(adapter).to receive(:find_node_by_key) { |key| node_store[key] }
     allow(adapter).to receive(:infer_type) do |_node|
       TypeGuessr::Core::Inference::Result.new(
         TypeGuessr::Core::Types::ClassInstance.new("String"),
@@ -22,10 +24,6 @@ RSpec.describe RubyLsp::TypeGuessr::GraphBuilder do
 
   let(:graph_builder) { described_class.new(runtime_adapter) }
 
-  before do
-    @nodes = {}
-  end
-
   describe "#build" do
     context "when node is not found" do
       it "returns nil" do
@@ -35,12 +33,15 @@ RSpec.describe RubyLsp::TypeGuessr::GraphBuilder do
     end
 
     context "with a simple literal node" do
-      before do
-        @literal = TypeGuessr::Core::IR::LiteralNode.new(
+      let(:literal) do
+        TypeGuessr::Core::IR::LiteralNode.new(
           type: TypeGuessr::Core::Types::ClassInstance.new("String"),
           loc: loc
         )
-        @nodes["Test:lit:ClassInstance:10"] = @literal
+      end
+
+      before do
+        nodes["Test:lit:ClassInstance:10"] = literal
       end
 
       it "returns graph with single node" do
@@ -65,21 +66,26 @@ RSpec.describe RubyLsp::TypeGuessr::GraphBuilder do
     end
 
     context "with a variable node with dependency" do
-      before do
-        @literal = TypeGuessr::Core::IR::LiteralNode.new(
+      let(:literal) do
+        TypeGuessr::Core::IR::LiteralNode.new(
           type: TypeGuessr::Core::Types::ClassInstance.new("String"),
           loc: loc
         )
-        @variable = TypeGuessr::Core::IR::VariableNode.new(
+      end
+
+      let(:variable) do
+        TypeGuessr::Core::IR::VariableNode.new(
           name: :name,
           kind: :local,
-          dependency: @literal,
+          dependency: literal,
           called_methods: [],
           loc: TypeGuessr::Core::IR::Loc.new(line: 5, col_range: 0...10)
         )
+      end
 
-        @nodes["Test:var:name:5"] = @variable
-        @nodes["Test:lit:ClassInstance:10"] = @literal
+      before do
+        nodes["Test:var:name:5"] = variable
+        nodes["Test:lit:ClassInstance:10"] = literal
       end
 
       it "traverses dependencies and creates edges" do
@@ -93,34 +99,45 @@ RSpec.describe RubyLsp::TypeGuessr::GraphBuilder do
     end
 
     context "with diamond pattern (same dependency from multiple nodes)" do
-      before do
-        @literal = TypeGuessr::Core::IR::LiteralNode.new(
+      let(:literal) do
+        TypeGuessr::Core::IR::LiteralNode.new(
           type: TypeGuessr::Core::Types::ClassInstance.new("String"),
           loc: loc
         )
-        @var1 = TypeGuessr::Core::IR::VariableNode.new(
+      end
+
+      let(:branch_a) do
+        TypeGuessr::Core::IR::VariableNode.new(
           name: :a,
           kind: :local,
-          dependency: @literal,
+          dependency: literal,
           called_methods: [],
           loc: TypeGuessr::Core::IR::Loc.new(line: 5, col_range: 0...10)
         )
-        @var2 = TypeGuessr::Core::IR::VariableNode.new(
+      end
+
+      let(:branch_b) do
+        TypeGuessr::Core::IR::VariableNode.new(
           name: :b,
           kind: :local,
-          dependency: @literal,
+          dependency: literal,
           called_methods: [],
           loc: TypeGuessr::Core::IR::Loc.new(line: 6, col_range: 0...10)
         )
-        @merge = TypeGuessr::Core::IR::MergeNode.new(
-          branches: [@var1, @var2],
+      end
+
+      let(:merge) do
+        TypeGuessr::Core::IR::MergeNode.new(
+          branches: [branch_a, branch_b],
           loc: TypeGuessr::Core::IR::Loc.new(line: 7, col_range: 0...10)
         )
+      end
 
-        @nodes["Test:merge:7"] = @merge
-        @nodes["Test:var:a:5"] = @var1
-        @nodes["Test:var:b:6"] = @var2
-        @nodes["Test:lit:ClassInstance:10"] = @literal
+      before do
+        nodes["Test:merge:7"] = merge
+        nodes["Test:var:a:5"] = branch_a
+        nodes["Test:var:b:6"] = branch_b
+        nodes["Test:lit:ClassInstance:10"] = literal
       end
 
       it "includes shared node only once" do
@@ -152,7 +169,7 @@ RSpec.describe RubyLsp::TypeGuessr::GraphBuilder do
         ),
         loc: loc
       )
-      @nodes["Test:lit:ArrayType:10"] = literal
+      nodes["Test:lit:ArrayType:10"] = literal
 
       result = graph_builder.build("Test:lit:ArrayType:10")
       expect(result[:nodes].first[:inferred_type]).to eq("Array[Integer]")
@@ -174,7 +191,7 @@ RSpec.describe RubyLsp::TypeGuessr::GraphBuilder do
         type: TypeGuessr::Core::Types::ClassInstance.new("String"),
         loc: loc
       )
-      @nodes["Test:lit:ClassInstance:10"] = literal
+      nodes["Test:lit:ClassInstance:10"] = literal
 
       result = graph_builder.build("Test:lit:ClassInstance:10")
       expect(result[:nodes].first[:inferred_type]).to eq("String | Integer")
@@ -196,7 +213,7 @@ RSpec.describe RubyLsp::TypeGuessr::GraphBuilder do
         called_methods: %i[foo bar],
         loc: loc
       )
-      @nodes["Test:param:x:10"] = param
+      nodes["Test:param:x:10"] = param
 
       result = graph_builder.build("Test:param:x:10")
       inferred_type = result[:nodes].first[:inferred_type]
@@ -217,7 +234,7 @@ RSpec.describe RubyLsp::TypeGuessr::GraphBuilder do
         body_nodes: [],
         loc: loc
       )
-      @nodes["Test:def:save:10"] = def_node
+      nodes["Test:def:save:10"] = def_node
 
       result = graph_builder.build("Test:def:save:10")
       details = result[:nodes].first[:details]
@@ -236,7 +253,7 @@ RSpec.describe RubyLsp::TypeGuessr::GraphBuilder do
         has_block: true,
         loc: loc
       )
-      @nodes["Test:call:upcase:10"] = call_node
+      nodes["Test:call:upcase:10"] = call_node
 
       result = graph_builder.build("Test:call:upcase:10")
       details = result[:nodes].first[:details]
@@ -253,7 +270,7 @@ RSpec.describe RubyLsp::TypeGuessr::GraphBuilder do
         called_methods: %i[name email],
         loc: loc
       )
-      @nodes["Test:var:user:10"] = var_node
+      nodes["Test:var:user:10"] = var_node
 
       result = graph_builder.build("Test:var:user:10")
       details = result[:nodes].first[:details]
@@ -279,8 +296,8 @@ RSpec.describe RubyLsp::TypeGuessr::GraphBuilder do
         called_methods: [],
         loc: loc
       )
-      @nodes["Test:var:user:10"] = read_node
-      @nodes["Test:var:user:5"] = write_node
+      nodes["Test:var:user:10"] = read_node
+      nodes["Test:var:user:5"] = write_node
 
       result = graph_builder.build("Test:var:user:10")
       read_details = result[:nodes].find { |n| n[:line] == 10 }[:details]

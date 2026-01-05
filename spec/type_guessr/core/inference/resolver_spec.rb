@@ -373,19 +373,19 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
 
   describe "#search_methods" do
     before do
-      @user_save = TypeGuessr::Core::IR::DefNode.new(
+      user_save = TypeGuessr::Core::IR::DefNode.new(
         name: :save, params: [], return_node: nil, body_nodes: [], loc: loc
       )
-      @user_delete = TypeGuessr::Core::IR::DefNode.new(
+      user_delete = TypeGuessr::Core::IR::DefNode.new(
         name: :delete, params: [], return_node: nil, body_nodes: [], loc: loc
       )
-      @post_save = TypeGuessr::Core::IR::DefNode.new(
+      post_save = TypeGuessr::Core::IR::DefNode.new(
         name: :save, params: [], return_node: nil, body_nodes: [], loc: loc
       )
 
-      resolver.register_method("User", "save", @user_save)
-      resolver.register_method("User", "delete", @user_delete)
-      resolver.register_method("Post", "save", @post_save)
+      resolver.register_method("User", "save", user_save)
+      resolver.register_method("User", "delete", user_delete)
+      resolver.register_method("Post", "save", post_save)
     end
 
     it "finds methods by method name" do
