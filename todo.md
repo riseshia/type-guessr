@@ -1,49 +1,9 @@
 # TypeGuessr TODO
 
-## In Progress
+## Completed
 
-### Optional type formatting
-
-Display `?Integer` instead of `Integer | nil` for optional types.
-
-**Current:**
-```ruby
-def find(id)
-  @users[id]  # Type: Integer | nil
-end
-```
-
-**Expected:**
-```ruby
-def find(id)
-  @users[id]  # Type: ?Integer
-end
-```
-
-## doubled activated
-
-Here is lsp log
-```
-026-01-05 17:22:44.178 [info] (type-guessr) [TypeGuessr] Ruby LSP indexing completed. Starting TypeGuessr file indexing.
-
-2026-01-05 17:22:44.178 [info] (type-guessr) [TypeGuessr] Ruby LSP indexing completed. Starting TypeGuessr file indexing.
-2026-01-05 17:22:44.203 [info] (type-guessr) [TypeGuessr] Found 3548 files to process.
-
-2026-01-05 17:22:44.203 [info] (type-guessr) [TypeGuessr] Found 3548 files to process.
-2026-01-05 17:22:44.693 [info] (type-guessr) [TypeGuessr] Indexing progress: 354/3548 (10.0%)
-
-2026-01-05 17:22:44.694 [info] (type-guessr) [TypeGuessr] Indexing progress: 354/3548 (10.0%)
-2026-01-05 17:22:45.547 [info] (type-guessr) [TypeGuessr] Indexing progress: 708/3548 (20.0%)
-
-2026-01-05 17:22:45.547 [info] (type-guessr) [TypeGuessr] Indexing progress: 708/3548 (20.0%)
-2026-01-05 17:22:46.012 [info] (type-guessr) [TypeGuessr] Indexing progress: 1062/3548 (29.9%)
-
-2026-01-05 17:22:46.012 [info] (type-guessr) [TypeGuessr] Indexing progress: 1062/3548 (29.9%)
-2026-01-05 17:22:46.119 [info] (type-guessr) [TypeGuessr] Indexing progress: 1416/3548 (39.9%)
-
-2026-01-05 17:22:46.119 [info] (type-guessr) [TypeGuessr] Indexing progress: 1416/3548 (39.9%)
-2026-01-05 17:22:48.413 [info] (type-guessr) [TypeGuessr] Indexing progress: 1770/3548 (49.9%)
-```
+- [x] Optional type formatting (`?Integer` instead of `Integer | nil`)
+- [x] Fix doubled activation issue (guard against double activation)
 
 ## inline if / unless support?
 

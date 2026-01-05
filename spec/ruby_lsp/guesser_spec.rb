@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "spec_helper"
+require "ruby_lsp/type_guessr/addon"
 
 RSpec.describe RubyLsp::TypeGuessr do
   describe "VERSION" do

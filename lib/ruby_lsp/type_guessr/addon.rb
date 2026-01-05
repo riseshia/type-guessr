@@ -66,13 +66,10 @@ module RubyLsp
         # Start debug server if enabled
         start_debug_server if Config.debug_server_enabled?
 
-        debug_status = Config.debug? ? " (debug mode)" : ""
-        message_queue.push(
-          method: "window/showMessage",
-          params: {
-            type: RubyLsp::Constant::MessageType::INFO,
-            message: "TypeGuessr activated#{debug_status}"
-          }
+        debug_status = Config.debug? ? " (debug mode enabled)" : ""
+        message_queue << RubyLsp::Notification.window_log_message(
+          "[TypeGuessr] Activated#{debug_status}",
+          type: RubyLsp::Constant::MessageType::LOG
         )
       end
 
