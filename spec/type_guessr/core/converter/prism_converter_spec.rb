@@ -312,6 +312,65 @@ RSpec.describe TypeGuessr::Core::Converter::PrismConverter do
     end
   end
 
+  describe "method with rescue/ensure" do
+    it "converts method with rescue block" do
+      source = <<~RUBY
+        def load_config
+          config = read_file
+          config
+        rescue => e
+          default_config
+        end
+      RUBY
+      parsed = Prism.parse(source)
+      context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+      node = converter.convert(parsed.value.statements.body.first, context)
+
+      expect(node).to be_a(TypeGuessr::Core::IR::DefNode)
+      expect(node.name).to eq(:load_config)
+      # Should have body nodes from main body and rescue clause
+      expect(node.body_nodes.size).to be >= 2
+    end
+
+    it "extracts body nodes from method with ensure" do
+      source = <<~RUBY
+        def process
+          result = compute
+          result
+        ensure
+          cleanup
+        end
+      RUBY
+      parsed = Prism.parse(source)
+      context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+      node = converter.convert(parsed.value.statements.body.first, context)
+
+      expect(node).to be_a(TypeGuessr::Core::IR::DefNode)
+      expect(node.body_nodes.size).to be >= 2
+    end
+
+    it "handles begin/rescue/else/ensure" do
+      source = <<~RUBY
+        def full_example
+          x = 1
+        rescue
+          x = 2
+        else
+          x = 3
+        ensure
+          cleanup
+        end
+      RUBY
+      parsed = Prism.parse(source)
+      context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+      node = converter.convert(parsed.value.statements.body.first, context)
+
+      expect(node).to be_a(TypeGuessr::Core::IR::DefNode)
+      # Should have nodes from: main body (1), rescue (1), else (1), ensure (1)
+      expect(node.body_nodes.size).to eq(4)
+    end
+  end
+
   describe "constant conversion" do
     it "converts constant read" do
       source = "DEFAULT_NAME"

@@ -150,6 +150,13 @@ module TypeGuessr
               class_name: context.current_class_name || "Object",
               loc: convert_loc(prism_node.location)
             )
+
+          when Prism::BeginNode
+            convert_begin(prism_node, context)
+
+          when Prism::RescueNode
+            # Rescue clause - convert body statements
+            convert_statements_body(prism_node.statements&.body, context)
           end
         end
 
@@ -568,6 +575,61 @@ module TypeGuessr
           last_node
         end
 
+        # Helper to convert an array of statement bodies
+        # @param body [Array<Prism::Node>, nil] Array of statement nodes
+        # @param context [Context] Conversion context
+        # @return [Array<IR::Node>] Array of converted IR nodes
+        def convert_statements_body(body, context)
+          return [] unless body
+
+          nodes = []
+          body.each do |stmt|
+            node = convert(stmt, context)
+            nodes << node if node
+          end
+          nodes
+        end
+
+        # Convert begin/rescue/ensure block
+        def convert_begin(prism_node, context)
+          body_nodes = extract_begin_body_nodes(prism_node, context)
+          # Return the last node (represents the value of the begin block)
+          body_nodes.last
+        end
+
+        # Extract all body nodes from a BeginNode (for DefNode bodies with rescue/ensure)
+        # @param begin_node [Prism::BeginNode] The begin node
+        # @param context [Context] Conversion context
+        # @return [Array<IR::Node>] Array of all body nodes
+        def extract_begin_body_nodes(begin_node, context)
+          body_nodes = []
+
+          # Convert main body statements
+          body_nodes.concat(convert_statements_body(begin_node.statements.body, context)) if begin_node.statements
+
+          # Convert rescue clause(s)
+          rescue_clause = begin_node.rescue_clause
+          while rescue_clause
+            rescue_nodes = convert_statements_body(rescue_clause.statements&.body, context)
+            body_nodes.concat(rescue_nodes)
+            rescue_clause = rescue_clause.subsequent
+          end
+
+          # Convert else clause
+          if begin_node.else_clause
+            else_nodes = convert_statements_body(begin_node.else_clause.statements&.body, context)
+            body_nodes.concat(else_nodes)
+          end
+
+          # Convert ensure clause
+          if begin_node.ensure_clause
+            ensure_nodes = convert_statements_body(begin_node.ensure_clause.statements&.body, context)
+            body_nodes.concat(ensure_nodes)
+          end
+
+          body_nodes
+        end
+
         def convert_def(prism_node, context)
           def_context = context.fork(:method)
           def_context.current_method = prism_node.name.to_s
@@ -688,6 +750,11 @@ module TypeGuessr
               node = convert(stmt, def_context)
               body_nodes << node if node
             end
+            return_node = body_nodes.last
+          elsif prism_node.body.is_a?(Prism::BeginNode)
+            # Method with rescue/ensure block
+            begin_node = prism_node.body
+            body_nodes = extract_begin_body_nodes(begin_node, def_context)
             return_node = body_nodes.last
           elsif prism_node.body
             return_node = convert(prism_node.body, def_context)
