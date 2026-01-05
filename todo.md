@@ -30,6 +30,14 @@ end
 - Track both explicit `return` statements and implicit last-expression returns
 - Compute union type from all collected return nodes
 
+## rbs finding fail?
+
+```
+raw = File.read("dummy.txt")
+```
+
+expected String, but untyped
+
 ## Debug Mode Hover Missing Inference Reason
 
 When `TYPE_GUESSR_DEBUG=1` is enabled, the hover UI should show the inference reason/basis, but it's not displaying. Need to investigate the hover provider code path.
