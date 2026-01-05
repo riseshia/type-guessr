@@ -14,25 +14,6 @@ Currently `VariableNode` represents both variable assignment (write) and variabl
 - ReadNode depends on the most recent WriteNode for that variable
 - Enables cleaner SSA-like representation
 
-## Inference Bug: Conditional String Building
-
-```ruby
-def build_debug_info(result, ir_node = nil)
-  info = "\n\n**[TypeGuessr Debug]**"
-  info += "\n\n**Reason:** #{result.reason}"
-  if ir_node
-    called_methods = extract_called_methods(ir_node)
-    info += "\n\n**Method calls:** #{called_methods.join(", ")}" if called_methods.any?
-  end
-  info
-end
-```
-
-The `info` variable's type should be `String` throughout, but inference may be failing due to:
-- Multiple reassignments via `+=`
-- Conditional modification inside `if` block
-- Need to investigate specific failure mode
-
 ## member var doesn't share its types
 
 ```
