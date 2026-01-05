@@ -1175,7 +1175,7 @@ RSpec.describe "Hover Integration" do
         RUBY
       end
 
-      it "infers union type", pending: "Compound assignment ||= not yet handled" do
+      it "infers union type" do
         expect_hover_type(line: 4, column: 2, expected: "Integer | nil")
       end
     end
@@ -1191,8 +1191,24 @@ RSpec.describe "Hover Integration" do
         RUBY
       end
 
-      it "infers union type", pending: "Compound assignment &&= not yet handled" do
+      it "infers union type" do
         expect_hover_type(line: 4, column: 2, expected: "Integer | String")
+      end
+    end
+
+    context "+= compound assignment" do
+      let(:source) do
+        <<~RUBY
+          def foo
+            x = "hello"
+            x += " world"
+            x
+          end
+        RUBY
+      end
+
+      it "infers String type from String#+" do
+        expect_hover_type(line: 4, column: 2, expected: "String")
       end
     end
 

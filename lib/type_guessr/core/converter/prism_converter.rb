@@ -105,6 +105,25 @@ module TypeGuessr
           when Prism::ClassVariableReadNode
             convert_class_variable_read(prism_node, context)
 
+          # Compound assignments (||=, &&=, +=, etc.)
+          when Prism::LocalVariableOrWriteNode
+            convert_local_variable_or_write(prism_node, context)
+
+          when Prism::LocalVariableAndWriteNode
+            convert_local_variable_and_write(prism_node, context)
+
+          when Prism::LocalVariableOperatorWriteNode
+            convert_local_variable_operator_write(prism_node, context)
+
+          when Prism::InstanceVariableOrWriteNode
+            convert_instance_variable_or_write(prism_node, context)
+
+          when Prism::InstanceVariableAndWriteNode
+            convert_instance_variable_and_write(prism_node, context)
+
+          when Prism::InstanceVariableOperatorWriteNode
+            convert_instance_variable_operator_write(prism_node, context)
+
           when Prism::CallNode
             convert_call(prism_node, context)
 
@@ -295,6 +314,131 @@ module TypeGuessr
             called_methods: called_methods,
             loc: convert_loc(prism_node.location)
           )
+        end
+
+        # Compound assignment: x ||= value
+        # Result type is union of original and new value type
+        def convert_local_variable_or_write(prism_node, context)
+          convert_or_write(prism_node, context, :local)
+        end
+
+        # Compound assignment: x &&= value
+        # Result type is union of original and new value type
+        def convert_local_variable_and_write(prism_node, context)
+          convert_and_write(prism_node, context, :local)
+        end
+
+        # Compound assignment: x += value, x -= value, etc.
+        # Result type depends on the operator method return type
+        def convert_local_variable_operator_write(prism_node, context)
+          convert_operator_write(prism_node, context, :local)
+        end
+
+        def convert_instance_variable_or_write(prism_node, context)
+          convert_or_write(prism_node, context, :instance)
+        end
+
+        def convert_instance_variable_and_write(prism_node, context)
+          convert_and_write(prism_node, context, :instance)
+        end
+
+        def convert_instance_variable_operator_write(prism_node, context)
+          convert_operator_write(prism_node, context, :instance)
+        end
+
+        # Generic ||= handler
+        # x ||= value means: if x is nil/false, x = value, else keep x
+        # Type is union of original type and value type
+        def convert_or_write(prism_node, context, kind)
+          original_node = context.lookup_variable(prism_node.name)
+          value_node = convert(prism_node.value, context)
+
+          # Create merge node for union type (original | value)
+          branches = []
+          branches << original_node if original_node
+          branches << value_node
+
+          merge_node = if branches.size == 1
+                         branches.first
+                       else
+                         IR::MergeNode.new(
+                           branches: branches,
+                           loc: convert_loc(prism_node.location)
+                         )
+                       end
+
+          # Create variable node with merged dependency
+          var_node = IR::VariableNode.new(
+            name: prism_node.name,
+            kind: kind,
+            dependency: merge_node,
+            called_methods: [],
+            loc: convert_loc(prism_node.location)
+          )
+          context.register_variable(prism_node.name, var_node)
+          var_node
+        end
+
+        # Generic &&= handler
+        # x &&= value means: if x is truthy, x = value, else keep x
+        # Type is union of original type and value type
+        def convert_and_write(prism_node, context, kind)
+          original_node = context.lookup_variable(prism_node.name)
+          value_node = convert(prism_node.value, context)
+
+          # Create merge node for union type (original | value)
+          branches = []
+          branches << original_node if original_node
+          branches << value_node
+
+          merge_node = if branches.size == 1
+                         branches.first
+                       else
+                         IR::MergeNode.new(
+                           branches: branches,
+                           loc: convert_loc(prism_node.location)
+                         )
+                       end
+
+          var_node = IR::VariableNode.new(
+            name: prism_node.name,
+            kind: kind,
+            dependency: merge_node,
+            called_methods: [],
+            loc: convert_loc(prism_node.location)
+          )
+          context.register_variable(prism_node.name, var_node)
+          var_node
+        end
+
+        # Generic operator write handler (+=, -=, *=, etc.)
+        # x += value is equivalent to x = x.+(value)
+        # Type is the return type of the operator method
+        def convert_operator_write(prism_node, context, kind)
+          original_node = context.lookup_variable(prism_node.name)
+          value_node = convert(prism_node.value, context)
+
+          # Create a call node representing x.operator(value)
+          call_node = IR::CallNode.new(
+            method: prism_node.binary_operator,
+            receiver: original_node,
+            args: [value_node],
+            block_params: [],
+            block_body: nil,
+            has_block: false,
+            loc: convert_loc(prism_node.location)
+          )
+
+          # Create variable node with call result as dependency
+          var_node = IR::VariableNode.new(
+            name: prism_node.name,
+            kind: kind,
+            dependency: call_node,
+            called_methods: [],
+            loc: convert_loc(prism_node.location)
+          )
+          context.register_variable(prism_node.name, var_node)
+          var_node
         end
 
         def convert_call(prism_node, context)
