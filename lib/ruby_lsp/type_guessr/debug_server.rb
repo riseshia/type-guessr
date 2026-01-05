@@ -629,106 +629,103 @@ module RubyLsp
                   code += `  classDef mergeNode fill:#ebcb8b,stroke:#333,color:#000\\n`;
                   code += `  classDef blockParamNode fill:#88c0d0,stroke:#333,color:#000\\n`;
                   code += `  classDef returnNode fill:#c586c0,stroke:#333,color:#fff\\n`;
+                  code += `  classDef constNode fill:#4ec9b0,stroke:#333,color:#000\\n`;
                   code += `  classDef otherNode fill:#4c566a,stroke:#333,color:#fff\\n`;
 
-                  // Find DefNode and ParamNodes
+                  // Categorize nodes
                   const defNode = data.nodes.find(n => n.type === 'DefNode');
                   const defNodeKey = defNode?.key;
-                  const paramNodeKeys = new Set(data.nodes.filter(n => n.type === 'ParamNode').map(n => n.key));
-
-                  // Find return_node key (first non-param, non-body dependency of DefNode - usually the last node)
-                  let returnNodeKey = null;
-                  if (defNodeKey) {
-                    const defEdges = data.edges.filter(e => e.from === defNodeKey);
-                    for (const edge of defEdges) {
-                      if (!paramNodeKeys.has(edge.to)) {
-                        returnNodeKey = edge.to;
-                        break;
-                      }
-                    }
-                  }
-
-                  // Build CallNode subgraph info
+                  const paramNodes = data.nodes.filter(n => n.type === 'ParamNode');
                   const callNodes = data.nodes.filter(n => n.type === 'CallNode');
-                  const argKeyToCallNode = new Map(); // arg_key -> CallNode key
-                  const callNodesWithArgs = new Set(); // CallNodes that become subgraphs
-                  callNodes.forEach(callNode => {
-                    const argKeys = callNode.details?.arg_keys || [];
-                    if (argKeys.length > 0) {
-                      callNodesWithArgs.add(callNode.key);
-                    }
-                    argKeys.forEach(argKey => {
-                      argKeyToCallNode.set(argKey, callNode.key);
-                    });
+
+                  // Build edge lookup: which nodes point to which
+                  const edgesFrom = new Map(); // from -> [to, ...]
+                  data.edges.forEach(edge => {
+                    if (!edgesFrom.has(edge.from)) edgesFrom.set(edge.from, []);
+                    edgesFrom.get(edge.from).push(edge.to);
                   });
 
-                  // Nodes inside subgraphs (args of CallNodes)
-                  const nodesInSubgraph = new Set(argKeyToCallNode.keys());
+                  // Track nodes already rendered in subgraphs
+                  const renderedInSubgraph = new Set();
 
-                  // Add nodes that are NOT in any subgraph and NOT a CallNode with args
+                  // 1. Add DefNode at top
+                  if (defNode) {
+                    const id = sanitizeId(defNode.key);
+                    const label = formatNodeLabel(defNode);
+                    code += `  ${id}["${label}"]:::defNode\\n`;
+                  }
+
+                  // 2. Add params subgraph
+                  if (paramNodes.length > 0) {
+                    code += `  subgraph params\\n`;
+                    code += `    direction TB\\n`;
+                    paramNodes.forEach(node => {
+                      const id = sanitizeId(node.key);
+                      const label = formatNodeLabel(node);
+                      code += `    ${id}["${label}"]:::paramNode\\n`;
+                      renderedInSubgraph.add(node.key);
+                    });
+                    code += `  end\\n`;
+                  }
+
+                  // 3. Add CallNode subgraphs with receiver and args
+                  callNodes.forEach(callNode => {
+                    const deps = edgesFrom.get(callNode.key) || [];
+                    if (deps.length === 0) {
+                      // No dependencies, render as simple node
+                      const id = sanitizeId(callNode.key);
+                      const label = formatNodeLabel(callNode);
+                      code += `  ${id}["${label}"]:::callNode\\n`;
+                      return;
+                    }
+
+                    // Create subgraph for call with its dependencies
+                    const subgraphId = sanitizeId(callNode.key) + '_sub';
+                    const receiver = callNode.details?.receiver || '';
+                    const method = callNode.details?.method || '';
+                    const subgraphLabel = receiver ? `${receiver}.${method}` : method;
+                    code += `  subgraph ${subgraphId} ["${escapeForMermaid(subgraphLabel)}"]\\n`;
+                    code += `    direction TB\\n`;
+
+                    // Add CallNode itself
+                    const callId = sanitizeId(callNode.key);
+                    const callLabel = formatNodeLabel(callNode);
+                    code += `    ${callId}["${callLabel}"]:::callNode\\n`;
+
+                    // Add direct dependencies (receiver, args) inside subgraph
+                    deps.forEach(depKey => {
+                      if (renderedInSubgraph.has(depKey)) return;
+                      const depNode = data.nodes.find(n => n.key === depKey);
+                      if (depNode && depNode.type !== 'DefNode' && depNode.type !== 'ParamNode') {
+                        const depId = sanitizeId(depKey);
+                        const depLabel = formatNodeLabel(depNode);
+                        const depStyle = getNodeStyleClass(depNode.type, depNode);
+                        code += `    ${depId}["${depLabel}"]:::${depStyle}\\n`;
+                        renderedInSubgraph.add(depKey);
+                      }
+                    });
+
+                    code += `  end\\n`;
+                    renderedInSubgraph.add(callNode.key);
+                  });
+
+                  // 4. Add remaining nodes (not in any subgraph)
                   data.nodes.forEach(node => {
-                    if (nodesInSubgraph.has(node.key)) return; // Skip, will be in subgraph
-                    if (callNodesWithArgs.has(node.key)) return; // Skip, will be a subgraph
+                    if (node.type === 'DefNode') return; // Already added
+                    if (renderedInSubgraph.has(node.key)) return;
                     const id = sanitizeId(node.key);
                     const label = formatNodeLabel(node);
                     const styleClass = getNodeStyleClass(node.type, node);
                     code += `  ${id}["${label}"]:::${styleClass}\\n`;
                   });
 
-                  // Add CallNode subgraphs with their args
-                  callNodes.forEach(callNode => {
-                    const argKeys = callNode.details?.arg_keys || [];
-                    if (argKeys.length === 0) return; // No subgraph needed
-
-                    const subgraphId = sanitizeId(callNode.key) + '_sub';
-                    const callLabel = formatNodeLabel(callNode).replace(/\\\\n/g, ' ');
-                    code += `  subgraph ${subgraphId} ["${callLabel}"]\\n`;
-
-                    // Add arg nodes inside subgraph
-                    argKeys.forEach(argKey => {
-                      const argNode = data.nodes.find(n => n.key === argKey);
-                      if (argNode) {
-                        const id = sanitizeId(argNode.key);
-                        const label = formatNodeLabel(argNode);
-                        const styleClass = getNodeStyleClass(argNode.type, argNode);
-                        code += `    ${id}["${label}"]:::${styleClass}\\n`;
-                      }
-                    });
-
-                    code += `  end\\n`;
-                  });
-
-                  // Add virtual Return node (always shown for DefNode)
-                  if (defNodeKey) {
-                    code += `  n_return["Return"]:::returnNode\\n`;
-                  }
-
-                  // Add edges: exclude DefNode's original edges
-                  // Redirect edges to/from CallNodes that became subgraphs
-                  const getNodeId = (key) => {
-                    if (callNodesWithArgs.has(key)) {
-                      return sanitizeId(key) + '_sub';
-                    }
-                    return sanitizeId(key);
-                  };
-
+                  // 5. Add edges (reversed direction: to --> from for BT layout)
+                  // In IR: from depends on to, so arrow should be to --> from
                   data.edges.forEach(edge => {
-                    if (edge.from === defNodeKey) return;
-                    code += `  ${getNodeId(edge.from)} --> ${getNodeId(edge.to)}\\n`;
+                    const fromId = sanitizeId(edge.from);
+                    const toId = sanitizeId(edge.to);
+                    code += `  ${toId} --> ${fromId}\\n`;
                   });
-
-                  // Add layout edges
-                  if (defNodeKey) {
-                    // ParamNode -> DefNode
-                    paramNodeKeys.forEach(paramKey => {
-                      code += `  ${getNodeId(paramKey)} --> ${getNodeId(defNodeKey)}\\n`;
-                    });
-
-                    // Return -> return_node (Return points to the expression it returns)
-                    if (returnNodeKey) {
-                      code += `  n_return --> ${getNodeId(returnNodeKey)}\\n`;
-                    }
-                  }
 
                   return code;
                 }
