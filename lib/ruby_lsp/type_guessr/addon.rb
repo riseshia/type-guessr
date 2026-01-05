@@ -119,8 +119,6 @@ module RubyLsp
         @runtime_adapter.index_source(uri.to_s, source)
       rescue StandardError => e
         warn("[TypeGuessr] Error indexing #{uri}: #{e.message}")
-        bt = e.backtrace&.first(5)&.join("\n") || "(no backtrace)"
-        warn(bt)
       end
 
       def debug_enabled?

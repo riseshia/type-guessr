@@ -46,8 +46,8 @@ module RubyLsp
           @location_index.remove_file(file_path)
           @resolver.clear_cache
 
-          # Index all nodes recursively
-          nodes&.each { |node| index_node_recursively(file_path, node) }
+          # Index all nodes recursively with scope tracking
+          nodes&.each { |node| index_node_recursively(file_path, node, "") }
 
           # Finalize the index for efficient lookups
           @location_index.finalize!
@@ -78,10 +78,10 @@ module RubyLsp
           # Create a shared context for all statements
           context = ::TypeGuessr::Core::Converter::PrismConverter::Context.new
 
-          # Convert statements to IR nodes
+          # Convert statements to IR nodes and index with scope tracking
           parsed.value.statements&.body&.each do |stmt|
             node = @converter.convert(stmt, context)
-            index_node_recursively(file_path, node) if node
+            index_node_recursively(file_path, node, "") if node
           end
 
           # Finalize the index for efficient lookups
@@ -89,16 +89,13 @@ module RubyLsp
         end
       end
 
-      # Find IR node at the given position
-      # @param uri [URI::Generic, nil] File URI (if nil, searches all files)
-      # @param line [Integer] Line number (0-indexed)
-      # @param column [Integer] Column number (0-indexed)
-      # @return [TypeGuessr::Core::IR::Node, nil] IR node at position
-      def find_node_at(uri, line, column)
-        file_path = uri&.to_standardized_path
-
-        # Convert from 0-indexed to 1-indexed line
-        @mutex.synchronize { @location_index.find(file_path, line + 1, column) }
+      # Find IR node by its unique key
+      # @param node_key [String] The node key (scope_id:node_hash)
+      # @return [TypeGuessr::Core::IR::Node, nil] IR node or nil if not found
+      def find_node_by_key(node_key)
+        @mutex.synchronize do
+          @location_index.find_by_key(node_key)
+        end
       end
 
       # Infer type for an IR node
@@ -279,7 +276,7 @@ module RubyLsp
         # Only hold mutex while modifying shared state
         @mutex.synchronize do
           @location_index.remove_file(file_path)
-          nodes&.each { |node| index_node_recursively(file_path, node) }
+          nodes&.each { |node| index_node_recursively(file_path, node, "") }
         end
         # NOTE: finalize! is called once after ALL files are indexed in start_indexing
       rescue StandardError => e
@@ -287,54 +284,67 @@ module RubyLsp
         log_message("Error indexing #{uri}: #{e.class}: #{e.message}\n#{bt}")
       end
 
-      # Recursively index a node and all its children
-      def index_node_recursively(file_path, node)
+      # Recursively index a node and all its children with scope tracking
+      # @param file_path [String] Absolute file path
+      # @param node [TypeGuessr::Core::IR::Node] IR node to index
+      # @param scope_id [String] Current scope identifier (e.g., "User#save")
+      def index_node_recursively(file_path, node, scope_id)
         return unless node
 
-        # Add the node itself
-        @location_index.add(file_path, node)
+        # Add the node itself with current scope
+        @location_index.add(file_path, node, scope_id)
 
-        # Recursively add children based on node type
+        # Recursively add children based on node type, updating scope as needed
         case node
+        when ::TypeGuessr::Core::IR::ClassModuleNode
+          # Enter class/module scope (concatenate with parent scope)
+          new_scope = scope_id.empty? ? node.name : "#{scope_id}::#{node.name}"
+          # Index all methods and nested classes in the class/module
+          node.methods&.each do |method|
+            if method.is_a?(::TypeGuessr::Core::IR::ClassModuleNode)
+              # Recursively index nested class/module with concatenated scope
+              index_node_recursively(file_path, method, scope_id.empty? ? node.name : "#{scope_id}::#{node.name}")
+            else
+              # Regular method
+              index_node_recursively(file_path, method, new_scope)
+              # Register method for project method lookup
+              @resolver.register_method(node.name, method.name.to_s, method)
+            end
+          end
+
         when ::TypeGuessr::Core::IR::DefNode
+          # Enter method scope
+          new_scope = scope_id.empty? ? "##{node.name}" : "#{scope_id}##{node.name}"
           # Index parameters
-          node.params&.each { |param| index_node_recursively(file_path, param) }
+          node.params&.each { |param| index_node_recursively(file_path, param, new_scope) }
           # Index all body nodes (including intermediate statements)
-          node.body_nodes&.each { |body_node| index_node_recursively(file_path, body_node) }
+          node.body_nodes&.each { |body_node| index_node_recursively(file_path, body_node, new_scope) }
 
         when ::TypeGuessr::Core::IR::VariableNode
           # Index dependency
-          index_node_recursively(file_path, node.dependency) if node.dependency
+          index_node_recursively(file_path, node.dependency, scope_id) if node.dependency
 
         when ::TypeGuessr::Core::IR::CallNode
           # Index receiver
-          index_node_recursively(file_path, node.receiver) if node.receiver
+          index_node_recursively(file_path, node.receiver, scope_id) if node.receiver
           # Index arguments
-          node.args&.each { |arg| index_node_recursively(file_path, arg) }
+          node.args&.each { |arg| index_node_recursively(file_path, arg, scope_id) }
           # Index block params
-          node.block_params&.each { |param| index_node_recursively(file_path, param) }
+          node.block_params&.each { |param| index_node_recursively(file_path, param, scope_id) }
           # Index block body
-          index_node_recursively(file_path, node.block_body) if node.block_body
+          index_node_recursively(file_path, node.block_body, scope_id) if node.block_body
 
         when ::TypeGuessr::Core::IR::ParamNode
           # Index default value
-          index_node_recursively(file_path, node.default_value) if node.default_value
+          index_node_recursively(file_path, node.default_value, scope_id) if node.default_value
 
         when ::TypeGuessr::Core::IR::MergeNode
           # Index branches
-          node.branches&.each { |branch| index_node_recursively(file_path, branch) }
+          node.branches&.each { |branch| index_node_recursively(file_path, branch, scope_id) }
 
         when ::TypeGuessr::Core::IR::ConstantNode
           # Index dependency
-          index_node_recursively(file_path, node.dependency) if node.dependency
-
-        when ::TypeGuessr::Core::IR::ClassModuleNode
-          # Index all methods in the class/module and register them for lookup
-          node.methods&.each do |method|
-            index_node_recursively(file_path, method)
-            # Register method for project method lookup
-            @resolver.register_method(node.name, method.name.to_s, method)
-          end
+          index_node_recursively(file_path, node.dependency, scope_id) if node.dependency
         end
       end
 

@@ -23,7 +23,7 @@ RSpec.describe "Addon Loading" do
       hover_file = File.read("lib/ruby_lsp/type_guessr/hover.rb")
 
       # Check for IR-based inference
-      expect(hover_file).to match(/find_node_at/)
+      expect(hover_file).to match(/find_node_by_key/)
       expect(hover_file).to match(/infer_type/)
     end
   end

@@ -13,13 +13,14 @@ module TypeGuessr
         # Context for tracking variable bindings during conversion
         class Context
           attr_reader :variables
-          attr_accessor :current_class
+          attr_accessor :current_class, :current_method
 
           def initialize(parent = nil)
             @parent = parent
             @variables = {} # name => node
             @scope_type = nil # :class, :method, :block, :top_level
             @current_class = nil
+            @current_method = nil
           end
 
           def register_variable(name, node)
@@ -34,6 +35,7 @@ module TypeGuessr
             child = Context.new(self)
             child.instance_variable_set(:@scope_type, scope_type)
             child.current_class = current_class_name
+            child.current_method = current_method_name
             child
           end
 
@@ -44,6 +46,22 @@ module TypeGuessr
           # Get the current class name (from this context or parent)
           def current_class_name
             @current_class || @parent&.current_class_name
+          end
+
+          # Get the current method name (from this context or parent)
+          def current_method_name
+            @current_method || @parent&.current_method_name
+          end
+
+          # Generate scope_id for node lookup (e.g., "User#save" or "User" or "")
+          def scope_id
+            class_path = current_class_name || ""
+            method_name = current_method_name
+            if method_name
+              "#{class_path}##{method_name}"
+            else
+              class_path
+            end
           end
 
           # Get variables that were defined/modified in this context (not from parent)
@@ -547,6 +565,7 @@ module TypeGuessr
 
         def convert_def(prism_node, context)
           def_context = context.fork(:method)
+          def_context.current_method = prism_node.name.to_s
 
           # Convert parameters
           params = []
@@ -778,19 +797,22 @@ module TypeGuessr
           class_context = context.fork(:class)
           class_context.current_class = name
 
-          # Collect all method definitions from the body (including from nested singleton classes)
+          # Collect all method definitions and nested classes from the body
           methods = []
+          nested_classes = []
           if prism_node.body.is_a?(Prism::StatementsNode)
             prism_node.body.body.each do |stmt|
               node = convert(stmt, class_context)
               if node.is_a?(IR::DefNode)
                 methods << node
               elsif node.is_a?(IR::ClassModuleNode)
-                # Include methods from nested classes (like singleton classes)
-                methods.concat(node.methods) if node.methods
+                # Store nested class/module for separate indexing with proper scope
+                nested_classes << node
               end
             end
           end
+          # Store nested classes in methods array (RuntimeAdapter handles both types)
+          methods.concat(nested_classes)
 
           IR::ClassModuleNode.new(
             name: name,
@@ -803,6 +825,11 @@ module TypeGuessr
           # Create a new context for singleton class scope
           singleton_context = context.fork(:class)
 
+          # Generate singleton class name in format: <Class:ParentName>
+          parent_name = context.current_class_name || "Object"
+          singleton_name = "<Class:#{parent_name}>"
+          singleton_context.current_class = singleton_name
+
           # Collect all method definitions from the body
           methods = []
           if prism_node.body.is_a?(Prism::StatementsNode)
@@ -813,7 +840,7 @@ module TypeGuessr
           end
 
           IR::ClassModuleNode.new(
-            name: "singleton",
+            name: singleton_name,
             methods: methods,
             loc: convert_loc(prism_node.location)
           )

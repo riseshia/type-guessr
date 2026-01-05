@@ -22,6 +22,19 @@ module TypeGuessr
         def dependencies
           []
         end
+
+        # Generate a unique hash for this node (type + identifier + line)
+        # @return [String]
+        def node_hash
+          raise NotImplementedError, "#{self.class} must implement node_hash"
+        end
+
+        # Generate a unique key for this node (scope_id + node_hash)
+        # @param scope_id [String] The scope identifier (e.g., "User#save")
+        # @return [String]
+        def node_key(scope_id)
+          "#{scope_id}:#{node_hash}"
+        end
       end
 
       # Literal value node (leaf node with no dependencies)
@@ -32,6 +45,15 @@ module TypeGuessr
       LiteralNode = Data.define(:type, :loc) do
         def dependencies
           []
+        end
+
+        def node_hash
+          type_name = type.is_a?(Class) ? type.name.split("::").last : type.class.name.split("::").last
+          "lit:#{type_name}:#{loc&.line}"
+        end
+
+        def node_key(scope_id)
+          "#{scope_id}:#{node_hash}"
         end
       end
 
@@ -46,6 +68,14 @@ module TypeGuessr
       VariableNode = Data.define(:name, :kind, :dependency, :called_methods, :loc) do
         def dependencies
           dependency ? [dependency] : []
+        end
+
+        def node_hash
+          "var:#{name}:#{loc&.line}"
+        end
+
+        def node_key(scope_id)
+          "#{scope_id}:#{node_hash}"
         end
       end
 
@@ -62,6 +92,14 @@ module TypeGuessr
         def dependencies
           default_value ? [default_value] : []
         end
+
+        def node_hash
+          "param:#{name}:#{loc&.line}"
+        end
+
+        def node_key(scope_id)
+          "#{scope_id}:#{node_hash}"
+        end
       end
 
       # Constant reference node
@@ -71,6 +109,14 @@ module TypeGuessr
       ConstantNode = Data.define(:name, :dependency, :loc) do
         def dependencies
           dependency ? [dependency] : []
+        end
+
+        def node_hash
+          "const:#{name}:#{loc&.line}"
+        end
+
+        def node_key(scope_id)
+          "#{scope_id}:#{node_hash}"
         end
       end
 
@@ -90,6 +136,14 @@ module TypeGuessr
           deps << block_body if block_body
           deps
         end
+
+        def node_hash
+          "call:#{method}:#{loc&.line}"
+        end
+
+        def node_key(scope_id)
+          "#{scope_id}:#{node_hash}"
+        end
       end
 
       # Block parameter slot
@@ -101,6 +155,14 @@ module TypeGuessr
         def dependencies
           [call_node]
         end
+
+        def node_hash
+          "bparam:#{index}:#{loc&.line}"
+        end
+
+        def node_key(scope_id)
+          "#{scope_id}:#{node_hash}"
+        end
       end
 
       # Branch merge node
@@ -111,6 +173,14 @@ module TypeGuessr
       MergeNode = Data.define(:branches, :loc) do
         def dependencies
           branches
+        end
+
+        def node_hash
+          "merge:#{loc&.line}"
+        end
+
+        def node_key(scope_id)
+          "#{scope_id}:#{node_hash}"
         end
       end
 
@@ -126,6 +196,14 @@ module TypeGuessr
           deps.concat(body_nodes || [])
           deps
         end
+
+        def node_hash
+          "def:#{name}:#{loc&.line}"
+        end
+
+        def node_key(scope_id)
+          "#{scope_id}:#{node_hash}"
+        end
       end
 
       # Class/Module node - container for methods and other definitions
@@ -136,6 +214,14 @@ module TypeGuessr
         def dependencies
           methods
         end
+
+        def node_hash
+          "class:#{name}:#{loc&.line}"
+        end
+
+        def node_key(scope_id)
+          "#{scope_id}:#{node_hash}"
+        end
       end
 
       # Self reference node
@@ -144,6 +230,14 @@ module TypeGuessr
       SelfNode = Data.define(:class_name, :loc) do
         def dependencies
           []
+        end
+
+        def node_hash
+          "self:#{class_name}:#{loc&.line}"
+        end
+
+        def node_key(scope_id)
+          "#{scope_id}:#{node_hash}"
         end
       end
     end

@@ -69,22 +69,17 @@ module RubyLsp
       private_constant :IR
 
       def add_hover_content(node)
-        # Extract position from Prism node
-        # Use more specific location when available:
-        # - For DefNode: use name_loc to match the method name position
-        # - For CallNode: use message_loc to match the method name position
-        location = if node.respond_to?(:name_loc) && node.name_loc
-                     node.name_loc
-                   elsif node.respond_to?(:message_loc) && node.message_loc
-                     node.message_loc
-                   else
-                     node.location
-                   end
-        line = location.start_line - 1 # Convert to 0-indexed
-        column = location.start_column
+        # Generate node_key from scope and Prism node
+        # DefNode is indexed with parent scope (not including the method itself)
+        exclude_method = node.is_a?(Prism::DefNode)
+        scope_id = generate_scope_id(exclude_method: exclude_method)
+        node_hash = generate_node_hash(node)
+        return unless node_hash
 
-        # Find IR node at position (searches all files since we don't have URI)
-        ir_node = @runtime_adapter.find_node_at(nil, line, column)
+        node_key = "#{scope_id}:#{node_hash}"
+
+        # Find IR node by key (O(1) lookup)
+        ir_node = @runtime_adapter.find_node_by_key(node_key)
         return unless ir_node
 
         # Handle DefNode specially - show method signature
@@ -247,6 +242,95 @@ module RubyLsp
         else
           []
         end
+      end
+
+      # Generate scope_id from node_context
+      # Format: "ClassName#method_name" or "ClassName" or "#method_name" or ""
+      # @param exclude_method [Boolean] Whether to exclude method from scope (for DefNode)
+      def generate_scope_id(exclude_method: false)
+        class_path = @node_context.nesting.map do |n|
+          n.is_a?(String) ? n : n.name.to_s
+        end.join("::")
+
+        method_name = exclude_method ? nil : @node_context.surrounding_method
+
+        if method_name
+          "#{class_path}##{method_name}"
+        else
+          class_path
+        end
+      end
+
+      # Generate node_hash from Prism node to match IR node_hash format
+      def generate_node_hash(node)
+        line = node.location.start_line
+        case node
+        when Prism::LocalVariableReadNode, Prism::LocalVariableWriteNode, Prism::LocalVariableTargetNode,
+             Prism::InstanceVariableReadNode, Prism::InstanceVariableWriteNode, Prism::InstanceVariableTargetNode,
+             Prism::ClassVariableReadNode, Prism::ClassVariableWriteNode, Prism::ClassVariableTargetNode,
+             Prism::GlobalVariableReadNode, Prism::GlobalVariableWriteNode, Prism::GlobalVariableTargetNode
+          "var:#{node.name}:#{line}"
+        when Prism::RequiredParameterNode, Prism::OptionalParameterNode, Prism::RestParameterNode,
+             Prism::RequiredKeywordParameterNode, Prism::OptionalKeywordParameterNode,
+             Prism::KeywordRestParameterNode, Prism::BlockParameterNode
+          # Check if this is a block parameter (parent is BlockParametersNode)
+          if block_parameter?(node)
+            index = block_parameter_index(node)
+            "bparam:#{index}:#{line}"
+          else
+            "param:#{node.name}:#{line}"
+          end
+        when Prism::ForwardingParameterNode
+          "param:...:#{line}"
+        when Prism::CallNode
+          # Use message_loc for accurate line number
+          call_line = node.message_loc&.start_line || line
+          "call:#{node.name}:#{call_line}"
+        when Prism::DefNode
+          # Use name_loc for accurate line number
+          def_line = node.name_loc&.start_line || line
+          "def:#{node.name}:#{def_line}"
+        when Prism::SelfNode
+          class_path = @node_context.nesting.map do |n|
+            n.is_a?(String) ? n : n.name.to_s
+          end.join("::")
+          "self:#{class_path}:#{line}"
+        end
+      end
+
+      # Check if a parameter node is inside a block (not a method definition)
+      def block_parameter?(node)
+        call_node = @node_context.call_node
+        return false unless call_node&.block
+
+        # Check if this parameter is in the block's parameters
+        block_params = call_node.block.parameters&.parameters
+        return false unless block_params
+
+        all_params = collect_block_params(block_params)
+        all_params.include?(node)
+      end
+
+      # Get the index of a block parameter
+      def block_parameter_index(node)
+        call_node = @node_context.call_node
+        return 0 unless call_node&.block
+
+        block_params = call_node.block.parameters&.parameters
+        return 0 unless block_params
+
+        all_params = collect_block_params(block_params)
+        all_params.index(node) || 0
+      end
+
+      # Collect all positional parameters from a ParametersNode
+      def collect_block_params(params_node)
+        all_params = []
+        all_params.concat(params_node.requireds || [])
+        all_params.concat(params_node.optionals || [])
+        all_params << params_node.rest if params_node.rest
+        all_params.concat(params_node.posts || [])
+        all_params
       end
 
       # Format type with definition link if available
