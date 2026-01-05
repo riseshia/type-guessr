@@ -249,18 +249,13 @@ This project follows strict Test-Driven Development (TDD) practices.
 
 ## Configuration
 
-Debug mode can be enabled via `.type-guessr.yml` or environment variable:
+Configuration is done via `.type-guessr.yml` in the project root:
 
 ```yaml
 # .type-guessr.yml
+enabled: true
 debug: true
 debug_server: false  # optional: disable debug server while keeping debug logging
-```
-
-Or via environment variable (takes precedence over YAML):
-
-```bash
-TYPE_GUESSR_DEBUG=1 bundle exec ruby-lsp
 ```
 
 **Debug mode features:**

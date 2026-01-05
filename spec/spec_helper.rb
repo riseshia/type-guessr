@@ -8,10 +8,12 @@ require "uri"
 # Load doc collector for generating documentation from tests
 require_relative "support/doc_collector"
 
-# Disable debug server for tests
-ENV["TYPE_GUESSR_DISABLE_DEBUG_SERVER"] = "1"
-
 RSpec.configure do |config|
+  # Disable debug server for all tests
+  config.before do
+    allow(RubyLsp::TypeGuessr::Config).to receive(:debug_server_enabled?).and_return(false)
+  end
+
   # Enable flags like --only-failures and --next-failure
   config.example_status_persistence_file_path = ".rspec_status"
 

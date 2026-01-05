@@ -797,15 +797,9 @@ RSpec.describe "Hover Integration" do
   end
 
   describe "Debug Mode" do
-    around do |example|
-      # Enable debug mode for this test
-      ENV["TYPE_GUESSR_DEBUG"] = "1"
-      TypeGuessr::Core::Logger.instance_variable_set(:@debug_enabled, nil)
-      example.run
-    ensure
-      # Clean up debug mode
-      ENV.delete("TYPE_GUESSR_DEBUG")
-      TypeGuessr::Core::Logger.instance_variable_set(:@debug_enabled, nil)
+    before do
+      # Enable debug mode via Config
+      allow(RubyLsp::TypeGuessr::Config).to receive(:debug?).and_return(true)
     end
 
     it "shows debug info when enabled" do
@@ -818,7 +812,6 @@ RSpec.describe "Hover Integration" do
 
       response = hover_on_source(source, { line: 0, character: 12 })
 
-      # Debug mode is enabled in spec_helper.rb via ENV["TYPE_GUESSR_DEBUG"] = "1"
       expect(response.contents.value).to match(/\*\*\[TypeGuessr Debug\]/)
       expect(response.contents.value).to match(/Reason:/)
       expect(response.contents.value).to match(/Method calls:/)

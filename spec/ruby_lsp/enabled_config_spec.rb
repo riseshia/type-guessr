@@ -22,30 +22,25 @@ RSpec.describe RubyLsp::TypeGuessr::Config do
     described_class.reset!
   end
 
+  before do
+    # Allow real Config methods to be called (override spec_helper mock)
+    allow(described_class).to receive(:debug_server_enabled?).and_call_original
+  end
+
   it "defaults enabled to true when config is missing" do
     expect(described_class.enabled?).to be(true)
   end
 
   describe ".debug_server_enabled?" do
-    it "returns false when TYPE_GUESSR_DISABLE_DEBUG_SERVER=1" do
-      allow(ENV).to receive(:[]).with("TYPE_GUESSR_DEBUG").and_return(nil)
-      allow(ENV).to receive(:[]).with("TYPE_GUESSR_DISABLE_DEBUG_SERVER").and_return("1")
-      expect(described_class.debug_server_enabled?).to be(false)
-    end
-
     it "uses debug_server from config when set" do
       File.write(".type-guessr.yml", "debug_server: true\n")
       described_class.reset!
-      allow(ENV).to receive(:[]).with("TYPE_GUESSR_DEBUG").and_return(nil)
-      allow(ENV).to receive(:[]).with("TYPE_GUESSR_DISABLE_DEBUG_SERVER").and_return(nil)
       expect(described_class.debug_server_enabled?).to be(true)
     end
 
     it "can disable debug_server independently from debug" do
       File.write(".type-guessr.yml", "debug: true\ndebug_server: false\n")
       described_class.reset!
-      allow(ENV).to receive(:[]).with("TYPE_GUESSR_DEBUG").and_return(nil)
-      allow(ENV).to receive(:[]).with("TYPE_GUESSR_DISABLE_DEBUG_SERVER").and_return(nil)
       expect(described_class.debug?).to be(true)
       expect(described_class.debug_server_enabled?).to be(false)
     end
@@ -53,8 +48,6 @@ RSpec.describe RubyLsp::TypeGuessr::Config do
     it "defaults to debug? value when debug_server not specified" do
       File.write(".type-guessr.yml", "debug: true\n")
       described_class.reset!
-      allow(ENV).to receive(:[]).with("TYPE_GUESSR_DEBUG").and_return(nil)
-      allow(ENV).to receive(:[]).with("TYPE_GUESSR_DISABLE_DEBUG_SERVER").and_return(nil)
       expect(described_class.debug_server_enabled?).to be(true)
     end
   end
