@@ -67,9 +67,11 @@ Create a `.type-guessr.yml` file in your project root:
 ```yaml
 enabled: true
 debug: true
+debug_server: true  # optional: can disable debug server independently
 ```
 
-`enabled` defaults to `true`. Set `enabled: false` to temporarily disable TypeGuessr without uninstalling the gem.
+- `enabled` defaults to `true`. Set `enabled: false` to temporarily disable TypeGuessr.
+- `debug_server` defaults to `debug` value. Set `false` to keep debug logging without starting the web server.
 
 Then restart Ruby LSP (VSCode: reload window).
 

@@ -217,7 +217,7 @@ module RubyLsp
       end
 
       def debug_enabled?
-        %w[1 true].include?(ENV.fetch("TYPE_GUESSR_DEBUG", nil))
+        Config.debug?
       end
 
       def build_debug_info(result, ir_node = nil)

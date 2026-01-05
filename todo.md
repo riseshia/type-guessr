@@ -1,15 +1,5 @@
 # TypeGuessr TODO
 
-## Configuration Consolidation
-
-Move all environment variable controls to Config class for consistency.
-
-Currently these environment variables control behavior:
-- `TYPE_GUESSR_DEBUG` - Enables debug logging and debug UI features
-- `TYPE_GUESSR_DISABLE_DEBUG_SERVER` - Disables the debug web server
-
-These should be configurable through `.type-guessr.yml` as well for better discoverability and consistency.
-
 ## Explicit Return Statement Handling
 
 The return type inference doesn't handle explicit `return` statements correctly.

@@ -35,6 +35,9 @@ module RubyLsp
       def debug_server_enabled?
         return false if %w[1 true].include?(ENV["TYPE_GUESSR_DISABLE_DEBUG_SERVER"])
 
+        config = load_config
+        return config["debug_server"] if config.key?("debug_server")
+
         debug?
       end
 

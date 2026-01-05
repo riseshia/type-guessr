@@ -14,29 +14,12 @@ RSpec.describe TypeGuessr::Core::Logger do
     $stderr = original_stderr
   end
 
-  # Reset the memoized debug_enabled? cache
-  after do
-    described_class.instance_variable_set(:@debug_enabled, nil)
-  end
-
   describe ".debug_enabled?" do
-    it "returns true when TYPE_GUESSR_DEBUG=1" do
-      allow(ENV).to receive(:fetch).with("TYPE_GUESSR_DEBUG", nil).and_return("1")
+    it "delegates to Config.debug?" do
+      allow(RubyLsp::TypeGuessr::Config).to receive(:debug?).and_return(true)
       expect(described_class.debug_enabled?).to be true
-    end
 
-    it "returns true when TYPE_GUESSR_DEBUG=true" do
-      allow(ENV).to receive(:fetch).with("TYPE_GUESSR_DEBUG", nil).and_return("true")
-      expect(described_class.debug_enabled?).to be true
-    end
-
-    it "returns false when TYPE_GUESSR_DEBUG is not set" do
-      allow(ENV).to receive(:fetch).with("TYPE_GUESSR_DEBUG", nil).and_return(nil)
-      expect(described_class.debug_enabled?).to be false
-    end
-
-    it "returns false when TYPE_GUESSR_DEBUG=0" do
-      allow(ENV).to receive(:fetch).with("TYPE_GUESSR_DEBUG", nil).and_return("0")
+      allow(RubyLsp::TypeGuessr::Config).to receive(:debug?).and_return(false)
       expect(described_class.debug_enabled?).to be false
     end
   end

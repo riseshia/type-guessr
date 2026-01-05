@@ -380,7 +380,7 @@ module RubyLsp
 
       def log_message(message)
         # Also log to stderr for debugging
-        warn "[TypeGuessr] #{message}" if ENV["TYPE_GUESSR_DEBUG"]
+        warn "[TypeGuessr] #{message}" if Config.debug?
 
         return unless @message_queue
         return if @message_queue.closed?

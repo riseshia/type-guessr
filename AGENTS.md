@@ -247,15 +247,26 @@ This project follows strict Test-Driven Development (TDD) practices.
 "Add tests"
 ```
 
-## Environment Variables
+## Configuration
 
-**TYPE_GUESSR_DEBUG** - Controls all debugging features:
-- Enables debug logging to stderr
-- Shows inference basis in hover UI
+Debug mode can be enabled via `.type-guessr.yml` or environment variable:
+
+```yaml
+# .type-guessr.yml
+debug: true
+debug_server: false  # optional: disable debug server while keeping debug logging
+```
+
+Or via environment variable (takes precedence over YAML):
 
 ```bash
 TYPE_GUESSR_DEBUG=1 bundle exec ruby-lsp
 ```
+
+**Debug mode features:**
+- Enables debug logging to stderr
+- Shows inference basis in hover UI
+- Starts debug web server (unless `debug_server: false`)
 
 ## Generating Documentation
 

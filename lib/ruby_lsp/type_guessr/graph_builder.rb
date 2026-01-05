@@ -62,14 +62,14 @@ module RubyLsp
           end
         end
 
-        warn("[GraphBuilder] Traversal complete: #{visited.size} nodes") if ENV["TYPE_GUESSR_DEBUG"]
+        warn("[GraphBuilder] Traversal complete: #{visited.size} nodes") if Config.debug?
       end
 
       # Serialize a node to hash format
       def serialize_node(node, node_key)
-        warn("[GraphBuilder] serialize_node: #{node_key}") if ENV["TYPE_GUESSR_DEBUG"]
+        warn("[GraphBuilder] serialize_node: #{node_key}") if Config.debug?
         result = @runtime_adapter.infer_type(node)
-        warn("[GraphBuilder] infer_type done for: #{node_key}") if ENV["TYPE_GUESSR_DEBUG"]
+        warn("[GraphBuilder] infer_type done for: #{node_key}") if Config.debug?
 
         {
           key: node_key,

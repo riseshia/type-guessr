@@ -1,9 +1,11 @@
 # frozen_string_literal: true
 
+require_relative "../../ruby_lsp/type_guessr/config"
+
 module TypeGuessr
   module Core
     # Unified logging interface for TypeGuessr
-    # Uses TYPE_GUESSR_DEBUG environment variable to control output
+    # Uses Config.debug? to control output
     module Logger
       module_function
 
@@ -32,10 +34,9 @@ module TypeGuessr
       end
 
       # Check if debug mode is enabled
-      # @return [Boolean] true if TYPE_GUESSR_DEBUG is set
+      # @return [Boolean] true if Config.debug? returns true
       def debug_enabled?
-        # Don't cache - check ENV every time during tests
-        %w[1 true].include?(ENV.fetch("TYPE_GUESSR_DEBUG", nil))
+        RubyLsp::TypeGuessr::Config.debug?
       end
     end
   end
