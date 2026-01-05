@@ -5,7 +5,6 @@ require_relative "../../type_guessr/core/type_formatter"
 module RubyLsp
   module TypeGuessr
     # Hover provider for TypeGuessr
-    # Provides type information on hover using IR-based inference
     class Hover
       # Core layer shortcuts
       TypeFormatter = ::TypeGuessr::Core::TypeFormatter

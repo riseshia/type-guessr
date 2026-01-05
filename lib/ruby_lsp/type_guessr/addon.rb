@@ -67,7 +67,7 @@ module RubyLsp
           method: "window/showMessage",
           params: {
             type: RubyLsp::Constant::MessageType::INFO,
-            message: "TypeGuessr activated (IR-based inference)"
+            message: "TypeGuessr activated"
           }
         )
       end

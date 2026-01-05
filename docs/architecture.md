@@ -2,7 +2,7 @@
 
 ## Overview
 
-TypeGuessr is a Ruby LSP addon that provides heuristic type inference without requiring explicit type annotations. It uses an IR (Intermediate Representation) based approach to convert Prism AST nodes into a simpler graph structure for type inference.
+TypeGuessr is a Ruby LSP addon that provides heuristic type inference without requiring explicit type annotations. It converts Prism AST nodes into a graph structure optimized for type inference.
 
 ## Architecture Layers
 
@@ -43,9 +43,9 @@ TypeGuessr is a Ruby LSP addon that provides heuristic type inference without re
 
 ## Core Components
 
-### IR Nodes (`lib/type_guessr/core/ir/nodes.rb`)
+### Nodes (`lib/type_guessr/core/ir/nodes.rb`)
 
-IR nodes form a reverse dependency graph where each node points to the nodes it depends on for type inference.
+Nodes form a reverse dependency graph where each node points to the nodes it depends on for type inference.
 
 | Node Type | Purpose | Dependency |
 |-----------|---------|------------|
@@ -61,7 +61,7 @@ IR nodes form a reverse dependency graph where each node points to the nodes it 
 
 ### PrismConverter (`lib/type_guessr/core/converter/prism_converter.rb`)
 
-Converts Prism AST to IR graph at indexing time.
+Converts Prism AST to node graph at indexing time.
 
 **Key responsibilities:**
 - Convert Prism nodes to IR nodes
@@ -76,7 +76,7 @@ Converts Prism AST to IR graph at indexing time.
 
 ### LocationIndex (`lib/type_guessr/core/index/location_index.rb`)
 
-O(log n) lookup from (file, line, column) to IR node.
+O(1) lookup from node key to node.
 
 **Key features:**
 - Entries sorted by (line, col_range.begin) for binary search
@@ -85,7 +85,7 @@ O(log n) lookup from (file, line, column) to IR node.
 
 ### Resolver (`lib/type_guessr/core/inference/resolver.rb`)
 
-Resolves IR nodes to types by traversing the dependency graph.
+Resolves nodes to types by traversing the dependency graph.
 
 **Key features:**
 - Caches inference results per node
