@@ -54,7 +54,37 @@ The `info` variable's type should be `String` throughout, but inference may be f
 ## Refactor integration hover spec
 
 - always use `let(:source)` even test is not doc test attaged
-- `Guessed Type` matching should use `expect_hover_type`
+- `Guessed Type` matching should use `expect_hover_type`\
+
+## member var doesn't share its types
+
+```
+class Chef
+  def do
+    @recipe.ingredients
+  end
+
+  def prepare_recipe
+    @recipe = Recipe.new
+  end
+end
+```
+
+@recipe expected `?Recipe` all over the place
+
+```
+class Chef
+  def do
+    recipe.ingredients
+  end
+
+  def recipe
+    @recipe ||= Recipe.new
+  end
+end
+```
+
+it's better to be guessed `Chef#recipe` as `() -> Recipe`.
 
 ## Future Features
 

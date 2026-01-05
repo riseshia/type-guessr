@@ -305,56 +305,56 @@ RSpec.describe "Hover Integration" do
   end
 
   describe "Hash Type Inference Edge Cases" do
-    # Edge case: Symbol-keyed hash
-    it "infers HashShape from symbol-keyed hash" do
-      source = <<~RUBY
-        user = { name: "John", age: 20 }
-        user
-      RUBY
+    context "Symbol-keyed hash" do
+      let(:source) do
+        <<~RUBY
+          user = { name: "John", age: 20 }
+          user
+        RUBY
+      end
 
-      response = hover_on_source(source, { line: 1, character: 2 })
-
-      expect(response.contents.value).to match(/Guessed Type:.*\{/)
-      expect(response.contents.value).to match(/name:/)
-      expect(response.contents.value).to match(/age:/)
+      it "infers HashShape with field types" do
+        expect_hover_type(line: 2, column: 0, expected: "{ name: String, age: Integer }")
+      end
     end
 
-    # Edge case: Non-symbol keys
-    it "infers Hash from string-keyed hash" do
-      source = <<~RUBY
-        data = { "key" => "value" }
-        data
-      RUBY
+    context "String-keyed hash" do
+      let(:source) do
+        <<~RUBY
+          data = { "key" => "value" }
+          data
+        RUBY
+      end
 
-      response = hover_on_source(source, { line: 1, character: 2 })
-
-      expect(response.contents.value).to match(/Guessed Type:.*Hash/)
+      it "infers Hash type" do
+        expect_hover_type(line: 2, column: 0, expected: "Hash")
+      end
     end
 
-    # Edge case: Mixed keys
-    it "infers Hash from hash with mixed keys" do
-      source = <<~RUBY
-        mixed = { name: "John", "key" => 1 }
-        mixed
-      RUBY
+    context "Mixed keys hash" do
+      let(:source) do
+        <<~RUBY
+          mixed = { name: "John", "key" => 1 }
+          mixed
+        RUBY
+      end
 
-      response = hover_on_source(source, { line: 1, character: 2 })
-
-      expect(response.contents.value).to match(/Guessed Type:.*Hash/)
+      it "infers Hash type" do
+        expect_hover_type(line: 2, column: 0, expected: "Hash")
+      end
     end
 
-    # Edge case: Nested hash
-    it "infers nested HashShape from nested symbol-keyed hash" do
-      source = <<~RUBY
-        user = { name: "John", address: { city: "Seoul" } }
-        user
-      RUBY
+    context "Nested symbol-keyed hash" do
+      let(:source) do
+        <<~RUBY
+          user = { name: "John", address: { city: "Seoul" } }
+          user
+        RUBY
+      end
 
-      response = hover_on_source(source, { line: 1, character: 2 })
-
-      expect(response.contents.value).to match(/Guessed Type:.*\{/)
-      expect(response.contents.value).to match(/name:/)
-      expect(response.contents.value).to match(/address:/)
+      it "infers nested HashShape" do
+        expect_hover_type(line: 2, column: 0, expected: "{ name: String, address: { city: String } }")
+      end
     end
   end
 
@@ -528,414 +528,464 @@ RSpec.describe "Hover Integration" do
   end
 
   describe "Method-Call Based Inference" do
-    it "infers single type when method is unique" do
-      source = <<~RUBY
-        class Recipe
-          def ingredients
-            []
+    context "single type when method is unique" do
+      let(:source) do
+        <<~RUBY
+          class Recipe
+            def ingredients
+              []
+            end
+
+            def steps
+              []
+            end
           end
 
-          def steps
-            []
+          class Article
+            def content
+              ""
+            end
           end
-        end
 
-        class Article
-          def content
-            ""
+          def process(recipe)
+            recipe.ingredients
+            recipe.steps
+            recipe
           end
-        end
+        RUBY
+      end
 
-        def process(recipe)
-          recipe.ingredients
-          recipe.steps
-          recipe
-        end
-      RUBY
-
-      response = hover_on_source(source, { line: 16, character: 12 })
-
-      expect(response.contents.value).to match(/Guessed Type:.*Recipe/)
-      expect(response.contents.value).not_to match(/Article/)
+      it "infers Recipe from duck typing" do
+        expect_hover_type(line: 16, column: 12, expected: "Recipe")
+      end
     end
 
-    it "shows ambiguous when multiple classes match" do
-      source = <<~RUBY
-        class Persistable
-          def save
+    context "multiple classes match" do
+      let(:source) do
+        <<~RUBY
+          class Persistable
+            def save
+            end
+
+            def destroy
+            end
           end
 
-          def destroy
+          class Cacheable
+            def save
+            end
+
+            def destroy
+            end
           end
-        end
 
-        class Cacheable
-          def save
+          def process(item)
+            item.save
+            item.destroy
+            item
           end
+        RUBY
+      end
 
-          def destroy
-          end
-        end
-
-        def process(item)
-          item.save
-          item.destroy
-          item
-        end
-      RUBY
-
-      response = hover_on_source(source, { line: 16, character: 12 })
-
-      expect(response.contents.value).to match(/Cacheable/)
-      expect(response.contents.value).to match(/Persistable/)
+      it "shows union of matching classes" do
+        expect_hover_type(line: 16, column: 12, expected: "Cacheable")
+        expect_hover_type(line: 16, column: 12, expected: "Persistable")
+      end
     end
 
-    it "truncates when too many classes match" do
-      source = <<~RUBY
-        class ClassA
-          def common_method_for_truncation_test
+    context "too many classes match (4+)" do
+      let(:source) do
+        <<~RUBY
+          class ClassA
+            def common_method_for_truncation_test
+            end
           end
-        end
 
-        class ClassB
-          def common_method_for_truncation_test
+          class ClassB
+            def common_method_for_truncation_test
+            end
           end
-        end
 
-        class ClassC
-          def common_method_for_truncation_test
+          class ClassC
+            def common_method_for_truncation_test
+            end
           end
-        end
 
-        class ClassD
-          def common_method_for_truncation_test
+          class ClassD
+            def common_method_for_truncation_test
+            end
           end
-        end
 
-        class ClassE
-          def common_method_for_truncation_test
+          class ClassE
+            def common_method_for_truncation_test
+            end
           end
-        end
 
-        def process(item)
-          item.common_method_for_truncation_test
-          item
-        end
-      RUBY
+          def process(item)
+            item.common_method_for_truncation_test
+            item
+          end
+        RUBY
+      end
 
-      response = hover_on_source(source, { line: 25, character: 12 })
-
-      # When 4+ classes match, show untyped instead of listing them
-      expect(response.contents.value).to match(/untyped/)
+      it "shows untyped instead of listing them" do
+        expect_hover_type(line: 25, column: 12, expected: "untyped")
+      end
     end
   end
 
   describe "Variable Scope Isolation" do
-    it "isolates same parameter name across methods" do
-      source = <<~RUBY
-        class Foo
-          def method_a(context)
-            @ctx = context
+    context "same parameter name across methods" do
+      let(:source) do
+        <<~RUBY
+          class Foo
+            def method_a(context)
+              @ctx = context
+            end
+
+            def method_b(context)
+              context.name
+              context.age
+            end
           end
+        RUBY
+      end
 
-          def method_b(context)
-            context.name
-            context.age
-          end
-        end
-      RUBY
+      it "isolates parameter types per method" do
+        # method_a's context has no duck typing info
+        response_a = hover_on_source(source, { line: 2, character: 15 })
+        expect(response_a.contents.value).not_to include("name")
+        expect(response_a.contents.value).not_to include("age")
 
-      response_a = hover_on_source(source, { line: 2, character: 15 })
-      response_b = hover_on_source(source, { line: 6, character: 4 })
-
-      expect(response_a.contents.value).not_to include("name")
-      expect(response_a.contents.value).not_to include("age")
-
-      expect(response_b.contents.value).to include("name")
-      expect(response_b.contents.value).to include("age")
+        # method_b's context has duck typing from .name and .age calls
+        response_b = hover_on_source(source, { line: 6, character: 4 })
+        expect(response_b.contents.value).to include("name")
+        expect(response_b.contents.value).to include("age")
+      end
     end
 
-    it "distinguishes local from instance variable" do
-      source = <<~RUBY
-        class Bar
-          def setup
-            @user = User.new
+    context "local vs instance variable" do
+      let(:source) do
+        <<~RUBY
+          class Bar
+            def setup
+              @user = User.new
+            end
+
+            def process
+              user = "string"
+              user
+            end
           end
 
-          def process
-            user = "string"
-            user
+          class User
           end
-        end
+        RUBY
+      end
 
-        class User
-        end
-      RUBY
-
-      response = hover_on_source(source, { line: 7, character: 4 })
-
-      expect(response.contents.value).to match(/String/)
-      expect(response.contents.value).not_to match(/User/)
+      it "distinguishes local from instance variable" do
+        expect_hover_type(line: 7, column: 4, expected: "String")
+      end
     end
 
-    # Edge case: Block-local variable shadowing
-    it "handles block-local variable shadowing outer variable" do
-      source = <<~RUBY
-        def foo
-          x = 1
-          [1, 2].each do |x|
-            x
-          end
-        end
-      RUBY
-
-      response = hover_on_source(source, { line: 3, character: 4 })
-
-      # Inside block, x refers to block parameter (Integer from array element)
-      expect(response).not_to be_nil
-    end
-
-    # Edge case: Top-level variable
-    it "handles top-level variable definition" do
-      source = <<~RUBY
-        x = 42
-        x
-      RUBY
-
-      response = hover_on_source(source, { line: 1, character: 0 })
-
-      expect(response.contents.value).to match(/Integer/)
-    end
-
-    # Edge case: Singleton class scope
-    it "handles singleton class scope" do
-      source = <<~RUBY
-        class Foo
-          class << self
-            def bar
-              x = "singleton"
+    context "block-local variable shadowing" do
+      let(:source) do
+        <<~RUBY
+          def foo
+            x = 1
+            [1, 2].each do |x|
               x
             end
           end
-        end
-      RUBY
+        RUBY
+      end
 
-      response = hover_on_source(source, { line: 4, character: 6 })
+      it "handles block parameter correctly" do
+        response = hover_on_source(source, { line: 3, character: 4 })
+        expect(response).not_to be_nil
+      end
+    end
 
-      expect(response.contents.value).to match(/String/)
+    context "top-level variable" do
+      let(:source) do
+        <<~RUBY
+          x = 42
+          x
+        RUBY
+      end
+
+      it "infers type at top level" do
+        expect_hover_type(line: 2, column: 0, expected: "Integer")
+      end
+    end
+
+    context "singleton class scope" do
+      let(:source) do
+        <<~RUBY
+          class Foo
+            class << self
+              def bar
+                x = "singleton"
+                x
+              end
+            end
+          end
+        RUBY
+      end
+
+      it "infers type in singleton class" do
+        expect_hover_type(line: 5, column: 6, expected: "String")
+      end
     end
   end
 
   describe "Parameter Hover" do
-    it "shows hover on required parameter" do
-      source = <<~RUBY
-        def greet(name)
-          name.upcase
-        end
-      RUBY
+    context "required parameter" do
+      let(:source) do
+        <<~RUBY
+          def greet(name)
+            name.upcase
+          end
+        RUBY
+      end
 
-      response = hover_on_source(source, { line: 1, character: 4 })
-
-      expect(response.contents.value).not_to be_nil
-      expect(response.contents.value).not_to be_empty
+      it "shows hover" do
+        response = hover_on_source(source, { line: 1, character: 4 })
+        expect(response.contents.value).not_to be_nil
+        expect(response.contents.value).not_to be_empty
+      end
     end
 
-    it "shows hover on optional parameter" do
-      source = <<~RUBY
-        def greet(name = "World")
-          name.upcase
-        end
-      RUBY
+    context "optional parameter" do
+      let(:source) do
+        <<~RUBY
+          def greet(name = "World")
+            name.upcase
+          end
+        RUBY
+      end
 
-      response = hover_on_source(source, { line: 1, character: 4 })
-
-      expect(response.contents.value).not_to be_nil
-      expect(response.contents.value).not_to be_empty
+      it "shows hover" do
+        response = hover_on_source(source, { line: 1, character: 4 })
+        expect(response.contents.value).not_to be_nil
+        expect(response.contents.value).not_to be_empty
+      end
     end
 
-    it "shows hover on keyword parameter" do
-      source = <<~RUBY
-        def greet(name:)
-          name.upcase
-        end
-      RUBY
+    context "keyword parameter" do
+      let(:source) do
+        <<~RUBY
+          def greet(name:)
+            name.upcase
+          end
+        RUBY
+      end
 
-      response = hover_on_source(source, { line: 1, character: 4 })
-
-      expect(response.contents.value).not_to be_nil
-      expect(response.contents.value).not_to be_empty
+      it "shows hover" do
+        response = hover_on_source(source, { line: 1, character: 4 })
+        expect(response.contents.value).not_to be_nil
+        expect(response.contents.value).not_to be_empty
+      end
     end
 
-    it "shows hover on rest parameter" do
-      source = <<~RUBY
-        def greet(*names)
-          names.join
-        end
-      RUBY
+    context "rest parameter" do
+      let(:source) do
+        <<~RUBY
+          def greet(*names)
+            names.join
+          end
+        RUBY
+      end
 
-      response = hover_on_source(source, { line: 1, character: 4 })
-
-      expect(response.contents.value).not_to be_nil
-      expect(response.contents.value).not_to be_empty
+      it "shows hover" do
+        response = hover_on_source(source, { line: 1, character: 4 })
+        expect(response.contents.value).not_to be_nil
+        expect(response.contents.value).not_to be_empty
+      end
     end
 
-    it "shows hover on block parameter" do
-      source = <<~RUBY
-        def execute(&block)
-          block.call
-        end
-      RUBY
+    context "block parameter" do
+      let(:source) do
+        <<~RUBY
+          def execute(&block)
+            block.call
+          end
+        RUBY
+      end
 
-      response = hover_on_source(source, { line: 1, character: 4 })
-
-      expect(response.contents.value).not_to be_nil
-      expect(response.contents.value).not_to be_empty
+      it "shows hover" do
+        response = hover_on_source(source, { line: 1, character: 4 })
+        expect(response.contents.value).not_to be_nil
+        expect(response.contents.value).not_to be_empty
+      end
     end
 
-    it "shows hover on forwarding parameter" do
-      source = <<~RUBY
-        def forward(...)
-          other_method(...)
-        end
-      RUBY
+    context "forwarding parameter" do
+      let(:source) do
+        <<~RUBY
+          def forward(...)
+            other_method(...)
+          end
+        RUBY
+      end
 
-      response = hover_on_source(source, { line: 0, character: 12 })
-
-      expect(response.contents.value).not_to be_nil
-      expect(response.contents.value).not_to be_empty
+      it "shows hover" do
+        response = hover_on_source(source, { line: 0, character: 12 })
+        expect(response.contents.value).not_to be_nil
+        expect(response.contents.value).not_to be_empty
+      end
     end
 
-    # Edge case: Keyword rest parameter
-    it "shows hover on keyword rest parameter" do
-      source = <<~RUBY
-        def process(**kwargs)
-          kwargs.keys
-        end
-      RUBY
+    context "keyword rest parameter" do
+      let(:source) do
+        <<~RUBY
+          def process(**kwargs)
+            kwargs.keys
+          end
+        RUBY
+      end
 
-      response = hover_on_source(source, { line: 1, character: 2 })
-
-      expect(response).not_to be_nil
+      it "shows hover" do
+        response = hover_on_source(source, { line: 1, character: 2 })
+        expect(response).not_to be_nil
+      end
     end
 
-    # Edge case: Optional parameter with .new default
-    it "infers type from optional parameter with .new default" do
-      source = <<~RUBY
-        class User
-        end
+    context "optional parameter with .new default" do
+      let(:source) do
+        <<~RUBY
+          class User
+          end
 
-        def foo(x = User.new)
-          x
-        end
-      RUBY
+          def foo(x = User.new)
+            x
+          end
+        RUBY
+      end
 
-      response = hover_on_source(source, { line: 4, character: 2 })
-
-      # Type inference might vary based on implementation
-      expect(response).not_to be_nil
+      it "infers type" do
+        response = hover_on_source(source, { line: 4, character: 2 })
+        expect(response).not_to be_nil
+      end
     end
 
-    # Edge case: Optional parameter with literal default
-    it "shows hover on optional parameter with integer default" do
-      source = <<~RUBY
-        def foo(x = 42)
-          x
-        end
-      RUBY
+    context "optional parameter with integer default" do
+      let(:source) do
+        <<~RUBY
+          def foo(x = 42)
+            x
+          end
+        RUBY
+      end
 
-      response = hover_on_source(source, { line: 1, character: 2 })
-
-      expect(response).not_to be_nil
+      it "shows hover" do
+        response = hover_on_source(source, { line: 1, character: 2 })
+        expect(response).not_to be_nil
+      end
     end
   end
 
   describe "Type Definition Links" do
-    it "includes link to class definition" do
-      source = <<~RUBY
-        class Recipe
-          def ingredients
+    context "link to class definition" do
+      let(:source) do
+        <<~RUBY
+          class Recipe
+            def ingredients
+            end
+
+            def steps
+            end
           end
 
-          def steps
+          def cook(recipe)
+            recipe.ingredients
+            recipe.steps
+            recipe
           end
-        end
+        RUBY
+      end
 
-        def cook(recipe)
-          recipe.ingredients
-          recipe.steps
-          recipe
-        end
-      RUBY
-
-      response = hover_on_source(source, { line: 11, character: 4 })
-
-      expect(response.contents.value).to match(/Guessed Type:/)
-      expect(response.contents.value).to match(/\[`Recipe`\]\(file:/)
+      it "includes link in hover" do
+        response = hover_on_source(source, { line: 11, character: 4 })
+        expect(response.contents.value).to match(/Guessed Type:/)
+        expect(response.contents.value).to match(/\[`Recipe`\]\(file:/)
+      end
     end
   end
 
   describe "Debug Mode" do
     before do
-      # Enable debug mode via Config
       allow(RubyLsp::TypeGuessr::Config).to receive(:debug?).and_return(true)
     end
 
-    it "shows debug info when enabled" do
-      source = <<~RUBY
-        def process(item)
-          item.save
-          item
-        end
-      RUBY
+    context "debug info display" do
+      let(:source) do
+        <<~RUBY
+          def process(item)
+            item.save
+            item
+          end
+        RUBY
+      end
 
-      response = hover_on_source(source, { line: 0, character: 12 })
-
-      expect(response.contents.value).to match(/\*\*\[TypeGuessr Debug\]/)
-      expect(response.contents.value).to match(/Reason:/)
-      expect(response.contents.value).to match(/Method calls:/)
+      it "shows debug info when enabled" do
+        response = hover_on_source(source, { line: 0, character: 12 })
+        expect(response.contents.value).to match(/\*\*\[TypeGuessr Debug\]/)
+        expect(response.contents.value).to match(/Reason:/)
+        expect(response.contents.value).to match(/Method calls:/)
+      end
     end
   end
 
   describe "Edge Cases" do
-    it "shows hover on self" do
-      source = <<~RUBY
-        class Foo
-          def bar
-            self
+    context "self keyword" do
+      let(:source) do
+        <<~RUBY
+          class Foo
+            def bar
+              self
+            end
           end
-        end
-      RUBY
+        RUBY
+      end
 
-      response = hover_on_source(source, { line: 2, character: 4 })
-
-      expect(response.contents.value).not_to be_nil
-      expect(response.contents.value).not_to be_empty
+      it "shows hover" do
+        response = hover_on_source(source, { line: 2, character: 4 })
+        expect(response.contents.value).not_to be_nil
+        expect(response.contents.value).not_to be_empty
+      end
     end
 
-    it "infers type for global variable" do
-      source = <<~RUBY
-        $global = "test"
-        $global.upcase
-      RUBY
+    context "global variable" do
+      let(:source) do
+        <<~RUBY
+          $global = "test"
+          $global.upcase
+        RUBY
+      end
 
-      response = hover_on_source(source, { line: 1, character: 0 })
-
-      expect(response.contents.value).not_to be_nil
-      expect(response.contents.value).not_to be_empty
+      it "infers type" do
+        response = hover_on_source(source, { line: 1, character: 0 })
+        expect(response.contents.value).not_to be_nil
+        expect(response.contents.value).not_to be_empty
+      end
     end
 
-    it "infers type for class variable" do
-      source = <<~RUBY
-        class Counter
-          @@count = 0
-          @@count.succ
-        end
-      RUBY
+    context "class variable" do
+      let(:source) do
+        <<~RUBY
+          class Counter
+            @@count = 0
+            @@count.succ
+          end
+        RUBY
+      end
 
-      response = hover_on_source(source, { line: 2, character: 4 })
-
-      expect(response.contents.value).not_to be_nil
-      expect(response.contents.value).not_to be_empty
+      it "infers type" do
+        response = hover_on_source(source, { line: 2, character: 4 })
+        expect(response.contents.value).not_to be_nil
+        expect(response.contents.value).not_to be_empty
+      end
     end
   end
 
@@ -996,450 +1046,471 @@ RSpec.describe "Hover Integration" do
       end
     end
 
-    it "tracks type changes through reassignment in non-first-line method" do
-      source = <<~RUBY
-        class MyClass
-          def some_other_method
-            # filler
-          end
+    context "reassignment in non-first-line method" do
+      let(:source) do
+        <<~RUBY
+          class MyClass
+            def some_other_method
+              # filler
+            end
 
-          def foo
+            def foo
+              x = 1
+              x = "string"
+              x
+            end
+          end
+        RUBY
+      end
+
+      it "tracks type changes to String" do
+        response = hover_on_source(source, { line: 8, character: 4 })
+        expect(response.contents.value).to match(/String/)
+        expect(response.contents.value).not_to match(/Integer/)
+      end
+    end
+
+    context "reassignment at top-level (read node)" do
+      let(:source) do
+        <<~RUBY
+          a = [1,2,3]
+          a = { a: 1, b: 2 }
+          a
+        RUBY
+      end
+
+      it "tracks type changes to Hash" do
+        response = hover_on_source(source, { line: 2, character: 0 })
+        expect(response.contents.value).to match(/\{|Hash/)
+        expect(response.contents.value).not_to match(/Array/)
+      end
+    end
+
+    context "reassignment at top-level (write node)" do
+      let(:source) do
+        <<~RUBY
+          a = [1,2,3]
+          a = { a: 1, b: 2 }
+        RUBY
+      end
+
+      it "tracks type changes to Hash" do
+        response = hover_on_source(source, { line: 1, character: 0 })
+        expect(response.contents.value).to match(/\{|Hash/)
+        expect(response.contents.value).not_to match(/Array/)
+      end
+    end
+
+    context "reassignment with method calls" do
+      let(:source) do
+        <<~RUBY
+          a = [1,2,3]
+          b = a.map do |num|
+            num * 2
+          end
+          a = { a: 1, b: 2 }
+        RUBY
+      end
+
+      it "tracks type changes to Hash" do
+        response = hover_on_source(source, { line: 4, character: 0 })
+        expect(response.contents.value).to match(/\{|Hash/)
+        expect(response.contents.value).not_to match(/Array/)
+      end
+    end
+
+    context "instance variable fallback" do
+      let(:source) do
+        <<~RUBY
+          class Foo
+            def bar
+              @instance_var = "test"
+              @instance_var
+            end
+          end
+        RUBY
+      end
+
+      it "falls back to VariableTypeResolver" do
+        response = hover_on_source(source, { line: 3, character: 4 })
+        expect(response.contents.value).to match(/String/)
+      end
+    end
+
+    context "elsif branches" do
+      let(:source) do
+        <<~RUBY
+          def foo(flag)
             x = 1
-            x = "string"
+            if flag == 1
+              x = "string"
+            elsif flag == 2
+              x = :symbol
+            end
             x
           end
-        end
-      RUBY
+        RUBY
+      end
 
-      # Hover on final "x" (0-indexed: line 8) - should show String (the last assignment)
-      response = hover_on_source(source, { line: 8, character: 4 })
-
-      expect(response.contents.value).to match(/String/)
-      expect(response.contents.value).not_to match(/Integer/)
+      it "infers union type" do
+        response = hover_on_source(source, { line: 7, character: 2 })
+        expect(response.contents.value).to match(/Integer/)
+        expect(response.contents.value).to match(/String/)
+        expect(response.contents.value).to match(/Symbol/)
+      end
     end
 
-    it "tracks type changes through reassignment at top-level (read node)" do
-      source = <<~RUBY
-        a = [1,2,3]
-        a = { a: 1, b: 2 }
-        a
-      RUBY
-
-      # Hover on final "a" read - should show Hash/HashShape (the last assignment), NOT Array
-      response = hover_on_source(source, { line: 2, character: 0 })
-
-      # Should show HashShape or Hash
-      expect(response.contents.value).to match(/\{|Hash/)
-      # Should NOT show Array from the first assignment
-      expect(response.contents.value).not_to match(/Array/)
-    end
-
-    it "tracks type changes through reassignment at top-level (write node)" do
-      source = <<~RUBY
-        a = [1,2,3]
-        a = { a: 1, b: 2 }
-      RUBY
-
-      # Hover on "a" in the second assignment line (the variable being reassigned)
-      response = hover_on_source(source, { line: 1, character: 0 })
-
-      # Should show HashShape or Hash (the new value being assigned)
-      expect(response.contents.value).to match(/\{|Hash/)
-      # Should NOT show Array from the first assignment
-      expect(response.contents.value).not_to match(/Array/)
-    end
-
-    it "tracks type changes through reassignment with method calls" do
-      source = <<~RUBY
-        a = [1,2,3]
-        b = a.map do |num|
-          num * 2
-        end
-        a = { a: 1, b: 2 }
-      RUBY
-
-      # Hover on "a" in the last assignment line
-      response = hover_on_source(source, { line: 4, character: 0 })
-
-      # Should show HashShape or Hash (the new value being assigned)
-      expect(response.contents.value).to match(/\{|Hash/)
-      # Should NOT show Array from the first assignment
-      expect(response.contents.value).not_to match(/Array/)
-    end
-
-    it "falls back to VariableTypeResolver when FlowAnalyzer fails" do
-      source = <<~RUBY
-        class Foo
-          def bar
-            @instance_var = "test"
-            @instance_var
+    context "ternary operator" do
+      let(:source) do
+        <<~RUBY
+          def foo(flag)
+            x = flag ? 1 : "str"
+            x
           end
-        end
-      RUBY
+        RUBY
+      end
 
-      # FlowAnalyzer doesn't handle instance variables well
-      # Should fall back to existing VariableTypeResolver
-      response = hover_on_source(source, { line: 3, character: 4 })
-
-      expect(response.contents.value).to match(/String/)
+      it "infers union type" do
+        response = hover_on_source(source, { line: 2, character: 2 })
+        expect(response.contents.value).to match(/Integer/)
+        expect(response.contents.value).to match(/String/)
+      end
     end
 
-    # Edge case: elsif branches
-    it "infers union type from elsif branches" do
-      source = <<~RUBY
-        def foo(flag)
-          x = 1
-          if flag == 1
-            x = "string"
-          elsif flag == 2
-            x = :symbol
+    context "unless statement" do
+      let(:source) do
+        <<~RUBY
+          def foo(flag)
+            x = 1
+            unless flag
+              x = "string"
+            end
+            x
           end
-          x
-        end
-      RUBY
+        RUBY
+      end
 
-      response = hover_on_source(source, { line: 7, character: 2 })
-
-      expect(response.contents.value).to match(/Integer/)
-      expect(response.contents.value).to match(/String/)
-      expect(response.contents.value).to match(/Symbol/)
+      it "handles unless" do
+        response = hover_on_source(source, { line: 5, character: 2 })
+        expect(response).not_to be_nil
+      end
     end
 
-    # Edge case: Ternary operator
-    it "infers union type from ternary operator" do
-      source = <<~RUBY
-        def foo(flag)
-          x = flag ? 1 : "str"
-          x
-        end
-      RUBY
-
-      response = hover_on_source(source, { line: 2, character: 2 })
-
-      expect(response.contents.value).to match(/Integer/)
-      expect(response.contents.value).to match(/String/)
-    end
-
-    # Edge case: unless statement
-    it "handles unless statement" do
-      source = <<~RUBY
-        def foo(flag)
-          x = 1
-          unless flag
-            x = "string"
+    context "||= compound assignment" do
+      let(:source) do
+        <<~RUBY
+          def foo
+            x = nil
+            x ||= 1
+            x
           end
-          x
-        end
-      RUBY
+        RUBY
+      end
 
-      response = hover_on_source(source, { line: 5, character: 2 })
-
-      # Should work similarly to if - may show union or last type
-      expect(response).not_to be_nil
+      it "infers union type" do
+        response = hover_on_source(source, { line: 3, character: 2 })
+        expect(response.contents.value).to match(/Integer|nil/)
+      end
     end
 
-    # Edge case: Compound assignment ||=
-    it "infers union type from ||= assignment" do
-      source = <<~RUBY
-        def foo
-          x = nil
-          x ||= 1
-          x
-        end
-      RUBY
+    context "&&= compound assignment" do
+      let(:source) do
+        <<~RUBY
+          def foo
+            x = 1
+            x &&= "string"
+            x
+          end
+        RUBY
+      end
 
-      response = hover_on_source(source, { line: 3, character: 2 })
-
-      expect(response.contents.value).to match(/Integer|nil/)
+      it "infers union type" do
+        response = hover_on_source(source, { line: 3, character: 2 })
+        expect(response.contents.value).to match(/Integer|String/)
+      end
     end
 
-    # Edge case: Compound assignment &&=
-    it "infers union type from &&= assignment" do
-      source = <<~RUBY
-        def foo
-          x = 1
-          x &&= "string"
-          x
-        end
-      RUBY
+    context "guard clause with return" do
+      let(:source) do
+        <<~RUBY
+          def foo(x)
+            return unless x
+            y = 1
+            y
+          end
+        RUBY
+      end
 
-      response = hover_on_source(source, { line: 3, character: 2 })
-
-      expect(response.contents.value).to match(/Integer|String/)
-    end
-
-    # Edge case: Guard clause
-    it "handles guard clause with return" do
-      source = <<~RUBY
-        def foo(x)
-          return unless x
-          y = 1
-          y
-        end
-      RUBY
-
-      response = hover_on_source(source, { line: 3, character: 2 })
-
-      expect(response.contents.value).to match(/Integer/)
+      it "handles guard clause" do
+        response = hover_on_source(source, { line: 3, character: 2 })
+        expect(response.contents.value).to match(/Integer/)
+      end
     end
   end
 
   describe "Method Call Return Type (Expression Type)" do
-    it "infers variable type from method call assignment" do
-      source = <<~RUBY
-        def example
-          hoge = 1
-          hoge2 = hoge.to_s
-          hoge2
-        end
-      RUBY
-
-      # Hover on "hoge2" - should infer String from Integer#to_s return type
-      response = hover_on_source(source, { line: 3, character: 2 })
-
-      expect(response.contents.value).to match(/String/)
-    end
-
-    it "infers variable type from chained method call assignment" do
-      source = <<~RUBY
-        def example
-          name = "hello"
-          result = name.upcase.length
-          result
-        end
-      RUBY
-
-      # Hover on "result" - should infer Integer from String#length
-      response = hover_on_source(source, { line: 3, character: 2 })
-
-      expect(response.contents.value).to match(/Integer/)
-    end
-
-    it "shows unknown for user-defined class method assignment" do
-      source = <<~RUBY
-        class User
-          def name
-            "John"
+    context "method call assignment" do
+      let(:source) do
+        <<~RUBY
+          def example
+            hoge = 1
+            hoge2 = hoge.to_s
+            hoge2
           end
-        end
+        RUBY
+      end
 
-        def example
-          user = User.new
-          result = user.name
-          result
-        end
-      RUBY
+      it "infers variable type" do
+        expect_hover_type(line: 4, column: 2, expected: "String")
+      end
+    end
 
-      # Hover on "result" - User#name is not in RBS, should show untyped
-      response = hover_on_source(source, { line: 9, character: 2 })
+    context "chained method call assignment" do
+      let(:source) do
+        <<~RUBY
+          def example
+            name = "hello"
+            result = name.upcase.length
+            result
+          end
+        RUBY
+      end
 
-      # Should show something (either unknown or no type info)
-      # For now, we just check it doesn't crash
-      expect(response).not_to be_nil
+      it "infers variable type" do
+        expect_hover_type(line: 4, column: 2, expected: "Integer")
+      end
+    end
+
+    context "user-defined class method assignment" do
+      let(:source) do
+        <<~RUBY
+          class User
+            def name
+              "John"
+            end
+          end
+
+          def example
+            user = User.new
+            result = user.name
+            result
+          end
+        RUBY
+      end
+
+      it "does not crash" do
+        response = hover_on_source(source, { line: 9, character: 2 })
+        expect(response).not_to be_nil
+      end
     end
   end
 
   describe "User-Defined Method Return Type" do
     # NOTE: These tests use spec_helper's with_server_and_addon which indexes test sources
     # in both TypeGuessr's VariableIndex and ruby-lsp's RubyIndexer.
-    # The core functionality is also verified in spec/type_guessr/core/user_method_return_resolver_spec.rb
 
-    it "infers return type from user-defined method with literal return" do
-      source = <<~RUBY
-        class Animal
-          def name
-            "Dog"
-          end
-        end
-
-        def example
-          animal = Animal.new
-          result = animal.name
-          result
-        end
-      RUBY
-
-      # Hover on "result" - should infer String from Animal#name return type
-      response = hover_on_source(source, { line: 8, character: 2 })
-
-      expect(response.contents.value).to match(/String/)
-    end
-
-    it "infers nil for empty method body" do
-      source = <<~RUBY
-        class Animal
-          def eat
-          end
-        end
-
-        def example
-          c = Animal.new
-          cc = c.eat
-          cc
-        end
-      RUBY
-
-      # Hover on "cc" - should infer nil from Animal#eat empty body
-      response = hover_on_source(source, { line: 7, character: 2 })
-
-      expect(response.contents.value).to match(/nil/)
-    end
-
-    it "infers return type from explicit return statement" do
-      source = <<~RUBY
-        class Calculator
-          def compute
-            return 42
-          end
-        end
-
-        def example
-          calc = Calculator.new
-          result = calc.compute
-          result
-        end
-      RUBY
-
-      # Hover on "result" - should infer Integer from Calculator#compute
-      response = hover_on_source(source, { line: 8, character: 2 })
-
-      expect(response.contents.value).to match(/Integer/)
-    end
-
-    it "infers union type from multiple return paths" do
-      source = <<~RUBY
-        class Conditional
-          def value
-            if true
-              "string"
-            else
-              42
+    context "literal return" do
+      let(:source) do
+        <<~RUBY
+          class Animal
+            def name
+              "Dog"
             end
           end
-        end
 
-        def example
-          obj = Conditional.new
-          result = obj.value
-          result
-        end
-      RUBY
-
-      # Hover on "result" - should infer String | Integer union type
-      response = hover_on_source(source, { line: 12, character: 2 })
-
-      # Should show union of String and Integer
-      expect(response.contents.value).to match(/String.*Integer|Integer.*String/)
-    end
-
-    it "works with nested method calls" do
-      source = <<~RUBY
-        class StringWrapper
-          def value
-            "hello"
+          def example
+            animal = Animal.new
+            result = animal.name
+            result
           end
-        end
+        RUBY
+      end
 
-        def example
-          wrapper = StringWrapper.new
-          length = wrapper.value.length
-          length
-        end
-      RUBY
-
-      # Hover on "length" - wrapper.value returns String, String#length returns Integer
-      response = hover_on_source(source, { line: 8, character: 2 })
-
-      expect(response.contents.value).to match(/Integer/)
+      it "infers return type" do
+        expect_hover_type(line: 9, column: 2, expected: "String")
+      end
     end
 
-    it "falls back to RBS when available" do
-      source = <<~RUBY
-        def example
-          arr = [1, 2, 3]
-          result = arr.map { |x| x * 2 }
-          result
-        end
-      RUBY
+    context "empty method body" do
+      let(:source) do
+        <<~RUBY
+          class Animal
+            def eat
+            end
+          end
 
-      # Hover on "result" - Array#map is in RBS, should use RBS first
-      response = hover_on_source(source, { line: 3, character: 2 })
+          def example
+            c = Animal.new
+            cc = c.eat
+            cc
+          end
+        RUBY
+      end
 
-      expect(response.contents.value).to match(/Array/)
+      it "infers nil" do
+        expect_hover_type(line: 8, column: 2, expected: "nil")
+      end
+    end
+
+    context "explicit return statement" do
+      let(:source) do
+        <<~RUBY
+          class Calculator
+            def compute
+              return 42
+            end
+          end
+
+          def example
+            calc = Calculator.new
+            result = calc.compute
+            result
+          end
+        RUBY
+      end
+
+      it "infers return type" do
+        expect_hover_type(line: 9, column: 2, expected: "Integer")
+      end
+    end
+
+    context "multiple return paths" do
+      let(:source) do
+        <<~RUBY
+          class Conditional
+            def value
+              if true
+                "string"
+              else
+                42
+              end
+            end
+          end
+
+          def example
+            obj = Conditional.new
+            result = obj.value
+            result
+          end
+        RUBY
+      end
+
+      it "infers union type" do
+        response = hover_on_source(source, { line: 12, character: 2 })
+        expect(response.contents.value).to match(/String.*Integer|Integer.*String/)
+      end
+    end
+
+    context "nested method calls" do
+      let(:source) do
+        <<~RUBY
+          class StringWrapper
+            def value
+              "hello"
+            end
+          end
+
+          def example
+            wrapper = StringWrapper.new
+            length = wrapper.value.length
+            length
+          end
+        RUBY
+      end
+
+      it "infers Integer" do
+        expect_hover_type(line: 9, column: 2, expected: "Integer")
+      end
+    end
+
+    context "RBS fallback" do
+      let(:source) do
+        <<~RUBY
+          def example
+            arr = [1, 2, 3]
+            result = arr.map { |x| x * 2 }
+            result
+          end
+        RUBY
+      end
+
+      it "uses RBS when available" do
+        expect_hover_type(line: 4, column: 2, expected: "Array")
+      end
     end
   end
 
   describe "Method-Call Set Heuristic" do
-    it "infers type from method pattern when parameter type is unknown" do
-      source = <<~RUBY
-        class Document
-          def title
-            "doc"
+    context "unique method pattern" do
+      let(:source) do
+        <<~RUBY
+          class Document
+            def title
+              "doc"
+            end
           end
-        end
 
-        def example(obj)
-          obj.title
-          obj
-        end
-      RUBY
+          def example(obj)
+            obj.title
+            obj
+          end
+        RUBY
+      end
 
-      # Hover on "obj" - obj is unknown parameter, but title is unique to Document
-      response = hover_on_source(source, { line: 8, character: 2 })
-
-      expect(response.contents.value).to match(/Document/)
+      it "infers type from method pattern" do
+        expect_hover_type(line: 9, column: 2, expected: "Document")
+      end
     end
 
-    it "infers receiver type from multiple method patterns" do
-      source = <<~RUBY
-        class Widget
-          def render
+    context "multiple method patterns" do
+      let(:source) do
+        <<~RUBY
+          class Widget
+            def render
+            end
+
+            def update
+            end
           end
 
-          def update
+          def example(obj)
+            obj.render
+            obj.update
+            obj
           end
-        end
+        RUBY
+      end
 
-        def example(obj)
-          obj.render
-          obj.update
-          obj
-        end
-      RUBY
-
-      # Hover on "obj"
-      # obj has render and update → unique to Widget
-      response = hover_on_source(source, { line: 11, character: 2 })
-
-      expect(response).not_to be_nil
-      expect(response.contents.value).to match(/Widget/)
+      it "infers receiver type" do
+        expect_hover_type(line: 12, column: 2, expected: "Widget")
+      end
     end
 
-    it "shows union type when multiple classes match duck typing" do
-      source = <<~RUBY
-        class Parser
-          def process
+    context "multiple classes match duck typing" do
+      let(:source) do
+        <<~RUBY
+          class Parser
+            def process
+            end
           end
-        end
 
-        class Compiler
-          def process
+          class Compiler
+            def process
+            end
           end
-        end
 
-        def example(obj)
-          obj.process
-          x = 1
-          obj
-        end
-      RUBY
+          def example(obj)
+            obj.process
+            x = 1
+            obj
+          end
+        RUBY
+      end
 
-      # Hover on "obj" at line 14
-      # obj has process → both Parser and Compiler match
-      response = hover_on_source(source, { line: 14, character: 2 })
-
-      # Shows union type when 2-3 classes match
-      expect(response.contents.value).to match(/Parser.*Compiler|Compiler.*Parser/)
+      it "shows union type" do
+        response = hover_on_source(source, { line: 14, character: 2 })
+        expect(response.contents.value).to match(/Parser.*Compiler|Compiler.*Parser/)
+      end
     end
   end
 
@@ -1460,19 +1531,19 @@ RSpec.describe "Hover Integration" do
       end
     end
 
-    it "returns nil or untyped when receiver type is unknown" do
-      source = <<~RUBY
-        def foo
-          unknown_var.some_method
-        end
-      RUBY
+    context "unknown receiver type" do
+      let(:source) do
+        <<~RUBY
+          def foo
+            unknown_var.some_method
+          end
+        RUBY
+      end
 
-      # Hover on "some_method"
-      response = hover_on_source(source, { line: 1, character: 14 })
-
-      # Should not crash, may return nil or untyped info
-      # This is acceptable behavior for unknown types
-      expect(response).to be_nil.or(have_attributes(contents: have_attributes(value: include("untyped"))))
+      it "returns nil or untyped" do
+        response = hover_on_source(source, { line: 1, character: 14 })
+        expect(response).to be_nil.or(have_attributes(contents: have_attributes(value: include("untyped"))))
+      end
     end
 
     context "instance variable receiver" do
@@ -1541,73 +1612,73 @@ RSpec.describe "Hover Integration" do
       end
     end
 
-    it "handles deep method chains gracefully" do
-      source = <<~RUBY
-        def foo
-          "a".upcase.downcase.upcase.downcase.upcase.downcase.upcase
-        end
-      RUBY
+    context "deep method chains" do
+      let(:source) do
+        <<~RUBY
+          def foo
+            "a".upcase.downcase.upcase.downcase.upcase.downcase.upcase
+          end
+        RUBY
+      end
 
-      # Hover on the last "upcase" (7th level)
-      # IR-based inference handles deep chains without recursion issues
-      response = hover_on_source(source, { line: 1, character: 54 })
-
-      # IR-based approach successfully infers type for deep chains
-      expect(response).not_to be_nil
-      expect(response.contents.value).to include("String")
+      it "handles gracefully" do
+        response = hover_on_source(source, { line: 1, character: 54 })
+        expect(response).not_to be_nil
+        expect(response.contents.value).to include("String")
+      end
     end
 
-    it "shows RBS signature when receiver type is inferred from method calls" do
-      source = <<~RUBY
-        class Recipe
-          def ingredients
-            []
+    context "receiver type inferred from method calls" do
+      let(:source) do
+        <<~RUBY
+          class Recipe
+            def ingredients
+              []
+            end
+            def steps
+              []
+            end
           end
-          def steps
-            []
+
+          class Recipe2 < Recipe
           end
-        end
 
-        class Recipe2 < Recipe
-        end
+          def process(recipe)
+            recipe.ingredients
+            recipe.steps
+          end
+        RUBY
+      end
 
-        def process(recipe)
-          recipe.ingredients
-          recipe.steps
-        end
-      RUBY
-
-      # Hover on "ingredients" method name in recipe.ingredients
-      response = hover_on_source(source, { line: 13, character: 9 })
-
-      # Should NOT crash with "undefined method 'delete_prefix' for Types::ClassInstance"
-      # Should return method signature for Array#ingredients (or Recipe#ingredients)
-      expect(response).not_to be_nil
-      expect(response.contents.value).to match(/ingredients/)
+      it "shows RBS signature" do
+        response = hover_on_source(source, { line: 13, character: 9 })
+        expect(response).not_to be_nil
+        expect(response.contents.value).to match(/ingredients/)
+      end
     end
 
-    # Edge case: Safe navigation operator
-    it "handles safe navigation operator" do
-      source = <<~RUBY
-        class User
-          def name
-            "John"
+    context "safe navigation operator" do
+      let(:source) do
+        <<~RUBY
+          class User
+            def name
+              "John"
+            end
           end
-        end
 
-        def foo
-          user = User.new
-          user&.name
-        end
-      RUBY
+          def foo
+            user = User.new
+            user&.name
+          end
+        RUBY
+      end
 
-      # Hover on "name" in safe navigation
-      response = hover_on_source(source, { line: 7, character: 11 })
-
-      expect(response).not_to be_nil
+      it "handles safe navigation" do
+        response = hover_on_source(source, { line: 7, character: 11 })
+        expect(response).not_to be_nil
+      end
     end
 
-    # Edge case: Method with block
     context "method call with block" do
       let(:source) do
         <<~RUBY
@@ -1778,143 +1849,144 @@ RSpec.describe "Hover Integration" do
   end
 
   describe "Block Parameter Type Inference" do
-    it "infers block parameter type from Array[Integer]#each" do
-      source = <<~RUBY
-        def foo
-          arr = [1, 2, 3]
-          arr.each { |num| puts num }
-        end
-      RUBY
+    context "Array[Integer]#each" do
+      let(:source) do
+        <<~RUBY
+          def foo
+            arr = [1, 2, 3]
+            arr.each { |num| puts num }
+          end
+        RUBY
+      end
 
-      # Hover on "num" block parameter (line 2, character 14 = 'n' of 'num')
-      response = hover_on_source(source, { line: 2, character: 14 })
-
-      expect(response).not_to be_nil
-      expect(response.contents.value).to match(/Integer/)
+      it "infers block parameter type" do
+        expect_hover_type(line: 3, column: 14, expected: "Integer")
+      end
     end
 
-    it "infers block parameter type from Array[String]#map" do
-      source = <<~RUBY
-        def foo
-          names = ["alice", "bob"]
-          names.map { |name| name.upcase }
-        end
-      RUBY
+    context "Array[String]#map" do
+      let(:source) do
+        <<~RUBY
+          def foo
+            names = ["alice", "bob"]
+            names.map { |name| name.upcase }
+          end
+        RUBY
+      end
 
-      # Hover on "name" block parameter
-      response = hover_on_source(source, { line: 2, character: 15 })
-
-      expect(response).not_to be_nil
-      expect(response.contents.value).to match(/String/)
+      it "infers block parameter type" do
+        expect_hover_type(line: 3, column: 15, expected: "String")
+      end
     end
 
-    it "infers block parameter type from String#each_char" do
-      source = <<~RUBY
-        def foo
-          text = "hello"
-          text.each_char { |char| puts char }
-        end
-      RUBY
+    context "String#each_char" do
+      let(:source) do
+        <<~RUBY
+          def foo
+            text = "hello"
+            text.each_char { |char| puts char }
+          end
+        RUBY
+      end
 
-      # Hover on "char" block parameter
-      response = hover_on_source(source, { line: 2, character: 21 })
-
-      expect(response).not_to be_nil
-      expect(response.contents.value).to match(/String/)
+      it "infers block parameter type" do
+        expect_hover_type(line: 3, column: 21, expected: "String")
+      end
     end
 
-    it "returns Unknown for block parameter when receiver type is unknown" do
-      source = <<~RUBY
-        def foo(arr)
-          arr.each { |item| puts item }
-        end
-      RUBY
+    context "unknown receiver type" do
+      let(:source) do
+        <<~RUBY
+          def foo(arr)
+            arr.each { |item| puts item }
+          end
+        RUBY
+      end
 
-      # Hover on "item" block parameter - receiver 'arr' has unknown type
-      response = hover_on_source(source, { line: 1, character: 15 })
-
-      # Should still return something (untyped or Unknown)
-      # Not testing specific content since receiver type is unknown
-      expect(response).not_to be_nil
+      it "returns something" do
+        response = hover_on_source(source, { line: 1, character: 15 })
+        expect(response).not_to be_nil
+      end
     end
 
-    # Edge case: Hash#each with multiple block parameters
-    it "infers block parameter types from Hash#each - k parameter" do
-      source = <<~RUBY
-        def foo
-          data = { name: "Alice", age: 30 }
-          data.each { |k, v| puts k }
-        end
-      RUBY
+    context "Hash#each - k parameter" do
+      let(:source) do
+        <<~RUBY
+          def foo
+            data = { name: "Alice", age: 30 }
+            data.each { |k, v| puts k }
+          end
+        RUBY
+      end
 
-      # Hover on "k" parameter - should be Symbol
-      response = hover_on_source(source, { line: 2, character: 15 })
-
-      expect(response).not_to be_nil
-      # k should be Symbol (key type)
-      expect(response.contents.value).to match(/Symbol/)
+      it "infers Symbol" do
+        expect_hover_type(line: 3, column: 15, expected: "Symbol")
+      end
     end
 
-    it "infers block parameter types from Hash#each - v parameter" do
-      source = <<~RUBY
-        def foo
-          data = { name: "Alice", age: 30 }
-          data.each { |k, v| puts v }
-        end
-      RUBY
+    context "Hash#each - v parameter" do
+      let(:source) do
+        <<~RUBY
+          def foo
+            data = { name: "Alice", age: 30 }
+            data.each { |k, v| puts v }
+          end
+        RUBY
+      end
 
-      # Hover on "v" parameter - should be Union of value types
-      response = hover_on_source(source, { line: 2, character: 18 })
-
-      expect(response).not_to be_nil
-      # v should be String | Integer (value types)
-      expect(response.contents.value).to match(/(String|Integer)/)
+      it "infers union type" do
+        response = hover_on_source(source, { line: 2, character: 18 })
+        expect(response).not_to be_nil
+        expect(response.contents.value).to match(/(String|Integer)/)
+      end
     end
 
-    it "infers block parameter type from Hash#each_key" do
-      source = <<~RUBY
-        def foo
-          data = { name: "Alice", age: 30 }
-          data.each_key { |k| puts k }
-        end
-      RUBY
+    context "Hash#each_key" do
+      let(:source) do
+        <<~RUBY
+          def foo
+            data = { name: "Alice", age: 30 }
+            data.each_key { |k| puts k }
+          end
+        RUBY
+      end
 
-      # Hover on "k" parameter - should be Symbol
-      response = hover_on_source(source, { line: 2, character: 19 })
-
-      expect(response).not_to be_nil
-      expect(response.contents.value).to match(/Symbol/)
+      it "infers Symbol" do
+        expect_hover_type(line: 3, column: 19, expected: "Symbol")
+      end
     end
 
-    it "infers block parameter type from Hash#each_value" do
-      source = <<~RUBY
-        def foo
-          data = { name: "Alice", age: 30 }
-          data.each_value { |v| puts v }
-        end
-      RUBY
+    context "Hash#each_value" do
+      let(:source) do
+        <<~RUBY
+          def foo
+            data = { name: "Alice", age: 30 }
+            data.each_value { |v| puts v }
+          end
+        RUBY
+      end
 
-      # Hover on "v" parameter - should be Union of value types
-      response = hover_on_source(source, { line: 2, character: 21 })
-
-      expect(response).not_to be_nil
-      # v should be String | Integer (value types)
-      expect(response.contents.value).to match(/(String|Integer)/)
+      it "infers union type" do
+        response = hover_on_source(source, { line: 2, character: 21 })
+        expect(response).not_to be_nil
+        expect(response.contents.value).to match(/(String|Integer)/)
+      end
     end
 
-    # Edge case: Enumerator chain
-    it "handles enumerator chain with_index" do
-      source = <<~RUBY
-        def foo
-          arr = [1, 2, 3]
-          arr.map.with_index { |x, i| x * i }
-        end
-      RUBY
+    context "enumerator chain with_index" do
+      let(:source) do
+        <<~RUBY
+          def foo
+            arr = [1, 2, 3]
+            arr.map.with_index { |x, i| x * i }
+          end
+        RUBY
+      end
 
-      # Hover on "x" - should be Integer
-      response = hover_on_source(source, { line: 2, character: 24 })
-
-      expect(response).not_to be_nil
+      it "handles enumerator chain" do
+        response = hover_on_source(source, { line: 2, character: 24 })
+        expect(response).not_to be_nil
+      end
     end
   end
 
@@ -2043,20 +2115,19 @@ RSpec.describe "Hover Integration" do
       end
     end
 
-    it "shows Unknown when no method calls on parameter" do
-      source = <<~RUBY
-        def process(data)
-          puts "processing"
-        end
-      RUBY
+    context "no method calls on parameter" do
+      let(:source) do
+        <<~RUBY
+          def process(data)
+            puts "processing"
+          end
+        RUBY
+      end
 
-      # Hover on "data" parameter - no method calls
-      response = hover_on_source(source, { line: 0, character: 13 })
-
-      # With no method calls, type inference returns Unknown
-      # In debug mode, this shows debug info; otherwise may show nothing
-      # Just check that it doesn't crash
-      expect(response).to be_nil.or(be_a(RubyLsp::Interface::Hover))
+      it "shows Unknown" do
+        response = hover_on_source(source, { line: 0, character: 13 })
+        expect(response).to be_nil.or(be_a(RubyLsp::Interface::Hover))
+      end
     end
 
     context "multiple parameters with different types" do
@@ -2089,37 +2160,38 @@ RSpec.describe "Hover Integration" do
       end
     end
 
-    it "shows ambiguous when multiple types match" do
-      source = <<~RUBY
-        class User
-          def save
+    context "multiple types match" do
+      let(:source) do
+        <<~RUBY
+          class User
+            def save
+            end
+
+            def reload
+            end
           end
 
-          def reload
+          class Post
+            def save
+            end
+
+            def reload
+            end
           end
-        end
 
-        class Post
-          def save
+          def persist(item)
+            item.save
+            item.reload
           end
+        RUBY
+      end
 
-          def reload
-          end
-        end
-
-        def persist(item)
-          item.save
-          item.reload
-        end
-      RUBY
-
-      # Hover on "item" parameter - both User and Post have save and reload
-      response = hover_on_source(source, { line: 16, character: 13 })
-
-      expect(response).not_to be_nil
-      # Should show ambiguous or union type
-      content = response.contents.value
-      expect(content).to match(/User|Post|Ambiguous/i)
+      it "shows ambiguous or union type" do
+        response = hover_on_source(source, { line: 16, character: 13 })
+        expect(response).not_to be_nil
+        content = response.contents.value
+        expect(content).to match(/User|Post|Ambiguous/i)
+      end
     end
   end
 
@@ -2219,50 +2291,50 @@ RSpec.describe "Hover Integration" do
       end
     end
 
-    # Edge case: Circular reference protection
-    it "handles circular constant references without infinite loop" do
-      source = <<~RUBY
-        class Base
-          def process
+    context "deep alias chain (circular reference protection)" do
+      let(:source) do
+        <<~RUBY
+          class Base
+            def process
+            end
           end
-        end
 
-        AliasA = Base
-        AliasB = AliasA
-        AliasC = AliasB
-        AliasD = AliasC
-        AliasE = AliasD
-        AliasF = AliasE
+          AliasA = Base
+          AliasB = AliasA
+          AliasC = AliasB
+          AliasD = AliasC
+          AliasE = AliasD
+          AliasF = AliasE
 
-        def foo
-          obj = AliasF.new
-          obj
-        end
-      RUBY
+          def foo
+            obj = AliasF.new
+            obj
+          end
+        RUBY
+      end
 
-      # Should handle deep alias chain (up to max depth)
-      response = hover_on_source(source, { line: 13, character: 2 })
-
-      expect(response).not_to be_nil
-      # Should resolve to Base or handle gracefully
+      it "handles without infinite loop" do
+        response = hover_on_source(source, { line: 13, character: 2 })
+        expect(response).not_to be_nil
+      end
     end
 
-    # Edge case: Undefined constant reference
-    it "handles undefined constant gracefully" do
-      source = <<~RUBY
-        # UndefinedClass does not exist
-        def foo
-          # This would fail at runtime, but type inference should not crash
-          obj = UndefinedClass.new
-          obj
-        end
-      RUBY
+    context "undefined constant reference" do
+      let(:source) do
+        <<~RUBY
+          # UndefinedClass does not exist
+          def foo
+            # This would fail at runtime, but type inference should not crash
+            obj = UndefinedClass.new
+            obj
+          end
+        RUBY
+      end
 
-      # Should not crash, may return nil or unknown
-      response = hover_on_source(source, { line: 3, character: 2 })
-
-      # Should handle gracefully (not crash)
-      expect(response).to be_nil.or(be_a(RubyLsp::Interface::Hover))
+      it "handles gracefully" do
+        response = hover_on_source(source, { line: 3, character: 2 })
+        expect(response).to be_nil.or(be_a(RubyLsp::Interface::Hover))
+      end
     end
   end
 
@@ -2340,18 +2412,19 @@ RSpec.describe "Hover Integration" do
       end
     end
 
-    it "does not crash when method definition not found" do
-      source = <<~RUBY
-        def example(obj)
-          obj.unknown_method
-        end
-      RUBY
+    context "method definition not found" do
+      let(:source) do
+        <<~RUBY
+          def example(obj)
+            obj.unknown_method
+          end
+        RUBY
+      end
 
-      # Hover on "unknown_method" - should not crash
-      response = hover_on_source(source, { line: 1, character: 6 })
-
-      # Should handle gracefully (may be nil or have RBS signature if available)
-      expect { response }.not_to raise_error
+      it "does not crash" do
+        response = hover_on_source(source, { line: 1, character: 6 })
+        expect { response }.not_to raise_error
+      end
     end
   end
 end
