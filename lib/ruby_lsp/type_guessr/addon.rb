@@ -60,6 +60,9 @@ module RubyLsp
         # Start background indexing
         @runtime_adapter.start_indexing
 
+        # Swap TypeInferrer for enhanced Go to Definition
+        @runtime_adapter.swap_type_inferrer
+
         # Start debug server if enabled
         start_debug_server if Config.debug_server_enabled?
 
@@ -74,6 +77,7 @@ module RubyLsp
       end
 
       def deactivate
+        @runtime_adapter&.restore_type_inferrer
         @debug_server&.stop
       end
 

@@ -5,6 +5,7 @@ require_relative "../../type_guessr/core/converter/prism_converter"
 require_relative "../../type_guessr/core/index/location_index"
 require_relative "../../type_guessr/core/inference/resolver"
 require_relative "../../type_guessr/core/rbs_provider"
+require_relative "type_inferrer"
 
 module RubyLsp
   module TypeGuessr
@@ -19,9 +20,34 @@ module RubyLsp
         @resolver = ::TypeGuessr::Core::Inference::Resolver.new(::TypeGuessr::Core::RBSProvider.instance)
         @indexing_completed = false
         @mutex = Mutex.new
+        @original_type_inferrer = nil
 
         # Set up duck type resolver callback
         @resolver.duck_type_resolver = ->(duck_type) { resolve_duck_type_to_class(duck_type) }
+      end
+
+      # Swap ruby-lsp's TypeInferrer with TypeGuessr's custom implementation
+      # This enhances Go to Definition and other features with heuristic type inference
+      def swap_type_inferrer
+        return unless @global_state.respond_to?(:type_inferrer)
+
+        @original_type_inferrer = @global_state.type_inferrer
+        custom_inferrer = TypeInferrer.new(@global_state.index, self)
+        @global_state.instance_variable_set(:@type_inferrer, custom_inferrer)
+        log_message("TypeInferrer swapped for enhanced type inference")
+      rescue StandardError => e
+        log_message("Failed to swap TypeInferrer: #{e.message}")
+      end
+
+      # Restore the original TypeInferrer
+      def restore_type_inferrer
+        return unless @original_type_inferrer
+
+        @global_state.instance_variable_set(:@type_inferrer, @original_type_inferrer)
+        @original_type_inferrer = nil
+        log_message("TypeInferrer restored")
+      rescue StandardError => e
+        log_message("Failed to restore TypeInferrer: #{e.message}")
       end
 
       # Index a file by converting its Prism AST to IR graph

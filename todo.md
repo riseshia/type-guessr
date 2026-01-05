@@ -1,23 +1,5 @@
 # TypeGuessr TODO
 
-## Restore TypeInferrer Integration
-
-The custom TypeInferrer swap mechanism was removed during Phase 4 & 5 rewrite (commit 006e7c8).
-
-**Original Implementation (removed):**
-- `lib/ruby_lsp/type_guessr/type_inferrer.rb` - Custom TypeInferrer
-- Swapped ruby-lsp's TypeInferrer to enhance Go to Definition with inferred types
-- Related commits: 9e2ec9c, 749626b, e7ebc46, 8150e27
-
-**Why Restore:**
-- Go to Definition currently doesn't benefit from TypeGuessr's type inference
-- The original goal was to enhance ruby-lsp's navigation features with heuristic types
-
-**Implementation Plan:**
-- Review the old implementation from git history
-- Adapt to current IR-based architecture
-- Hook into ruby-lsp's TypeInferrer to provide inferred types for Go to Definition
-
 ## VariableNode Split into WriteNode/ReadNode
 
 Currently `VariableNode` represents both variable assignment (write) and variable reference (read). This causes issues with:
@@ -51,11 +33,6 @@ The `info` variable's type should be `String` throughout, but inference may be f
 - Conditional modification inside `if` block
 - Need to investigate specific failure mode
 
-## Refactor integration hover spec
-
-- always use `let(:source)` even test is not doc test attaged
-- `Guessed Type` matching should use `expect_hover_type`\
-
 ## member var doesn't share its types
 
 ```
@@ -85,6 +62,11 @@ end
 ```
 
 it's better to be guessed `Chef#recipe` as `() -> Recipe`.
+
+## Optional type
+
+expected ?Integer
+actual Integer | nil
 
 ## Future Features
 
