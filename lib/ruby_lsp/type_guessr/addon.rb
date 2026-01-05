@@ -61,7 +61,7 @@ module RubyLsp
         @runtime_adapter.start_indexing
 
         # Start debug server if enabled
-        start_debug_server if debug_enabled?
+        start_debug_server if Config.debug_server_enabled?
 
         message_queue.push(
           method: "window/showMessage",
@@ -121,15 +121,14 @@ module RubyLsp
         warn("[TypeGuessr] Error indexing #{uri}: #{e.message}")
       end
 
-      def debug_enabled?
-        %w[1 true].include?(ENV.fetch("TYPE_GUESSR_DEBUG", nil))
-      end
-
       def start_debug_server
-        @debug_server = DebugServer.new(@global_state)
+        warn("[TypeGuessr] Starting debug server on port 7010...")
+        @debug_server = DebugServer.new(@global_state, @runtime_adapter)
         @debug_server.start
+        warn("[TypeGuessr] Debug server started: http://127.0.0.1:7010")
       rescue StandardError => e
-        warn("[TypeGuessr] Failed to start debug server: #{e.message}")
+        warn("[TypeGuessr] Failed to start debug server: #{e.class}: #{e.message}")
+        warn("[TypeGuessr] #{e.backtrace&.first(5)&.join("\n")}")
       end
     end
   end

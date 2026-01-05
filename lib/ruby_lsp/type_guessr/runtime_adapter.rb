@@ -255,6 +255,36 @@ module RubyLsp
         @location_index.stats
       end
 
+      # Get all registered class names (thread-safe)
+      # @return [Array<String>] List of class names
+      def registered_classes
+        @mutex.synchronize { @resolver.registered_classes }
+      end
+
+      # Get all methods for a specific class (thread-safe)
+      # @param class_name [String] Class name
+      # @return [Hash<String, DefNode>] Methods hash
+      def methods_for_class(class_name)
+        @mutex.synchronize { @resolver.methods_for_class(class_name) }
+      end
+
+      # Search for methods matching a pattern (thread-safe)
+      # @param query [String] Search query (e.g., "User#save" or "save")
+      # @return [Array<Hash>] Array of method info hashes
+      def search_project_methods(query)
+        @mutex.synchronize do
+          @resolver.search_methods(query).map do |class_name, method_name, def_node|
+            {
+              class_name: class_name,
+              method_name: method_name,
+              full_name: "#{class_name}##{method_name}",
+              node_key: def_node.node_key(class_name),
+              location: { line: def_node.loc&.line }
+            }
+          end
+        end
+      end
+
       private
 
       # Traverse and index a single file
@@ -307,8 +337,8 @@ module RubyLsp
             else
               # Regular method
               index_node_recursively(file_path, method, new_scope)
-              # Register method for project method lookup
-              @resolver.register_method(node.name, method.name.to_s, method)
+              # Register method for project method lookup (use full scope for correct key lookup)
+              @resolver.register_method(new_scope, method.name.to_s, method)
             end
           end
 

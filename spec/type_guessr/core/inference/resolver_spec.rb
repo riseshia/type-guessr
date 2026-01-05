@@ -325,4 +325,93 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
       end
     end
   end
+
+  describe "#registered_classes" do
+    it "returns empty array when no methods registered" do
+      expect(resolver.registered_classes).to eq([])
+    end
+
+    it "returns list of registered class names" do
+      def_node1 = TypeGuessr::Core::IR::DefNode.new(
+        name: :save, params: [], return_node: nil, body_nodes: [], loc: loc
+      )
+      def_node2 = TypeGuessr::Core::IR::DefNode.new(
+        name: :delete, params: [], return_node: nil, body_nodes: [], loc: loc
+      )
+
+      resolver.register_method("User", "save", def_node1)
+      resolver.register_method("Post", "delete", def_node2)
+
+      expect(resolver.registered_classes).to contain_exactly("User", "Post")
+    end
+
+    it "returns frozen array" do
+      expect(resolver.registered_classes).to be_frozen
+    end
+  end
+
+  describe "#methods_for_class" do
+    it "returns empty hash for unknown class" do
+      expect(resolver.methods_for_class("Unknown")).to eq({})
+    end
+
+    it "returns methods hash for registered class" do
+      def_node = TypeGuessr::Core::IR::DefNode.new(
+        name: :save, params: [], return_node: nil, body_nodes: [], loc: loc
+      )
+      resolver.register_method("User", "save", def_node)
+
+      methods = resolver.methods_for_class("User")
+      expect(methods.keys).to eq(["save"])
+      expect(methods["save"]).to eq(def_node)
+    end
+
+    it "returns frozen hash" do
+      expect(resolver.methods_for_class("User")).to be_frozen
+    end
+  end
+
+  describe "#search_methods" do
+    before do
+      @user_save = TypeGuessr::Core::IR::DefNode.new(
+        name: :save, params: [], return_node: nil, body_nodes: [], loc: loc
+      )
+      @user_delete = TypeGuessr::Core::IR::DefNode.new(
+        name: :delete, params: [], return_node: nil, body_nodes: [], loc: loc
+      )
+      @post_save = TypeGuessr::Core::IR::DefNode.new(
+        name: :save, params: [], return_node: nil, body_nodes: [], loc: loc
+      )
+
+      resolver.register_method("User", "save", @user_save)
+      resolver.register_method("User", "delete", @user_delete)
+      resolver.register_method("Post", "save", @post_save)
+    end
+
+    it "finds methods by method name" do
+      results = resolver.search_methods("save")
+      expect(results.size).to eq(2)
+      expect(results.map { |r| r[0..1] }).to contain_exactly(
+        %w[User save],
+        %w[Post save]
+      )
+    end
+
+    it "finds methods by class name" do
+      results = resolver.search_methods("User")
+      expect(results.size).to eq(2)
+      expect(results.map { |r| r[1] }).to contain_exactly("save", "delete")
+    end
+
+    it "finds methods by full name" do
+      results = resolver.search_methods("User#save")
+      expect(results.size).to eq(1)
+      expect(results[0][0..1]).to eq(%w[User save])
+    end
+
+    it "returns empty array for no match" do
+      results = resolver.search_methods("Unknown")
+      expect(results).to eq([])
+    end
+  end
 end

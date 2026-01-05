@@ -8,6 +8,72 @@ module TypeGuessr
       # @param col_range [Range] Column range
       Loc = Data.define(:line, :col_range)
 
+      # Pretty print helper for IR nodes (Prism-style tree output)
+      module TreeInspect
+        BRANCH = "├── "
+        LAST_BRANCH = "└── "
+        PIPE = "│   "
+        SPACE = "    "
+
+        def tree_inspect(indent: "", last: true, root: false)
+          lines = if root
+                    ["@ #{self.class.name.split("::").last} (location: #{format_loc})"]
+                  else
+                    prefix = last ? LAST_BRANCH : BRANCH
+                    indent += (last ? SPACE : PIPE)
+                    ["#{indent.delete_suffix(last ? SPACE : PIPE)}#{prefix}@ #{self.class.name.split("::").last} (location: #{format_loc})"]
+                  end
+          lines.concat(tree_inspect_fields(indent))
+          lines.join("\n")
+        end
+
+        private
+
+        def format_loc
+          loc ? "(#{loc.line},#{loc.col_range.begin})-(#{loc.line},#{loc.col_range.end})" : "∅"
+        end
+
+        def tree_field(name, value, indent, last: false)
+          prefix = last ? LAST_BRANCH : BRANCH
+          case value
+          when nil
+            "#{indent}#{prefix}#{name}: ∅"
+          when Array
+            if value.empty?
+              "#{indent}#{prefix}#{name}: (length: 0)"
+            else
+              lines = ["#{indent}#{prefix}#{name}: (length: #{value.size})"]
+              value.each_with_index do |item, idx|
+                is_last = idx == value.size - 1
+                item_indent = indent + (last ? SPACE : PIPE)
+                if item.is_a?(TreeInspect)
+                  lines << item.tree_inspect(indent: item_indent, last: is_last)
+                else
+                  item_prefix = is_last ? LAST_BRANCH : BRANCH
+                  lines << "#{item_indent}#{item_prefix}#{item.inspect}"
+                end
+              end
+              lines.join("\n")
+            end
+          when Symbol, String, Integer, TrueClass, FalseClass
+            "#{indent}#{prefix}#{name}: #{value.inspect}"
+          else
+            if value.is_a?(TreeInspect)
+              lines = ["#{indent}#{prefix}#{name}:"]
+              child_indent = indent + (last ? SPACE : PIPE)
+              lines << value.tree_inspect(indent: child_indent, last: true)
+              lines.join("\n")
+            else
+              "#{indent}#{prefix}#{name}: #{value.inspect}"
+            end
+          end
+        end
+
+        def tree_inspect_fields(_indent)
+          []
+        end
+      end
+
       # Base class for all IR nodes
       # IR represents a reverse dependency graph where each node points to nodes it depends on
       class Node
@@ -43,6 +109,8 @@ module TypeGuessr
       #
       # Examples: "hello" → String, 123 → Integer, [] → Array, {} → Hash
       LiteralNode = Data.define(:type, :loc) do
+        include TreeInspect
+
         def dependencies
           []
         end
@@ -55,6 +123,11 @@ module TypeGuessr
         def node_key(scope_id)
           "#{scope_id}:#{node_hash}"
         end
+
+        def tree_inspect_fields(indent)
+          type_str = type.respond_to?(:name) ? type.name : type.class.name.split("::").last
+          [tree_field(:type, type_str, indent, last: true)]
+        end
       end
 
       # Variable reference node
@@ -66,6 +139,8 @@ module TypeGuessr
       #
       # Note: called_methods is a shared array object that can be mutated during parsing
       VariableNode = Data.define(:name, :kind, :dependency, :called_methods, :loc) do
+        include TreeInspect
+
         def dependencies
           dependency ? [dependency] : []
         end
@@ -76,6 +151,15 @@ module TypeGuessr
 
         def node_key(scope_id)
           "#{scope_id}:#{node_hash}"
+        end
+
+        def tree_inspect_fields(indent)
+          [
+            tree_field(:name, name, indent),
+            tree_field(:kind, kind, indent),
+            tree_field(:dependency, dependency, indent),
+            tree_field(:called_methods, called_methods, indent, last: true),
+          ]
         end
       end
 
@@ -89,6 +173,8 @@ module TypeGuessr
       #
       # Note: called_methods is a shared array object that can be mutated during parsing
       ParamNode = Data.define(:name, :kind, :default_value, :called_methods, :loc) do
+        include TreeInspect
+
         def dependencies
           default_value ? [default_value] : []
         end
@@ -100,6 +186,15 @@ module TypeGuessr
         def node_key(scope_id)
           "#{scope_id}:#{node_hash}"
         end
+
+        def tree_inspect_fields(indent)
+          [
+            tree_field(:name, name, indent),
+            tree_field(:kind, kind, indent),
+            tree_field(:default_value, default_value, indent),
+            tree_field(:called_methods, called_methods, indent, last: true),
+          ]
+        end
       end
 
       # Constant reference node
@@ -107,6 +202,8 @@ module TypeGuessr
       # @param dependency [Node] The node where this constant is defined
       # @param loc [Loc] Location information
       ConstantNode = Data.define(:name, :dependency, :loc) do
+        include TreeInspect
+
         def dependencies
           dependency ? [dependency] : []
         end
@@ -117,6 +214,13 @@ module TypeGuessr
 
         def node_key(scope_id)
           "#{scope_id}:#{node_hash}"
+        end
+
+        def tree_inspect_fields(indent)
+          [
+            tree_field(:name, name, indent),
+            tree_field(:dependency, dependency, indent, last: true),
+          ]
         end
       end
 
@@ -129,6 +233,8 @@ module TypeGuessr
       # @param has_block [Boolean] Whether a block was provided (even if empty)
       # @param loc [Loc] Location information
       CallNode = Data.define(:method, :receiver, :args, :block_params, :block_body, :has_block, :loc) do
+        include TreeInspect
+
         def dependencies
           deps = []
           deps << receiver if receiver
@@ -144,6 +250,17 @@ module TypeGuessr
         def node_key(scope_id)
           "#{scope_id}:#{node_hash}"
         end
+
+        def tree_inspect_fields(indent)
+          [
+            tree_field(:method, method, indent),
+            tree_field(:receiver, receiver, indent),
+            tree_field(:args, args, indent),
+            tree_field(:block_params, block_params, indent),
+            tree_field(:block_body, block_body, indent),
+            tree_field(:has_block, has_block, indent, last: true),
+          ]
+        end
       end
 
       # Block parameter slot
@@ -152,6 +269,8 @@ module TypeGuessr
       # @param call_node [CallNode] The call node this slot belongs to
       # @param loc [Loc] Location information for the parameter itself
       BlockParamSlot = Data.define(:index, :call_node, :loc) do
+        include TreeInspect
+
         def dependencies
           [call_node]
         end
@@ -163,6 +282,13 @@ module TypeGuessr
         def node_key(scope_id)
           "#{scope_id}:#{node_hash}"
         end
+
+        def tree_inspect_fields(indent)
+          [
+            tree_field(:index, index, indent),
+            tree_field(:call_node, "(CallNode ref)", indent, last: true),
+          ]
+        end
       end
 
       # Branch merge node
@@ -171,6 +297,8 @@ module TypeGuessr
       # @param branches [Array<Node>] Final nodes from each branch
       # @param loc [Loc] Location information
       MergeNode = Data.define(:branches, :loc) do
+        include TreeInspect
+
         def dependencies
           branches
         end
@@ -182,6 +310,10 @@ module TypeGuessr
         def node_key(scope_id)
           "#{scope_id}:#{node_hash}"
         end
+
+        def tree_inspect_fields(indent)
+          [tree_field(:branches, branches, indent, last: true)]
+        end
       end
 
       # Method definition node
@@ -190,6 +322,8 @@ module TypeGuessr
       # @param return_node [Node] Node representing the return value
       # @param loc [Loc] Location information
       DefNode = Data.define(:name, :params, :return_node, :body_nodes, :loc) do
+        include TreeInspect
+
         def dependencies
           deps = params.dup
           deps << return_node if return_node
@@ -204,6 +338,15 @@ module TypeGuessr
         def node_key(scope_id)
           "#{scope_id}:#{node_hash}"
         end
+
+        def tree_inspect_fields(indent)
+          [
+            tree_field(:name, name, indent),
+            tree_field(:params, params, indent),
+            tree_field(:return_node, return_node, indent),
+            tree_field(:body_nodes, body_nodes, indent, last: true),
+          ]
+        end
       end
 
       # Class/Module node - container for methods and other definitions
@@ -211,6 +354,8 @@ module TypeGuessr
       # @param methods [Array<DefNode>] Method definitions in this class/module
       # @param loc [Loc] Location information
       ClassModuleNode = Data.define(:name, :methods, :loc) do
+        include TreeInspect
+
         def dependencies
           methods
         end
@@ -222,12 +367,21 @@ module TypeGuessr
         def node_key(scope_id)
           "#{scope_id}:#{node_hash}"
         end
+
+        def tree_inspect_fields(indent)
+          [
+            tree_field(:name, name, indent),
+            tree_field(:methods, methods, indent, last: true),
+          ]
+        end
       end
 
       # Self reference node
       # @param class_name [String] Name of the enclosing class/module
       # @param loc [Loc] Location information
       SelfNode = Data.define(:class_name, :loc) do
+        include TreeInspect
+
         def dependencies
           []
         end
@@ -238,6 +392,10 @@ module TypeGuessr
 
         def node_key(scope_id)
           "#{scope_id}:#{node_hash}"
+        end
+
+        def tree_inspect_fields(indent)
+          [tree_field(:class_name, class_name, indent, last: true)]
         end
       end
     end

@@ -38,6 +38,33 @@ module TypeGuessr
           @project_methods.dig(class_name, method_name)
         end
 
+        # Get all registered class names
+        # @return [Array<String>] List of class names (frozen)
+        def registered_classes
+          @project_methods.keys.freeze
+        end
+
+        # Get all methods for a specific class
+        # @param class_name [String] Class name
+        # @return [Hash<String, IR::DefNode>] Methods hash (frozen)
+        def methods_for_class(class_name)
+          (@project_methods[class_name] || {}).freeze
+        end
+
+        # Search for methods matching a pattern
+        # @param pattern [String] Search pattern (partial match on "ClassName#method_name")
+        # @return [Array<Array>] Array of [class_name, method_name, def_node]
+        def search_methods(pattern)
+          results = []
+          @project_methods.each do |class_name, methods|
+            methods.each do |method_name, def_node|
+              full_name = "#{class_name}##{method_name}"
+              results << [class_name, method_name, def_node] if full_name.include?(pattern)
+            end
+          end
+          results
+        end
+
         # Infer the type of an IR node
         # @param node [IR::Node] IR node to infer type for
         # @return [Result] Inference result with type and reason
