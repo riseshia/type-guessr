@@ -14,12 +14,28 @@ Currently `VariableNode` represents both variable assignment (write) and variabl
 - ReadNode depends on the most recent WriteNode for that variable
 - Enables cleaner SSA-like representation
 
-## member var doesn't share its types
+## Instance variable type sharing (Partially Fixed)
 
-```
+Instance variables are now shared across methods within the same class when the assignment comes before usage:
+
+```ruby
 class Chef
-  def do
-    @recipe.ingredients
+  def prepare_recipe
+    @recipe = Recipe.new  # Assignment first
+  end
+
+  def do_something
+    @recipe  # Type: Recipe (shared from prepare_recipe)
+  end
+end
+```
+
+**Remaining limitation:** When usage appears before assignment (in method definition order), the type cannot be inferred:
+
+```ruby
+class Chef
+  def do_something
+    @recipe  # Type: unknown (assignment comes later)
   end
 
   def prepare_recipe
@@ -28,21 +44,19 @@ class Chef
 end
 ```
 
-@recipe expected `?Recipe` all over the place
+**Workaround:** Use accessor methods with memoization:
 
-```
+```ruby
 class Chef
-  def do
+  def do_something
     recipe.ingredients
   end
 
   def recipe
-    @recipe ||= Recipe.new
+    @recipe ||= Recipe.new  # Type: Recipe
   end
 end
 ```
-
-it's better to be guessed `Chef#recipe` as `() -> Recipe`.
 
 ## Optional type
 

@@ -688,6 +688,55 @@ RSpec.describe "Hover Integration" do
       end
     end
 
+    context "instance variable sharing across methods" do
+      let(:source) do
+        <<~RUBY
+          class Chef
+            def prepare_recipe
+              @recipe = Recipe.new
+            end
+
+            def do_something
+              @recipe
+            end
+          end
+
+          class Recipe
+          end
+        RUBY
+      end
+
+      it "shares instance variable type across methods within same class" do
+        expect_hover_type(line: 7, column: 6, expected: "Recipe")
+      end
+    end
+
+    context "instance variable usage before assignment" do
+      let(:source) do
+        <<~RUBY
+          class Chef
+            def do_something
+              @recipe
+            end
+
+            def prepare_recipe
+              @recipe = Recipe.new
+            end
+          end
+
+          class Recipe
+          end
+        RUBY
+      end
+
+      it "cannot see instance variable assigned in later method" do
+        # When usage comes before assignment (in method order),
+        # the instance variable is not yet registered
+        response = hover_on_source(source, { line: 2, character: 6 })
+        expect(response.contents.value).not_to include("Recipe")
+      end
+    end
+
     context "block-local variable shadowing" do
       let(:source) do
         <<~RUBY

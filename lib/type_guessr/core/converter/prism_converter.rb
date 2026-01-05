@@ -18,6 +18,7 @@ module TypeGuessr
           def initialize(parent = nil)
             @parent = parent
             @variables = {} # name => node
+            @instance_variables = {} # @name => node (only for class-level context)
             @scope_type = nil # :class, :method, :block, :top_level
             @current_class = nil
             @current_method = nil
@@ -29,6 +30,30 @@ module TypeGuessr
 
           def lookup_variable(name)
             @variables[name] || @parent&.lookup_variable(name)
+          end
+
+          # Register an instance variable at the class level
+          # Instance variables are shared across all methods in a class
+          def register_instance_variable(name, node)
+            if @scope_type == :class
+              @instance_variables[name] = node
+            elsif @parent
+              @parent.register_instance_variable(name, node)
+            else
+              # Top-level instance variable, store locally
+              @instance_variables[name] = node
+            end
+          end
+
+          # Lookup an instance variable from the class level
+          def lookup_instance_variable(name)
+            if @scope_type == :class
+              @instance_variables[name]
+            elsif @parent
+              @parent.lookup_instance_variable(name)
+            else
+              @instance_variables[name]
+            end
           end
 
           def fork(scope_type)
@@ -265,12 +290,14 @@ module TypeGuessr
             called_methods: [],
             loc: convert_loc(prism_node.location)
           )
-          context.register_variable(prism_node.name, var_node)
+          # Register at class level so it's visible across methods
+          context.register_instance_variable(prism_node.name, var_node)
           var_node
         end
 
         def convert_instance_variable_read(prism_node, context)
-          dependency = context.lookup_variable(prism_node.name)
+          # Look up from class level first
+          dependency = context.lookup_instance_variable(prism_node.name)
           called_methods = if dependency.is_a?(IR::VariableNode) || dependency.is_a?(IR::ParamNode)
                              dependency.called_methods
                            else
@@ -350,7 +377,7 @@ module TypeGuessr
         # x ||= value means: if x is nil/false, x = value, else keep x
         # Type is union of original type and value type
         def convert_or_write(prism_node, context, kind)
-          original_node = context.lookup_variable(prism_node.name)
+          original_node = lookup_by_kind(prism_node.name, kind, context)
           value_node = convert(prism_node.value, context)
 
           # Create merge node for union type (original | value)
@@ -375,7 +402,7 @@ module TypeGuessr
             called_methods: [],
             loc: convert_loc(prism_node.location)
           )
-          context.register_variable(prism_node.name, var_node)
+          register_by_kind(prism_node.name, var_node, kind, context)
           var_node
         end
 
@@ -383,7 +410,7 @@ module TypeGuessr
         # x &&= value means: if x is truthy, x = value, else keep x
         # Type is union of original type and value type
         def convert_and_write(prism_node, context, kind)
-          original_node = context.lookup_variable(prism_node.name)
+          original_node = lookup_by_kind(prism_node.name, kind, context)
           value_node = convert(prism_node.value, context)
 
           # Create merge node for union type (original | value)
@@ -407,7 +434,7 @@ module TypeGuessr
             called_methods: [],
             loc: convert_loc(prism_node.location)
           )
-          context.register_variable(prism_node.name, var_node)
+          register_by_kind(prism_node.name, var_node, kind, context)
           var_node
         end
 
@@ -415,7 +442,7 @@ module TypeGuessr
         # x += value is equivalent to x = x.+(value)
         # Type is the return type of the operator method
         def convert_operator_write(prism_node, context, kind)
-          original_node = context.lookup_variable(prism_node.name)
+          original_node = lookup_by_kind(prism_node.name, kind, context)
           value_node = convert(prism_node.value, context)
 
           # Create a call node representing x.operator(value)
@@ -437,8 +464,28 @@ module TypeGuessr
             called_methods: [],
             loc: convert_loc(prism_node.location)
           )
-          context.register_variable(prism_node.name, var_node)
+          register_by_kind(prism_node.name, var_node, kind, context)
           var_node
+        end
+
+        # Helper to lookup variable by kind
+        def lookup_by_kind(name, kind, context)
+          case kind
+          when :instance
+            context.lookup_instance_variable(name)
+          else
+            context.lookup_variable(name)
+          end
+        end
+
+        # Helper to register variable by kind
+        def register_by_kind(name, node, kind, context)
+          case kind
+          when :instance
+            context.register_instance_variable(name, node)
+          else
+            context.register_variable(name, node)
+          end
         end
 
         def convert_call(prism_node, context)
