@@ -1069,6 +1069,14 @@ module TypeGuessr
             elsif original_val
               # Variable not modified in else branch, use original
               branches << original_val
+            elsif then_val
+              # Inline if/unless: no else branch and no original value
+              # Add nil to represent "variable may not be assigned"
+              nil_node = IR::LiteralNode.new(
+                type: Types::ClassInstance.new("NilClass"),
+                loc: convert_loc(location)
+              )
+              branches << nil_node
             end
 
             # Create MergeNode only if we have multiple branches

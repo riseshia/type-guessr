@@ -208,6 +208,35 @@ RSpec.describe TypeGuessr::Core::Converter::PrismConverter do
       expect(node).to be_a(TypeGuessr::Core::IR::MergeNode)
       expect(node.branches.size).to eq(2)
     end
+
+    it "creates merge node for inline if (modifier if)" do
+      source = "x = 1 if condition"
+      parsed = Prism.parse(source)
+      context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+      converter.convert(parsed.value.statements.body.first, context)
+
+      # Variable should be a MergeNode with WriteNode and nil
+      var = context.lookup_variable(:x)
+      expect(var).to be_a(TypeGuessr::Core::IR::MergeNode)
+      expect(var.branches.size).to eq(2)
+
+      # One branch is WriteNode, one is LiteralNode(nil)
+      types = var.branches.map(&:class).map(&:name)
+      expect(types).to include("TypeGuessr::Core::IR::WriteNode")
+      expect(types).to include("TypeGuessr::Core::IR::LiteralNode")
+    end
+
+    it "creates merge node for inline unless (modifier unless)" do
+      source = "x = 1 unless condition"
+      parsed = Prism.parse(source)
+      context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+      converter.convert(parsed.value.statements.body.first, context)
+
+      # Variable should be a MergeNode with WriteNode and nil
+      var = context.lookup_variable(:x)
+      expect(var).to be_a(TypeGuessr::Core::IR::MergeNode)
+      expect(var.branches.size).to eq(2)
+    end
   end
 
   describe "method definition conversion" do

@@ -4,10 +4,7 @@
 
 - [x] Optional type formatting (`?Integer` instead of `Integer | nil`)
 - [x] Fix doubled activation issue (guard against double activation)
-
-## inline if / unless support?
-
-looks like it isn't supported. don't need correct type inference, but its ir should build as it means.
+- [x] Inline if/unless support (`x = 1 if condition` → MergeNode with nil)
 
 ## IR Dependency Graph seems strange
 
