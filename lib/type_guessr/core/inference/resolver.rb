@@ -91,8 +91,10 @@ module TypeGuessr
           case node
           when IR::LiteralNode
             infer_literal(node)
-          when IR::VariableNode
-            infer_variable(node)
+          when IR::WriteNode
+            infer_write(node)
+          when IR::ReadNode
+            infer_read(node)
           when IR::ParamNode
             infer_param(node)
           when IR::ConstantNode
@@ -118,11 +120,17 @@ module TypeGuessr
           Result.new(node.type, "literal", :literal)
         end
 
-        def infer_variable(node)
-          return Result.new(Types::Unknown.instance, "unassigned variable", :unknown) unless node.dependency
+        def infer_write(node)
+          return Result.new(Types::Unknown.instance, "unassigned variable", :unknown) unless node.value
 
-          dep_result = infer(node.dependency)
+          dep_result = infer(node.value)
           Result.new(dep_result.type, "assigned from #{dep_result.reason}", dep_result.source)
+        end
+
+        def infer_read(node)
+          return Result.new(Types::Unknown.instance, "unassigned variable", :unknown) unless node.write_node
+
+          infer(node.write_node)
         end
 
         def infer_param(node)

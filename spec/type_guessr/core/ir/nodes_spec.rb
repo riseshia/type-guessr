@@ -29,29 +29,29 @@ RSpec.describe TypeGuessr::Core::IR do
     end
   end
 
-  describe "VariableNode" do
-    it "stores variable information" do
+  describe "WriteNode" do
+    it "stores write variable information" do
       literal = described_class::LiteralNode.new(type: string_type, loc: loc)
-      node = described_class::VariableNode.new(
+      node = described_class::WriteNode.new(
         name: :user,
         kind: :local,
-        dependency: literal,
+        value: literal,
         called_methods: [],
         loc: loc
       )
 
       expect(node.name).to eq(:user)
       expect(node.kind).to eq(:local)
-      expect(node.dependency).to eq(literal)
+      expect(node.value).to eq(literal)
       expect(node.called_methods).to eq([])
     end
 
-    it "returns dependency in dependencies array" do
+    it "returns value in dependencies array" do
       literal = described_class::LiteralNode.new(type: string_type, loc: loc)
-      node = described_class::VariableNode.new(
+      node = described_class::WriteNode.new(
         name: :user,
         kind: :local,
-        dependency: literal,
+        value: literal,
         called_methods: [],
         loc: loc
       )
@@ -61,10 +61,10 @@ RSpec.describe TypeGuessr::Core::IR do
 
     it "shares called_methods array for mutation" do
       methods = []
-      node = described_class::VariableNode.new(
+      node = described_class::WriteNode.new(
         name: :user,
         kind: :local,
-        dependency: nil,
+        value: nil,
         called_methods: methods,
         loc: loc
       )
@@ -72,6 +72,102 @@ RSpec.describe TypeGuessr::Core::IR do
       # Mutate the shared array
       methods << :profile
       expect(node.called_methods).to eq([:profile])
+    end
+
+    it "generates wvar node_hash" do
+      literal = described_class::LiteralNode.new(type: string_type, loc: loc)
+      node = described_class::WriteNode.new(
+        name: :user,
+        kind: :local,
+        value: literal,
+        called_methods: [],
+        loc: loc
+      )
+
+      expect(node.node_hash).to eq("wvar:user:1")
+    end
+  end
+
+  describe "ReadNode" do
+    it "stores read variable information" do
+      write_node = described_class::WriteNode.new(
+        name: :user,
+        kind: :local,
+        value: nil,
+        called_methods: [],
+        loc: loc
+      )
+      node = described_class::ReadNode.new(
+        name: :user,
+        kind: :local,
+        write_node: write_node,
+        called_methods: write_node.called_methods,
+        loc: loc
+      )
+
+      expect(node.name).to eq(:user)
+      expect(node.kind).to eq(:local)
+      expect(node.write_node).to eq(write_node)
+    end
+
+    it "returns write_node in dependencies array" do
+      write_node = described_class::WriteNode.new(
+        name: :user,
+        kind: :local,
+        value: nil,
+        called_methods: [],
+        loc: loc
+      )
+      node = described_class::ReadNode.new(
+        name: :user,
+        kind: :local,
+        write_node: write_node,
+        called_methods: [],
+        loc: loc
+      )
+
+      expect(node.dependencies).to eq([write_node])
+    end
+
+    it "shares called_methods with write_node" do
+      methods = []
+      write_node = described_class::WriteNode.new(
+        name: :user,
+        kind: :local,
+        value: nil,
+        called_methods: methods,
+        loc: loc
+      )
+      node = described_class::ReadNode.new(
+        name: :user,
+        kind: :local,
+        write_node: write_node,
+        called_methods: methods,
+        loc: loc
+      )
+
+      # Mutate via write_node
+      methods << :profile
+      expect(node.called_methods).to eq([:profile])
+    end
+
+    it "generates rvar node_hash" do
+      write_node = described_class::WriteNode.new(
+        name: :user,
+        kind: :local,
+        value: nil,
+        called_methods: [],
+        loc: loc
+      )
+      node = described_class::ReadNode.new(
+        name: :user,
+        kind: :local,
+        write_node: write_node,
+        called_methods: [],
+        loc: loc
+      )
+
+      expect(node.node_hash).to eq("rvar:user:1")
     end
   end
 
@@ -119,10 +215,10 @@ RSpec.describe TypeGuessr::Core::IR do
 
   describe "CallNode" do
     it "stores call information" do
-      receiver = described_class::VariableNode.new(
+      receiver = described_class::WriteNode.new(
         name: :user,
         kind: :local,
-        dependency: nil,
+        value: nil,
         called_methods: [],
         loc: loc
       )
@@ -142,10 +238,10 @@ RSpec.describe TypeGuessr::Core::IR do
     end
 
     it "includes receiver and args in dependencies" do
-      receiver = described_class::VariableNode.new(
+      receiver = described_class::WriteNode.new(
         name: :user,
         kind: :local,
-        dependency: nil,
+        value: nil,
         called_methods: [],
         loc: loc
       )

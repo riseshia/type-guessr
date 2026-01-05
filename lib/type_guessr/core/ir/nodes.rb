@@ -130,23 +130,23 @@ module TypeGuessr
         end
       end
 
-      # Variable reference node
+      # Variable write node (assignment)
       # @param name [Symbol] Variable name
       # @param kind [Symbol] Variable kind (:local, :instance, :class)
-      # @param dependency [Node] The node this variable depends on (assigned value)
+      # @param value [Node] The node of the assigned value
       # @param called_methods [Array<Symbol>] Methods called on this variable (for duck typing)
       # @param loc [Loc] Location information
       #
       # Note: called_methods is a shared array object that can be mutated during parsing
-      VariableNode = Data.define(:name, :kind, :dependency, :called_methods, :loc) do
+      WriteNode = Data.define(:name, :kind, :value, :called_methods, :loc) do
         include TreeInspect
 
         def dependencies
-          dependency ? [dependency] : []
+          value ? [value] : []
         end
 
         def node_hash
-          "var:#{name}:#{loc&.line}"
+          "wvar:#{name}:#{loc&.line}"
         end
 
         def node_key(scope_id)
@@ -157,7 +157,40 @@ module TypeGuessr
           [
             tree_field(:name, name, indent),
             tree_field(:kind, kind, indent),
-            tree_field(:dependency, dependency, indent),
+            tree_field(:value, value, indent),
+            tree_field(:called_methods, called_methods, indent, last: true),
+          ]
+        end
+      end
+
+      # Variable read node (reference)
+      # @param name [Symbol] Variable name
+      # @param kind [Symbol] Variable kind (:local, :instance, :class)
+      # @param write_node [WriteNode, nil] The WriteNode this read references
+      # @param called_methods [Array<Symbol>] Methods called on this variable (for duck typing)
+      # @param loc [Loc] Location information
+      #
+      # Note: called_methods is shared with WriteNode for duck typing propagation
+      ReadNode = Data.define(:name, :kind, :write_node, :called_methods, :loc) do
+        include TreeInspect
+
+        def dependencies
+          write_node ? [write_node] : []
+        end
+
+        def node_hash
+          "rvar:#{name}:#{loc&.line}"
+        end
+
+        def node_key(scope_id)
+          "#{scope_id}:#{node_hash}"
+        end
+
+        def tree_inspect_fields(indent)
+          [
+            tree_field(:name, name, indent),
+            tree_field(:kind, kind, indent),
+            tree_field(:write_node, write_node, indent),
             tree_field(:called_methods, called_methods, indent, last: true),
           ]
         end

@@ -233,7 +233,7 @@ module RubyLsp
 
       def extract_called_methods(ir_node)
         case ir_node
-        when IR::VariableNode, IR::ParamNode
+        when IR::WriteNode, IR::ReadNode, IR::ParamNode
           ir_node.called_methods || []
         when IR::BlockParamSlot
           # For block params, check the underlying param node
@@ -264,11 +264,13 @@ module RubyLsp
       def generate_node_hash(node)
         line = node.location.start_line
         case node
-        when Prism::LocalVariableReadNode, Prism::LocalVariableWriteNode, Prism::LocalVariableTargetNode,
-             Prism::InstanceVariableReadNode, Prism::InstanceVariableWriteNode, Prism::InstanceVariableTargetNode,
-             Prism::ClassVariableReadNode, Prism::ClassVariableWriteNode, Prism::ClassVariableTargetNode,
-             Prism::GlobalVariableReadNode, Prism::GlobalVariableWriteNode, Prism::GlobalVariableTargetNode
-          "var:#{node.name}:#{line}"
+        when Prism::LocalVariableWriteNode, Prism::InstanceVariableWriteNode, Prism::ClassVariableWriteNode,
+             Prism::GlobalVariableWriteNode, Prism::LocalVariableTargetNode, Prism::InstanceVariableTargetNode,
+             Prism::ClassVariableTargetNode, Prism::GlobalVariableTargetNode
+          "wvar:#{node.name}:#{line}"
+        when Prism::LocalVariableReadNode, Prism::InstanceVariableReadNode,
+             Prism::ClassVariableReadNode, Prism::GlobalVariableReadNode
+          "rvar:#{node.name}:#{line}"
         when Prism::RequiredParameterNode, Prism::OptionalParameterNode, Prism::RestParameterNode,
              Prism::RequiredKeywordParameterNode, Prism::OptionalKeywordParameterNode,
              Prism::KeywordRestParameterNode, Prism::BlockParameterNode

@@ -33,35 +33,75 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
       end
     end
 
-    context "with VariableNode" do
-      it "infers type from dependency" do
+    context "with WriteNode" do
+      it "infers type from value" do
         literal = TypeGuessr::Core::IR::LiteralNode.new(
           type: TypeGuessr::Core::Types::ClassInstance.new("Integer"),
           loc: loc
         )
-        var_node = TypeGuessr::Core::IR::VariableNode.new(
+        write_node = TypeGuessr::Core::IR::WriteNode.new(
           name: :x,
           kind: :local,
-          dependency: literal,
+          value: literal,
           called_methods: [],
           loc: loc
         )
 
-        result = resolver.infer(var_node)
+        result = resolver.infer(write_node)
         expect(result.type.name).to eq("Integer")
         expect(result.reason).to eq("assigned from literal")
       end
 
       it "returns Unknown for unassigned variable" do
-        var_node = TypeGuessr::Core::IR::VariableNode.new(
+        write_node = TypeGuessr::Core::IR::WriteNode.new(
           name: :x,
           kind: :local,
-          dependency: nil,
+          value: nil,
           called_methods: [],
           loc: loc
         )
 
-        result = resolver.infer(var_node)
+        result = resolver.infer(write_node)
+        expect(result.type).to be(TypeGuessr::Core::Types::Unknown.instance)
+        expect(result.reason).to eq("unassigned variable")
+      end
+    end
+
+    context "with ReadNode" do
+      it "infers type from write_node" do
+        literal = TypeGuessr::Core::IR::LiteralNode.new(
+          type: TypeGuessr::Core::Types::ClassInstance.new("String"),
+          loc: loc
+        )
+        write_node = TypeGuessr::Core::IR::WriteNode.new(
+          name: :x,
+          kind: :local,
+          value: literal,
+          called_methods: [],
+          loc: loc
+        )
+        read_node = TypeGuessr::Core::IR::ReadNode.new(
+          name: :x,
+          kind: :local,
+          write_node: write_node,
+          called_methods: write_node.called_methods,
+          loc: loc
+        )
+
+        result = resolver.infer(read_node)
+        expect(result.type.name).to eq("String")
+      end
+
+      it "returns Unknown for unassigned variable" do
+        read_node = TypeGuessr::Core::IR::ReadNode.new(
+          name: :x,
+          kind: :local,
+          write_node: nil,
+          called_methods: [],
+          loc: loc
+        )
+
+        result = resolver.infer(read_node)
         expect(result.type).to be(TypeGuessr::Core::Types::Unknown.instance)
         expect(result.reason).to eq("unassigned variable")
       end
@@ -135,10 +175,10 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
 
     context "with CallNode" do
       it "queries RBS for return type" do
-        receiver_var = TypeGuessr::Core::IR::VariableNode.new(
+        receiver_var = TypeGuessr::Core::IR::WriteNode.new(
           name: :str,
           kind: :local,
-          dependency: TypeGuessr::Core::IR::LiteralNode.new(
+          value: TypeGuessr::Core::IR::LiteralNode.new(
             type: TypeGuessr::Core::Types::ClassInstance.new("String"),
             loc: loc
           ),
@@ -165,10 +205,10 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
         array_type = TypeGuessr::Core::Types::ArrayType.new(
           TypeGuessr::Core::Types::ClassInstance.new("Integer")
         )
-        receiver_var = TypeGuessr::Core::IR::VariableNode.new(
+        receiver_var = TypeGuessr::Core::IR::WriteNode.new(
           name: :arr,
           kind: :local,
-          dependency: TypeGuessr::Core::IR::LiteralNode.new(
+          value: TypeGuessr::Core::IR::LiteralNode.new(
             type: array_type,
             loc: loc
           ),
@@ -196,10 +236,10 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
         array_type = TypeGuessr::Core::Types::ArrayType.new(
           TypeGuessr::Core::Types::ClassInstance.new("String")
         )
-        receiver_var = TypeGuessr::Core::IR::VariableNode.new(
+        receiver_var = TypeGuessr::Core::IR::WriteNode.new(
           name: :arr,
           kind: :local,
-          dependency: TypeGuessr::Core::IR::LiteralNode.new(
+          value: TypeGuessr::Core::IR::LiteralNode.new(
             type: array_type,
             loc: loc
           ),

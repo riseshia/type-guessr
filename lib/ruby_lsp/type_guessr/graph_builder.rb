@@ -115,11 +115,12 @@ module RubyLsp
           # Get receiver description
           receiver_str = format_receiver(node.receiver)
           { method: node.method.to_s, has_block: node.has_block, arg_keys: arg_keys, receiver: receiver_str }
-        when ::TypeGuessr::Core::IR::VariableNode
-          is_read = node.dependency.is_a?(::TypeGuessr::Core::IR::VariableNode) &&
-                    node.dependency.name == node.name
+        when ::TypeGuessr::Core::IR::WriteNode
           { name: node.name.to_s, kind: node.kind.to_s, called_methods: node.called_methods.map(&:to_s),
-            is_read: is_read }
+            is_read: false }
+        when ::TypeGuessr::Core::IR::ReadNode
+          { name: node.name.to_s, kind: node.kind.to_s, called_methods: node.called_methods.map(&:to_s),
+            is_read: true }
         when ::TypeGuessr::Core::IR::ParamNode
           { name: node.name.to_s, kind: node.kind.to_s, called_methods: node.called_methods.map(&:to_s) }
         when ::TypeGuessr::Core::IR::LiteralNode
@@ -146,7 +147,7 @@ module RubyLsp
         case receiver
         when ::TypeGuessr::Core::IR::SelfNode
           "self"
-        when ::TypeGuessr::Core::IR::VariableNode
+        when ::TypeGuessr::Core::IR::WriteNode, ::TypeGuessr::Core::IR::ReadNode
           receiver.name.to_s
         when ::TypeGuessr::Core::IR::ConstantNode
           receiver.name.to_s

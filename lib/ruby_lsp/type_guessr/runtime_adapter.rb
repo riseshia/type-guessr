@@ -376,9 +376,13 @@ module RubyLsp
           # Index all body nodes (including intermediate statements)
           node.body_nodes&.each { |body_node| index_node_recursively(file_path, body_node, new_scope) }
 
-        when ::TypeGuessr::Core::IR::VariableNode
-          # Index dependency
-          index_node_recursively(file_path, node.dependency, scope_id) if node.dependency
+        when ::TypeGuessr::Core::IR::WriteNode
+          # Index value
+          index_node_recursively(file_path, node.value, scope_id) if node.value
+
+        when ::TypeGuessr::Core::IR::ReadNode
+          # Index write_node
+          index_node_recursively(file_path, node.write_node, scope_id) if node.write_node
 
         when ::TypeGuessr::Core::IR::CallNode
           # Index receiver

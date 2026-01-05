@@ -52,11 +52,11 @@ RSpec.describe TypeGuessr::Core::Converter::PrismConverter do
       context = TypeGuessr::Core::Converter::PrismConverter::Context.new
       node = converter.convert(parsed.value.statements.body.first, context)
 
-      expect(node).to be_a(TypeGuessr::Core::IR::VariableNode)
+      expect(node).to be_a(TypeGuessr::Core::IR::WriteNode)
       expect(node.name).to eq(:x)
       expect(node.kind).to eq(:local)
-      expect(node.dependency).to be_a(TypeGuessr::Core::IR::LiteralNode)
-      expect(node.dependency.type.name).to eq("String")
+      expect(node.value).to be_a(TypeGuessr::Core::IR::LiteralNode)
+      expect(node.value.type.name).to eq("String")
     end
 
     it "converts instance variable assignment" do
@@ -65,7 +65,7 @@ RSpec.describe TypeGuessr::Core::Converter::PrismConverter do
       context = TypeGuessr::Core::Converter::PrismConverter::Context.new
       node = converter.convert(parsed.value.statements.body.first, context)
 
-      expect(node).to be_a(TypeGuessr::Core::IR::VariableNode)
+      expect(node).to be_a(TypeGuessr::Core::IR::WriteNode)
       expect(node.name).to eq(:@name)
       expect(node.kind).to eq(:instance)
     end
@@ -76,7 +76,7 @@ RSpec.describe TypeGuessr::Core::Converter::PrismConverter do
       context = TypeGuessr::Core::Converter::PrismConverter::Context.new
       node = converter.convert(parsed.value.statements.body.first, context)
 
-      expect(node).to be_a(TypeGuessr::Core::IR::VariableNode)
+      expect(node).to be_a(TypeGuessr::Core::IR::WriteNode)
       expect(node.name).to eq(:@@count)
       expect(node.kind).to eq(:class)
     end
@@ -93,17 +93,17 @@ RSpec.describe TypeGuessr::Core::Converter::PrismConverter do
 
       # Convert assignment
       assignment = parsed.value.statements.body[0]
-      var_node = converter.convert(assignment, context)
+      write_node = converter.convert(assignment, context)
 
       # Convert read
       read = parsed.value.statements.body[1]
       read_node = converter.convert(read, context)
 
-      # Read creates a new node but points to the assignment via dependency
-      expect(read_node).to be_a(TypeGuessr::Core::IR::VariableNode)
-      expect(read_node.dependency).to eq(var_node)
+      # Read creates a ReadNode pointing to the WriteNode
+      expect(read_node).to be_a(TypeGuessr::Core::IR::ReadNode)
+      expect(read_node.write_node).to eq(write_node)
       # Should share called_methods array for duck typing
-      expect(read_node.called_methods).to be(var_node.called_methods)
+      expect(read_node.called_methods).to be(write_node.called_methods)
     end
   end
 
@@ -134,7 +134,7 @@ RSpec.describe TypeGuessr::Core::Converter::PrismConverter do
 
       expect(node).to be_a(TypeGuessr::Core::IR::CallNode)
       expect(node.method).to eq(:profile)
-      expect(node.receiver).to be_a(TypeGuessr::Core::IR::VariableNode)
+      expect(node.receiver).to be_a(TypeGuessr::Core::IR::ReadNode)
     end
 
     it "tracks method calls for duck typing" do
@@ -289,10 +289,10 @@ RSpec.describe TypeGuessr::Core::Converter::PrismConverter do
         node = converter.convert(parsed.value.statements.body.first, context)
 
         # The return_node should reference the param 'a' from destructuring
-        expect(node.return_node).to be_a(TypeGuessr::Core::IR::VariableNode)
+        expect(node.return_node).to be_a(TypeGuessr::Core::IR::ReadNode)
         expect(node.return_node.name).to eq(:a)
-        # Should have a dependency since it was registered from destructuring
-        expect(node.return_node.dependency).to be_a(TypeGuessr::Core::IR::ParamNode)
+        # Should have a write_node since it was registered from destructuring
+        expect(node.return_node.write_node).to be_a(TypeGuessr::Core::IR::ParamNode)
       end
 
       it "handles nested destructuring" do

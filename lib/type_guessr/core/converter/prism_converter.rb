@@ -250,32 +250,31 @@ module TypeGuessr
 
         def convert_local_variable_write(prism_node, context)
           value_node = convert(prism_node.value, context)
-          var_node = IR::VariableNode.new(
+          write_node = IR::WriteNode.new(
             name: prism_node.name,
             kind: :local,
-            dependency: value_node,
+            value: value_node,
             called_methods: [],
             loc: convert_loc(prism_node.location)
           )
-          context.register_variable(prism_node.name, var_node)
-          var_node
+          context.register_variable(prism_node.name, write_node)
+          write_node
         end
 
         def convert_local_variable_read(prism_node, context)
           # Look up the most recent assignment
-          dependency = context.lookup_variable(prism_node.name)
-          # Create a new node with the read location pointing to the assignment
-          # Share called_methods array with the assignment/parameter for duck typing
-          called_methods = if dependency.is_a?(IR::VariableNode) || dependency.is_a?(IR::ParamNode)
-                             dependency.called_methods
+          write_node = context.lookup_variable(prism_node.name)
+          # Share called_methods array with the write node/parameter for duck typing
+          called_methods = if write_node.is_a?(IR::WriteNode) || write_node.is_a?(IR::ParamNode)
+                             write_node.called_methods
                            else
                              []
                            end
 
-          IR::VariableNode.new(
+          IR::ReadNode.new(
             name: prism_node.name,
             kind: :local,
-            dependency: dependency,
+            write_node: write_node,
             called_methods: called_methods,
             loc: convert_loc(prism_node.location)
           )
@@ -283,31 +282,31 @@ module TypeGuessr
 
         def convert_instance_variable_write(prism_node, context)
           value_node = convert(prism_node.value, context)
-          var_node = IR::VariableNode.new(
+          write_node = IR::WriteNode.new(
             name: prism_node.name,
             kind: :instance,
-            dependency: value_node,
+            value: value_node,
             called_methods: [],
             loc: convert_loc(prism_node.location)
           )
           # Register at class level so it's visible across methods
-          context.register_instance_variable(prism_node.name, var_node)
-          var_node
+          context.register_instance_variable(prism_node.name, write_node)
+          write_node
         end
 
         def convert_instance_variable_read(prism_node, context)
           # Look up from class level first
-          dependency = context.lookup_instance_variable(prism_node.name)
-          called_methods = if dependency.is_a?(IR::VariableNode) || dependency.is_a?(IR::ParamNode)
-                             dependency.called_methods
+          write_node = context.lookup_instance_variable(prism_node.name)
+          called_methods = if write_node.is_a?(IR::WriteNode) || write_node.is_a?(IR::ParamNode)
+                             write_node.called_methods
                            else
                              []
                            end
 
-          IR::VariableNode.new(
+          IR::ReadNode.new(
             name: prism_node.name,
             kind: :instance,
-            dependency: dependency,
+            write_node: write_node,
             called_methods: called_methods,
             loc: convert_loc(prism_node.location)
           )
@@ -315,29 +314,29 @@ module TypeGuessr
 
         def convert_class_variable_write(prism_node, context)
           value_node = convert(prism_node.value, context)
-          var_node = IR::VariableNode.new(
+          write_node = IR::WriteNode.new(
             name: prism_node.name,
             kind: :class,
-            dependency: value_node,
+            value: value_node,
             called_methods: [],
             loc: convert_loc(prism_node.location)
           )
-          context.register_variable(prism_node.name, var_node)
-          var_node
+          context.register_variable(prism_node.name, write_node)
+          write_node
         end
 
         def convert_class_variable_read(prism_node, context)
-          dependency = context.lookup_variable(prism_node.name)
-          called_methods = if dependency.is_a?(IR::VariableNode) || dependency.is_a?(IR::ParamNode)
-                             dependency.called_methods
+          write_node = context.lookup_variable(prism_node.name)
+          called_methods = if write_node.is_a?(IR::WriteNode) || write_node.is_a?(IR::ParamNode)
+                             write_node.called_methods
                            else
                              []
                            end
 
-          IR::VariableNode.new(
+          IR::ReadNode.new(
             name: prism_node.name,
             kind: :class,
-            dependency: dependency,
+            write_node: write_node,
             called_methods: called_methods,
             loc: convert_loc(prism_node.location)
           )
@@ -394,16 +393,16 @@ module TypeGuessr
                          )
                        end
 
-          # Create variable node with merged dependency
-          var_node = IR::VariableNode.new(
+          # Create write node with merged value
+          write_node = IR::WriteNode.new(
             name: prism_node.name,
             kind: kind,
-            dependency: merge_node,
+            value: merge_node,
             called_methods: [],
             loc: convert_loc(prism_node.location)
           )
-          register_by_kind(prism_node.name, var_node, kind, context)
-          var_node
+          register_by_kind(prism_node.name, write_node, kind, context)
+          write_node
         end
 
         # Generic &&= handler
@@ -427,15 +426,15 @@ module TypeGuessr
                          )
                        end
 
-          var_node = IR::VariableNode.new(
+          write_node = IR::WriteNode.new(
             name: prism_node.name,
             kind: kind,
-            dependency: merge_node,
+            value: merge_node,
             called_methods: [],
             loc: convert_loc(prism_node.location)
           )
-          register_by_kind(prism_node.name, var_node, kind, context)
-          var_node
+          register_by_kind(prism_node.name, write_node, kind, context)
+          write_node
         end
 
         # Generic operator write handler (+=, -=, *=, etc.)
@@ -456,16 +455,16 @@ module TypeGuessr
             loc: convert_loc(prism_node.location)
           )
 
-          # Create variable node with call result as dependency
-          var_node = IR::VariableNode.new(
+          # Create write node with call result as value
+          write_node = IR::WriteNode.new(
             name: prism_node.name,
             kind: kind,
-            dependency: call_node,
+            value: call_node,
             called_methods: [],
             loc: convert_loc(prism_node.location)
           )
-          register_by_kind(prism_node.name, var_node, kind, context)
-          var_node
+          register_by_kind(prism_node.name, write_node, kind, context)
+          write_node
         end
 
         # Helper to lookup variable by kind
@@ -496,13 +495,16 @@ module TypeGuessr
           has_block = !prism_node.block.nil?
 
           # Track method call on receiver for duck typing
-          receiver_node.called_methods << prism_node.name if receiver_node.is_a?(IR::VariableNode) || receiver_node.is_a?(IR::ParamNode)
+          if receiver_node.is_a?(IR::WriteNode) || receiver_node.is_a?(IR::ReadNode) || receiver_node.is_a?(IR::ParamNode)
+            receiver_node.called_methods << prism_node.name
+          end
 
           # Handle indexed assignment: a[:key] = value
-          # Replace receiver with updated node so it gets indexed with correct type
-          if prism_node.name == :[]= && receiver_node.is_a?(IR::VariableNode)
-            updated_receiver = handle_indexed_assignment(prism_node, receiver_node, args, context)
-            receiver_node = updated_receiver if updated_receiver
+          # Register updated type but keep original receiver for proper indexing
+          if prism_node.name == :[]= && (receiver_node.is_a?(IR::WriteNode) || receiver_node.is_a?(IR::ReadNode))
+            handle_indexed_assignment(prism_node, receiver_node, args, context)
+            # NOTE: Keep original receiver_node for the CallNode - the updated WriteNode
+            # is registered in context for future reads
           end
 
           call_node = IR::CallNode.new(
@@ -556,11 +558,11 @@ module TypeGuessr
                          end
           return nil unless updated_type
 
-          # Create new variable node with updated dependency
-          updated_var = IR::VariableNode.new(
+          # Create new write node with updated type
+          updated_var = IR::WriteNode.new(
             name: receiver_node.name,
             kind: receiver_node.kind,
-            dependency: IR::LiteralNode.new(type: updated_type, loc: receiver_node.loc),
+            value: IR::LiteralNode.new(type: updated_type, loc: receiver_node.loc),
             called_methods: receiver_node.called_methods,
             loc: convert_loc(prism_node.location)
           )
@@ -580,8 +582,8 @@ module TypeGuessr
         def merge_hash_field(original_var, key_name, value_type)
           # Get original type
           original_type = case original_var
-                          when IR::VariableNode
-                            original_var.dependency.is_a?(IR::LiteralNode) ? original_var.dependency.type : nil
+                          when IR::WriteNode
+                            original_var.value.is_a?(IR::LiteralNode) ? original_var.value.type : nil
                           when IR::LiteralNode
                             original_var.type
                           end
@@ -609,8 +611,8 @@ module TypeGuessr
 
           # Get original type to preserve existing key/value types
           original_type = case original_var
-                          when IR::VariableNode
-                            original_var.dependency.is_a?(IR::LiteralNode) ? original_var.dependency.type : nil
+                          when IR::WriteNode
+                            original_var.value.is_a?(IR::LiteralNode) ? original_var.value.type : nil
                           when IR::LiteralNode
                             original_var.type
                           end
