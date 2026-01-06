@@ -33,6 +33,10 @@ class Entry
     harmful >= threshold
   end
 
+  def score
+    helpful - harmful
+  end
+
   def self.from_markdown(line)
     match = ENTRY_REGEX.match(line)
     return nil unless match
@@ -49,10 +53,26 @@ class Entry
 
   def self.next_id(category, existing_entries)
     max_num = existing_entries
-      .select { |e| e.category == category }
-      .map { |e| e.id.split("-").last.to_i }
-      .max || 0
+              .select { |e| e.category == category }
+              .map { |e| e.id.split("-").last.to_i }
+              .max || 0
 
     format("%s-%03d", category, max_num + 1)
+  end
+
+  def self.trim_to_limit(entries, max_count: 200)
+    return entries if entries.size <= max_count
+
+    # Sort by: score desc, date desc, id desc (keep highest)
+    sorted = entries.sort do |a, b|
+      score_cmp = b.score <=> a.score
+      next score_cmp unless score_cmp.zero?
+
+      date_cmp = b.last_ref_date <=> a.last_ref_date
+      next date_cmp unless date_cmp.zero?
+
+      b.id <=> a.id
+    end
+    sorted.first(max_count)
   end
 end

@@ -81,9 +81,7 @@ module KnowledgeManager
           current_category = args[i + 1]
         when "--content", "-t"
           content = args[i + 1]
-          if current_category && content && !content.empty?
-            entries_to_add << { category: current_category, content: content }
-          end
+          entries_to_add << { category: current_category, content: content } if current_category && content && !content.empty?
         end
       end
 
@@ -112,12 +110,18 @@ module KnowledgeManager
         added_entries << new_entry
       end
 
-      updated = Parser.update_content(claude_md, existing)
+      # Trim to max 200 entries
+      trimmed = Entry.trim_to_limit(existing)
+      removed_count = existing.size - trimmed.size
+
+      updated = Parser.update_content(claude_md, trimmed)
       write_claude_md(updated)
 
       added_entries.each do |entry|
         puts "Added: #{entry.to_markdown}"
       end
+
+      puts "Trimmed #{removed_count} entries (limit: 200)" if removed_count.positive?
     end
 
     def update_score(entry_id, score_type)
