@@ -332,8 +332,13 @@ Type guessing is performed through:
 <!-- Managed by /retro -->
 
 ### Architecture Knowledge
+- [+0, -0, 2026-01-06] arch-001: Deferred resolution pattern: When IR nodes need forward references (e.g., instance variable read before write), store nil at conversion time and look up from a registry at inference time
+- [+0, -0, 2026-01-06] arch-002: Variable nodes are split by scope: LocalWriteNode/LocalReadNode for locals, InstanceVariableWriteNode/InstanceVariableReadNode (with class_name field) for instance vars, ClassVariableWriteNode/ClassVariableReadNode for class vars
+- [+0, -0, 2026-01-06] arch-003: Resolver maintains registries for deferred lookup: @instance_variables = { 'ClassName' => { :@name => WriteNode } } and @class_variables with same structure - RuntimeAdapter registers during indexing
 
 ### Pattern Knowledge
+- [+0, -0, 2026-01-06] pat-001: Node hash format: local_write:/local_read:/ivar_write:/ivar_read:/cvar_write:/cvar_read: prefixes - update all locations that generate or parse node keys when changing format
+- [+0, -0, 2026-01-06] pat-002: When splitting node types, update: nodes.rb (definitions), prism_converter.rb (creation), resolver.rb (inference), runtime_adapter.rb (indexing), hover.rb/type_inferrer.rb/graph_builder.rb (key generation), debug_server.rb (JS display)
 
 ### Tool Knowledge
 - [+0, -0, 2026-01-06] tool-001: Claude Code sessions are stored in ~/.claude/projects/{encoded-path}/{session-id}.jsonl as JSONL format
