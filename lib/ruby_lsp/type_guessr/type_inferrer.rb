@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 require "ruby_lsp/type_inferrer"
-require_relative "../../type_guessr/core/type_formatter"
 
 module RubyLsp
   module TypeGuessr
@@ -9,10 +8,9 @@ module RubyLsp
     # IR-based heuristic inference. Used by Go to Definition and other features.
     class TypeInferrer < ::RubyLsp::TypeInferrer
       # Core layer shortcuts
-      TypeFormatter = ::TypeGuessr::Core::TypeFormatter
       Types = ::TypeGuessr::Core::Types
       IR = ::TypeGuessr::Core::IR
-      private_constant :TypeFormatter, :Types, :IR
+      private_constant :Types, :IR
 
       def initialize(index, runtime_adapter)
         super(index)
@@ -59,7 +57,7 @@ module RubyLsp
         return nil if result.type.is_a?(Types::Unknown)
 
         # Convert to ruby-lsp's Type format
-        type_string = TypeFormatter.format(result.type)
+        type_string = result.type.to_s
         return nil if type_string == "untyped" || type_string.empty?
 
         GuessedType.new(type_string)

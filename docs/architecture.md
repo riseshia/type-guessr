@@ -174,7 +174,7 @@ Hover.add_hover_content(prism_node)
     ├── resolver.infer(ir_node)  ← Traverses dependency graph
     │
     ▼
-TypeFormatter.format(result.type)
+result.type.to_s
     │
     ▼
 response_builder.push(content)

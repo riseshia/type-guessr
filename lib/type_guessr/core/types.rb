@@ -47,7 +47,12 @@ module TypeGuessr
         end
 
         def to_s
-          @name
+          case @name
+          when "NilClass" then "nil"
+          when "TrueClass" then "true"
+          when "FalseClass" then "false"
+          else @name
+          end
         end
       end
 
@@ -74,10 +79,27 @@ module TypeGuessr
         end
 
         def to_s
-          @types.map(&:to_s).join(" | ")
+          # Handle optional type: exactly 2 types where one is NilClass → ?Type
+          if optional_type?
+            "?#{non_nil_type}"
+          else
+            @types.map(&:to_s).join(" | ")
+          end
         end
 
         private
+
+        def optional_type?
+          @types.size == 2 && @types.any? { |t| nil_type?(t) }
+        end
+
+        def nil_type?(type)
+          type.is_a?(ClassInstance) && type.name == "NilClass"
+        end
+
+        def non_nil_type
+          @types.find { |t| !nil_type?(t) }
+        end
 
         def normalize(types, cutoff)
           # Flatten nested unions
@@ -235,7 +257,8 @@ module TypeGuessr
         end
 
         def to_s
-          "responds_to(#{@methods.map { |m| ":#{m}" }.join(", ")})"
+          methods_str = @methods.map { |m| "##{m}" }.join(", ")
+          "(responds to #{methods_str})"
         end
       end
 

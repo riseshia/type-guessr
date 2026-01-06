@@ -51,6 +51,21 @@ RSpec.describe TypeGuessr::Core::Types do
       type = TypeGuessr::Core::Types::ClassInstance.new("String")
       expect(type.to_s).to eq("String")
     end
+
+    it "formats NilClass as nil" do
+      type = TypeGuessr::Core::Types::ClassInstance.new("NilClass")
+      expect(type.to_s).to eq("nil")
+    end
+
+    it "formats TrueClass as true" do
+      type = TypeGuessr::Core::Types::ClassInstance.new("TrueClass")
+      expect(type.to_s).to eq("true")
+    end
+
+    it "formats FalseClass as false" do
+      type = TypeGuessr::Core::Types::ClassInstance.new("FalseClass")
+      expect(type.to_s).to eq("false")
+    end
   end
 
   describe "Union" do
@@ -101,6 +116,28 @@ RSpec.describe TypeGuessr::Core::Types do
       type2 = TypeGuessr::Core::Types::ClassInstance.new("Integer")
       union = TypeGuessr::Core::Types::Union.new([type1, type2])
       expect(union.to_s).to match(/String \| Integer|Integer \| String/)
+    end
+
+    it "formats optional type as ?Type" do
+      type = TypeGuessr::Core::Types::ClassInstance.new("String")
+      nil_type = TypeGuessr::Core::Types::ClassInstance.new("NilClass")
+      union = TypeGuessr::Core::Types::Union.new([type, nil_type])
+      expect(union.to_s).to eq("?String")
+    end
+
+    it "formats optional type regardless of order" do
+      type = TypeGuessr::Core::Types::ClassInstance.new("Integer")
+      nil_type = TypeGuessr::Core::Types::ClassInstance.new("NilClass")
+      union = TypeGuessr::Core::Types::Union.new([nil_type, type])
+      expect(union.to_s).to eq("?Integer")
+    end
+
+    it "does not use optional format for more than 2 types" do
+      type1 = TypeGuessr::Core::Types::ClassInstance.new("String")
+      type2 = TypeGuessr::Core::Types::ClassInstance.new("Integer")
+      nil_type = TypeGuessr::Core::Types::ClassInstance.new("NilClass")
+      union = TypeGuessr::Core::Types::Union.new([type1, type2, nil_type])
+      expect(union.to_s).not_to start_with("?")
     end
 
     it "equals another Union with the same types" do
@@ -181,6 +218,51 @@ RSpec.describe TypeGuessr::Core::Types do
       type_var1 = described_class::TypeVariable.new(:K)
       type_var2 = described_class::TypeVariable.new(:V)
       expect(type_var1).not_to eq(type_var2)
+    end
+  end
+
+  describe "HashType" do
+    it "creates a hash type with key and value types" do
+      key_type = TypeGuessr::Core::Types::ClassInstance.new("Symbol")
+      value_type = TypeGuessr::Core::Types::ClassInstance.new("String")
+      hash_type = TypeGuessr::Core::Types::HashType.new(key_type, value_type)
+      expect(hash_type.key_type).to eq(key_type)
+      expect(hash_type.value_type).to eq(value_type)
+    end
+
+    it "creates a hash type with Unknown types by default" do
+      hash_type = TypeGuessr::Core::Types::HashType.new
+      expect(hash_type.key_type).to eq(TypeGuessr::Core::Types::Unknown.instance)
+      expect(hash_type.value_type).to eq(TypeGuessr::Core::Types::Unknown.instance)
+    end
+
+    it "has a string representation" do
+      key_type = TypeGuessr::Core::Types::ClassInstance.new("Symbol")
+      value_type = TypeGuessr::Core::Types::ClassInstance.new("String")
+      hash_type = TypeGuessr::Core::Types::HashType.new(key_type, value_type)
+      expect(hash_type.to_s).to eq("Hash[Symbol, String]")
+    end
+
+    it "has a string representation with Unknown types" do
+      hash_type = TypeGuessr::Core::Types::HashType.new
+      expect(hash_type.to_s).to eq("Hash[untyped, untyped]")
+    end
+
+    it "equals another HashType with the same key and value types" do
+      key_type = TypeGuessr::Core::Types::ClassInstance.new("Symbol")
+      value_type = TypeGuessr::Core::Types::ClassInstance.new("String")
+      hash1 = TypeGuessr::Core::Types::HashType.new(key_type, value_type)
+      hash2 = TypeGuessr::Core::Types::HashType.new(key_type, value_type)
+      expect(hash1).to eq(hash2)
+    end
+
+    it "does not equal HashType with different types" do
+      key_type = TypeGuessr::Core::Types::ClassInstance.new("Symbol")
+      value_type1 = TypeGuessr::Core::Types::ClassInstance.new("String")
+      value_type2 = TypeGuessr::Core::Types::ClassInstance.new("Integer")
+      hash1 = TypeGuessr::Core::Types::HashType.new(key_type, value_type1)
+      hash2 = TypeGuessr::Core::Types::HashType.new(key_type, value_type2)
+      expect(hash1).not_to eq(hash2)
     end
   end
 
@@ -298,6 +380,53 @@ RSpec.describe TypeGuessr::Core::Types do
 
         expect(hash_shape.fields.keys).to eq([:a])
       end
+    end
+  end
+
+  describe "DuckType" do
+    it "creates a duck type with methods" do
+      duck_type = TypeGuessr::Core::Types::DuckType.new(%i[foo bar])
+      expect(duck_type.methods).to eq(%i[bar foo])
+    end
+
+    it "sorts methods alphabetically" do
+      duck_type = TypeGuessr::Core::Types::DuckType.new(%i[zebra apple middle])
+      expect(duck_type.methods).to eq(%i[apple middle zebra])
+    end
+
+    it "has a string representation" do
+      duck_type = TypeGuessr::Core::Types::DuckType.new(%i[foo bar])
+      expect(duck_type.to_s).to eq("(responds to #bar, #foo)")
+    end
+
+    it "has a string representation for single method" do
+      duck_type = TypeGuessr::Core::Types::DuckType.new([:save])
+      expect(duck_type.to_s).to eq("(responds to #save)")
+    end
+
+    it "equals another DuckType with the same methods" do
+      duck1 = TypeGuessr::Core::Types::DuckType.new(%i[foo bar])
+      duck2 = TypeGuessr::Core::Types::DuckType.new(%i[bar foo])
+      expect(duck1).to eq(duck2)
+    end
+
+    it "does not equal DuckType with different methods" do
+      duck1 = TypeGuessr::Core::Types::DuckType.new(%i[foo bar])
+      duck2 = TypeGuessr::Core::Types::DuckType.new(%i[foo baz])
+      expect(duck1).not_to eq(duck2)
+    end
+  end
+
+  describe "ForwardingArgs" do
+    it "is a singleton" do
+      forwarding1 = TypeGuessr::Core::Types::ForwardingArgs.instance
+      forwarding2 = TypeGuessr::Core::Types::ForwardingArgs.instance
+      expect(forwarding1).to be(forwarding2)
+    end
+
+    it "has a string representation" do
+      forwarding = TypeGuessr::Core::Types::ForwardingArgs.instance
+      expect(forwarding.to_s).to eq("...")
     end
   end
 end

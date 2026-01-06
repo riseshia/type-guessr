@@ -8,12 +8,6 @@ Refactor `Resolver#infer_block_param_slot` to use RBS-based generic lookup.
 - Simplify resolver from ~70 lines to ~20 lines
 - Enable automatic support for Set, Enumerator, and other generic types
 
-#### Type format Method
-Move formatting logic from `TypeFormatter` to individual Type classes.
-- Each type implements its own `format` method
-- `TypeFormatter` becomes a simple delegator
-- Follows Ruby OOP principles (objects know how to represent themselves)
-
 #### Node Key Factory
 Centralize node key generation in `NodeKeyFactory` class.
 - Consistent key format across all node types

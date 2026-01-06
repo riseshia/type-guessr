@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-require_relative "../../type_guessr/core/type_formatter"
-
 module RubyLsp
   module TypeGuessr
     # Builds graph data from IR nodes for visualization
@@ -163,7 +161,7 @@ module RubyLsp
 
       def infer_type_str(node)
         result = @runtime_adapter.infer_type(node)
-        ::TypeGuessr::Core::TypeFormatter.format(result.type)
+        result.type.to_s
       end
 
       # BFS traversal for non-DefNode (fallback)
@@ -231,7 +229,7 @@ module RubyLsp
           key: node_key,
           type: node_type_name(node),
           line: node.loc&.line,
-          inferred_type: ::TypeGuessr::Core::TypeFormatter.format(result.type),
+          inferred_type: result.type.to_s,
           details: extract_details(node, node_key)
         }
       end
@@ -248,7 +246,7 @@ module RubyLsp
           # Build full method signature with param types
           param_signatures = (node.params || []).map do |p|
             type_result = @runtime_adapter.infer_type(p)
-            type_str = ::TypeGuessr::Core::TypeFormatter.format(type_result.type)
+            type_str = type_result.type.to_s
             "#{p.name}: #{type_str}"
           end
           { name: node.name.to_s, param_signatures: param_signatures }
@@ -269,7 +267,7 @@ module RubyLsp
         when ::TypeGuessr::Core::IR::ParamNode
           { name: node.name.to_s, kind: node.kind.to_s, called_methods: node.called_methods.map(&:to_s) }
         when ::TypeGuessr::Core::IR::LiteralNode
-          { literal_type: ::TypeGuessr::Core::TypeFormatter.format(node.type) }
+          { literal_type: node.type.to_s }
         when ::TypeGuessr::Core::IR::MergeNode
           { branches_count: node.branches.size }
         when ::TypeGuessr::Core::IR::ConstantNode

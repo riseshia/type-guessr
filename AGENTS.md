@@ -59,7 +59,6 @@ type-guessr/
 │           │   └── nodes.rb                     # Node definitions
 │           ├── logger.rb                        # Logger utility
 │           ├── rbs_provider.rb                  # RBS method signatures
-│           ├── type_formatter.rb                # Type formatting
 │           └── types.rb                         # Type system
 ├── spec/
 │   ├── spec_helper.rb
@@ -86,7 +85,6 @@ type-guessr/
 │           │   └── nodes_spec.rb
 │           ├── logger_spec.rb
 │           ├── rbs_provider_spec.rb
-│           ├── type_formatter_spec.rb
 │           └── types_spec.rb
 ├── docs/
 │   ├── architecture.md                          # Architecture documentation

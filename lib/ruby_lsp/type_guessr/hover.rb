@@ -1,15 +1,12 @@
 # frozen_string_literal: true
 
-require_relative "../../type_guessr/core/type_formatter"
-
 module RubyLsp
   module TypeGuessr
     # Hover provider for TypeGuessr
     class Hover
       # Core layer shortcuts
-      TypeFormatter = ::TypeGuessr::Core::TypeFormatter
       Types = ::TypeGuessr::Core::Types
-      private_constant :TypeFormatter, :Types
+      private_constant :Types
 
       # Define all node types that should trigger hover content
       HOVER_NODE_TYPES = %i[
@@ -112,7 +109,7 @@ module RubyLsp
         # Build method signature: (params) -> return_type
         params_str = format_params(def_node.params)
         return_result = @runtime_adapter.infer_type(def_node)
-        return_type_str = TypeFormatter.format(return_result.type)
+        return_type_str = return_result.type.to_s
 
         signature = "(#{params_str}) -> #{return_type_str}"
         content = "**Method Signature:** `#{signature}`"
@@ -143,7 +140,7 @@ module RubyLsp
 
               if debug_enabled?
                 content += "\n\n**[TypeGuessr Debug]**"
-                content += "\n\n**Receiver:** `#{TypeFormatter.format(receiver_type)}`"
+                content += "\n\n**Receiver:** `#{receiver_type}`"
                 if sig_strs.size > 1
                   content += "\n\n**Overloads:**\n"
                   sig_strs.each { |s| content += "- `#{s}`\n" }
@@ -158,7 +155,7 @@ module RubyLsp
 
         # Fallback: show inferred return type
         result = @runtime_adapter.infer_type(call_node)
-        type_str = TypeFormatter.format(result.type)
+        type_str = result.type.to_s
 
         # For project methods, show as signature format
         content = if result.source == :project
@@ -186,7 +183,7 @@ module RubyLsp
 
         params.map do |param|
           param_type = infer_param_type(param)
-          type_str = TypeFormatter.format(param_type)
+          type_str = param_type.to_s
 
           case param.kind
           when :required
@@ -336,7 +333,7 @@ module RubyLsp
 
       # Format type with definition link if available
       def format_type_with_link(type)
-        formatted = TypeFormatter.format(type)
+        formatted = type.to_s
 
         # Only link ClassInstance types
         return "`#{formatted}`" unless type.is_a?(Types::ClassInstance)
