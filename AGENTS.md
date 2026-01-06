@@ -327,3 +327,17 @@ Type guessing is performed through:
 ❌ **Only sequential when TRUE dependencies exist:**
 - Edit needs Read first
 - Commit needs tests to pass first
+
+## Knowledge Base
+<!-- Managed by /retro -->
+
+### Architecture Knowledge
+
+### Pattern Knowledge
+
+### Tool Knowledge
+- [+0, -0, 2026-01-06] tool-001: Claude Code sessions are stored in ~/.claude/projects/{encoded-path}/{session-id}.jsonl as JSONL format
+- [+0, -0, 2026-01-06] tool-002: Claude Code skills (model-invoked) go in .claude/skills/, commands (user-invoked) go in .claude/commands/
+
+### Convention Knowledge
+- [+0, -0, 2026-01-06] conv-001: Skill folder name must differ from command filename to avoid conflicts
