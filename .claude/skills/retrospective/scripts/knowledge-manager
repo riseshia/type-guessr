@@ -71,39 +71,53 @@ module KnowledgeManager
     end
 
     def add_entry(args)
-      category = nil
-      content = nil
+      # Parse multiple -c/-t pairs
+      entries_to_add = []
+      current_category = nil
 
       args.each_with_index do |arg, i|
         case arg
         when "--category", "-c"
-          category = args[i + 1]
+          current_category = args[i + 1]
         when "--content", "-t"
           content = args[i + 1]
+          if current_category && content && !content.empty?
+            entries_to_add << { category: current_category, content: content }
+          end
         end
       end
 
-      unless category && Entry::CATEGORIES.include?(category)
-        warn "Invalid category. Use: #{Entry::CATEGORIES.join(", ")}"
+      if entries_to_add.empty?
+        warn "No valid entries. Use: -c CATEGORY -t \"content\" [-c CATEGORY -t \"content\" ...]"
+        warn "Categories: #{Entry::CATEGORIES.join(", ")}"
         exit 1
       end
 
-      unless content && !content.empty?
-        warn "Content is required. Use --content \"...\""
-        exit 1
+      # Validate all categories
+      entries_to_add.each do |entry_data|
+        unless Entry::CATEGORIES.include?(entry_data[:category])
+          warn "Invalid category: #{entry_data[:category]}. Use: #{Entry::CATEGORIES.join(", ")}"
+          exit 1
+        end
       end
 
       claude_md = read_claude_md
       existing = Parser.parse(claude_md)
-      new_id = Entry.next_id(category, existing)
+      added_entries = []
 
-      new_entry = Entry.new(id: new_id, category: category, content: content)
-      existing << new_entry
+      entries_to_add.each do |entry_data|
+        new_id = Entry.next_id(entry_data[:category], existing)
+        new_entry = Entry.new(id: new_id, category: entry_data[:category], content: entry_data[:content])
+        existing << new_entry
+        added_entries << new_entry
+      end
 
       updated = Parser.update_content(claude_md, existing)
       write_claude_md(updated)
 
-      puts "Added: #{new_entry.to_markdown}"
+      added_entries.each do |entry|
+        puts "Added: #{entry.to_markdown}"
+      end
     end
 
     def update_score(entry_id, score_type)
@@ -164,7 +178,7 @@ module KnowledgeManager
         Commands:
           read-session              Read current session conversation
           list                      List all knowledge entries
-          add -c CATEGORY -t TEXT   Add new entry
+          add -c CAT -t TEXT [...]   Add entries (multiple -c/-t pairs allowed)
           helpful ENTRY_ID          Mark entry as helpful (+1)
           harmful ENTRY_ID          Mark entry as harmful (+1)
           cleanup                   Remove stale/harmful entries

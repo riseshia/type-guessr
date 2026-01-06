@@ -48,15 +48,19 @@ List current entries to avoid duplicates:
 
 ### Step 4: Add New Knowledge
 
-For each new piece of knowledge:
+Add one or more entries (multiple `-c`/`-t` pairs allowed):
 
 ```bash
-.claude/skills/retro/scripts/knowledge-manager --project-path "$(pwd)" add -c <category> -t "<content>"
+.claude/skills/retro/scripts/knowledge-manager --project-path "$(pwd)" add -c <category> -t "<content>" [-c <category> -t "<content>" ...]
 ```
 
-Example:
+Examples:
 ```bash
+# Single entry
 .claude/skills/retro/scripts/knowledge-manager --project-path "$(pwd)" add -c pat -t "Use guard clauses for early returns to reduce nesting"
+
+# Multiple entries at once
+.claude/skills/retro/scripts/knowledge-manager --project-path "$(pwd)" add -c arch -t "First insight" -c pat -t "Second insight"
 ```
 
 ### Step 5: Update Scores for Referenced Knowledge
