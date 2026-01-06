@@ -14,8 +14,8 @@ module TypeGuessr
         # @return [Proc, nil] A proc that takes DuckType and returns resolved type or nil
         attr_accessor :duck_type_resolver
 
-        def initialize(rbs_provider)
-          @rbs_provider = rbs_provider
+        def initialize(signature_provider)
+          @signature_provider = signature_provider
           @cache = {}.compare_by_identity
           @project_methods = {} # { "ClassName" => { "method_name" => DefNode } }
           @duck_type_resolver = nil
@@ -190,9 +190,9 @@ module TypeGuessr
               )
             end
 
-            # For other class methods, query RBS singleton type
+            # For other class methods, query signature provider
             arg_types = node.args.map { |arg| infer(arg).type }
-            return_type = @rbs_provider.get_class_method_return_type(
+            return_type = @signature_provider.get_class_method_return_type(
               class_name,
               node.method.to_s,
               arg_types
@@ -227,11 +227,11 @@ module TypeGuessr
               end
             end
 
-            # Query RBS for method return type
+            # Query signature provider for method return type
             if receiver_type.is_a?(Types::ClassInstance)
               # Infer argument types for overload resolution
               arg_types = node.args.map { |arg| infer(arg).type }
-              return_type = @rbs_provider.get_method_return_type_for_args(
+              return_type = @signature_provider.get_method_return_type(
                 receiver_type.name,
                 node.method.to_s,
                 arg_types
@@ -257,8 +257,8 @@ module TypeGuessr
               )
             elsif receiver_type.is_a?(Types::ArrayType)
               # Handle Array methods with element type substitution
-              elem_type = receiver_type.element_type
-              substitutions = { Elem: elem_type }
+              # Start with substitutions from receiver type (e.g., Elem)
+              substitutions = receiver_type.type_variable_substitutions.dup
 
               # Check for block presence and infer its return type for U substitution
               if node.has_block
@@ -271,14 +271,12 @@ module TypeGuessr
                 end
               end
 
-              return_type = @rbs_provider.get_method_return_type_with_substitution(
-                "Array",
-                node.method.to_s,
-                substitutions
-              )
+              # Get raw return type, then substitute type variables
+              raw_return_type = @signature_provider.get_method_return_type("Array", node.method.to_s)
+              return_type = raw_return_type.substitute(substitutions)
               return Result.new(
                 return_type,
-                "Array[#{elem_type || "untyped"}]##{node.method}",
+                "Array[#{receiver_type.element_type || "untyped"}]##{node.method}",
                 :stdlib
               )
             end
@@ -295,8 +293,8 @@ module TypeGuessr
           class_name = receiver_type.rbs_class_name
           return Result.new(Types::Unknown.instance, "block param without type info", :unknown) unless class_name
 
-          # Get block parameter types from RBSProvider (returns internal types with TypeVariables)
-          raw_block_param_types = @rbs_provider.get_block_param_types(class_name, node.call_node.method.to_s)
+          # Get block parameter types (returns internal types with TypeVariables)
+          raw_block_param_types = @signature_provider.get_block_param_types(class_name, node.call_node.method.to_s)
           return Result.new(Types::Unknown.instance, "block param without type info", :unknown) unless raw_block_param_types.size > node.index
 
           # Type#substitute applies type variable substitutions

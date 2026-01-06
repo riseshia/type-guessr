@@ -1,26 +1,5 @@
 # TypeGuessr TODO
 
-### Architecture Improvements
-
-#### Node Key Factory
-Centralize node key generation in `NodeKeyFactory` class.
-- Consistent key format across all node types
-- Key parsing for debugging
-- Foundation for collision detection
-
-#### SignatureProvider Unified Interface
-Create unified method signature lookup with transparent fallback:
-1. **Project methods** → User code priority
-2. **Bundled gems** → Gem RBS/type info via RubyIndexer
-3. **RBS stdlib** → Standard library
-
-Single entry point replaces 5 scattered interfaces:
-- `RBSProvider.get_method_signatures`
-- `RBSProvider.get_method_return_type`
-- `RBSProvider.get_method_return_type_for_args`
-- `Resolver.lookup_method`
-- `RuntimeAdapter.find_classes_defining_methods`
-
 ## Future Features
 
 ### Array Mutation Tracking

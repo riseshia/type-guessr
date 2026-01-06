@@ -164,92 +164,34 @@ RSpec.describe TypeGuessr::Core::RBSProvider do
     end
   end
 
-  describe "#get_method_return_type_with_substitution" do
-    it "substitutes U in Array#map return type" do
-      # Array#map: [U] { (Elem) -> U } -> Array[U]
-      # If block returns String, then return type is Array[String]
-      block_return_type = TypeGuessr::Core::Types::ClassInstance.new("String")
-      type = provider.get_method_return_type_with_substitution(
-        "Array", "map", { U: block_return_type }
-      )
-
-      expect(type).to be_a(TypeGuessr::Core::Types::ArrayType)
-      expect(type.element_type).to be_a(TypeGuessr::Core::Types::ClassInstance)
-      expect(type.element_type.name).to eq("String")
-    end
-
-    it "substitutes Elem in Array#select return type" do
-      # Array#select: { (Elem) -> boolish } -> Array[Elem]
-      # Preserves element type
-      element_type = TypeGuessr::Core::Types::ClassInstance.new("Integer")
-      type = provider.get_method_return_type_with_substitution(
-        "Array", "select", { Elem: element_type }
-      )
-
-      expect(type).to be_a(TypeGuessr::Core::Types::ArrayType)
-      expect(type.element_type).to be_a(TypeGuessr::Core::Types::ClassInstance)
-      expect(type.element_type.name).to eq("Integer")
-    end
-
-    it "substitutes Elem in Array#compact return type" do
-      # Array#compact: -> Array[Elem]
-      element_type = TypeGuessr::Core::Types::ClassInstance.new("String")
-      type = provider.get_method_return_type_with_substitution(
-        "Array", "compact", { Elem: element_type }
-      )
-
-      expect(type).to be_a(TypeGuessr::Core::Types::ArrayType)
-      expect(type.element_type).to be_a(TypeGuessr::Core::Types::ClassInstance)
-      expect(type.element_type.name).to eq("String")
-    end
-
-    it "returns Unknown for non-existent method" do
-      type = provider.get_method_return_type_with_substitution(
-        "Array", "non_existent", { U: TypeGuessr::Core::Types::ClassInstance.new("String") }
-      )
-
-      expect(type).to eq(TypeGuessr::Core::Types::Unknown.instance)
-    end
-
-    it "handles methods without type variables" do
-      # String#upcase: -> String (no type variables)
-      type = provider.get_method_return_type_with_substitution(
-        "String", "upcase", {}
-      )
-
-      expect(type).to be_a(TypeGuessr::Core::Types::ClassInstance)
-      expect(type.name).to eq("String")
-    end
-  end
-
-  describe "#get_method_return_type_for_args" do
+  describe "#get_method_return_type with arg_types (overload resolution)" do
     describe "Integer arithmetic overload resolution" do
       let(:int_type) { TypeGuessr::Core::Types::ClassInstance.new("Integer") }
       let(:float_type) { TypeGuessr::Core::Types::ClassInstance.new("Float") }
 
       it "returns Integer for Integer#* with Integer argument" do
-        type = provider.get_method_return_type_for_args("Integer", "*", [int_type])
+        type = provider.get_method_return_type("Integer", "*", [int_type])
 
         expect(type).to be_a(TypeGuessr::Core::Types::ClassInstance)
         expect(type.name).to eq("Integer")
       end
 
       it "returns Float for Integer#* with Float argument" do
-        type = provider.get_method_return_type_for_args("Integer", "*", [float_type])
+        type = provider.get_method_return_type("Integer", "*", [float_type])
 
         expect(type).to be_a(TypeGuessr::Core::Types::ClassInstance)
         expect(type.name).to eq("Float")
       end
 
       it "returns Integer for Integer#+ with Integer argument" do
-        type = provider.get_method_return_type_for_args("Integer", "+", [int_type])
+        type = provider.get_method_return_type("Integer", "+", [int_type])
 
         expect(type).to be_a(TypeGuessr::Core::Types::ClassInstance)
         expect(type.name).to eq("Integer")
       end
 
       it "returns Float for Integer#+ with Float argument" do
-        type = provider.get_method_return_type_for_args("Integer", "+", [float_type])
+        type = provider.get_method_return_type("Integer", "+", [float_type])
 
         expect(type).to be_a(TypeGuessr::Core::Types::ClassInstance)
         expect(type.name).to eq("Float")
@@ -259,7 +201,7 @@ RSpec.describe TypeGuessr::Core::RBSProvider do
     describe "with no arguments" do
       it "falls back to first overload" do
         # Integer#* first overload is (Float) -> Float
-        type = provider.get_method_return_type_for_args("Integer", "*", [])
+        type = provider.get_method_return_type("Integer", "*", [])
 
         expect(type).to be_a(TypeGuessr::Core::Types::ClassInstance)
         # First overload might be any type, just verify it returns something
@@ -270,7 +212,7 @@ RSpec.describe TypeGuessr::Core::RBSProvider do
     describe "with Unknown argument types" do
       it "falls back to first overload when argument type is Unknown" do
         unknown_type = TypeGuessr::Core::Types::Unknown.instance
-        type = provider.get_method_return_type_for_args("Integer", "*", [unknown_type])
+        type = provider.get_method_return_type("Integer", "*", [unknown_type])
 
         # Falls back to first overload since Unknown doesn't match any specific type
         expect(type).to be_a(TypeGuessr::Core::Types::ClassInstance)
@@ -281,7 +223,7 @@ RSpec.describe TypeGuessr::Core::RBSProvider do
     describe "with non-existent method" do
       it "returns Unknown for non-existent method" do
         int_type = TypeGuessr::Core::Types::ClassInstance.new("Integer")
-        type = provider.get_method_return_type_for_args("String", "non_existent", [int_type])
+        type = provider.get_method_return_type("String", "non_existent", [int_type])
 
         expect(type).to eq(TypeGuessr::Core::Types::Unknown.instance)
       end

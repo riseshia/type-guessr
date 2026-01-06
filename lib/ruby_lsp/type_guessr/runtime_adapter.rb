@@ -4,6 +4,7 @@ require "prism"
 require_relative "../../type_guessr/core/converter/prism_converter"
 require_relative "../../type_guessr/core/index/location_index"
 require_relative "../../type_guessr/core/inference/resolver"
+require_relative "../../type_guessr/core/signature_provider"
 require_relative "../../type_guessr/core/rbs_provider"
 require_relative "type_inferrer"
 
@@ -17,7 +18,8 @@ module RubyLsp
         @message_queue = message_queue
         @converter = ::TypeGuessr::Core::Converter::PrismConverter.new
         @location_index = ::TypeGuessr::Core::Index::LocationIndex.new
-        @resolver = ::TypeGuessr::Core::Inference::Resolver.new(::TypeGuessr::Core::RBSProvider.instance)
+        @signature_provider = build_signature_provider
+        @resolver = ::TypeGuessr::Core::Inference::Resolver.new(@signature_provider)
         @indexing_completed = false
         @mutex = Mutex.new
         @original_type_inferrer = nil
@@ -406,6 +408,21 @@ module RubyLsp
           # Index dependency
           index_node_recursively(file_path, node.dependency, scope_id) if node.dependency
         end
+      end
+
+      # Build SignatureProvider with configured type sources
+      # Currently uses RBSProvider for stdlib types
+      # Can be extended to add project RBS, Sorbet, etc.
+      def build_signature_provider
+        provider = ::TypeGuessr::Core::SignatureProvider.new
+
+        # Add stdlib RBS provider (lowest priority)
+        provider.add_provider(::TypeGuessr::Core::RBSProvider.instance)
+
+        # Future: Add project RBS provider (high priority)
+        # provider.add_provider(ProjectRBSProvider.new, priority: :high)
+
+        provider
       end
 
       def log_message(message)

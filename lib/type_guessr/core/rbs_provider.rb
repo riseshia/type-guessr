@@ -65,18 +65,18 @@ module TypeGuessr
         []
       end
 
-      # Get the return type of a method call
+      # Get the return type of a method call with overload resolution
       # @param class_name [String] the receiver class name
       # @param method_name [String] the method name
+      # @param arg_types [Array<Types::Type>] argument types for overload matching
       # @return [Types::Type] the return type (Unknown if not found)
-      def get_method_return_type(class_name, method_name)
+      def get_method_return_type(class_name, method_name, arg_types = [])
         signatures = get_method_signatures(class_name, method_name)
         return Types::Unknown.instance if signatures.empty?
 
-        # For now, take the first signature's return type
-        # TODO: Handle overloads by considering argument types
-        first_sig = signatures.first
-        return_type = first_sig.method_type.type.return_type
+        # Find best matching overload based on argument types
+        best_match = find_best_overload(signatures, arg_types)
+        return_type = best_match.method_type.type.return_type
 
         @converter.convert(return_type)
       end
@@ -90,41 +90,6 @@ module TypeGuessr
         return [] unless block_sig
 
         extract_block_param_types(block_sig)
-      end
-
-      # Get the return type of a method call with type variable substitution
-      # @param class_name [String] the receiver class name
-      # @param method_name [String] the method name
-      # @param substitutions [Hash{Symbol => Types::Type}] type variable substitutions (e.g., { U: Integer, Elem: String })
-      # @return [Types::Type] the return type with substitutions applied (Unknown if not found)
-      def get_method_return_type_with_substitution(class_name, method_name, substitutions = {})
-        signatures = get_method_signatures(class_name, method_name)
-        return Types::Unknown.instance if signatures.empty?
-
-        # For now, take the first signature's return type
-        # TODO: Handle overloads by considering argument types
-        first_sig = signatures.first
-        return_type = first_sig.method_type.type.return_type
-
-        # Convert RBS type to internal type, then substitute type variables
-        raw_type = @converter.convert(return_type)
-        raw_type.substitute(substitutions)
-      end
-
-      # Get the return type of a method call considering argument types for overload resolution
-      # @param class_name [String] the receiver class name
-      # @param method_name [String] the method name
-      # @param arg_types [Array<Types::Type>] the argument types
-      # @return [Types::Type] the return type (Unknown if not found)
-      def get_method_return_type_for_args(class_name, method_name, arg_types)
-        signatures = get_method_signatures(class_name, method_name)
-        return Types::Unknown.instance if signatures.empty?
-
-        # Find best matching overload based on argument types
-        best_match = find_best_overload(signatures, arg_types)
-        return_type = best_match.method_type.type.return_type
-
-        @converter.convert(return_type)
       end
 
       # Get class method signatures (singleton methods like File.read, Array.new)
