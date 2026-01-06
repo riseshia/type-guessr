@@ -429,4 +429,173 @@ RSpec.describe TypeGuessr::Core::Types do
       expect(forwarding.to_s).to eq("...")
     end
   end
+
+  describe "#substitute" do
+    let(:integer_type) { described_class::ClassInstance.new("Integer") }
+    let(:string_type) { described_class::ClassInstance.new("String") }
+    let(:symbol_type) { described_class::ClassInstance.new("Symbol") }
+
+    describe "Type (base class)" do
+      it "returns self by default" do
+        type = integer_type
+        result = type.substitute({ Elem: string_type })
+        expect(result).to be(type)
+      end
+    end
+
+    describe "Unknown" do
+      it "returns self" do
+        unknown = described_class::Unknown.instance
+        result = unknown.substitute({ Elem: integer_type })
+        expect(result).to be(unknown)
+      end
+    end
+
+    describe "ClassInstance" do
+      it "returns self (no type variables)" do
+        result = integer_type.substitute({ Elem: string_type })
+        expect(result).to be(integer_type)
+      end
+    end
+
+    describe "TypeVariable" do
+      it "returns substituted type when match found" do
+        type_var = described_class::TypeVariable.new(:Elem)
+        result = type_var.substitute({ Elem: integer_type })
+        expect(result).to eq(integer_type)
+      end
+
+      it "returns self when no match found" do
+        type_var = described_class::TypeVariable.new(:Elem)
+        result = type_var.substitute({ K: integer_type })
+        expect(result).to be(type_var)
+      end
+
+      it "returns self with empty substitutions" do
+        type_var = described_class::TypeVariable.new(:Elem)
+        result = type_var.substitute({})
+        expect(result).to be(type_var)
+      end
+    end
+
+    describe "ArrayType" do
+      it "substitutes element type" do
+        elem_var = described_class::TypeVariable.new(:Elem)
+        array_type = described_class::ArrayType.new(elem_var)
+
+        result = array_type.substitute({ Elem: integer_type })
+
+        expect(result).to be_a(described_class::ArrayType)
+        expect(result.element_type).to eq(integer_type)
+      end
+
+      it "returns self when element type unchanged" do
+        array_type = described_class::ArrayType.new(integer_type)
+
+        result = array_type.substitute({ Elem: string_type })
+
+        expect(result).to be(array_type)
+      end
+
+      it "handles nested type variables" do
+        elem_var = described_class::TypeVariable.new(:Elem)
+        inner_array = described_class::ArrayType.new(elem_var)
+        outer_array = described_class::ArrayType.new(inner_array)
+
+        result = outer_array.substitute({ Elem: integer_type })
+
+        expect(result.element_type).to be_a(described_class::ArrayType)
+        expect(result.element_type.element_type).to eq(integer_type)
+      end
+    end
+
+    describe "HashType" do
+      it "substitutes key and value types" do
+        k_var = described_class::TypeVariable.new(:K)
+        v_var = described_class::TypeVariable.new(:V)
+        hash_type = described_class::HashType.new(k_var, v_var)
+
+        result = hash_type.substitute({ K: symbol_type, V: integer_type })
+
+        expect(result).to be_a(described_class::HashType)
+        expect(result.key_type).to eq(symbol_type)
+        expect(result.value_type).to eq(integer_type)
+      end
+
+      it "substitutes only key type" do
+        k_var = described_class::TypeVariable.new(:K)
+        hash_type = described_class::HashType.new(k_var, integer_type)
+
+        result = hash_type.substitute({ K: symbol_type })
+
+        expect(result.key_type).to eq(symbol_type)
+        expect(result.value_type).to eq(integer_type)
+      end
+
+      it "returns self when both types unchanged" do
+        hash_type = described_class::HashType.new(symbol_type, integer_type)
+
+        result = hash_type.substitute({ Elem: string_type })
+
+        expect(result).to be(hash_type)
+      end
+    end
+
+    describe "Union" do
+      it "substitutes all member types" do
+        elem_var = described_class::TypeVariable.new(:Elem)
+        union = described_class::Union.new([elem_var, string_type])
+
+        result = union.substitute({ Elem: integer_type })
+
+        expect(result).to be_a(described_class::Union)
+        expect(result.types).to contain_exactly(integer_type, string_type)
+      end
+
+      it "returns self when no types changed" do
+        union = described_class::Union.new([integer_type, string_type])
+
+        result = union.substitute({ Elem: symbol_type })
+
+        expect(result).to be(union)
+      end
+    end
+
+    describe "DuckType" do
+      it "returns self (no type variables)" do
+        duck_type = described_class::DuckType.new(%i[foo bar])
+        result = duck_type.substitute({ Elem: integer_type })
+        expect(result).to be(duck_type)
+      end
+    end
+
+    describe "ForwardingArgs" do
+      it "returns self" do
+        forwarding = described_class::ForwardingArgs.instance
+        result = forwarding.substitute({ Elem: integer_type })
+        expect(result).to be(forwarding)
+      end
+    end
+
+    describe "HashShape" do
+      it "substitutes field value types" do
+        elem_var = described_class::TypeVariable.new(:Elem)
+        hash_shape = described_class::HashShape.new({ name: string_type, value: elem_var })
+
+        result = hash_shape.substitute({ Elem: integer_type })
+
+        expect(result).to be_a(described_class::HashShape)
+        expect(result.fields[:name]).to eq(string_type)
+        expect(result.fields[:value]).to eq(integer_type)
+      end
+
+      it "returns self when no fields changed" do
+        hash_shape = described_class::HashShape.new({ name: string_type, count: integer_type })
+
+        result = hash_shape.substitute({ Elem: symbol_type })
+
+        expect(result).to be(hash_shape)
+      end
+    end
+  end
 end

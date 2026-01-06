@@ -8,21 +8,23 @@ module TypeGuessr
     module Converter
       # Converts RBS types to internal type system
       # Isolates RBS type dependencies from the core type inference logic
+      #
+      # This class only handles conversion (RBS → internal types).
+      # Type variable substitution is handled separately by Type#substitute.
       class RBSConverter
         # Convert RBS type to internal type system
         # @param rbs_type [RBS::Types::t] the RBS type
-        # @param substitutions [Hash{Symbol => Types::Type}] type variable substitutions
-        # @return [Types::Type] internal type representation
-        def convert(rbs_type, substitutions = {})
+        # @return [Types::Type] internal type representation (TypeVariables preserved)
+        def convert(rbs_type)
           case rbs_type
           when RBS::Types::Variable
-            convert_type_variable(rbs_type, substitutions)
+            Types::TypeVariable.new(rbs_type.name)
           when RBS::Types::ClassInstance
-            convert_class_instance(rbs_type, substitutions)
+            convert_class_instance(rbs_type)
           when RBS::Types::Union
-            convert_union(rbs_type, substitutions)
+            convert_union(rbs_type)
           when RBS::Types::Tuple
-            convert_tuple(rbs_type, substitutions)
+            convert_tuple(rbs_type)
           when RBS::Types::Bases::Bool
             # bool is a type alias for TrueClass | FalseClass
             Types::ClassInstance.new("bool")
@@ -41,29 +43,15 @@ module TypeGuessr
 
         private
 
-        # Convert RBS type variable to internal type
-        # @param rbs_type [RBS::Types::Variable] RBS type variable
-        # @param substitutions [Hash] type variable substitutions
-        # @return [Types::Type] substituted type or TypeVariable
-        def convert_type_variable(rbs_type, substitutions)
-          # Check if we have a substitution for this type variable
-          substituted = substitutions[rbs_type.name]
-          return substituted if substituted
-
-          # No substitution available - return TypeVariable
-          Types::TypeVariable.new(rbs_type.name)
-        end
-
         # Convert RBS ClassInstance to internal type
         # @param rbs_type [RBS::Types::ClassInstance] RBS class instance
-        # @param substitutions [Hash] type variable substitutions
         # @return [Types::Type] internal type
-        def convert_class_instance(rbs_type, substitutions)
+        def convert_class_instance(rbs_type)
           class_name = rbs_type.name.to_s.delete_prefix("::")
 
           # Handle Array with type parameter
           if class_name == "Array" && rbs_type.args.size == 1
-            element_type = convert(rbs_type.args.first, substitutions)
+            element_type = convert(rbs_type.args.first)
             return Types::ArrayType.new(element_type)
           end
 
@@ -74,20 +62,18 @@ module TypeGuessr
 
         # Convert RBS Union to internal Union type
         # @param rbs_type [RBS::Types::Union] RBS union type
-        # @param substitutions [Hash] type variable substitutions
         # @return [Types::Union] internal union type
-        def convert_union(rbs_type, substitutions)
-          types = rbs_type.types.map { |t| convert(t, substitutions) }
+        def convert_union(rbs_type)
+          types = rbs_type.types.map { |t| convert(t) }
           Types::Union.new(types)
         end
 
         # Convert RBS Tuple to internal ArrayType
         # Tuples like [K, V] are converted to Array[K | V]
         # @param rbs_type [RBS::Types::Tuple] RBS tuple type
-        # @param substitutions [Hash] type variable substitutions
         # @return [Types::ArrayType] internal array type with union element type
-        def convert_tuple(rbs_type, substitutions)
-          element_types = rbs_type.types.map { |t| convert(t, substitutions) }
+        def convert_tuple(rbs_type)
+          element_types = rbs_type.types.map { |t| convert(t) }
           Types::ArrayType.new(Types::Union.new(element_types))
         end
       end

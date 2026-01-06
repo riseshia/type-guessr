@@ -121,7 +121,9 @@ module TypeGuessr
         first_sig = signatures.first
         return_type = first_sig.method_type.type.return_type
 
-        @converter.convert(return_type, substitutions)
+        # Convert RBS type to internal type, then substitute type variables
+        raw_type = @converter.convert(return_type)
+        raw_type.substitute(substitutions)
       end
 
       # Get the return type of a method call considering argument types for overload resolution
@@ -210,11 +212,13 @@ module TypeGuessr
         block_func = method_type.block.type
         block_func.required_positionals.flat_map do |param|
           # Handle Tuple types (e.g., [K, V] in Hash#each) by flattening
-          if param.type.is_a?(RBS::Types::Tuple)
-            param.type.types.map { |t| @converter.convert(t, substitutions) }
-          else
-            @converter.convert(param.type, substitutions)
-          end
+          raw_types = if param.type.is_a?(RBS::Types::Tuple)
+                        param.type.types.map { |t| @converter.convert(t) }
+                      else
+                        [@converter.convert(param.type)]
+                      end
+          # Apply substitutions after conversion
+          raw_types.map { |t| t.substitute(substitutions) }
         end
       end
 

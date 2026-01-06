@@ -18,6 +18,13 @@ module TypeGuessr
         def hash
           self.class.hash
         end
+
+        # Substitute type variables with concrete types
+        # @param substitutions [Hash{Symbol => Type}] type variable substitutions
+        # @return [Type] the type with substitutions applied (self if no change)
+        def substitute(_substitutions)
+          self
+        end
       end
 
       # Unknown type - no information available
@@ -87,6 +94,13 @@ module TypeGuessr
           end
         end
 
+        def substitute(substitutions)
+          new_types = @types.map { |t| t.substitute(substitutions) }
+          return self if new_types.zip(@types).all? { |new_t, old_t| new_t.equal?(old_t) }
+
+          Union.new(new_types)
+        end
+
         private
 
         def optional_type?
@@ -153,6 +167,13 @@ module TypeGuessr
         def to_s
           "Array[#{@element_type}]"
         end
+
+        def substitute(substitutions)
+          new_element = @element_type.substitute(substitutions)
+          return self if new_element.equal?(@element_type)
+
+          ArrayType.new(new_element)
+        end
       end
 
       # HashType - hash with key and value types
@@ -175,6 +196,14 @@ module TypeGuessr
 
         def to_s
           "Hash[#{@key_type}, #{@value_type}]"
+        end
+
+        def substitute(substitutions)
+          new_key = @key_type.substitute(substitutions)
+          new_value = @value_type.substitute(substitutions)
+          return self if new_key.equal?(@key_type) && new_value.equal?(@value_type)
+
+          HashType.new(new_key, new_value)
         end
       end
 
@@ -215,6 +244,13 @@ module TypeGuessr
           new_fields = @fields.merge(key => value_type)
           HashShape.new(new_fields, max_fields: max_fields)
         end
+
+        def substitute(substitutions)
+          new_fields = @fields.transform_values { |v| v.substitute(substitutions) }
+          return self if new_fields.all? { |k, v| v.equal?(@fields[k]) }
+
+          HashShape.new(new_fields)
+        end
       end
 
       # TypeVariable - represents a type variable from RBS (e.g., Elem, K, V, U)
@@ -236,6 +272,10 @@ module TypeGuessr
 
         def to_s
           @name.to_s
+        end
+
+        def substitute(substitutions)
+          substitutions[@name] || self
         end
       end
 

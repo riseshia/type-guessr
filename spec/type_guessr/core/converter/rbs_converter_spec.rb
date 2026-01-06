@@ -79,7 +79,7 @@ RSpec.describe TypeGuessr::Core::Converter::RBSConverter do
     end
 
     context "with TypeVariable" do
-      it "converts type variable without substitution" do
+      it "converts type variable to TypeVariable" do
         rbs_type = RBS::Types::Variable.new(name: :U, location: nil)
 
         result = converter.convert(rbs_type)
@@ -87,11 +87,12 @@ RSpec.describe TypeGuessr::Core::Converter::RBSConverter do
         expect(result.name).to eq(:U)
       end
 
-      it "applies substitution when provided" do
+      it "can be substituted after conversion using Type#substitute" do
         rbs_type = RBS::Types::Variable.new(name: :Elem, location: nil)
-        substitutions = { Elem: TypeGuessr::Core::Types::ClassInstance.new("String") }
 
-        result = converter.convert(rbs_type, substitutions)
+        raw_type = converter.convert(rbs_type)
+        result = raw_type.substitute({ Elem: TypeGuessr::Core::Types::ClassInstance.new("String") })
+
         expect(result).to be_a(TypeGuessr::Core::Types::ClassInstance)
         expect(result.name).to eq("String")
       end
@@ -120,19 +121,20 @@ RSpec.describe TypeGuessr::Core::Converter::RBSConverter do
         expect(result.element_type.types.size).to eq(2)
       end
 
-      it "applies substitution to tuple elements" do
+      it "converts tuple with type variables that can be substituted later" do
         var1 = RBS::Types::Variable.new(name: :K, location: nil)
         var2 = RBS::Types::Variable.new(name: :V, location: nil)
         rbs_type = RBS::Types::Tuple.new(
           types: [var1, var2],
           location: nil
         )
-        substitutions = {
-          K: TypeGuessr::Core::Types::ClassInstance.new("Symbol"),
-          V: TypeGuessr::Core::Types::ClassInstance.new("String")
-        }
 
-        result = converter.convert(rbs_type, substitutions)
+        raw_type = converter.convert(rbs_type)
+        result = raw_type.substitute({
+                                       K: TypeGuessr::Core::Types::ClassInstance.new("Symbol"),
+                                       V: TypeGuessr::Core::Types::ClassInstance.new("String")
+                                     })
+
         expect(result).to be_a(TypeGuessr::Core::Types::ArrayType)
         expect(result.element_type).to be_a(TypeGuessr::Core::Types::Union)
         expect(result.element_type.types.map(&:name)).to contain_exactly("Symbol", "String")
@@ -182,22 +184,23 @@ RSpec.describe TypeGuessr::Core::Converter::RBSConverter do
     end
 
     context "with type variable substitution in complex types" do
-      it "substitutes type variable in Array[U]" do
+      it "converts Array[U] with type variable that can be substituted later" do
         var_type = RBS::Types::Variable.new(name: :U, location: nil)
         rbs_type = RBS::Types::ClassInstance.new(
           name: RBS::TypeName.new(name: :Array, namespace: RBS::Namespace.root),
           args: [var_type],
           location: nil
         )
-        substitutions = { U: TypeGuessr::Core::Types::ClassInstance.new("Integer") }
 
-        result = converter.convert(rbs_type, substitutions)
+        raw_type = converter.convert(rbs_type)
+        result = raw_type.substitute({ U: TypeGuessr::Core::Types::ClassInstance.new("Integer") })
+
         expect(result).to be_a(TypeGuessr::Core::Types::ArrayType)
         expect(result.element_type).to be_a(TypeGuessr::Core::Types::ClassInstance)
         expect(result.element_type.name).to eq("Integer")
       end
 
-      it "substitutes type variable in Union" do
+      it "converts Union with type variable that can be substituted later" do
         var_type = RBS::Types::Variable.new(name: :T, location: nil)
         nil_type = RBS::Types::ClassInstance.new(
           name: RBS::TypeName.new(name: :NilClass, namespace: RBS::Namespace.root),
@@ -208,9 +211,10 @@ RSpec.describe TypeGuessr::Core::Converter::RBSConverter do
           types: [var_type, nil_type],
           location: nil
         )
-        substitutions = { T: TypeGuessr::Core::Types::ClassInstance.new("String") }
 
-        result = converter.convert(rbs_type, substitutions)
+        raw_type = converter.convert(rbs_type)
+        result = raw_type.substitute({ T: TypeGuessr::Core::Types::ClassInstance.new("String") })
+
         expect(result).to be_a(TypeGuessr::Core::Types::Union)
         expect(result.types.map(&:name)).to contain_exactly("String", "NilClass")
       end
