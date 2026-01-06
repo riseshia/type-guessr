@@ -120,18 +120,19 @@ module RubyLsp
       end
 
       def add_call_node_hover(call_node)
-        # Get receiver type to look up RBS signature
+        # Get receiver type to look up method signature
         if call_node.receiver
           receiver_result = @runtime_adapter.infer_type(call_node.receiver)
           receiver_type = receiver_result.type
 
-          # Get the class name for RBS lookup
+          # Get the class name for signature lookup
           class_name = extract_class_name(receiver_type)
 
           if class_name
-            # Look up RBS signature
-            rbs_provider = ::TypeGuessr::Core::RBSProvider.instance
-            signatures = rbs_provider.get_method_signatures(class_name, call_node.method.to_s)
+            # Look up signature via SignatureProvider
+            signatures = @runtime_adapter.signature_provider.get_method_signatures(
+              class_name, call_node.method.to_s
+            )
 
             if signatures.any?
               # Format the signature(s)

@@ -9,7 +9,7 @@ Extract reusable knowledge from the current conversation and update the Knowledg
 
 ## When to Use
 
-Invoke `/retro` at the end of a productive session when you want to preserve:
+Invoke `/retrospective` at the end of a productive session when you want to preserve:
 - Architecture insights discovered
 - Coding patterns that proved useful
 - Tool commands and debugging techniques
@@ -22,7 +22,7 @@ Invoke `/retro` at the end of a productive session when you want to preserve:
 Run the following command to read the conversation history:
 
 ```bash
-.claude/skills/retro/scripts/knowledge-manager --project-path "$(pwd)" read-session
+.claude/skills/retrospective/scripts/knowledge-manager --project-path "$(pwd)" read-session
 ```
 
 Review the output and identify knowledge worth preserving.
@@ -43,7 +43,7 @@ Look for insights in these categories:
 List current entries to avoid duplicates:
 
 ```bash
-.claude/skills/retro/scripts/knowledge-manager --project-path "$(pwd)" list
+.claude/skills/retrospective/scripts/knowledge-manager --project-path "$(pwd)" list
 ```
 
 ### Step 4: Add New Knowledge
@@ -51,16 +51,16 @@ List current entries to avoid duplicates:
 Add one or more entries (multiple `-c`/`-t` pairs allowed):
 
 ```bash
-.claude/skills/retro/scripts/knowledge-manager --project-path "$(pwd)" add -c <category> -t "<content>" [-c <category> -t "<content>" ...]
+.claude/skills/retrospective/scripts/knowledge-manager --project-path "$(pwd)" add -c <category> -t "<content>" [-c <category> -t "<content>" ...]
 ```
 
 Examples:
 ```bash
 # Single entry
-.claude/skills/retro/scripts/knowledge-manager --project-path "$(pwd)" add -c pat -t "Use guard clauses for early returns to reduce nesting"
+.claude/skills/retrospective/scripts/knowledge-manager --project-path "$(pwd)" add -c pat -t "Use guard clauses for early returns to reduce nesting"
 
 # Multiple entries at once
-.claude/skills/retro/scripts/knowledge-manager --project-path "$(pwd)" add -c arch -t "First insight" -c pat -t "Second insight"
+.claude/skills/retrospective/scripts/knowledge-manager --project-path "$(pwd)" add -c arch -t "First insight" -c pat -t "Second insight"
 ```
 
 ### Step 5: Update Scores for Referenced Knowledge
@@ -68,13 +68,13 @@ Examples:
 If you used knowledge from the Knowledge Base during this session that was helpful:
 
 ```bash
-.claude/skills/retro/scripts/knowledge-manager --project-path "$(pwd)" helpful <entry-id>
+.claude/skills/retrospective/scripts/knowledge-manager --project-path "$(pwd)" helpful <entry-id>
 ```
 
 If any knowledge was misleading or harmful:
 
 ```bash
-.claude/skills/retro/scripts/knowledge-manager --project-path "$(pwd)" harmful <entry-id>
+.claude/skills/retrospective/scripts/knowledge-manager --project-path "$(pwd)" harmful <entry-id>
 ```
 
 ### Step 6: Cleanup
@@ -82,7 +82,7 @@ If any knowledge was misleading or harmful:
 Remove stale or harmful entries:
 
 ```bash
-.claude/skills/retro/scripts/knowledge-manager --project-path "$(pwd)" cleanup
+.claude/skills/retrospective/scripts/knowledge-manager --project-path "$(pwd)" cleanup
 ```
 
 ## Entry Guidelines

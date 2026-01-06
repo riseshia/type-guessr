@@ -312,28 +312,26 @@ module TypeGuessr
               end
             end
 
-            # Query signature provider for method return type
+            # Query for method return type: project first, then RBS
             if receiver_type.is_a?(Types::ClassInstance)
-              # Infer argument types for overload resolution
+              # 1. Try project methods first
+              def_node = lookup_method(receiver_type.name, node.method.to_s)
+              if def_node
+                return_result = infer(def_node)
+                return Result.new(
+                  return_result.type,
+                  "#{receiver_type.name}##{node.method} (project)",
+                  :project
+                )
+              end
+
+              # 2. Fall back to RBS signature provider
               arg_types = node.args.map { |arg| infer(arg).type }
               return_type = @signature_provider.get_method_return_type(
                 receiver_type.name,
                 node.method.to_s,
                 arg_types
               )
-
-              # If RBS returns Unknown, try project methods
-              if return_type.is_a?(Types::Unknown)
-                def_node = lookup_method(receiver_type.name, node.method.to_s)
-                if def_node
-                  return_result = infer(def_node)
-                  return Result.new(
-                    return_result.type,
-                    "#{receiver_type.name}##{node.method} (project)",
-                    :project
-                  )
-                end
-              end
 
               return Result.new(
                 return_type,

@@ -46,6 +46,9 @@ module TypeGuessr
         # Build the type name
         type_name = build_type_name(class_name)
 
+        # Check if class exists in RBS before building (avoids RuntimeError for project classes)
+        return [] unless @env.class_decl?(type_name)
+
         # Use RBS::DefinitionBuilder to get method definitions
         builder = RBS::DefinitionBuilder.new(env: @env)
         definition = builder.build_instance(type_name)
@@ -101,6 +104,9 @@ module TypeGuessr
 
         # Build the type name
         type_name = build_type_name(class_name)
+
+        # Check if class exists in RBS before building (avoids RuntimeError for project classes)
+        return [] unless @env.class_decl?(type_name)
 
         # Use RBS::DefinitionBuilder to get singleton method definitions
         builder = RBS::DefinitionBuilder.new(env: @env)

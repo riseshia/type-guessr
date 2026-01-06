@@ -335,6 +335,9 @@ Type guessing is performed through:
 - [+0, -0, 2026-01-06] arch-001: Deferred resolution pattern: When IR nodes need forward references (e.g., instance variable read before write), store nil at conversion time and look up from a registry at inference time
 - [+0, -0, 2026-01-06] arch-002: Variable nodes are split by scope: LocalWriteNode/LocalReadNode for locals, InstanceVariableWriteNode/InstanceVariableReadNode (with class_name field) for instance vars, ClassVariableWriteNode/ClassVariableReadNode for class vars
 - [+0, -0, 2026-01-06] arch-003: Resolver maintains registries for deferred lookup: @instance_variables = { 'ClassName' => { :@name => WriteNode } } and @class_variables with same structure - RuntimeAdapter registers during indexing
+- [+0, -0, 2026-01-06] arch-004: RBSProvider.get_method_signatures must check @env.class_decl?(type_name) before build_instance to avoid RuntimeError for project-defined classes not in RBS
+- [+0, -0, 2026-01-06] arch-005: SignatureProvider aggregates type sources via get_method_return_type (type inference) and get_method_signatures (hover display) - hover should use SignatureProvider, not RBSProvider directly
+- [+0, -0, 2026-01-06] arch-006: Method lookup order must be project-first then RBS: Resolver checks lookup_method() for project methods before querying SignatureProvider for RBS types
 
 ### Pattern Knowledge
 - [+0, -0, 2026-01-06] pat-001: Node hash format: local_write:/local_read:/ivar_write:/ivar_read:/cvar_write:/cvar_read: prefixes - update all locations that generate or parse node keys when changing format

@@ -13,6 +13,8 @@ module RubyLsp
     # RuntimeAdapter manages the IR graph and inference for TypeGuessr
     # Converts files to IR graphs and provides type inference
     class RuntimeAdapter
+      attr_reader :signature_provider
+
       def initialize(global_state, message_queue = nil)
         @global_state = global_state
         @message_queue = message_queue
