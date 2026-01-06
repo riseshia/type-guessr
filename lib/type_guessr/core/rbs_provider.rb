@@ -92,21 +92,6 @@ module TypeGuessr
         extract_block_param_types(block_sig)
       end
 
-      # Get block parameter types with type variable substitution
-      # @param class_name [String] the receiver class name
-      # @param method_name [String] the method name
-      # @param elem [Types::Type, nil] the element type to substitute for Elem (Array)
-      # @param key [Types::Type, nil] the key type to substitute for K (Hash)
-      # @param value [Types::Type, nil] the value type to substitute for V (Hash)
-      # @return [Array<Types::Type>] array of block parameter types with substitution applied
-      def get_block_param_types_with_substitution(class_name, method_name, elem: nil, key: nil, value: nil)
-        block_sig = find_block_signature(class_name, method_name)
-        return [] unless block_sig
-
-        substitutions = { Elem: elem, K: key, V: value }.compact
-        extract_block_param_types(block_sig, substitutions: substitutions)
-      end
-
       # Get the return type of a method call with type variable substitution
       # @param class_name [String] the receiver class name
       # @param method_name [String] the method name

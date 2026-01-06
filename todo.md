@@ -2,12 +2,6 @@
 
 ### Architecture Improvements
 
-#### Block Parameter Generalization
-Refactor `Resolver#infer_block_param_slot` to use RBS-based generic lookup.
-- Add `type_variable_substitutions` and `rbs_class_name` methods to Type classes
-- Simplify resolver from ~70 lines to ~20 lines
-- Enable automatic support for Set, Enumerator, and other generic types
-
 #### Node Key Factory
 Centralize node key generation in `NodeKeyFactory` class.
 - Consistent key format across all node types

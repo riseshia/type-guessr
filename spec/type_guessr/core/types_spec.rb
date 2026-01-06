@@ -430,6 +430,161 @@ RSpec.describe TypeGuessr::Core::Types do
     end
   end
 
+  describe "#rbs_class_name" do
+    describe "Type (base class)" do
+      it "returns nil by default" do
+        # Use Unknown as a representative since Type is abstract
+        unknown = described_class::Unknown.instance
+        expect(unknown.rbs_class_name).to be_nil
+      end
+    end
+
+    describe "ClassInstance" do
+      it "returns the class name" do
+        type = described_class::ClassInstance.new("String")
+        expect(type.rbs_class_name).to eq("String")
+      end
+
+      it "returns namespaced class name" do
+        type = described_class::ClassInstance.new("ActiveRecord::Base")
+        expect(type.rbs_class_name).to eq("ActiveRecord::Base")
+      end
+    end
+
+    describe "ArrayType" do
+      it "returns 'Array'" do
+        array_type = described_class::ArrayType.new
+        expect(array_type.rbs_class_name).to eq("Array")
+      end
+    end
+
+    describe "HashType" do
+      it "returns 'Hash'" do
+        hash_type = described_class::HashType.new
+        expect(hash_type.rbs_class_name).to eq("Hash")
+      end
+    end
+
+    describe "HashShape" do
+      it "returns 'Hash'" do
+        hash_shape = described_class::HashShape.new({ a: described_class::ClassInstance.new("Integer") })
+        expect(hash_shape.rbs_class_name).to eq("Hash")
+      end
+    end
+
+    describe "Union" do
+      it "returns nil" do
+        union = described_class::Union.new([
+                                             described_class::ClassInstance.new("String"),
+                                             described_class::ClassInstance.new("Integer"),
+                                           ])
+        expect(union.rbs_class_name).to be_nil
+      end
+    end
+
+    describe "DuckType" do
+      it "returns nil" do
+        duck_type = described_class::DuckType.new(%i[foo bar])
+        expect(duck_type.rbs_class_name).to be_nil
+      end
+    end
+  end
+
+  describe "#type_variable_substitutions" do
+    let(:integer_type) { described_class::ClassInstance.new("Integer") }
+    let(:string_type) { described_class::ClassInstance.new("String") }
+
+    describe "Type (base class)" do
+      it "returns empty hash by default" do
+        unknown = described_class::Unknown.instance
+        expect(unknown.type_variable_substitutions).to eq({})
+      end
+    end
+
+    describe "ClassInstance" do
+      it "returns empty hash" do
+        type = described_class::ClassInstance.new("String")
+        expect(type.type_variable_substitutions).to eq({})
+      end
+    end
+
+    describe "ArrayType" do
+      it "returns Elem substitution" do
+        array_type = described_class::ArrayType.new(integer_type)
+        expect(array_type.type_variable_substitutions).to eq({ Elem: integer_type })
+      end
+
+      it "returns Unknown for Elem when element_type is Unknown" do
+        array_type = described_class::ArrayType.new
+        expect(array_type.type_variable_substitutions).to eq({ Elem: described_class::Unknown.instance })
+      end
+    end
+
+    describe "HashType" do
+      it "returns K and V substitutions" do
+        symbol_type = described_class::ClassInstance.new("Symbol")
+        hash_type = described_class::HashType.new(symbol_type, integer_type)
+        expect(hash_type.type_variable_substitutions).to eq({ K: symbol_type, V: integer_type })
+      end
+
+      it "returns Unknown for K and V when types are Unknown" do
+        hash_type = described_class::HashType.new
+        expect(hash_type.type_variable_substitutions).to eq({
+                                                              K: described_class::Unknown.instance,
+                                                              V: described_class::Unknown.instance
+                                                            })
+      end
+    end
+
+    describe "HashShape" do
+      it "returns Symbol for K and value type for V with single field type" do
+        hash_shape = described_class::HashShape.new({ a: integer_type, b: integer_type })
+        subs = hash_shape.type_variable_substitutions
+
+        expect(subs[:K]).to eq(described_class::ClassInstance.new("Symbol"))
+        expect(subs[:V]).to eq(integer_type)
+      end
+
+      it "returns Union for V with multiple field types" do
+        hash_shape = described_class::HashShape.new({ a: integer_type, b: string_type })
+        subs = hash_shape.type_variable_substitutions
+
+        expect(subs[:K]).to eq(described_class::ClassInstance.new("Symbol"))
+        expect(subs[:V]).to be_a(described_class::Union)
+        expect(subs[:V].types).to contain_exactly(integer_type, string_type)
+      end
+
+      it "returns Unknown for V with empty hash shape" do
+        hash_shape = described_class::HashShape.new({})
+        subs = hash_shape.type_variable_substitutions
+
+        expect(subs[:K]).to eq(described_class::ClassInstance.new("Symbol"))
+        expect(subs[:V]).to eq(described_class::Unknown.instance)
+      end
+    end
+
+    describe "Union" do
+      it "returns empty hash" do
+        union = described_class::Union.new([integer_type, string_type])
+        expect(union.type_variable_substitutions).to eq({})
+      end
+    end
+
+    describe "DuckType" do
+      it "returns empty hash" do
+        duck_type = described_class::DuckType.new(%i[foo bar])
+        expect(duck_type.type_variable_substitutions).to eq({})
+      end
+    end
+
+    describe "ForwardingArgs" do
+      it "returns empty hash" do
+        forwarding = described_class::ForwardingArgs.instance
+        expect(forwarding.type_variable_substitutions).to eq({})
+      end
+    end
+  end
+
   describe "#substitute" do
     let(:integer_type) { described_class::ClassInstance.new("Integer") }
     let(:string_type) { described_class::ClassInstance.new("String") }

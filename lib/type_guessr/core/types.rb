@@ -25,6 +25,20 @@ module TypeGuessr
         def substitute(_substitutions)
           self
         end
+
+        # Get the RBS class name for this type
+        # Used for looking up method signatures in RBSProvider
+        # @return [String, nil] class name or nil if not applicable
+        def rbs_class_name
+          nil
+        end
+
+        # Get type variable substitutions for this type
+        # Used for substituting type variables in block parameters
+        # @return [Hash{Symbol => Type}] type variable substitutions (e.g., { Elem: Integer, K: Symbol, V: String })
+        def type_variable_substitutions
+          {}
+        end
       end
 
       # Unknown type - no information available
@@ -60,6 +74,10 @@ module TypeGuessr
           when "FalseClass" then "false"
           else @name
           end
+        end
+
+        def rbs_class_name
+          @name
         end
       end
 
@@ -174,6 +192,14 @@ module TypeGuessr
 
           ArrayType.new(new_element)
         end
+
+        def rbs_class_name
+          "Array"
+        end
+
+        def type_variable_substitutions
+          { Elem: @element_type }
+        end
       end
 
       # HashType - hash with key and value types
@@ -204,6 +230,14 @@ module TypeGuessr
           return self if new_key.equal?(@key_type) && new_value.equal?(@value_type)
 
           HashType.new(new_key, new_value)
+        end
+
+        def rbs_class_name
+          "Hash"
+        end
+
+        def type_variable_substitutions
+          { K: @key_type, V: @value_type }
         end
       end
 
@@ -250,6 +284,23 @@ module TypeGuessr
           return self if new_fields.all? { |k, v| v.equal?(@fields[k]) }
 
           HashShape.new(new_fields)
+        end
+
+        def rbs_class_name
+          "Hash"
+        end
+
+        def type_variable_substitutions
+          key_type = ClassInstance.new("Symbol")
+          value_types = @fields.values.uniq
+          value_type = if value_types.empty?
+                         Unknown.instance
+                       elsif value_types.size == 1
+                         value_types.first
+                       else
+                         Union.new(value_types)
+                       end
+          { K: key_type, V: value_type }
         end
       end
 

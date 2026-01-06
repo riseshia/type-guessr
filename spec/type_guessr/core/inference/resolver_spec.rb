@@ -268,7 +268,7 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
         result = resolver.infer(slot)
         expect(result.type).to be_a(TypeGuessr::Core::Types::ClassInstance)
         expect(result.type.name).to eq("String")
-        expect(result.reason).to include("Array[String]#each")
+        expect(result.reason).to include("Array#each")
       end
     end
 

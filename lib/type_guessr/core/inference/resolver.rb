@@ -289,81 +289,21 @@ module TypeGuessr
         end
 
         def infer_block_param_slot(node)
-          # Get the type of the call node
-          infer(node.call_node)
+          return Result.new(Types::Unknown.instance, "block param without type info", :unknown) unless node.call_node.receiver
 
-          # Try to get block parameter types from RBS
-          if node.call_node.receiver
-            receiver_result = infer(node.call_node.receiver)
-            receiver_type = receiver_result.type
+          receiver_type = infer(node.call_node.receiver).type
+          class_name = receiver_type.rbs_class_name
+          return Result.new(Types::Unknown.instance, "block param without type info", :unknown) unless class_name
 
-            if receiver_type.is_a?(Types::ArrayType) && receiver_type.element_type
-              # For Array, block parameter is the element type
-              elem_type = receiver_type.element_type
-              if node.index.zero?
-                return Result.new(
-                  elem_type,
-                  "block param from Array[#{elem_type}]##{node.call_node.method}",
-                  :stdlib
-                )
-              end
-            elsif receiver_type.is_a?(Types::HashType)
-              # For Hash, substitute K and V type variables
-              block_param_types = @rbs_provider.get_block_param_types_with_substitution(
-                "Hash",
-                node.call_node.method.to_s,
-                key: receiver_type.key_type,
-                value: receiver_type.value_type
-              )
-              if block_param_types.size > node.index
-                param_type = block_param_types[node.index]
-                return Result.new(
-                  param_type,
-                  "block param[#{node.index}] from Hash[#{receiver_type.key_type}, #{receiver_type.value_type}]##{node.call_node.method}",
-                  :stdlib
-                )
-              end
-            elsif receiver_type.is_a?(Types::HashShape)
-              # For HashShape, key type is Symbol and value type is union of all field types
-              key_type = Types::ClassInstance.new("Symbol")
-              value_types = receiver_type.fields.values.uniq
-              value_type = if value_types.size == 1
-                             value_types.first
-                           else
-                             Types::Union.new(value_types)
-                           end
-              block_param_types = @rbs_provider.get_block_param_types_with_substitution(
-                "Hash",
-                node.call_node.method.to_s,
-                key: key_type,
-                value: value_type
-              )
-              if block_param_types.size > node.index
-                param_type = block_param_types[node.index]
-                return Result.new(
-                  param_type,
-                  "block param[#{node.index}] from HashShape##{node.call_node.method}",
-                  :stdlib
-                )
-              end
-            elsif receiver_type.is_a?(Types::ClassInstance)
-              # Query RBS for block parameter types
-              block_param_types = @rbs_provider.get_block_param_types(
-                receiver_type.name,
-                node.call_node.method.to_s
-              )
-              if block_param_types.size > node.index
-                param_type = block_param_types[node.index]
-                return Result.new(
-                  param_type,
-                  "block param[#{node.index}] from #{receiver_type.name}##{node.call_node.method}",
-                  :stdlib
-                )
-              end
-            end
-          end
+          # Get block parameter types from RBSProvider (returns internal types with TypeVariables)
+          raw_block_param_types = @rbs_provider.get_block_param_types(class_name, node.call_node.method.to_s)
+          return Result.new(Types::Unknown.instance, "block param without type info", :unknown) unless raw_block_param_types.size > node.index
 
-          Result.new(Types::Unknown.instance, "block param without type info", :unknown)
+          # Type#substitute applies type variable substitutions
+          raw_type = raw_block_param_types[node.index]
+          resolved_type = raw_type.substitute(receiver_type.type_variable_substitutions)
+
+          Result.new(resolved_type, "block param from #{class_name}##{node.call_node.method}", :stdlib)
         end
 
         def infer_merge(node)
