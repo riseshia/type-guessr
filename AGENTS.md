@@ -338,10 +338,12 @@ Type guessing is performed through:
 - [+0, -0, 2026-01-06] arch-004: RBSProvider.get_method_signatures must check @env.class_decl?(type_name) before build_instance to avoid RuntimeError for project-defined classes not in RBS
 - [+0, -0, 2026-01-06] arch-005: SignatureProvider aggregates type sources via get_method_return_type (type inference) and get_method_signatures (hover display) - hover should use SignatureProvider, not RBSProvider directly
 - [+0, -0, 2026-01-06] arch-006: Method lookup order must be project-first then RBS: Resolver checks lookup_method() for project methods before querying SignatureProvider for RBS types
+- [+0, -0, 2026-01-06] arch-007: Implicit self method calls require SelfNode with full class path: convert_class_or_module must build full_name from parent_path + name for nested modules, otherwise lookup_method fails to find project methods
 
 ### Pattern Knowledge
 - [+0, -0, 2026-01-06] pat-001: Node hash format: local_write:/local_read:/ivar_write:/ivar_read:/cvar_write:/cvar_read: prefixes - update all locations that generate or parse node keys when changing format
 - [+0, -0, 2026-01-06] pat-002: When splitting node types, update: nodes.rb (definitions), prism_converter.rb (creation), resolver.rb (inference), runtime_adapter.rb (indexing), hover.rb/type_inferrer.rb/graph_builder.rb (key generation), debug_server.rb (JS display)
+- [+0, -0, 2026-01-06] pat-003: When adding new IR node types that contain child nodes (like ReturnNode), add case to RuntimeAdapter.index_node_recursively to index children, otherwise hover won't work for nodes inside
 
 ### Tool Knowledge
 - [+0, -0, 2026-01-06] tool-001: Claude Code sessions are stored in ~/.claude/projects/{encoded-path}/{session-id}.jsonl as JSONL format

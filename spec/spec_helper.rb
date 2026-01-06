@@ -2,6 +2,8 @@
 
 $LOAD_PATH.unshift File.expand_path("../lib", __dir__)
 require "type-guessr"
+# Load addon for integration tests (normally auto-discovered by Ruby LSP)
+require "ruby_lsp/type_guessr/addon"
 require "ruby_lsp/test_helper"
 require "uri"
 

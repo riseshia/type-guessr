@@ -566,7 +566,15 @@ module TypeGuessr
         end
 
         def convert_call(prism_node, context)
-          receiver_node = (convert(prism_node.receiver, context) if prism_node.receiver)
+          # Convert receiver - if nil and inside a class, create implicit SelfNode
+          receiver_node = if prism_node.receiver
+                            convert(prism_node.receiver, context)
+                          elsif context.current_class_name
+                            IR::SelfNode.new(
+                              class_name: context.current_class_name,
+                              loc: convert_loc(prism_node.location)
+                            )
+                          end
 
           args = prism_node.arguments&.arguments&.map { |arg| convert(arg, context) } || []
 
@@ -1206,9 +1214,11 @@ module TypeGuessr
                    "Anonymous"
                  end
 
-          # Create a new context for class/module scope with the class name set
+          # Create a new context for class/module scope with the full class path
           class_context = context.fork(:class)
-          class_context.current_class = name
+          parent_path = context.current_class_name
+          full_name = parent_path ? "#{parent_path}::#{name}" : name
+          class_context.current_class = full_name
 
           # Collect all method definitions and nested classes from the body
           methods = []

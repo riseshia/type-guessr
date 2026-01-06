@@ -1469,6 +1469,26 @@ RSpec.describe "Hover Integration" do
         expect_hover_type(line: 4, column: 2, expected: "Array")
       end
     end
+
+    context "implicit self method call" do
+      let(:source) do
+        <<~RUBY
+          class Config
+            def default_config
+              { "enabled" => true }
+            end
+
+            def load_config
+              default_config
+            end
+          end
+        RUBY
+      end
+
+      it "infers return type from same-class method" do
+        expect_hover_type(line: 7, column: 6, expected: "Hash")
+      end
+    end
   end
 
   describe "Method-Call Set Heuristic" do

@@ -426,6 +426,10 @@ module RubyLsp
           # Index branches
           node.branches&.each { |branch| index_node_recursively(file_path, branch, scope_id) }
 
+        when ::TypeGuessr::Core::IR::ReturnNode
+          # Index return value
+          index_node_recursively(file_path, node.value, scope_id) if node.value
+
         when ::TypeGuessr::Core::IR::ConstantNode
           # Index dependency
           index_node_recursively(file_path, node.dependency, scope_id) if node.dependency
