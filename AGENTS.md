@@ -190,6 +190,23 @@ bundle exec rspec && bundle exec rubocop -a
 bin/console
 ```
 
+### Testing Hover in Real LSP Environment
+```bash
+bin/hover-repl
+```
+
+REPL-style tool that spawns actual ruby-lsp server with TypeGuessr addon.
+Waits for full project indexing (~20 seconds), then allows multiple hover queries:
+
+```
+> lib/ruby_lsp/type_guessr/config.rb 40 11
+**Method Signature:** `() -> ?Hash[String, true | false]`
+...
+> exit
+```
+
+Use this to verify hover results match what users see in their editors.
+
 ## TDD Development Workflow
 
 This project follows strict Test-Driven Development (TDD) practices.
@@ -348,6 +365,7 @@ Type guessing is performed through:
 ### Tool Knowledge
 - [+0, -0, 2026-01-06] tool-001: Claude Code sessions are stored in ~/.claude/projects/{encoded-path}/{session-id}.jsonl as JSONL format
 - [+0, -0, 2026-01-06] tool-002: Claude Code skills (model-invoked) go in .claude/skills/, commands (user-invoked) go in .claude/commands/
+- [+0, -0, 2026-01-06] tool-003: bin/hover-repl: REPL tool for testing LSP hover - spawns ruby-lsp server, waits for window/logMessage notifications for indexing completion, allows multiple hover queries without reinitializing
 
 ### Convention Knowledge
 - [+0, -0, 2026-01-06] conv-001: Skill folder name must differ from command filename to avoid conflicts

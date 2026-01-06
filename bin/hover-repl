@@ -1,0 +1,315 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# REPL for testing TypeGuessr hover results with actual ruby-lsp server.
+# Usage:
+#   bin/hover-repl
+#   > lib/ruby_lsp/type_guessr/config.rb 40 6
+#   > exit
+
+require "open3"
+require "json"
+require "uri"
+
+# JSON-RPC client for communicating with LSP server
+class LspClient
+  def initialize(stdin, stdout)
+    @stdin = stdin
+    @stdout = stdout
+    @request_id = 0
+    @notification_handler = nil
+  end
+
+  def on_notification(&block)
+    @notification_handler = block
+  end
+
+  def send_request(method, params)
+    @request_id += 1
+    message = {
+      jsonrpc: "2.0",
+      id: @request_id,
+      method: method,
+      params: params
+    }
+    write_message(message)
+    read_response(@request_id)
+  end
+
+  def send_notification(method, params)
+    message = {
+      jsonrpc: "2.0",
+      method: method,
+      params: params
+    }
+    write_message(message)
+  end
+
+  def read_response(expected_id = nil)
+    loop do
+      msg = read_message
+      return nil unless msg
+
+      # If it's a notification (no id), handle it and keep reading
+      unless msg.key?("id")
+        @notification_handler&.call(msg)
+        next
+      end
+
+      # If we're waiting for a specific response, check id
+      if expected_id && msg["id"] != expected_id
+        # This shouldn't happen in normal flow, but handle it
+        next
+      end
+
+      return msg
+    end
+  end
+
+  # Read notifications without blocking (used during indexing wait)
+  def drain_notifications(timeout: 0.1)
+    start = Time.now
+    while Time.now - start < timeout
+      # Check if data is available using wait_readable for fiber scheduler compatibility
+      break unless @stdout.wait_readable(0.05)
+
+      msg = read_message
+      break unless msg
+
+      @notification_handler&.call(msg) unless msg.key?("id")
+    end
+  end
+
+  private
+
+  def read_message
+    # Read Content-Length header
+    header = ""
+    loop do
+      line = @stdout.gets
+      return nil unless line
+      break if line == "\r\n"
+
+      header += line
+    end
+
+    content_length = header.match(/Content-Length: (\d+)/i)&.[](1)&.to_i
+    return nil unless content_length
+
+    # Read body
+    body = @stdout.read(content_length)
+    JSON.parse(body)
+  end
+
+  def write_message(message)
+    json = JSON.generate(message)
+    @stdin.write("Content-Length: #{json.bytesize}\r\n\r\n#{json}")
+    @stdin.flush
+  end
+end
+
+# Interactive REPL for testing hover results with actual ruby-lsp server
+class HoverRepl
+  def initialize
+    @client = nil
+    @stdin = nil
+    @stdout = nil
+    @stderr = nil
+    @wait_thr = nil
+    @opened_files = {}
+    @indexing_complete = false
+  end
+
+  def start
+    puts "Starting ruby-lsp server..."
+    @stdin, @stdout, @stderr, @wait_thr = Open3.popen3(
+      "bundle", "exec", "ruby-lsp",
+      chdir: Dir.pwd
+    )
+    @client = LspClient.new(@stdin, @stdout)
+
+    # Handle notifications from server (including window/logMessage)
+    @client.on_notification do |msg|
+      handle_notification(msg)
+    end
+
+    # Start stderr reader thread for any direct stderr output
+    @stderr_thread = Thread.new do
+      while (line = @stderr.gets)
+        warn "  [stderr] #{line.strip}" if ENV["DEBUG"]
+      end
+    rescue IOError
+      # Expected when stream is closed during shutdown
+    end
+
+    initialize_server
+    puts "Ready! Type '<file> <line> <column>' or 'exit'"
+    puts "Example: lib/ruby_lsp/type_guessr/config.rb 40 6"
+  end
+
+  def handle_notification(msg)
+    method = msg["method"]
+    params = msg["params"]
+
+    case method
+    when "window/logMessage"
+      message = params&.dig("message") || ""
+      if message.include?("[TypeGuessr]")
+        puts "  #{message}"
+        @indexing_complete = true if message.include?("File indexing completed")
+      end
+    when "$/progress"
+      # Progress notifications from ruby-lsp indexing
+      token = params&.dig("token")
+      value = params&.dig("value")
+      if value&.dig("kind") == "begin"
+        puts "  Progress: #{value["title"]}" if ENV["DEBUG"]
+      elsif value&.dig("kind") == "end"
+        puts "  Progress end: #{token}" if ENV["DEBUG"]
+      end
+    end
+  end
+
+  def run
+    start
+    loop do
+      print "> "
+      input = $stdin.gets&.strip
+      break if input.nil? || input == "exit" || input == "quit"
+      next if input.empty?
+
+      process_command(input)
+    end
+  ensure
+    shutdown
+  end
+
+  private
+
+  def initialize_server
+    root_uri = "file://#{Dir.pwd}"
+    response = @client.send_request("initialize", {
+                                      processId: Process.pid,
+                                      rootUri: root_uri,
+                                      capabilities: {
+                                        textDocument: {
+                                          hover: {
+                                            contentFormat: %w[markdown plaintext]
+                                          }
+                                        },
+                                        window: {
+                                          workDoneProgress: true
+                                        }
+                                      },
+                                      initializationOptions: {}
+                                    })
+
+    if response&.dig("error")
+      puts "Initialize error: #{response["error"]}"
+      exit 1
+    end
+
+    @client.send_notification("initialized", {})
+    puts "Server initialized, waiting for indexing..."
+
+    # Wait for indexing to complete by reading progress notifications
+    wait_for_indexing
+  end
+
+  def wait_for_indexing
+    timeout = Time.now + 120 # 2 minutes timeout
+
+    # Drain notifications from stdout, checking for indexing completion
+    @client.drain_notifications(timeout: 0.5) until @indexing_complete || Time.now > timeout
+
+    if @indexing_complete
+      puts "TypeGuessr indexing complete!"
+    else
+      puts "Timeout waiting for indexing, continuing anyway..."
+    end
+  end
+
+  def process_command(input)
+    parts = input.split
+    if parts.size < 3
+      puts "Usage: <file_path> <line> <column>"
+      return
+    end
+
+    file_path = parts[0]
+    line = parts[1].to_i
+    column = parts[2].to_i
+
+    absolute_path = File.expand_path(file_path, Dir.pwd)
+    unless File.exist?(absolute_path)
+      puts "File not found: #{absolute_path}"
+      return
+    end
+
+    hover(absolute_path, line, column)
+  end
+
+  def hover(file_path, line, column)
+    uri = "file://#{file_path}"
+
+    # Open file if not already opened
+    open_file(uri, file_path) unless @opened_files[uri]
+
+    # Send hover request (LSP uses 0-based line/column)
+    response = @client.send_request("textDocument/hover", {
+                                      textDocument: { uri: uri },
+                                      position: { line: line - 1, character: column - 1 }
+                                    })
+
+    if response&.dig("error")
+      puts "Error: #{response["error"]["message"]}"
+      return
+    end
+
+    result = response&.dig("result")
+    if result.nil?
+      puts "(no hover info)"
+      return
+    end
+
+    contents = result["contents"]
+    if contents.is_a?(Hash)
+      puts contents["value"]
+    elsif contents.is_a?(Array)
+      contents.each do |c|
+        puts c.is_a?(Hash) ? c["value"] : c
+      end
+    else
+      puts contents
+    end
+  end
+
+  def open_file(uri, file_path)
+    source = File.read(file_path)
+    @client.send_notification("textDocument/didOpen", {
+                                textDocument: {
+                                  uri: uri,
+                                  languageId: "ruby",
+                                  version: 1,
+                                  text: source
+                                }
+                              })
+    @opened_files[uri] = true
+    # Give server time to process the file
+    sleep 0.5
+  end
+
+  def shutdown
+    return unless @client
+
+    puts "\nShutting down..."
+    @client.send_request("shutdown", nil)
+    @client.send_notification("exit", nil)
+    @stdin&.close
+    @stdout&.close
+    @stderr&.close
+    @wait_thr&.value
+  end
+end
+
+HoverRepl.new.run
