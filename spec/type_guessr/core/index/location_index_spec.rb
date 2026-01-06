@@ -69,6 +69,7 @@ RSpec.describe TypeGuessr::Core::Index::LocationIndex do
     it "ignores nodes without location" do
       node_without_loc = TypeGuessr::Core::IR::LiteralNode.new(
         type: string_type,
+        values: nil,
         loc: nil
       )
 

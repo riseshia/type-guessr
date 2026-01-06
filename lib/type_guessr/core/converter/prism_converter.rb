@@ -107,10 +107,15 @@ module TypeGuessr
           case prism_node
           when Prism::IntegerNode, Prism::FloatNode, Prism::StringNode,
                Prism::SymbolNode, Prism::TrueNode, Prism::FalseNode,
-               Prism::NilNode, Prism::ArrayNode, Prism::HashNode,
-               Prism::InterpolatedStringNode, Prism::RangeNode,
+               Prism::NilNode, Prism::InterpolatedStringNode, Prism::RangeNode,
                Prism::RegularExpressionNode, Prism::InterpolatedRegularExpressionNode
             convert_literal(prism_node)
+
+          when Prism::ArrayNode
+            convert_array_literal(prism_node, context)
+
+          when Prism::HashNode
+            convert_hash_literal(prism_node, context)
 
           when Prism::LocalVariableWriteNode
             convert_local_variable_write(prism_node, context)
@@ -184,6 +189,7 @@ module TypeGuessr
                            # return with no value returns nil
                            IR::LiteralNode.new(
                              type: Types::ClassInstance.new("NilClass"),
+                             values: nil,
                              loc: convert_loc(prism_node.location)
                            )
                          end
@@ -214,6 +220,64 @@ module TypeGuessr
           type = infer_literal_type(prism_node)
           IR::LiteralNode.new(
             type: type,
+            values: nil,
+            loc: convert_loc(prism_node.location)
+          )
+        end
+
+        def convert_array_literal(prism_node, context)
+          type = infer_array_element_type(prism_node)
+
+          # Convert each element to an IR node
+          value_nodes = prism_node.elements.filter_map do |elem|
+            next if elem.nil?
+
+            case elem
+            when Prism::SplatNode
+              # *arr → convert to CallNode for to_a
+              splat_expr = convert(elem.expression, context)
+              IR::CallNode.new(
+                method: :to_a,
+                receiver: splat_expr,
+                args: [],
+                block_params: [],
+                block_body: nil,
+                has_block: false,
+                loc: convert_loc(elem.location)
+              )
+            else
+              convert(elem, context)
+            end
+          end
+
+          IR::LiteralNode.new(
+            type: type,
+            values: value_nodes.empty? ? nil : value_nodes,
+            loc: convert_loc(prism_node.location)
+          )
+        end
+
+        def convert_hash_literal(prism_node, context)
+          type = infer_hash_element_types(prism_node)
+
+          # Convert each value expression to an IR node
+          value_nodes = []
+          prism_node.elements.each do |elem|
+            case elem
+            when Prism::AssocNode
+              # Convert value (key is just for type info, not tracked as dependency)
+              value_node = convert(elem.value, context)
+              value_nodes << value_node if value_node
+            when Prism::AssocSplatNode
+              # Handle **hash spread
+              splat_node = convert(elem.value, context)
+              value_nodes << splat_node if splat_node
+            end
+          end
+
+          IR::LiteralNode.new(
+            type: type,
+            values: value_nodes.empty? ? nil : value_nodes,
             loc: convert_loc(prism_node.location)
           )
         end
@@ -562,7 +626,7 @@ module TypeGuessr
           updated_var = IR::WriteNode.new(
             name: receiver_node.name,
             kind: receiver_node.kind,
-            value: IR::LiteralNode.new(type: updated_type, loc: receiver_node.loc),
+            value: IR::LiteralNode.new(type: updated_type, values: nil, loc: receiver_node.loc),
             called_methods: receiver_node.called_methods,
             loc: convert_loc(prism_node.location)
           )
@@ -1074,6 +1138,7 @@ module TypeGuessr
               # Add nil to represent "variable may not be assigned"
               nil_node = IR::LiteralNode.new(
                 type: Types::ClassInstance.new("NilClass"),
+                values: nil,
                 loc: convert_loc(location)
               )
               branches << nil_node

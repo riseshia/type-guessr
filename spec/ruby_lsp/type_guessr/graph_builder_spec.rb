@@ -36,6 +36,7 @@ RSpec.describe RubyLsp::TypeGuessr::GraphBuilder do
       let(:literal) do
         TypeGuessr::Core::IR::LiteralNode.new(
           type: TypeGuessr::Core::Types::ClassInstance.new("String"),
+          values: nil,
           loc: loc
         )
       end
@@ -69,6 +70,7 @@ RSpec.describe RubyLsp::TypeGuessr::GraphBuilder do
       let(:literal) do
         TypeGuessr::Core::IR::LiteralNode.new(
           type: TypeGuessr::Core::Types::ClassInstance.new("String"),
+          values: nil,
           loc: loc
         )
       end
@@ -102,6 +104,7 @@ RSpec.describe RubyLsp::TypeGuessr::GraphBuilder do
       let(:literal) do
         TypeGuessr::Core::IR::LiteralNode.new(
           type: TypeGuessr::Core::Types::ClassInstance.new("String"),
+          values: nil,
           loc: loc
         )
       end
@@ -149,6 +152,54 @@ RSpec.describe RubyLsp::TypeGuessr::GraphBuilder do
         expect(literal_nodes.size).to eq(1)
       end
     end
+
+    context "with LiteralNode containing values (Hash/Array with expressions)" do
+      let(:inner_literal) do
+        TypeGuessr::Core::IR::LiteralNode.new(
+          type: TypeGuessr::Core::Types::ClassInstance.new("Integer"),
+          values: nil,
+          loc: loc
+        )
+      end
+
+      let(:read_node) do
+        TypeGuessr::Core::IR::ReadNode.new(
+          name: :x,
+          kind: :local,
+          write_node: nil,
+          called_methods: [],
+          loc: TypeGuessr::Core::IR::Loc.new(line: 5, col_range: 0...10)
+        )
+      end
+
+      let(:array_literal) do
+        TypeGuessr::Core::IR::LiteralNode.new(
+          type: TypeGuessr::Core::Types::ArrayType.new(
+            TypeGuessr::Core::Types::ClassInstance.new("Integer")
+          ),
+          values: [read_node, inner_literal],
+          loc: loc
+        )
+      end
+
+      before do
+        nodes["Test:lit:ArrayType:10"] = array_literal
+        nodes["Test:rvar:x:5"] = read_node
+        nodes["Test:lit:ClassInstance:10"] = inner_literal
+      end
+
+      it "traverses values and creates edges" do
+        result = graph_builder.build("Test:lit:ArrayType:10")
+
+        expect(result[:nodes].size).to eq(3)
+        expect(result[:edges].size).to eq(2)
+
+        # Check edges from array literal to its values (dependency direction)
+        array_key = "Test:lit:ArrayType:10"
+        edges_from_array = result[:edges].select { |e| e[:from] == array_key }
+        expect(edges_from_array.size).to eq(2)
+      end
+    end
   end
 
   describe "node type formatting" do
@@ -167,6 +218,7 @@ RSpec.describe RubyLsp::TypeGuessr::GraphBuilder do
         type: TypeGuessr::Core::Types::ArrayType.new(
           TypeGuessr::Core::Types::ClassInstance.new("Integer")
         ),
+        values: nil,
         loc: loc
       )
       nodes["Test:lit:ArrayType:10"] = literal
@@ -189,6 +241,7 @@ RSpec.describe RubyLsp::TypeGuessr::GraphBuilder do
 
       literal = TypeGuessr::Core::IR::LiteralNode.new(
         type: TypeGuessr::Core::Types::ClassInstance.new("String"),
+        values: nil,
         loc: loc
       )
       nodes["Test:lit:ClassInstance:10"] = literal

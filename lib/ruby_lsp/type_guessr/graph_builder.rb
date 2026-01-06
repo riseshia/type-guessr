@@ -133,6 +133,14 @@ module RubyLsp
             branch_key = process_body_node(branch, scope_id, return_sources)
             add_edge(branch_key, node_key) if branch_key
           end
+        when ::TypeGuessr::Core::IR::LiteralNode
+          # Process internal values (for Hash/Array literals with expressions)
+          # rubocop:disable Style/HashEachMethods -- values is an Array attribute, not Hash#values
+          node.values&.each do |value_node|
+            value_key = process_body_node(value_node, scope_id, return_sources)
+            add_edge(value_key, node_key) if value_key
+          end
+          # rubocop:enable Style/HashEachMethods
         end
 
         node_key

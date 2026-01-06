@@ -1,11 +1,37 @@
 # TypeGuessr TODO
 
-## Completed
+### Architecture Improvements
 
-- [x] Optional type formatting (`?Integer` instead of `Integer | nil`)
-- [x] Fix doubled activation issue (guard against double activation)
-- [x] Inline if/unless support (`x = 1 if condition` → MergeNode with nil)
-- [x] Fix IR Dependency Graph visualization (skip body_nodes in traverse to avoid duplicates)
+#### Block Parameter Generalization
+Refactor `Resolver#infer_block_param_slot` to use RBS-based generic lookup.
+- Add `type_variable_substitutions` and `rbs_class_name` methods to Type classes
+- Simplify resolver from ~70 lines to ~20 lines
+- Enable automatic support for Set, Enumerator, and other generic types
+
+#### Type format Method
+Move formatting logic from `TypeFormatter` to individual Type classes.
+- Each type implements its own `format` method
+- `TypeFormatter` becomes a simple delegator
+- Follows Ruby OOP principles (objects know how to represent themselves)
+
+#### Node Key Factory
+Centralize node key generation in `NodeKeyFactory` class.
+- Consistent key format across all node types
+- Key parsing for debugging
+- Foundation for collision detection
+
+#### SignatureProvider Unified Interface
+Create unified method signature lookup with transparent fallback:
+1. **Project methods** → User code priority
+2. **Bundled gems** → Gem RBS/type info via RubyIndexer
+3. **RBS stdlib** → Standard library
+
+Single entry point replaces 5 scattered interfaces:
+- `RBSProvider.get_method_signatures`
+- `RBSProvider.get_method_return_type`
+- `RBSProvider.get_method_return_type_for_args`
+- `Resolver.lookup_method`
+- `RuntimeAdapter.find_classes_defining_methods`
 
 ## Future Features
 
@@ -27,35 +53,6 @@ arr << "hello" # Array[Integer | String] or Array[untyped]
 - Need to track mutations across method boundaries
 - Consider aliasing (`arr2 = arr; arr2 << x`)
 
-### Hash/Array literal internal dependencies
-
-`LiteralNode` currently has empty `dependencies`, so internal values of Hash/Array literals are not tracked in the dependency graph.
-
-**Problem:**
-```ruby
-result = {
-  nodes: @nodes.values,  # Not tracked
-  edges: @edges,         # Not tracked
-  root_key: node_key     # Not tracked
-}
-```
-
-Current IR:
-```
-WriteNode(result)
-└── value: LiteralNode(HashShape)
-    └── dependencies: []  ← Always empty!
-```
-
-**Expected:**
-- `@nodes.values` → `CallNode(.values)` → `ReadNode(@nodes)` → `WriteNode(@nodes)`
-- `@edges` → `ReadNode(@edges)` → `WriteNode(@edges)`
-
-**Solution options:**
-1. Add `HashLiteralNode` with `entries` field for key-value pairs
-2. Extend `LiteralNode` with `values` field for internal dependencies
-3. Modify `PrismConverter` to track Hash/Array literal contents
-
 ### Instance variable ordering limitation
 
 When usage appears before assignment (in method definition order), the type cannot be inferred:
@@ -73,3 +70,4 @@ end
 ```
 
 **Workaround:** Use accessor methods with memoization.
+
