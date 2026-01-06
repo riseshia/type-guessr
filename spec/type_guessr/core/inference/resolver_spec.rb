@@ -304,6 +304,86 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
       end
     end
 
+    context "with unknown receiver fallback to Object" do
+      # Helper to check if type is bool (either Union[TrueClass, FalseClass] or ClassInstance("bool"))
+      def bool_type?(type)
+        case type
+        when TypeGuessr::Core::Types::Union
+          type.types.map(&:name).sort == %w[FalseClass TrueClass]
+        when TypeGuessr::Core::Types::ClassInstance
+          type.name == "bool"
+        else
+          false
+        end
+      end
+
+      it "treats unknown receiver as Object and queries RBS for ==" do
+        call = TypeGuessr::Core::IR::CallNode.new(
+          method: :==,
+          receiver: nil,
+          args: [],
+          block_params: [],
+          block_body: nil,
+          has_block: false,
+          loc: loc
+        )
+
+        result = resolver.infer(call)
+        # Object#== returns bool in RBS
+        expect(bool_type?(result.type)).to be(true), "Expected bool type, got #{result.type.inspect}"
+        expect(result.reason).to include("Object#==")
+      end
+
+      it "treats unknown receiver as Object and queries RBS for to_s" do
+        call = TypeGuessr::Core::IR::CallNode.new(
+          method: :to_s,
+          receiver: nil,
+          args: [],
+          block_params: [],
+          block_body: nil,
+          has_block: false,
+          loc: loc
+        )
+
+        result = resolver.infer(call)
+        # Object#to_s returns String
+        expect(result.type).to be_a(TypeGuessr::Core::Types::ClassInstance)
+        expect(result.type.name).to eq("String")
+        expect(result.reason).to include("Object#to_s")
+      end
+
+      it "treats unknown receiver as Object and queries RBS for !" do
+        call = TypeGuessr::Core::IR::CallNode.new(
+          method: :!,
+          receiver: nil,
+          args: [],
+          block_params: [],
+          block_body: nil,
+          has_block: false,
+          loc: loc
+        )
+
+        result = resolver.infer(call)
+        # BasicObject#! returns bool
+        expect(bool_type?(result.type)).to be(true), "Expected bool type, got #{result.type.inspect}"
+      end
+
+      it "returns Unknown for method not defined on Object" do
+        call = TypeGuessr::Core::IR::CallNode.new(
+          method: :some_random_method_that_does_not_exist,
+          receiver: nil,
+          args: [],
+          block_params: [],
+          block_body: nil,
+          has_block: false,
+          loc: loc
+        )
+
+        result = resolver.infer(call)
+        expect(result.type).to be(TypeGuessr::Core::Types::Unknown.instance)
+      end
+    end
+
     context "with DefNode" do
       it "infers return type from return node" do
         return_node = TypeGuessr::Core::IR::LiteralNode.new(
