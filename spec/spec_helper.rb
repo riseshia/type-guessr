@@ -9,9 +9,9 @@ require "uri"
 require_relative "support/doc_collector"
 
 RSpec.configure do |config|
-  # Disable debug server for all tests
+  # Disable debug logging and server for all tests
   config.before do
-    allow(RubyLsp::TypeGuessr::Config).to receive(:debug_server_enabled?).and_return(false)
+    allow(RubyLsp::TypeGuessr::Config).to receive_messages(debug?: false, debug_server_enabled?: false)
   end
 
   # Enable flags like --only-failures and --next-failure

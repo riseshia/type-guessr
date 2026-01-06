@@ -24,6 +24,7 @@ RSpec.describe RubyLsp::TypeGuessr::Config do
 
   before do
     # Allow real Config methods to be called (override spec_helper mock)
+    allow(described_class).to receive(:debug?).and_call_original
     allow(described_class).to receive(:debug_server_enabled?).and_call_original
   end
 
