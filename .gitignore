@@ -8,9 +8,10 @@
 /tmp/
 /Gemfile.lock
 
-.kiro/
 .vscode/
 
 a.rb
 .type-guessr.yml
 .rspec_status
+
+plan.md
