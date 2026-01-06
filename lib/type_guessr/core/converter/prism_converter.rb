@@ -573,7 +573,7 @@ module TypeGuessr
           has_block = !prism_node.block.nil?
 
           # Track method call on receiver for duck typing
-          receiver_node.called_methods << prism_node.name if variable_node?(receiver_node)
+          receiver_node.called_methods << prism_node.name if variable_node?(receiver_node) && !receiver_node.called_methods.include?(prism_node.name)
 
           # Handle indexed assignment: a[:key] = value
           # Register updated type but keep original receiver for proper indexing
