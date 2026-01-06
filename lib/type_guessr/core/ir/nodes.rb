@@ -135,15 +135,14 @@ module TypeGuessr
         end
       end
 
-      # Variable write node (assignment)
+      # Local variable write node (assignment)
       # @param name [Symbol] Variable name
-      # @param kind [Symbol] Variable kind (:local, :instance, :class)
       # @param value [Node] The node of the assigned value
       # @param called_methods [Array<Symbol>] Methods called on this variable (for duck typing)
       # @param loc [Loc] Location information
       #
       # Note: called_methods is a shared array object that can be mutated during parsing
-      WriteNode = Data.define(:name, :kind, :value, :called_methods, :loc) do
+      LocalWriteNode = Data.define(:name, :value, :called_methods, :loc) do
         include TreeInspect
 
         def dependencies
@@ -151,7 +150,7 @@ module TypeGuessr
         end
 
         def node_hash
-          "wvar:#{name}:#{loc&.line}"
+          "local_write:#{name}:#{loc&.line}"
         end
 
         def node_key(scope_id)
@@ -161,22 +160,20 @@ module TypeGuessr
         def tree_inspect_fields(indent)
           [
             tree_field(:name, name, indent),
-            tree_field(:kind, kind, indent),
             tree_field(:value, value, indent),
             tree_field(:called_methods, called_methods, indent, last: true),
           ]
         end
       end
 
-      # Variable read node (reference)
+      # Local variable read node (reference)
       # @param name [Symbol] Variable name
-      # @param kind [Symbol] Variable kind (:local, :instance, :class)
-      # @param write_node [WriteNode, nil] The WriteNode this read references
+      # @param write_node [LocalWriteNode, nil] The LocalWriteNode this read references
       # @param called_methods [Array<Symbol>] Methods called on this variable (for duck typing)
       # @param loc [Loc] Location information
       #
-      # Note: called_methods is shared with WriteNode for duck typing propagation
-      ReadNode = Data.define(:name, :kind, :write_node, :called_methods, :loc) do
+      # Note: called_methods is shared with LocalWriteNode for duck typing propagation
+      LocalReadNode = Data.define(:name, :write_node, :called_methods, :loc) do
         include TreeInspect
 
         def dependencies
@@ -184,7 +181,7 @@ module TypeGuessr
         end
 
         def node_hash
-          "rvar:#{name}:#{loc&.line}"
+          "local_read:#{name}:#{loc&.line}"
         end
 
         def node_key(scope_id)
@@ -194,7 +191,133 @@ module TypeGuessr
         def tree_inspect_fields(indent)
           [
             tree_field(:name, name, indent),
-            tree_field(:kind, kind, indent),
+            tree_field(:write_node, write_node, indent),
+            tree_field(:called_methods, called_methods, indent, last: true),
+          ]
+        end
+      end
+
+      # Instance variable write node (@name = value)
+      # @param name [Symbol] Variable name (e.g., :@recipe)
+      # @param class_name [String, nil] Enclosing class name for deferred resolution
+      # @param value [Node] The node of the assigned value
+      # @param called_methods [Array<Symbol>] Methods called on this variable (for duck typing)
+      # @param loc [Loc] Location information
+      InstanceVariableWriteNode = Data.define(:name, :class_name, :value, :called_methods, :loc) do
+        include TreeInspect
+
+        def dependencies
+          value ? [value] : []
+        end
+
+        def node_hash
+          "ivar_write:#{name}:#{loc&.line}"
+        end
+
+        def node_key(scope_id)
+          "#{scope_id}:#{node_hash}"
+        end
+
+        def tree_inspect_fields(indent)
+          [
+            tree_field(:name, name, indent),
+            tree_field(:class_name, class_name, indent),
+            tree_field(:value, value, indent),
+            tree_field(:called_methods, called_methods, indent, last: true),
+          ]
+        end
+      end
+
+      # Instance variable read node (@name)
+      # @param name [Symbol] Variable name (e.g., :@recipe)
+      # @param class_name [String, nil] Enclosing class name for deferred resolution
+      # @param write_node [InstanceVariableWriteNode, nil] The write node this read references
+      # @param called_methods [Array<Symbol>] Methods called on this variable (for duck typing)
+      # @param loc [Loc] Location information
+      #
+      # Note: write_node may be nil at conversion time if assignment appears later.
+      # Resolver performs deferred lookup using class_name.
+      InstanceVariableReadNode = Data.define(:name, :class_name, :write_node, :called_methods, :loc) do
+        include TreeInspect
+
+        def dependencies
+          write_node ? [write_node] : []
+        end
+
+        def node_hash
+          "ivar_read:#{name}:#{loc&.line}"
+        end
+
+        def node_key(scope_id)
+          "#{scope_id}:#{node_hash}"
+        end
+
+        def tree_inspect_fields(indent)
+          [
+            tree_field(:name, name, indent),
+            tree_field(:class_name, class_name, indent),
+            tree_field(:write_node, write_node, indent),
+            tree_field(:called_methods, called_methods, indent, last: true),
+          ]
+        end
+      end
+
+      # Class variable write node (@@name = value)
+      # @param name [Symbol] Variable name (e.g., :@@count)
+      # @param class_name [String, nil] Enclosing class name for deferred resolution
+      # @param value [Node] The node of the assigned value
+      # @param called_methods [Array<Symbol>] Methods called on this variable (for duck typing)
+      # @param loc [Loc] Location information
+      ClassVariableWriteNode = Data.define(:name, :class_name, :value, :called_methods, :loc) do
+        include TreeInspect
+
+        def dependencies
+          value ? [value] : []
+        end
+
+        def node_hash
+          "cvar_write:#{name}:#{loc&.line}"
+        end
+
+        def node_key(scope_id)
+          "#{scope_id}:#{node_hash}"
+        end
+
+        def tree_inspect_fields(indent)
+          [
+            tree_field(:name, name, indent),
+            tree_field(:class_name, class_name, indent),
+            tree_field(:value, value, indent),
+            tree_field(:called_methods, called_methods, indent, last: true),
+          ]
+        end
+      end
+
+      # Class variable read node (@@name)
+      # @param name [Symbol] Variable name (e.g., :@@count)
+      # @param class_name [String, nil] Enclosing class name for deferred resolution
+      # @param write_node [ClassVariableWriteNode, nil] The write node this read references
+      # @param called_methods [Array<Symbol>] Methods called on this variable (for duck typing)
+      # @param loc [Loc] Location information
+      ClassVariableReadNode = Data.define(:name, :class_name, :write_node, :called_methods, :loc) do
+        include TreeInspect
+
+        def dependencies
+          write_node ? [write_node] : []
+        end
+
+        def node_hash
+          "cvar_read:#{name}:#{loc&.line}"
+        end
+
+        def node_key(scope_id)
+          "#{scope_id}:#{node_hash}"
+        end
+
+        def tree_inspect_fields(indent)
+          [
+            tree_field(:name, name, indent),
+            tree_field(:class_name, class_name, indent),
             tree_field(:write_node, write_node, indent),
             tree_field(:called_methods, called_methods, indent, last: true),
           ]

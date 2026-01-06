@@ -230,7 +230,10 @@ module RubyLsp
 
       def extract_called_methods(ir_node)
         case ir_node
-        when IR::WriteNode, IR::ReadNode, IR::ParamNode
+        when IR::LocalWriteNode, IR::LocalReadNode,
+             IR::InstanceVariableWriteNode, IR::InstanceVariableReadNode,
+             IR::ClassVariableWriteNode, IR::ClassVariableReadNode,
+             IR::ParamNode
           ir_node.called_methods || []
         when IR::BlockParamSlot
           # For block params, check the underlying param node
@@ -261,13 +264,22 @@ module RubyLsp
       def generate_node_hash(node)
         line = node.location.start_line
         case node
-        when Prism::LocalVariableWriteNode, Prism::InstanceVariableWriteNode, Prism::ClassVariableWriteNode,
-             Prism::GlobalVariableWriteNode, Prism::LocalVariableTargetNode, Prism::InstanceVariableTargetNode,
-             Prism::ClassVariableTargetNode, Prism::GlobalVariableTargetNode
-          "wvar:#{node.name}:#{line}"
-        when Prism::LocalVariableReadNode, Prism::InstanceVariableReadNode,
-             Prism::ClassVariableReadNode, Prism::GlobalVariableReadNode
-          "rvar:#{node.name}:#{line}"
+        when Prism::LocalVariableWriteNode, Prism::LocalVariableTargetNode
+          "local_write:#{node.name}:#{line}"
+        when Prism::LocalVariableReadNode
+          "local_read:#{node.name}:#{line}"
+        when Prism::InstanceVariableWriteNode, Prism::InstanceVariableTargetNode
+          "ivar_write:#{node.name}:#{line}"
+        when Prism::InstanceVariableReadNode
+          "ivar_read:#{node.name}:#{line}"
+        when Prism::ClassVariableWriteNode, Prism::ClassVariableTargetNode
+          "cvar_write:#{node.name}:#{line}"
+        when Prism::ClassVariableReadNode
+          "cvar_read:#{node.name}:#{line}"
+        when Prism::GlobalVariableWriteNode, Prism::GlobalVariableTargetNode
+          "global_write:#{node.name}:#{line}"
+        when Prism::GlobalVariableReadNode
+          "global_read:#{node.name}:#{line}"
         when Prism::RequiredParameterNode, Prism::OptionalParameterNode, Prism::RestParameterNode,
              Prism::RequiredKeywordParameterNode, Prism::OptionalKeywordParameterNode,
              Prism::KeywordRestParameterNode, Prism::BlockParameterNode

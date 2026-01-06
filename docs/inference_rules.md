@@ -261,6 +261,118 @@ def foo(flag)
 end
 ```
 
+### Type within branch
+
+```ruby
+def foo(flag)
+  x = 1
+  if flag
+    x = "string"
+    [x]  # Guessed Type: String
+  end
+end
+```
+
+### Simple reassignment
+
+```ruby
+def foo
+  x = 1
+  x = "string"
+  [x]  # Guessed Type: String
+end
+```
+
+### reassignment in non-first-line method
+
+```ruby
+class MyClass
+  def some_other_method
+    # filler
+  end
+
+  def foo
+    x = 1
+    x = "string"
+    [x]  # Guessed Type: String
+  end
+end
+```
+
+### instance variable fallback
+
+```ruby
+class Foo
+  def bar
+    @instance_var = "test"
+    [@]instance_var  # Guessed Type: String
+  end
+end
+```
+
+### elsif branches
+
+```ruby
+def foo(flag)
+  x = 1
+  if flag == 1
+    x = "string"
+  elsif flag == 2
+    x = :symbol
+  end
+  [x]  # Guessed Type: Integer | String | Symbol
+end
+```
+
+### ternary operator
+
+```ruby
+def foo(flag)
+  x = flag ? 1 : "str"
+  [x]  # Guessed Type: Integer | String
+end
+```
+
+### ||= compound assignment
+
+```ruby
+def foo
+  x = nil
+  x ||= 1
+  [x]  # Guessed Type: ?Integer
+end
+```
+
+### &&= compound assignment
+
+```ruby
+def foo
+  x = 1
+  x &&= "string"
+  [x]  # Guessed Type: Integer | String
+end
+```
+
+### += compound assignment
+
+```ruby
+def foo
+  x = "hello"
+  x += " world"
+  [x]  # Guessed Type: String
+end
+```
+
+### guard clause with return
+
+```ruby
+def foo(x)
+  return unless x
+  y = 1
+  [y]  # Guessed Type: Integer
+end
+```
+
 ## Method Signature Display
 
 ### String#upcase

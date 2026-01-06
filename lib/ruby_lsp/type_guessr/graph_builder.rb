@@ -95,7 +95,9 @@ module RubyLsp
 
         # Create edges based on node structure (value, receiver, args)
         case node
-        when ::TypeGuessr::Core::IR::WriteNode
+        when ::TypeGuessr::Core::IR::LocalWriteNode,
+             ::TypeGuessr::Core::IR::InstanceVariableWriteNode,
+             ::TypeGuessr::Core::IR::ClassVariableWriteNode
           if node.value
             value_key = process_body_node(node.value, scope_id, return_sources)
             add_edge(value_key, node_key) if value_key
@@ -116,13 +118,17 @@ module RubyLsp
             value_key = process_body_node(node.value, scope_id, return_sources)
             add_edge(value_key, node_key) if value_key
           end
-        when ::TypeGuessr::Core::IR::ReadNode
-          # ReadNode references its write_node (variable definition)
-          # Only follow local variables - instance/class variables may be defined in other methods
-          if node.write_node && node.kind == :local
+        when ::TypeGuessr::Core::IR::LocalReadNode
+          # LocalReadNode references its write_node (variable definition)
+          if node.write_node
             write_key = process_body_node(node.write_node, scope_id, return_sources)
             add_edge(write_key, node_key) if write_key
           end
+        when ::TypeGuessr::Core::IR::InstanceVariableReadNode,
+             ::TypeGuessr::Core::IR::ClassVariableReadNode
+          # Instance/class variable reads may reference writes in other methods
+          # We don't follow these edges in the graph to avoid complexity
+          nil
         when ::TypeGuessr::Core::IR::ParamNode
           # ParamNode is a leaf node, no edges to create
           nil
@@ -192,7 +198,8 @@ module RubyLsp
         # For root key like "Class:def:name:line", scope is "Class"
         # For "Class#method:type:name:line", scope is "Class#method"
         # Find the last occurrence of known type prefixes
-        type_prefixes = %w[def: param: call: lit: wvar: rvar: merge: const: bparam: return: class: self:]
+        type_prefixes = %w[def: param: call: lit: local_write: local_read: ivar_write: ivar_read: cvar_write: cvar_read: merge: const: bparam: return: class:
+                           self:]
         last_type_pos = nil
 
         type_prefixes.each do |prefix|
@@ -258,12 +265,24 @@ module RubyLsp
           # Get receiver description
           receiver_str = format_receiver(node.receiver)
           { method: node.method.to_s, has_block: node.has_block, arg_keys: arg_keys, receiver: receiver_str }
-        when ::TypeGuessr::Core::IR::WriteNode
-          { name: node.name.to_s, kind: node.kind.to_s, called_methods: node.called_methods.map(&:to_s),
+        when ::TypeGuessr::Core::IR::LocalWriteNode
+          { name: node.name.to_s, kind: "local", called_methods: node.called_methods.map(&:to_s),
             is_read: false }
-        when ::TypeGuessr::Core::IR::ReadNode
-          { name: node.name.to_s, kind: node.kind.to_s, called_methods: node.called_methods.map(&:to_s),
+        when ::TypeGuessr::Core::IR::LocalReadNode
+          { name: node.name.to_s, kind: "local", called_methods: node.called_methods.map(&:to_s),
             is_read: true }
+        when ::TypeGuessr::Core::IR::InstanceVariableWriteNode
+          { name: node.name.to_s, kind: "instance", class_name: node.class_name,
+            called_methods: node.called_methods.map(&:to_s), is_read: false }
+        when ::TypeGuessr::Core::IR::InstanceVariableReadNode
+          { name: node.name.to_s, kind: "instance", class_name: node.class_name,
+            called_methods: node.called_methods.map(&:to_s), is_read: true }
+        when ::TypeGuessr::Core::IR::ClassVariableWriteNode
+          { name: node.name.to_s, kind: "class", class_name: node.class_name,
+            called_methods: node.called_methods.map(&:to_s), is_read: false }
+        when ::TypeGuessr::Core::IR::ClassVariableReadNode
+          { name: node.name.to_s, kind: "class", class_name: node.class_name,
+            called_methods: node.called_methods.map(&:to_s), is_read: true }
         when ::TypeGuessr::Core::IR::ParamNode
           { name: node.name.to_s, kind: node.kind.to_s, called_methods: node.called_methods.map(&:to_s) }
         when ::TypeGuessr::Core::IR::LiteralNode
@@ -290,7 +309,9 @@ module RubyLsp
         case receiver
         when ::TypeGuessr::Core::IR::SelfNode
           "self"
-        when ::TypeGuessr::Core::IR::WriteNode, ::TypeGuessr::Core::IR::ReadNode
+        when ::TypeGuessr::Core::IR::LocalWriteNode, ::TypeGuessr::Core::IR::LocalReadNode,
+             ::TypeGuessr::Core::IR::InstanceVariableWriteNode, ::TypeGuessr::Core::IR::InstanceVariableReadNode,
+             ::TypeGuessr::Core::IR::ClassVariableWriteNode, ::TypeGuessr::Core::IR::ClassVariableReadNode
           receiver.name.to_s
         when ::TypeGuessr::Core::IR::ConstantNode
           receiver.name.to_s

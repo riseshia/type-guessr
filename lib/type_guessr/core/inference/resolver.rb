@@ -18,6 +18,8 @@ module TypeGuessr
           @signature_provider = signature_provider
           @cache = {}.compare_by_identity
           @project_methods = {} # { "ClassName" => { "method_name" => DefNode } }
+          @instance_variables = {} # { "ClassName" => { :@name => InstanceVariableWriteNode } }
+          @class_variables = {} # { "ClassName" => { :@@name => ClassVariableWriteNode } }
           @duck_type_resolver = nil
         end
 
@@ -65,6 +67,45 @@ module TypeGuessr
           results
         end
 
+        # Register an instance variable write for deferred lookup
+        # @param class_name [String] Class name
+        # @param name [Symbol] Instance variable name (e.g., :@recipe)
+        # @param write_node [IR::InstanceVariableWriteNode] Write node
+        def register_instance_variable(class_name, name, write_node)
+          return unless class_name
+
+          @instance_variables[class_name] ||= {}
+          # First write wins (preserves consistent behavior)
+          @instance_variables[class_name][name] ||= write_node
+        end
+
+        # Look up an instance variable write from the registry
+        # @param class_name [String] Class name
+        # @param name [Symbol] Instance variable name
+        # @return [IR::InstanceVariableWriteNode, nil]
+        def lookup_instance_variable(class_name, name)
+          @instance_variables.dig(class_name, name)
+        end
+
+        # Register a class variable write for deferred lookup
+        # @param class_name [String] Class name
+        # @param name [Symbol] Class variable name (e.g., :@@count)
+        # @param write_node [IR::ClassVariableWriteNode] Write node
+        def register_class_variable(class_name, name, write_node)
+          return unless class_name
+
+          @class_variables[class_name] ||= {}
+          @class_variables[class_name][name] ||= write_node
+        end
+
+        # Look up a class variable write from the registry
+        # @param class_name [String] Class name
+        # @param name [Symbol] Class variable name
+        # @return [IR::ClassVariableWriteNode, nil]
+        def lookup_class_variable(class_name, name)
+          @class_variables.dig(class_name, name)
+        end
+
         # Infer the type of an IR node
         # @param node [IR::Node] IR node to infer type for
         # @return [Result] Inference result with type and reason
@@ -91,10 +132,18 @@ module TypeGuessr
           case node
           when IR::LiteralNode
             infer_literal(node)
-          when IR::WriteNode
-            infer_write(node)
-          when IR::ReadNode
-            infer_read(node)
+          when IR::LocalWriteNode
+            infer_local_write(node)
+          when IR::LocalReadNode
+            infer_local_read(node)
+          when IR::InstanceVariableWriteNode
+            infer_instance_variable_write(node)
+          when IR::InstanceVariableReadNode
+            infer_instance_variable_read(node)
+          when IR::ClassVariableWriteNode
+            infer_class_variable_write(node)
+          when IR::ClassVariableReadNode
+            infer_class_variable_read(node)
           when IR::ParamNode
             infer_param(node)
           when IR::ConstantNode
@@ -120,17 +169,53 @@ module TypeGuessr
           Result.new(node.type, "literal", :literal)
         end
 
-        def infer_write(node)
+        def infer_local_write(node)
           return Result.new(Types::Unknown.instance, "unassigned variable", :unknown) unless node.value
 
           dep_result = infer(node.value)
           Result.new(dep_result.type, "assigned from #{dep_result.reason}", dep_result.source)
         end
 
-        def infer_read(node)
+        def infer_local_read(node)
           return Result.new(Types::Unknown.instance, "unassigned variable", :unknown) unless node.write_node
 
           infer(node.write_node)
+        end
+
+        def infer_instance_variable_write(node)
+          return Result.new(Types::Unknown.instance, "unassigned instance variable", :unknown) unless node.value
+
+          dep_result = infer(node.value)
+          Result.new(dep_result.type, "assigned from #{dep_result.reason}", dep_result.source)
+        end
+
+        def infer_instance_variable_read(node)
+          write_node = node.write_node
+
+          # Deferred lookup: if write_node is nil at conversion time, try registry
+          write_node = lookup_instance_variable(node.class_name, node.name) if write_node.nil? && node.class_name
+
+          return Result.new(Types::Unknown.instance, "unassigned instance variable", :unknown) unless write_node
+
+          infer(write_node)
+        end
+
+        def infer_class_variable_write(node)
+          return Result.new(Types::Unknown.instance, "unassigned class variable", :unknown) unless node.value
+
+          dep_result = infer(node.value)
+          Result.new(dep_result.type, "assigned from #{dep_result.reason}", dep_result.source)
+        end
+
+        def infer_class_variable_read(node)
+          write_node = node.write_node
+
+          # Deferred lookup: if write_node is nil at conversion time, try registry
+          write_node = lookup_class_variable(node.class_name, node.name) if write_node.nil? && node.class_name
+
+          return Result.new(Types::Unknown.instance, "unassigned class variable", :unknown) unless write_node
+
+          infer(write_node)
         end
 
         def infer_param(node)

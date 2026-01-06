@@ -12,9 +12,8 @@ RSpec.describe TypeGuessr::Core::Index::LocationIndex do
 
   describe "#add and #find_by_key" do
     it "indexes and finds a node by key" do
-      node = TypeGuessr::Core::IR::WriteNode.new(
+      node = TypeGuessr::Core::IR::LocalWriteNode.new(
         name: :name,
-        kind: :local,
         value: nil,
         called_methods: [],
         loc: TypeGuessr::Core::IR::Loc.new(line: 5, col_range: 10...20)
@@ -23,15 +22,14 @@ RSpec.describe TypeGuessr::Core::Index::LocationIndex do
       index.add(file_path, node, "User#save")
       index.finalize!
 
-      # node_key = "User#save:wvar:name:5"
-      found = index.find_by_key("User#save:wvar:name:5")
+      # node_key = "User#save:local_write:name:5"
+      found = index.find_by_key("User#save:local_write:name:5")
       expect(found).to eq(node)
     end
 
     it "returns nil when key is not found" do
-      node = TypeGuessr::Core::IR::WriteNode.new(
+      node = TypeGuessr::Core::IR::LocalWriteNode.new(
         name: :name,
-        kind: :local,
         value: nil,
         called_methods: [],
         loc: TypeGuessr::Core::IR::Loc.new(line: 5, col_range: 10...20)
@@ -41,19 +39,18 @@ RSpec.describe TypeGuessr::Core::Index::LocationIndex do
       index.finalize!
 
       # Different scope
-      expect(index.find_by_key("Admin#update:wvar:name:5")).to be_nil
+      expect(index.find_by_key("Admin#update:local_write:name:5")).to be_nil
 
       # Different variable
-      expect(index.find_by_key("User#save:wvar:title:5")).to be_nil
+      expect(index.find_by_key("User#save:local_write:title:5")).to be_nil
 
       # Different line
-      expect(index.find_by_key("User#save:wvar:name:10")).to be_nil
+      expect(index.find_by_key("User#save:local_write:name:10")).to be_nil
     end
 
     it "works with empty scope_id" do
-      node = TypeGuessr::Core::IR::WriteNode.new(
+      node = TypeGuessr::Core::IR::LocalWriteNode.new(
         name: :x,
-        kind: :local,
         value: nil,
         called_methods: [],
         loc: TypeGuessr::Core::IR::Loc.new(line: 1, col_range: 0...5)
@@ -61,8 +58,8 @@ RSpec.describe TypeGuessr::Core::Index::LocationIndex do
 
       index.add(file_path, node, "")
 
-      # node_key = ":wvar:x:1"
-      found = index.find_by_key(":wvar:x:1")
+      # node_key = ":local_write:x:1"
+      found = index.find_by_key(":local_write:x:1")
       expect(found).to eq(node)
     end
 
@@ -82,16 +79,14 @@ RSpec.describe TypeGuessr::Core::Index::LocationIndex do
 
   describe "#nodes_for_file" do
     it "returns all nodes for a file" do
-      node1 = TypeGuessr::Core::IR::WriteNode.new(
+      node1 = TypeGuessr::Core::IR::LocalWriteNode.new(
         name: :x,
-        kind: :local,
         value: nil,
         called_methods: [],
         loc: TypeGuessr::Core::IR::Loc.new(line: 1, col_range: 0...5)
       )
-      node2 = TypeGuessr::Core::IR::WriteNode.new(
+      node2 = TypeGuessr::Core::IR::LocalWriteNode.new(
         name: :y,
-        kind: :local,
         value: nil,
         called_methods: [],
         loc: TypeGuessr::Core::IR::Loc.new(line: 2, col_range: 0...5)
@@ -111,9 +106,8 @@ RSpec.describe TypeGuessr::Core::Index::LocationIndex do
 
   describe "#remove_file" do
     it "removes all entries for a file" do
-      node = TypeGuessr::Core::IR::WriteNode.new(
+      node = TypeGuessr::Core::IR::LocalWriteNode.new(
         name: :name,
-        kind: :local,
         value: nil,
         called_methods: [],
         loc: TypeGuessr::Core::IR::Loc.new(line: 1, col_range: 0...5)
@@ -122,25 +116,23 @@ RSpec.describe TypeGuessr::Core::Index::LocationIndex do
       index.add(file_path, node, "User#save")
       index.finalize!
 
-      expect(index.find_by_key("User#save:wvar:name:1")).to eq(node)
+      expect(index.find_by_key("User#save:local_write:name:1")).to eq(node)
 
       index.remove_file(file_path)
-      expect(index.find_by_key("User#save:wvar:name:1")).to be_nil
+      expect(index.find_by_key("User#save:local_write:name:1")).to be_nil
     end
   end
 
   describe "#clear" do
     it "clears all indexed data" do
-      node1 = TypeGuessr::Core::IR::WriteNode.new(
+      node1 = TypeGuessr::Core::IR::LocalWriteNode.new(
         name: :x,
-        kind: :local,
         value: nil,
         called_methods: [],
         loc: TypeGuessr::Core::IR::Loc.new(line: 1, col_range: 0...5)
       )
-      node2 = TypeGuessr::Core::IR::WriteNode.new(
+      node2 = TypeGuessr::Core::IR::LocalWriteNode.new(
         name: :y,
-        kind: :local,
         value: nil,
         called_methods: [],
         loc: TypeGuessr::Core::IR::Loc.new(line: 1, col_range: 0...5)
@@ -152,30 +144,27 @@ RSpec.describe TypeGuessr::Core::Index::LocationIndex do
 
       index.clear
 
-      expect(index.find_by_key("A#m:wvar:x:1")).to be_nil
-      expect(index.find_by_key("B#n:wvar:y:1")).to be_nil
+      expect(index.find_by_key("A#m:local_write:x:1")).to be_nil
+      expect(index.find_by_key("B#n:local_write:y:1")).to be_nil
     end
   end
 
   describe "#stats" do
     it "returns statistics about the index" do
-      node1 = TypeGuessr::Core::IR::WriteNode.new(
+      node1 = TypeGuessr::Core::IR::LocalWriteNode.new(
         name: :x,
-        kind: :local,
         value: nil,
         called_methods: [],
         loc: TypeGuessr::Core::IR::Loc.new(line: 1, col_range: 0...5)
       )
-      node2 = TypeGuessr::Core::IR::WriteNode.new(
+      node2 = TypeGuessr::Core::IR::LocalWriteNode.new(
         name: :y,
-        kind: :local,
         value: nil,
         called_methods: [],
         loc: TypeGuessr::Core::IR::Loc.new(line: 2, col_range: 0...5)
       )
-      node3 = TypeGuessr::Core::IR::WriteNode.new(
+      node3 = TypeGuessr::Core::IR::LocalWriteNode.new(
         name: :z,
-        kind: :local,
         value: nil,
         called_methods: [],
         loc: TypeGuessr::Core::IR::Loc.new(line: 1, col_range: 0...5)

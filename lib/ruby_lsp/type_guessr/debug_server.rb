@@ -781,13 +781,13 @@ module RubyLsp
                     return escapeForMermaid(`${d.name}: ${type}\\n(${d.kind} param)`);
                   }
 
-                  if (node.type === 'WriteNode') {
+                  if (node.type.endsWith('WriteNode')) {
                     // var_name: Type (name already includes @ or @@ prefix)
                     const type = node.inferred_type || 'Unknown';
                     return escapeForMermaid(`${d.name}: ${type}\\n(write, L${node.line})`);
                   }
 
-                  if (node.type === 'ReadNode') {
+                  if (node.type.endsWith('ReadNode')) {
                     // var_name: Type (name already includes @ or @@ prefix)
                     const type = node.inferred_type || 'Unknown';
                     return escapeForMermaid(`${d.name}: ${type}\\n(read, L${node.line})`);
@@ -830,15 +830,15 @@ module RubyLsp
                 }
 
                 function getNodeStyleClass(nodeType, node) {
+                  if (nodeType.endsWith('WriteNode')) return 'varWriteNode';
+                  if (nodeType.endsWith('ReadNode')) return 'varReadNode';
                   const styles = {
                     DefNode: 'defNode',
                     CallNode: 'callNode',
                     ParamNode: 'paramNode',
                     LiteralNode: 'literalNode',
                     MergeNode: 'mergeNode',
-                    BlockParamSlot: 'blockParamNode',
-                    WriteNode: 'varWriteNode',
-                    ReadNode: 'varReadNode'
+                    BlockParamSlot: 'blockParamNode'
                   };
                   return styles[nodeType] || 'otherNode';
                 }

@@ -76,9 +76,8 @@ RSpec.describe RubyLsp::TypeGuessr::GraphBuilder do
       end
 
       let(:variable) do
-        TypeGuessr::Core::IR::WriteNode.new(
+        TypeGuessr::Core::IR::LocalWriteNode.new(
           name: :name,
-          kind: :local,
           value: literal,
           called_methods: [],
           loc: TypeGuessr::Core::IR::Loc.new(line: 5, col_range: 0...10)
@@ -86,16 +85,16 @@ RSpec.describe RubyLsp::TypeGuessr::GraphBuilder do
       end
 
       before do
-        nodes["Test:var:name:5"] = variable
+        nodes["Test:local_write:name:5"] = variable
         nodes["Test:lit:ClassInstance:10"] = literal
       end
 
       it "traverses dependencies and creates edges" do
-        result = graph_builder.build("Test:var:name:5")
+        result = graph_builder.build("Test:local_write:name:5")
 
         expect(result[:nodes].size).to eq(2)
         expect(result[:edges].size).to eq(1)
-        expect(result[:edges].first[:from]).to eq("Test:var:name:5")
+        expect(result[:edges].first[:from]).to eq("Test:local_write:name:5")
         expect(result[:edges].first[:to]).to eq("Test:lit:ClassInstance:10")
       end
     end
@@ -110,9 +109,8 @@ RSpec.describe RubyLsp::TypeGuessr::GraphBuilder do
       end
 
       let(:branch_a) do
-        TypeGuessr::Core::IR::WriteNode.new(
+        TypeGuessr::Core::IR::LocalWriteNode.new(
           name: :a,
-          kind: :local,
           value: literal,
           called_methods: [],
           loc: TypeGuessr::Core::IR::Loc.new(line: 5, col_range: 0...10)
@@ -120,9 +118,8 @@ RSpec.describe RubyLsp::TypeGuessr::GraphBuilder do
       end
 
       let(:branch_b) do
-        TypeGuessr::Core::IR::WriteNode.new(
+        TypeGuessr::Core::IR::LocalWriteNode.new(
           name: :b,
-          kind: :local,
           value: literal,
           called_methods: [],
           loc: TypeGuessr::Core::IR::Loc.new(line: 6, col_range: 0...10)
@@ -138,8 +135,8 @@ RSpec.describe RubyLsp::TypeGuessr::GraphBuilder do
 
       before do
         nodes["Test:merge:7"] = merge
-        nodes["Test:var:a:5"] = branch_a
-        nodes["Test:var:b:6"] = branch_b
+        nodes["Test:local_write:a:5"] = branch_a
+        nodes["Test:local_write:b:6"] = branch_b
         nodes["Test:lit:ClassInstance:10"] = literal
       end
 
@@ -163,9 +160,8 @@ RSpec.describe RubyLsp::TypeGuessr::GraphBuilder do
       end
 
       let(:read_node) do
-        TypeGuessr::Core::IR::ReadNode.new(
+        TypeGuessr::Core::IR::LocalReadNode.new(
           name: :x,
-          kind: :local,
           write_node: nil,
           called_methods: [],
           loc: TypeGuessr::Core::IR::Loc.new(line: 5, col_range: 0...10)
@@ -184,7 +180,7 @@ RSpec.describe RubyLsp::TypeGuessr::GraphBuilder do
 
       before do
         nodes["Test:lit:ArrayType:10"] = array_literal
-        nodes["Test:rvar:x:5"] = read_node
+        nodes["Test:local_read:x:5"] = read_node
         nodes["Test:lit:ClassInstance:10"] = inner_literal
       end
 
@@ -315,44 +311,42 @@ RSpec.describe RubyLsp::TypeGuessr::GraphBuilder do
       expect(details[:has_block]).to be true
     end
 
-    it "extracts WriteNode details" do
-      write_node = TypeGuessr::Core::IR::WriteNode.new(
-        name: :user,
-        kind: :instance,
+    it "extracts InstanceVariableWriteNode details" do
+      write_node = TypeGuessr::Core::IR::InstanceVariableWriteNode.new(
+        name: :@user,
+        class_name: "Test",
         value: nil,
         called_methods: %i[name email],
         loc: loc
       )
-      nodes["Test:wvar:user:10"] = write_node
+      nodes["Test:ivar_write:@user:10"] = write_node
 
-      result = graph_builder.build("Test:wvar:user:10")
+      result = graph_builder.build("Test:ivar_write:@user:10")
       details = result[:nodes].first[:details]
 
-      expect(details[:name]).to eq("user")
+      expect(details[:name]).to eq("@user")
       expect(details[:kind]).to eq("instance")
       expect(details[:called_methods]).to eq(%w[name email])
       expect(details[:is_read]).to be false
     end
 
-    it "extracts ReadNode details" do
-      write_node = TypeGuessr::Core::IR::WriteNode.new(
+    it "extracts LocalReadNode details" do
+      write_node = TypeGuessr::Core::IR::LocalWriteNode.new(
         name: :user,
-        kind: :local,
         value: nil,
         called_methods: [],
         loc: TypeGuessr::Core::IR::Loc.new(line: 5, col_range: 0...10)
       )
-      read_node = TypeGuessr::Core::IR::ReadNode.new(
+      read_node = TypeGuessr::Core::IR::LocalReadNode.new(
         name: :user,
-        kind: :local,
         write_node: write_node,
         called_methods: [],
         loc: loc
       )
-      nodes["Test:rvar:user:10"] = read_node
-      nodes["Test:wvar:user:5"] = write_node
+      nodes["Test:local_read:user:10"] = read_node
+      nodes["Test:local_write:user:5"] = write_node
 
-      result = graph_builder.build("Test:rvar:user:10")
+      result = graph_builder.build("Test:local_read:user:10")
       read_details = result[:nodes].find { |n| n[:line] == 10 }[:details]
       write_details = result[:nodes].find { |n| n[:line] == 5 }[:details]
 

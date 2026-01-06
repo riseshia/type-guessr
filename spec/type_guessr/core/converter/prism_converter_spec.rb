@@ -66,7 +66,7 @@ RSpec.describe TypeGuessr::Core::Converter::PrismConverter do
       expect(array_node.type).to be_a(TypeGuessr::Core::Types::ArrayType)
       expect(array_node.values).not_to be_nil
       expect(array_node.values.size).to eq(2)
-      expect(array_node.values[0]).to be_a(TypeGuessr::Core::IR::ReadNode)
+      expect(array_node.values[0]).to be_a(TypeGuessr::Core::IR::LocalReadNode)
       expect(array_node.values[1]).to be_a(TypeGuessr::Core::IR::LiteralNode)
     end
 
@@ -123,7 +123,7 @@ RSpec.describe TypeGuessr::Core::Converter::PrismConverter do
       expect(hash_node.type).to be_a(TypeGuessr::Core::Types::HashShape)
       expect(hash_node.values).not_to be_nil
       expect(hash_node.values.size).to eq(2)
-      expect(hash_node.values[0]).to be_a(TypeGuessr::Core::IR::ReadNode)
+      expect(hash_node.values[0]).to be_a(TypeGuessr::Core::IR::LocalReadNode)
       expect(hash_node.values[1]).to be_a(TypeGuessr::Core::IR::LiteralNode)
     end
 
@@ -144,9 +144,9 @@ RSpec.describe TypeGuessr::Core::Converter::PrismConverter do
       hash_node = def_node.return_node
 
       expect(hash_node.values.size).to eq(2)
-      expect(hash_node.values[0]).to be_a(TypeGuessr::Core::IR::ReadNode)
+      expect(hash_node.values[0]).to be_a(TypeGuessr::Core::IR::InstanceVariableReadNode)
       expect(hash_node.values[0].name).to eq(:@nodes)
-      expect(hash_node.values[1]).to be_a(TypeGuessr::Core::IR::ReadNode)
+      expect(hash_node.values[1]).to be_a(TypeGuessr::Core::IR::InstanceVariableReadNode)
       expect(hash_node.values[1].name).to eq(:@edges)
     end
 
@@ -196,9 +196,8 @@ RSpec.describe TypeGuessr::Core::Converter::PrismConverter do
       context = TypeGuessr::Core::Converter::PrismConverter::Context.new
       node = converter.convert(parsed.value.statements.body.first, context)
 
-      expect(node).to be_a(TypeGuessr::Core::IR::WriteNode)
+      expect(node).to be_a(TypeGuessr::Core::IR::LocalWriteNode)
       expect(node.name).to eq(:x)
-      expect(node.kind).to eq(:local)
       expect(node.value).to be_a(TypeGuessr::Core::IR::LiteralNode)
       expect(node.value.type.name).to eq("String")
     end
@@ -209,9 +208,8 @@ RSpec.describe TypeGuessr::Core::Converter::PrismConverter do
       context = TypeGuessr::Core::Converter::PrismConverter::Context.new
       node = converter.convert(parsed.value.statements.body.first, context)
 
-      expect(node).to be_a(TypeGuessr::Core::IR::WriteNode)
+      expect(node).to be_a(TypeGuessr::Core::IR::InstanceVariableWriteNode)
       expect(node.name).to eq(:@name)
-      expect(node.kind).to eq(:instance)
     end
 
     it "converts class variable assignment" do
@@ -220,9 +218,8 @@ RSpec.describe TypeGuessr::Core::Converter::PrismConverter do
       context = TypeGuessr::Core::Converter::PrismConverter::Context.new
       node = converter.convert(parsed.value.statements.body.first, context)
 
-      expect(node).to be_a(TypeGuessr::Core::IR::WriteNode)
+      expect(node).to be_a(TypeGuessr::Core::IR::ClassVariableWriteNode)
       expect(node.name).to eq(:@@count)
-      expect(node.kind).to eq(:class)
     end
   end
 
@@ -243,8 +240,8 @@ RSpec.describe TypeGuessr::Core::Converter::PrismConverter do
       read = parsed.value.statements.body[1]
       read_node = converter.convert(read, context)
 
-      # Read creates a ReadNode pointing to the WriteNode
-      expect(read_node).to be_a(TypeGuessr::Core::IR::ReadNode)
+      # Read creates a LocalReadNode pointing to the LocalWriteNode
+      expect(read_node).to be_a(TypeGuessr::Core::IR::LocalReadNode)
       expect(read_node.write_node).to eq(write_node)
       # Should share called_methods array for duck typing
       expect(read_node.called_methods).to be(write_node.called_methods)
@@ -278,7 +275,7 @@ RSpec.describe TypeGuessr::Core::Converter::PrismConverter do
 
       expect(node).to be_a(TypeGuessr::Core::IR::CallNode)
       expect(node.method).to eq(:profile)
-      expect(node.receiver).to be_a(TypeGuessr::Core::IR::ReadNode)
+      expect(node.receiver).to be_a(TypeGuessr::Core::IR::LocalReadNode)
     end
 
     it "tracks method calls for duck typing" do
@@ -364,9 +361,9 @@ RSpec.describe TypeGuessr::Core::Converter::PrismConverter do
       expect(var).to be_a(TypeGuessr::Core::IR::MergeNode)
       expect(var.branches.size).to eq(2)
 
-      # One branch is WriteNode, one is LiteralNode(nil)
+      # One branch is LocalWriteNode, one is LiteralNode(nil)
       types = var.branches.map(&:class).map(&:name)
-      expect(types).to include("TypeGuessr::Core::IR::WriteNode")
+      expect(types).to include("TypeGuessr::Core::IR::LocalWriteNode")
       expect(types).to include("TypeGuessr::Core::IR::LiteralNode")
     end
 
@@ -462,7 +459,7 @@ RSpec.describe TypeGuessr::Core::Converter::PrismConverter do
         node = converter.convert(parsed.value.statements.body.first, context)
 
         # The return_node should reference the param 'a' from destructuring
-        expect(node.return_node).to be_a(TypeGuessr::Core::IR::ReadNode)
+        expect(node.return_node).to be_a(TypeGuessr::Core::IR::LocalReadNode)
         expect(node.return_node.name).to eq(:a)
         # Should have a write_node since it was registered from destructuring
         expect(node.return_node.write_node).to be_a(TypeGuessr::Core::IR::ParamNode)

@@ -729,11 +729,12 @@ RSpec.describe "Hover Integration" do
         RUBY
       end
 
-      it "cannot see instance variable assigned in later method" do
-        # When usage comes before assignment (in method order),
-        # the instance variable is not yet registered
+      it "can see instance variable assigned in later method via deferred lookup" do
+        # Deferred lookup at inference time resolves forward references
+        # Even when usage comes before assignment in method order,
+        # the instance variable can be resolved through the registry
         response = hover_on_source(source, { line: 2, character: 6 })
-        expect(response.contents.value).not_to include("Recipe")
+        expect(response.contents.value).to include("Recipe")
       end
     end
 

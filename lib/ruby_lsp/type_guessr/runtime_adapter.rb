@@ -378,13 +378,33 @@ module RubyLsp
           # Index all body nodes (including intermediate statements)
           node.body_nodes&.each { |body_node| index_node_recursively(file_path, body_node, new_scope) }
 
-        when ::TypeGuessr::Core::IR::WriteNode
+        when ::TypeGuessr::Core::IR::LocalWriteNode
           # Index value
           index_node_recursively(file_path, node.value, scope_id) if node.value
 
-        when ::TypeGuessr::Core::IR::ReadNode
-          # Index write_node
-          index_node_recursively(file_path, node.write_node, scope_id) if node.write_node
+        when ::TypeGuessr::Core::IR::LocalReadNode
+          # No recursive indexing needed (write_node is already indexed)
+          nil
+
+        when ::TypeGuessr::Core::IR::InstanceVariableWriteNode
+          # Register with resolver for deferred lookup
+          @resolver.register_instance_variable(node.class_name, node.name, node) if node.class_name
+          # Index value
+          index_node_recursively(file_path, node.value, scope_id) if node.value
+
+        when ::TypeGuessr::Core::IR::InstanceVariableReadNode
+          # No recursive indexing needed (deferred lookup at inference time)
+          nil
+
+        when ::TypeGuessr::Core::IR::ClassVariableWriteNode
+          # Register with resolver for deferred lookup
+          @resolver.register_class_variable(node.class_name, node.name, node) if node.class_name
+          # Index value
+          index_node_recursively(file_path, node.value, scope_id) if node.value
+
+        when ::TypeGuessr::Core::IR::ClassVariableReadNode
+          # No recursive indexing needed (deferred lookup at inference time)
+          nil
 
         when ::TypeGuessr::Core::IR::CallNode
           # Index receiver

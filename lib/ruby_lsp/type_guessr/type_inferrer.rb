@@ -133,11 +133,14 @@ module RubyLsp
       def generate_node_hash(node, node_context)
         line = node.location.start_line
         case node
-        when Prism::LocalVariableWriteNode, Prism::InstanceVariableWriteNode, Prism::LocalVariableTargetNode,
-             Prism::InstanceVariableTargetNode
-          "wvar:#{node.name}:#{line}"
-        when Prism::LocalVariableReadNode, Prism::InstanceVariableReadNode
-          "rvar:#{node.name}:#{line}"
+        when Prism::LocalVariableWriteNode, Prism::LocalVariableTargetNode
+          "local_write:#{node.name}:#{line}"
+        when Prism::LocalVariableReadNode
+          "local_read:#{node.name}:#{line}"
+        when Prism::InstanceVariableWriteNode, Prism::InstanceVariableTargetNode
+          "ivar_write:#{node.name}:#{line}"
+        when Prism::InstanceVariableReadNode
+          "ivar_read:#{node.name}:#{line}"
         when Prism::RequiredParameterNode, Prism::OptionalParameterNode, Prism::RestParameterNode,
              Prism::RequiredKeywordParameterNode, Prism::OptionalKeywordParameterNode,
              Prism::KeywordRestParameterNode, Prism::BlockParameterNode

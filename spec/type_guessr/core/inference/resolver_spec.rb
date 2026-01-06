@@ -34,16 +34,15 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
       end
     end
 
-    context "with WriteNode" do
+    context "with LocalWriteNode" do
       it "infers type from value" do
         literal = TypeGuessr::Core::IR::LiteralNode.new(
           type: TypeGuessr::Core::Types::ClassInstance.new("Integer"),
           values: nil,
           loc: loc
         )
-        write_node = TypeGuessr::Core::IR::WriteNode.new(
+        write_node = TypeGuessr::Core::IR::LocalWriteNode.new(
           name: :x,
-          kind: :local,
           value: literal,
           called_methods: [],
           loc: loc
@@ -55,9 +54,8 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
       end
 
       it "returns Unknown for unassigned variable" do
-        write_node = TypeGuessr::Core::IR::WriteNode.new(
+        write_node = TypeGuessr::Core::IR::LocalWriteNode.new(
           name: :x,
-          kind: :local,
           value: nil,
           called_methods: [],
           loc: loc
@@ -69,23 +67,21 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
       end
     end
 
-    context "with ReadNode" do
+    context "with LocalReadNode" do
       it "infers type from write_node" do
         literal = TypeGuessr::Core::IR::LiteralNode.new(
           type: TypeGuessr::Core::Types::ClassInstance.new("String"),
           values: nil,
           loc: loc
         )
-        write_node = TypeGuessr::Core::IR::WriteNode.new(
+        write_node = TypeGuessr::Core::IR::LocalWriteNode.new(
           name: :x,
-          kind: :local,
           value: literal,
           called_methods: [],
           loc: loc
         )
-        read_node = TypeGuessr::Core::IR::ReadNode.new(
+        read_node = TypeGuessr::Core::IR::LocalReadNode.new(
           name: :x,
-          kind: :local,
           write_node: write_node,
           called_methods: write_node.called_methods,
           loc: loc
@@ -96,9 +92,8 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
       end
 
       it "returns Unknown for unassigned variable" do
-        read_node = TypeGuessr::Core::IR::ReadNode.new(
+        read_node = TypeGuessr::Core::IR::LocalReadNode.new(
           name: :x,
-          kind: :local,
           write_node: nil,
           called_methods: [],
           loc: loc
@@ -180,9 +175,8 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
 
     context "with CallNode" do
       it "queries RBS for return type" do
-        receiver_var = TypeGuessr::Core::IR::WriteNode.new(
+        receiver_var = TypeGuessr::Core::IR::LocalWriteNode.new(
           name: :str,
-          kind: :local,
           value: TypeGuessr::Core::IR::LiteralNode.new(
             type: TypeGuessr::Core::Types::ClassInstance.new("String"),
             values: nil,
@@ -211,9 +205,8 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
         array_type = TypeGuessr::Core::Types::ArrayType.new(
           TypeGuessr::Core::Types::ClassInstance.new("Integer")
         )
-        receiver_var = TypeGuessr::Core::IR::WriteNode.new(
+        receiver_var = TypeGuessr::Core::IR::LocalWriteNode.new(
           name: :arr,
-          kind: :local,
           value: TypeGuessr::Core::IR::LiteralNode.new(
             type: array_type,
             values: nil,
@@ -243,9 +236,8 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
         array_type = TypeGuessr::Core::Types::ArrayType.new(
           TypeGuessr::Core::Types::ClassInstance.new("String")
         )
-        receiver_var = TypeGuessr::Core::IR::WriteNode.new(
+        receiver_var = TypeGuessr::Core::IR::LocalWriteNode.new(
           name: :arr,
-          kind: :local,
           value: TypeGuessr::Core::IR::LiteralNode.new(
             type: array_type,
             values: nil,

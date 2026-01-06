@@ -50,28 +50,25 @@ RSpec.describe TypeGuessr::Core::IR do
     end
   end
 
-  describe "WriteNode" do
+  describe "LocalWriteNode" do
     it "stores write variable information" do
       literal = described_class::LiteralNode.new(type: string_type, values: nil, loc: loc)
-      node = described_class::WriteNode.new(
+      node = described_class::LocalWriteNode.new(
         name: :user,
-        kind: :local,
         value: literal,
         called_methods: [],
         loc: loc
       )
 
       expect(node.name).to eq(:user)
-      expect(node.kind).to eq(:local)
       expect(node.value).to eq(literal)
       expect(node.called_methods).to eq([])
     end
 
     it "returns value in dependencies array" do
       literal = described_class::LiteralNode.new(type: string_type, values: nil, loc: loc)
-      node = described_class::WriteNode.new(
+      node = described_class::LocalWriteNode.new(
         name: :user,
-        kind: :local,
         value: literal,
         called_methods: [],
         loc: loc
@@ -82,9 +79,8 @@ RSpec.describe TypeGuessr::Core::IR do
 
     it "shares called_methods array for mutation" do
       methods = []
-      node = described_class::WriteNode.new(
+      node = described_class::LocalWriteNode.new(
         name: :user,
-        kind: :local,
         value: nil,
         called_methods: methods,
         loc: loc
@@ -95,53 +91,105 @@ RSpec.describe TypeGuessr::Core::IR do
       expect(node.called_methods).to eq([:profile])
     end
 
-    it "generates wvar node_hash" do
+    it "generates local_write node_hash" do
       literal = described_class::LiteralNode.new(type: string_type, values: nil, loc: loc)
-      node = described_class::WriteNode.new(
+      node = described_class::LocalWriteNode.new(
         name: :user,
-        kind: :local,
         value: literal,
         called_methods: [],
         loc: loc
       )
 
-      expect(node.node_hash).to eq("wvar:user:1")
+      expect(node.node_hash).to eq("local_write:user:1")
     end
   end
 
-  describe "ReadNode" do
-    it "stores read variable information" do
-      write_node = described_class::WriteNode.new(
-        name: :user,
-        kind: :local,
+  describe "InstanceVariableWriteNode" do
+    it "stores instance variable information" do
+      literal = described_class::LiteralNode.new(type: string_type, values: nil, loc: loc)
+      node = described_class::InstanceVariableWriteNode.new(
+        name: :@user,
+        class_name: "User",
+        value: literal,
+        called_methods: [],
+        loc: loc
+      )
+
+      expect(node.name).to eq(:@user)
+      expect(node.class_name).to eq("User")
+      expect(node.value).to eq(literal)
+    end
+
+    it "generates ivar_write node_hash" do
+      node = described_class::InstanceVariableWriteNode.new(
+        name: :@user,
+        class_name: "User",
         value: nil,
         called_methods: [],
         loc: loc
       )
-      node = described_class::ReadNode.new(
+
+      expect(node.node_hash).to eq("ivar_write:@user:1")
+    end
+  end
+
+  describe "ClassVariableWriteNode" do
+    it "stores class variable information" do
+      literal = described_class::LiteralNode.new(type: string_type, values: nil, loc: loc)
+      node = described_class::ClassVariableWriteNode.new(
+        name: :@@count,
+        class_name: "Counter",
+        value: literal,
+        called_methods: [],
+        loc: loc
+      )
+
+      expect(node.name).to eq(:@@count)
+      expect(node.class_name).to eq("Counter")
+      expect(node.value).to eq(literal)
+    end
+
+    it "generates cvar_write node_hash" do
+      node = described_class::ClassVariableWriteNode.new(
+        name: :@@count,
+        class_name: "Counter",
+        value: nil,
+        called_methods: [],
+        loc: loc
+      )
+
+      expect(node.node_hash).to eq("cvar_write:@@count:1")
+    end
+  end
+
+  describe "LocalReadNode" do
+    it "stores read variable information" do
+      write_node = described_class::LocalWriteNode.new(
         name: :user,
-        kind: :local,
+        value: nil,
+        called_methods: [],
+        loc: loc
+      )
+      node = described_class::LocalReadNode.new(
+        name: :user,
         write_node: write_node,
         called_methods: write_node.called_methods,
         loc: loc
       )
 
       expect(node.name).to eq(:user)
-      expect(node.kind).to eq(:local)
       expect(node.write_node).to eq(write_node)
     end
 
     it "returns write_node in dependencies array" do
-      write_node = described_class::WriteNode.new(
+      write_node = described_class::LocalWriteNode.new(
         name: :user,
-        kind: :local,
         value: nil,
         called_methods: [],
         loc: loc
       )
-      node = described_class::ReadNode.new(
+      node = described_class::LocalReadNode.new(
         name: :user,
-        kind: :local,
         write_node: write_node,
         called_methods: [],
         loc: loc
@@ -152,16 +200,14 @@ RSpec.describe TypeGuessr::Core::IR do
 
     it "shares called_methods with write_node" do
       methods = []
-      write_node = described_class::WriteNode.new(
+      write_node = described_class::LocalWriteNode.new(
         name: :user,
-        kind: :local,
         value: nil,
         called_methods: methods,
         loc: loc
       )
-      node = described_class::ReadNode.new(
+      node = described_class::LocalReadNode.new(
         name: :user,
-        kind: :local,
         write_node: write_node,
         called_methods: methods,
         loc: loc
@@ -172,23 +218,91 @@ RSpec.describe TypeGuessr::Core::IR do
       expect(node.called_methods).to eq([:profile])
     end
 
-    it "generates rvar node_hash" do
-      write_node = described_class::WriteNode.new(
+    it "generates local_read node_hash" do
+      write_node = described_class::LocalWriteNode.new(
         name: :user,
-        kind: :local,
         value: nil,
         called_methods: [],
         loc: loc
       )
-      node = described_class::ReadNode.new(
+      node = described_class::LocalReadNode.new(
         name: :user,
-        kind: :local,
         write_node: write_node,
         called_methods: [],
         loc: loc
       )
 
-      expect(node.node_hash).to eq("rvar:user:1")
+      expect(node.node_hash).to eq("local_read:user:1")
+    end
+  end
+
+  describe "InstanceVariableReadNode" do
+    it "stores instance variable read information" do
+      write_node = described_class::InstanceVariableWriteNode.new(
+        name: :@user,
+        class_name: "User",
+        value: nil,
+        called_methods: [],
+        loc: loc
+      )
+      node = described_class::InstanceVariableReadNode.new(
+        name: :@user,
+        class_name: "User",
+        write_node: write_node,
+        called_methods: [],
+        loc: loc
+      )
+
+      expect(node.name).to eq(:@user)
+      expect(node.class_name).to eq("User")
+      expect(node.write_node).to eq(write_node)
+    end
+
+    it "generates ivar_read node_hash" do
+      node = described_class::InstanceVariableReadNode.new(
+        name: :@user,
+        class_name: "User",
+        write_node: nil,
+        called_methods: [],
+        loc: loc
+      )
+
+      expect(node.node_hash).to eq("ivar_read:@user:1")
+    end
+  end
+
+  describe "ClassVariableReadNode" do
+    it "stores class variable read information" do
+      write_node = described_class::ClassVariableWriteNode.new(
+        name: :@@count,
+        class_name: "Counter",
+        value: nil,
+        called_methods: [],
+        loc: loc
+      )
+      node = described_class::ClassVariableReadNode.new(
+        name: :@@count,
+        class_name: "Counter",
+        write_node: write_node,
+        called_methods: [],
+        loc: loc
+      )
+
+      expect(node.name).to eq(:@@count)
+      expect(node.class_name).to eq("Counter")
+      expect(node.write_node).to eq(write_node)
+    end
+
+    it "generates cvar_read node_hash" do
+      node = described_class::ClassVariableReadNode.new(
+        name: :@@count,
+        class_name: "Counter",
+        write_node: nil,
+        called_methods: [],
+        loc: loc
+      )
+
+      expect(node.node_hash).to eq("cvar_read:@@count:1")
     end
   end
 
@@ -236,9 +350,8 @@ RSpec.describe TypeGuessr::Core::IR do
 
   describe "CallNode" do
     it "stores call information" do
-      receiver = described_class::WriteNode.new(
+      receiver = described_class::LocalWriteNode.new(
         name: :user,
-        kind: :local,
         value: nil,
         called_methods: [],
         loc: loc
@@ -259,9 +372,8 @@ RSpec.describe TypeGuessr::Core::IR do
     end
 
     it "includes receiver and args in dependencies" do
-      receiver = described_class::WriteNode.new(
+      receiver = described_class::LocalWriteNode.new(
         name: :user,
-        kind: :local,
         value: nil,
         called_methods: [],
         loc: loc
