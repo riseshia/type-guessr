@@ -939,8 +939,13 @@ module TypeGuessr
           # Convert each when clause
           prism_node.conditions&.each do |when_node|
             when_context = context.fork(:when)
-            when_result = convert(when_node.statements, when_context) if when_node.statements
-            branches << when_result if when_result
+            if when_node.statements
+              when_result = convert(when_node.statements, when_context)
+              branches << (when_result || create_nil_literal(prism_node.location))
+            else
+              # Empty when clause → nil
+              branches << create_nil_literal(prism_node.location)
+            end
             branch_contexts << when_context
           end
 
@@ -948,16 +953,11 @@ module TypeGuessr
           if prism_node.consequent
             else_context = context.fork(:else)
             else_result = convert(prism_node.consequent.statements, else_context)
-            branches << else_result if else_result
+            branches << (else_result || create_nil_literal(prism_node.location))
             branch_contexts << else_context
           else
             # If no else clause, nil is possible
-            nil_node = IR::LiteralNode.new(
-              type: Types::ClassInstance.new("NilClass"),
-              values: nil,
-              loc: convert_loc(prism_node.location)
-            )
-            branches << nil_node
+            branches << create_nil_literal(prism_node.location)
           end
 
           # Merge modified variables across all branches
@@ -1305,8 +1305,18 @@ module TypeGuessr
               branches: [then_node, else_node].compact,
               loc: convert_loc(location)
             )
-          else
-            then_node || else_node
+          elsif then_node || else_node
+            # Modifier form: one branch only → value or nil
+            branch_node = then_node || else_node
+            nil_node = IR::LiteralNode.new(
+              type: Types::ClassInstance.new("NilClass"),
+              values: nil,
+              loc: convert_loc(location)
+            )
+            IR::MergeNode.new(
+              branches: [branch_node, nil_node],
+              loc: convert_loc(location)
+            )
           end
         end
 
@@ -1348,6 +1358,14 @@ module TypeGuessr
           elsif branches.size == 1
             branches.first
           end
+        end
+
+        def create_nil_literal(location)
+          IR::LiteralNode.new(
+            type: Types::ClassInstance.new("NilClass"),
+            values: nil,
+            loc: convert_loc(location)
+          )
         end
 
         def convert_class_or_module(prism_node, context)

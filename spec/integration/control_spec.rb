@@ -63,7 +63,7 @@ RSpec.describe "Control Flow Type Inference from TypeProf Scenarios" do
       end
 
       it "infers result as Integer | nil" do
-        expect_hover_type(line: 4, column: 0, expected: "Integer | nil")
+        expect_hover_type(line: 4, column: 0, expected: "?Integer")
       end
     end
 
@@ -187,7 +187,7 @@ RSpec.describe "Control Flow Type Inference from TypeProf Scenarios" do
       end
 
       it "infers Integer | nil" do
-        expect_hover_type(line: 7, column: 0, expected: "Integer | nil")
+        expect_hover_type(line: 7, column: 0, expected: "?Integer")
       end
     end
   end
