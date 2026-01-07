@@ -583,13 +583,8 @@ module TypeGuessr
           # Track method call on receiver for duck typing
           receiver_node.called_methods << prism_node.name if variable_node?(receiver_node) && !receiver_node.called_methods.include?(prism_node.name)
 
-          # Handle indexed assignment: a[:key] = value
-          # Register updated type but keep original receiver for proper indexing
-          if prism_node.name == :[]= && local_variable_node?(receiver_node)
-            handle_indexed_assignment(prism_node, receiver_node, args, context)
-            # NOTE: Keep original receiver_node for the CallNode - the updated LocalWriteNode
-            # is registered in context for future reads
-          end
+          # Handle container mutating methods (Hash#[]=, Array#[]=, Array#<<)
+          receiver_node = handle_container_mutation(prism_node, receiver_node, args, context) if container_mutating_method?(prism_node.name, receiver_node)
 
           call_node = IR::CallNode.new(
             method: prism_node.name,
@@ -619,40 +614,6 @@ module TypeGuessr
           call_node
         end
 
-        def handle_indexed_assignment(prism_node, receiver_node, args, context)
-          # a[:key] = value -> update a's type to include the new field
-          return nil unless args.size == 2
-
-          value_node = args[1]
-          key_arg = prism_node.arguments.arguments[0]
-
-          # Get the original variable
-          original_var = context.lookup_variable(receiver_node.name)
-          return nil unless original_var
-
-          value_type = extract_literal_type(value_node)
-
-          # Determine how to update the type based on key type
-          updated_type = if key_arg.is_a?(Prism::SymbolNode)
-                           key_name = key_arg.value.to_sym
-                           merge_hash_field(original_var, key_name, value_type)
-                         else
-                           # Non-symbol key: widen to HashType
-                           widen_to_hash_type(original_var, key_arg, value_type)
-                         end
-          return nil unless updated_type
-
-          # Create new write node with updated type (only for local variables)
-          updated_var = IR::LocalWriteNode.new(
-            name: receiver_node.name,
-            value: IR::LiteralNode.new(type: updated_type, values: nil, loc: receiver_node.loc),
-            called_methods: receiver_node.called_methods,
-            loc: convert_loc(prism_node.location)
-          )
-          context.register_variable(receiver_node.name, updated_var)
-          updated_var
-        end
-
         # Check if node is any variable node (for duck typing tracking)
         def variable_node?(node)
           node.is_a?(IR::LocalWriteNode) ||
@@ -678,43 +639,9 @@ module TypeGuessr
           end
         end
 
-        def merge_hash_field(original_var, key_name, value_type)
-          # Get original type
-          original_type = case original_var
-                          when IR::LocalWriteNode
-                            original_var.value.is_a?(IR::LiteralNode) ? original_var.value.type : nil
-                          when IR::LiteralNode
-                            original_var.type
-                          end
-
-          case original_type
-          when Types::HashShape
-            # Add new field to existing shape
-            new_fields = original_type.fields.merge(key_name => value_type)
-            Types::HashShape.new(new_fields)
-          when Types::HashType
-            # Empty hash (Unknown types) becomes HashShape with one field
-            Types::HashShape.new({ key_name => value_type }) if empty_hash_type?(original_type)
-            # Otherwise keep as HashType (mixed keys)
-          end
-        end
-
-        def empty_hash_type?(hash_type)
-          (hash_type.key_type.nil? || hash_type.key_type.is_a?(Types::Unknown)) &&
-            (hash_type.value_type.nil? || hash_type.value_type.is_a?(Types::Unknown))
-        end
-
-        def widen_to_hash_type(original_var, key_arg, value_type)
+        def widen_to_hash_type(original_type, key_arg, value_type)
           # When mixing key types, widen to generic HashType
           new_key_type = infer_key_type(key_arg)
-
-          # Get original type to preserve existing key/value types
-          original_type = case original_var
-                          when IR::LocalWriteNode
-                            original_var.value.is_a?(IR::LiteralNode) ? original_var.value.type : nil
-                          when IR::LiteralNode
-                            original_var.type
-                          end
 
           case original_type
           when Types::HashShape
@@ -759,6 +686,142 @@ module TypeGuessr
           else
             Types::Unknown.instance
           end
+        end
+
+        # Check if method is a container mutating method
+        def container_mutating_method?(method, receiver_node)
+          return false unless local_variable_node?(receiver_node)
+
+          receiver_type = get_receiver_type(receiver_node)
+          return false unless receiver_type
+
+          case method
+          when :[]= then hash_like?(receiver_type) || array_like?(receiver_type)
+          when :<<  then array_like?(receiver_type)
+          else false
+          end
+        end
+
+        # Get receiver's current type
+        def get_receiver_type(receiver_node)
+          return nil unless receiver_node.respond_to?(:write_node)
+
+          write_node = receiver_node.write_node
+          return nil unless write_node
+          return nil unless write_node.respond_to?(:value)
+
+          value = write_node.value
+          return nil unless value.respond_to?(:type)
+
+          value.type
+        end
+
+        # Check if type is hash-like
+        def hash_like?(type)
+          type.is_a?(Types::HashShape) || type.is_a?(Types::HashType)
+        end
+
+        # Check if type is array-like
+        def array_like?(type)
+          type.is_a?(Types::ArrayType)
+        end
+
+        # Handle container mutation by creating new LocalWriteNode with merged type
+        def handle_container_mutation(prism_node, receiver_node, args, context)
+          merged_type = compute_merged_type(receiver_node, prism_node.name, args, prism_node)
+          return receiver_node unless merged_type
+
+          # Create new LocalWriteNode with merged type
+          new_write = IR::LocalWriteNode.new(
+            name: receiver_node.name,
+            value: IR::LiteralNode.new(type: merged_type, values: nil, loc: receiver_node.loc),
+            called_methods: receiver_node.called_methods,
+            loc: convert_loc(prism_node.location)
+          )
+
+          # Register for next line references
+          context.register_variable(receiver_node.name, new_write)
+
+          # Return new LocalReadNode pointing to new write_node
+          IR::LocalReadNode.new(
+            name: receiver_node.name,
+            write_node: new_write,
+            called_methods: receiver_node.called_methods,
+            loc: receiver_node.loc
+          )
+        end
+
+        # Compute merged type for container mutation
+        def compute_merged_type(receiver_node, method, args, prism_node)
+          original_type = get_receiver_type(receiver_node)
+          return nil unless original_type
+
+          case method
+          when :[]=
+            if hash_like?(original_type)
+              compute_hash_assignment_type(original_type, args, prism_node)
+            elsif array_like?(original_type)
+              compute_array_assignment_type(original_type, args)
+            end
+          when :<<
+            compute_array_append_type(original_type, args) if array_like?(original_type)
+          end
+        end
+
+        # Compute Hash type after indexed assignment
+        def compute_hash_assignment_type(original_type, args, prism_node)
+          return nil unless args.size == 2
+
+          key_arg = prism_node.arguments.arguments[0]
+          value_type = extract_literal_type(args[1])
+
+          case original_type
+          when Types::HashShape
+            if key_arg.is_a?(Prism::SymbolNode)
+              # Symbol key → keep HashShape, add field
+              key_name = key_arg.value.to_sym
+              Types::HashShape.new(original_type.fields.merge(key_name => value_type))
+            else
+              # Non-symbol key → widen to HashType
+              widen_to_hash_type(original_type, key_arg, value_type)
+            end
+          when Types::HashType
+            # Empty hash (Unknown types) + symbol key → becomes HashShape with one field
+            if empty_hash_type?(original_type) && key_arg.is_a?(Prism::SymbolNode)
+              key_name = key_arg.value.to_sym
+              Types::HashShape.new({ key_name => value_type })
+            else
+              key_type = infer_key_type(key_arg)
+              Types::HashType.new(
+                union_types(original_type.key_type, key_type),
+                union_types(original_type.value_type, value_type)
+              )
+            end
+          end
+        end
+
+        # Check if HashType is empty (has Unknown types)
+        def empty_hash_type?(hash_type)
+          (hash_type.key_type.nil? || hash_type.key_type.is_a?(Types::Unknown)) &&
+            (hash_type.value_type.nil? || hash_type.value_type.is_a?(Types::Unknown))
+        end
+
+        # Compute Array type after indexed assignment
+        def compute_array_assignment_type(original_type, args)
+          return nil unless args.size == 2
+
+          value_type = extract_literal_type(args[1])
+          combined = union_types(original_type.element_type, value_type)
+          Types::ArrayType.new(combined)
+        end
+
+        # Compute Array type after << operator
+        def compute_array_append_type(original_type, args)
+          return nil unless args.size == 1
+
+          value_type = extract_literal_type(args[0])
+          combined = union_types(original_type.element_type, value_type)
+          Types::ArrayType.new(combined)
         end
 
         # Extract IR param nodes from a Prism parameter node

@@ -2478,5 +2478,68 @@ RSpec.describe "Hover Integration" do
       end
     end
   end
+
+  describe "Container Mutating Methods - Current Line Hover", :doc do
+    context "Hash indexed assignment with string key" do
+      let(:source) do
+        <<~RUBY
+          a = { a: 1 }
+          a["f"] = "a"
+        RUBY
+      end
+
+      it "→ Hash on assignment line" do
+        expect_hover_type(line: 2, column: 0, expected: "Hash")
+      end
+    end
+
+    context "Hash indexed assignment with symbol key" do
+      let(:source) do
+        <<~RUBY
+          a = { a: 1 }
+          a[:b] = "x"
+        RUBY
+      end
+
+      it "shows both fields on assignment line" do
+        response = hover_on_source(source, { line: 1, character: 0 })
+        expect(response).not_to be_nil
+        expect(response.contents.value).to include("a: Integer")
+        expect(response.contents.value).to include("b: String")
+      end
+    end
+
+    context "Array indexed assignment" do
+      let(:source) do
+        <<~RUBY
+          a = [1]
+          a[0] = "x"
+        RUBY
+      end
+
+      it "→ Array with union type on assignment line" do
+        response = hover_on_source(source, { line: 1, character: 0 })
+        expect(response).not_to be_nil
+        expect(response.contents.value).to match(/Array/)
+        expect(response.contents.value).to match(/(Integer|String)/)
+      end
+    end
+
+    context "Array << operator" do
+      let(:source) do
+        <<~RUBY
+          a = [1]
+          a << "x"
+        RUBY
+      end
+
+      it "→ Array with union type on assignment line" do
+        response = hover_on_source(source, { line: 1, character: 0 })
+        expect(response).not_to be_nil
+        expect(response.contents.value).to match(/Array/)
+        expect(response.contents.value).to match(/(Integer|String)/)
+      end
+    end
+  end
 end
 # rubocop:enable RSpec/DescribeClass

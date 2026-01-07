@@ -124,10 +124,10 @@ RSpec.describe "IR-based Hover", :doc do
         RUBY
       end
 
-      # NOTE: Hovering on `a` within `a[:y] = 2` shows the pre-assignment type
-      # because `a` is read as the receiver before modification
-      it "shows pre-assignment type at receiver position" do
-        expect_hover_type(line: 2, column: 0, expected: "{ x: Integer }")
+      # NOTE: Hovering on `a` within `a[:y] = 2` shows the post-assignment type
+      # after container mutation handling
+      it "shows post-assignment type at receiver position" do
+        expect_hover_type(line: 2, column: 0, expected: "{ x: Integer, y: Integer }")
       end
 
       it "shows updated type at read" do
@@ -145,14 +145,14 @@ RSpec.describe "IR-based Hover", :doc do
         RUBY
       end
 
-      # NOTE: Each indexed assignment reads `a` before modifying it,
-      # so hovering on `a` in the expression shows the type before that modification
-      it "shows original type at first assignment receiver" do
-        expect_hover_type(line: 2, column: 0, expected: "{ a: Integer }")
+      # NOTE: Each indexed assignment shows the post-assignment type
+      # after container mutation handling
+      it "shows type after first assignment at first assignment receiver" do
+        expect_hover_type(line: 2, column: 0, expected: "{ a: Integer, b: Integer }")
       end
 
-      it "shows type after first assignment at second assignment receiver" do
-        expect_hover_type(line: 3, column: 0, expected: "{ a: Integer, b: Integer }")
+      it "shows type after second assignment at second assignment receiver" do
+        expect_hover_type(line: 3, column: 0, expected: "{ a: Integer, b: Integer, c: String }")
       end
 
       it "shows final type" do
