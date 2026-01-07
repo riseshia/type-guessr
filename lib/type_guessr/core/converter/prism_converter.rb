@@ -197,6 +197,7 @@ module TypeGuessr
                            # return with no value returns nil
                            IR::LiteralNode.new(
                              type: Types::ClassInstance.new("NilClass"),
+                             literal_value: nil,
                              values: nil,
                              loc: convert_loc(prism_node.location)
                            )
@@ -226,11 +227,25 @@ module TypeGuessr
 
         def convert_literal(prism_node)
           type = infer_literal_type(prism_node)
+          literal_value = extract_literal_value(prism_node)
           IR::LiteralNode.new(
             type: type,
+            literal_value: literal_value,
             values: nil,
             loc: convert_loc(prism_node.location)
           )
+        end
+
+        # Extract the actual value from a literal node (for Symbol, Integer, String)
+        def extract_literal_value(prism_node)
+          case prism_node
+          when Prism::SymbolNode
+            prism_node.value.to_sym
+          when Prism::IntegerNode
+            prism_node.value
+          when Prism::StringNode
+            prism_node.content
+          end
         end
 
         def convert_array_literal(prism_node, context)
@@ -260,6 +275,7 @@ module TypeGuessr
 
           IR::LiteralNode.new(
             type: type,
+            literal_value: nil,
             values: value_nodes.empty? ? nil : value_nodes,
             loc: convert_loc(prism_node.location)
           )
@@ -285,6 +301,7 @@ module TypeGuessr
 
           IR::LiteralNode.new(
             type: type,
+            literal_value: nil,
             values: value_nodes.empty? ? nil : value_nodes,
             loc: convert_loc(prism_node.location)
           )
@@ -748,7 +765,7 @@ module TypeGuessr
           # Create new LocalWriteNode with merged type
           new_write = IR::LocalWriteNode.new(
             name: receiver_node.name,
-            value: IR::LiteralNode.new(type: merged_type, values: nil, loc: receiver_node.loc),
+            value: IR::LiteralNode.new(type: merged_type, literal_value: nil, values: nil, loc: receiver_node.loc),
             called_methods: receiver_node.called_methods,
             loc: convert_loc(prism_node.location)
           )
@@ -1288,6 +1305,7 @@ module TypeGuessr
               # Add nil to represent "variable may not be assigned"
               nil_node = IR::LiteralNode.new(
                 type: Types::ClassInstance.new("NilClass"),
+                literal_value: nil,
                 values: nil,
                 loc: convert_loc(location)
               )
@@ -1318,6 +1336,7 @@ module TypeGuessr
             branch_node = then_node || else_node
             nil_node = IR::LiteralNode.new(
               type: Types::ClassInstance.new("NilClass"),
+              literal_value: nil,
               values: nil,
               loc: convert_loc(location)
             )
@@ -1371,6 +1390,7 @@ module TypeGuessr
         def create_nil_literal(location)
           IR::LiteralNode.new(
             type: Types::ClassInstance.new("NilClass"),
+            literal_value: nil,
             values: nil,
             loc: convert_loc(location)
           )

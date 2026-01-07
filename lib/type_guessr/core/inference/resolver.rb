@@ -393,7 +393,8 @@ module TypeGuessr
             end
 
             # Query for method return type: project first, then RBS
-            if receiver_type.is_a?(Types::ClassInstance)
+            case receiver_type
+            when Types::ClassInstance
               # 1. Try project methods first
               def_node = lookup_method(receiver_type.name, node.method.to_s)
               if def_node
@@ -418,7 +419,7 @@ module TypeGuessr
                 "#{receiver_type.name}##{node.method}",
                 :stdlib
               )
-            elsif receiver_type.is_a?(Types::ArrayType)
+            when Types::ArrayType
               # Handle Array methods with element type substitution
               # Start with substitutions from receiver type (e.g., Elem)
               substitutions = receiver_type.type_variable_substitutions.dup
@@ -440,6 +441,32 @@ module TypeGuessr
               return Result.new(
                 return_type,
                 "Array[#{receiver_type.element_type || "untyped"}]##{node.method}",
+                :stdlib
+              )
+            when Types::HashShape
+              # Handle HashShape field access with [] method
+              if node.method == :[] && node.args.size == 1
+                key_result = infer_hash_shape_access(receiver_type, node.args.first)
+                return key_result if key_result
+              end
+
+              # Fall back to Hash RBS for other methods
+              substitutions = receiver_type.type_variable_substitutions
+              raw_return_type = @signature_provider.get_method_return_type("Hash", node.method.to_s)
+              return_type = raw_return_type.substitute(substitutions)
+              return Result.new(
+                return_type,
+                "HashShape##{node.method}",
+                :stdlib
+              )
+            when Types::HashType
+              # Handle generic HashType
+              substitutions = receiver_type.type_variable_substitutions
+              raw_return_type = @signature_provider.get_method_return_type("Hash", node.method.to_s)
+              return_type = raw_return_type.substitute(substitutions)
+              return Result.new(
+                return_type,
+                "Hash[#{receiver_type.key_type}, #{receiver_type.value_type}]##{node.method}",
                 :stdlib
               )
             end
@@ -526,6 +553,27 @@ module TypeGuessr
             Result.new(value_result.type, "explicit return: #{value_result.reason}", value_result.source)
           else
             Result.new(Types::ClassInstance.new("NilClass"), "explicit return nil", :inference)
+          end
+        end
+
+        # Infer type for HashShape field access (hash[:key])
+        # @param hash_shape [Types::HashShape] The hash shape type
+        # @param key_node [IR::Node] The key argument node
+        # @return [Result, nil] The field type result, or nil if not a known symbol key
+        def infer_hash_shape_access(hash_shape, key_node)
+          # Only handle symbol literal keys
+          return nil unless key_node.is_a?(IR::LiteralNode)
+          return nil unless key_node.type.is_a?(Types::ClassInstance) && key_node.type.name == "Symbol"
+          return nil unless key_node.literal_value.is_a?(Symbol)
+
+          key = key_node.literal_value
+          field_type = hash_shape.fields[key]
+
+          if field_type
+            Result.new(field_type, "HashShape[:#{key}]", :inference)
+          else
+            # Key not found in shape - return nil type (like Hash#[] for missing keys)
+            Result.new(Types::ClassInstance.new("NilClass"), "HashShape[:#{key}] (missing)", :inference)
           end
         end
 

@@ -36,6 +36,7 @@ RSpec.describe RubyLsp::TypeGuessr::GraphBuilder do
       let(:literal) do
         TypeGuessr::Core::IR::LiteralNode.new(
           type: TypeGuessr::Core::Types::ClassInstance.new("String"),
+          literal_value: nil,
           values: nil,
           loc: loc
         )
@@ -70,6 +71,7 @@ RSpec.describe RubyLsp::TypeGuessr::GraphBuilder do
       let(:literal) do
         TypeGuessr::Core::IR::LiteralNode.new(
           type: TypeGuessr::Core::Types::ClassInstance.new("String"),
+          literal_value: nil,
           values: nil,
           loc: loc
         )
@@ -103,6 +105,7 @@ RSpec.describe RubyLsp::TypeGuessr::GraphBuilder do
       let(:literal) do
         TypeGuessr::Core::IR::LiteralNode.new(
           type: TypeGuessr::Core::Types::ClassInstance.new("String"),
+          literal_value: nil,
           values: nil,
           loc: loc
         )
@@ -154,6 +157,7 @@ RSpec.describe RubyLsp::TypeGuessr::GraphBuilder do
       let(:inner_literal) do
         TypeGuessr::Core::IR::LiteralNode.new(
           type: TypeGuessr::Core::Types::ClassInstance.new("Integer"),
+          literal_value: nil,
           values: nil,
           loc: loc
         )
@@ -173,6 +177,7 @@ RSpec.describe RubyLsp::TypeGuessr::GraphBuilder do
           type: TypeGuessr::Core::Types::ArrayType.new(
             TypeGuessr::Core::Types::ClassInstance.new("Integer")
           ),
+          literal_value: nil,
           values: [read_node, inner_literal],
           loc: loc
         )
@@ -214,6 +219,7 @@ RSpec.describe RubyLsp::TypeGuessr::GraphBuilder do
         type: TypeGuessr::Core::Types::ArrayType.new(
           TypeGuessr::Core::Types::ClassInstance.new("Integer")
         ),
+        literal_value: nil,
         values: nil,
         loc: loc
       )
@@ -237,6 +243,7 @@ RSpec.describe RubyLsp::TypeGuessr::GraphBuilder do
 
       literal = TypeGuessr::Core::IR::LiteralNode.new(
         type: TypeGuessr::Core::Types::ClassInstance.new("String"),
+        literal_value: nil,
         values: nil,
         loc: loc
       )

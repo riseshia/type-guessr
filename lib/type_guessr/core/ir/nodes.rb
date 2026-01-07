@@ -105,12 +105,14 @@ module TypeGuessr
 
       # Literal value node
       # @param type [TypeGuessr::Core::Types::Type] The type of the literal
+      # @param literal_value [Object, nil] The actual literal value (for Symbol, Integer, String)
       # @param values [Array<Node>, nil] Internal value nodes for compound literals (Hash/Array)
       # @param loc [Loc] Location information
       #
       # Examples: "hello" → String, 123 → Integer, [] → Array, {} → Hash
       # For compound literals, values contains the internal expression nodes
-      LiteralNode = Data.define(:type, :values, :loc) do
+      # For simple literals, literal_value stores the actual value (e.g., :a for symbols)
+      LiteralNode = Data.define(:type, :literal_value, :values, :loc) do
         include TreeInspect
 
         def dependencies
@@ -130,6 +132,7 @@ module TypeGuessr
           type_str = type.respond_to?(:name) ? type.name : type.class.name.split("::").last
           [
             tree_field(:type, type_str, indent),
+            tree_field(:literal_value, literal_value, indent),
             tree_field(:values, values, indent, last: true),
           ]
         end

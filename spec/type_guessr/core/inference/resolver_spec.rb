@@ -22,6 +22,7 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
       it "returns the literal type" do
         node = TypeGuessr::Core::IR::LiteralNode.new(
           type: TypeGuessr::Core::Types::ClassInstance.new("String"),
+          literal_value: nil,
           values: nil,
           loc: loc
         )
@@ -38,6 +39,7 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
       it "infers type from value" do
         literal = TypeGuessr::Core::IR::LiteralNode.new(
           type: TypeGuessr::Core::Types::ClassInstance.new("Integer"),
+          literal_value: nil,
           values: nil,
           loc: loc
         )
@@ -71,6 +73,7 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
       it "infers type from write_node" do
         literal = TypeGuessr::Core::IR::LiteralNode.new(
           type: TypeGuessr::Core::Types::ClassInstance.new("String"),
+          literal_value: nil,
           values: nil,
           loc: loc
         )
@@ -109,6 +112,7 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
       it "infers type from default value" do
         default = TypeGuessr::Core::IR::LiteralNode.new(
           type: TypeGuessr::Core::Types::ClassInstance.new("String"),
+          literal_value: nil,
           values: nil,
           loc: loc
         )
@@ -158,6 +162,7 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
       it "infers type from dependency" do
         literal = TypeGuessr::Core::IR::LiteralNode.new(
           type: TypeGuessr::Core::Types::ClassInstance.new("String"),
+          literal_value: nil,
           values: nil,
           loc: loc
         )
@@ -239,6 +244,7 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
           name: :str,
           value: TypeGuessr::Core::IR::LiteralNode.new(
             type: TypeGuessr::Core::Types::ClassInstance.new("String"),
+            literal_value: nil,
             values: nil,
             loc: loc
           ),
@@ -269,6 +275,7 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
           name: :arr,
           value: TypeGuessr::Core::IR::LiteralNode.new(
             type: array_type,
+            literal_value: nil,
             values: nil,
             loc: loc
           ),
@@ -300,6 +307,7 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
           name: :arr,
           value: TypeGuessr::Core::IR::LiteralNode.new(
             type: array_type,
+            literal_value: nil,
             values: nil,
             loc: loc
           ),
@@ -328,11 +336,13 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
       it "creates union type from branches" do
         branch1 = TypeGuessr::Core::IR::LiteralNode.new(
           type: TypeGuessr::Core::Types::ClassInstance.new("String"),
+          literal_value: nil,
           values: nil,
           loc: loc
         )
         branch2 = TypeGuessr::Core::IR::LiteralNode.new(
           type: TypeGuessr::Core::Types::ClassInstance.new("Integer"),
+          literal_value: nil,
           values: nil,
           loc: loc
         )
@@ -350,6 +360,7 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
       it "returns single type when only one branch" do
         branch = TypeGuessr::Core::IR::LiteralNode.new(
           type: TypeGuessr::Core::Types::ClassInstance.new("String"),
+          literal_value: nil,
           values: nil,
           loc: loc
         )
@@ -448,6 +459,7 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
       it "infers return type from return node" do
         return_node = TypeGuessr::Core::IR::LiteralNode.new(
           type: TypeGuessr::Core::Types::ClassInstance.new("Integer"),
+          literal_value: nil,
           values: nil,
           loc: loc
         )
@@ -485,6 +497,7 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
       it "caches inference results" do
         node = TypeGuessr::Core::IR::LiteralNode.new(
           type: TypeGuessr::Core::Types::ClassInstance.new("String"),
+          literal_value: nil,
           values: nil,
           loc: loc
         )
@@ -498,6 +511,7 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
       it "clears cache when requested" do
         node = TypeGuessr::Core::IR::LiteralNode.new(
           type: TypeGuessr::Core::Types::ClassInstance.new("String"),
+          literal_value: nil,
           values: nil,
           loc: loc
         )

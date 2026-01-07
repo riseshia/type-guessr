@@ -18,22 +18,23 @@ RSpec.describe TypeGuessr::Core::IR do
 
   describe "LiteralNode" do
     it "stores type and location" do
-      node = described_class::LiteralNode.new(type: string_type, values: nil, loc: loc)
+      node = described_class::LiteralNode.new(type: string_type, literal_value: nil, values: nil, loc: loc)
       expect(node.type).to eq(string_type)
       expect(node.loc).to eq(loc)
     end
 
     it "has no dependencies when values is nil" do
-      node = described_class::LiteralNode.new(type: string_type, values: nil, loc: loc)
+      node = described_class::LiteralNode.new(type: string_type, literal_value: nil, values: nil, loc: loc)
       expect(node.dependencies).to eq([])
     end
 
     it "returns values as dependencies when present" do
-      inner1 = described_class::LiteralNode.new(type: string_type, values: nil, loc: loc)
-      inner2 = described_class::LiteralNode.new(type: string_type, values: nil, loc: loc)
+      inner1 = described_class::LiteralNode.new(type: string_type, literal_value: nil, values: nil, loc: loc)
+      inner2 = described_class::LiteralNode.new(type: string_type, literal_value: nil, values: nil, loc: loc)
       array_type = TypeGuessr::Core::Types::ArrayType.new(string_type)
       node = described_class::LiteralNode.new(
         type: array_type,
+        literal_value: nil,
         values: [inner1, inner2],
         loc: loc
       )
@@ -43,6 +44,7 @@ RSpec.describe TypeGuessr::Core::IR do
     it "returns empty array when values is empty" do
       node = described_class::LiteralNode.new(
         type: TypeGuessr::Core::Types::ArrayType.new,
+        literal_value: nil,
         values: [],
         loc: loc
       )
@@ -52,7 +54,7 @@ RSpec.describe TypeGuessr::Core::IR do
 
   describe "LocalWriteNode" do
     it "stores write variable information" do
-      literal = described_class::LiteralNode.new(type: string_type, values: nil, loc: loc)
+      literal = described_class::LiteralNode.new(type: string_type, literal_value: nil, values: nil, loc: loc)
       node = described_class::LocalWriteNode.new(
         name: :user,
         value: literal,
@@ -66,7 +68,7 @@ RSpec.describe TypeGuessr::Core::IR do
     end
 
     it "returns value in dependencies array" do
-      literal = described_class::LiteralNode.new(type: string_type, values: nil, loc: loc)
+      literal = described_class::LiteralNode.new(type: string_type, literal_value: nil, values: nil, loc: loc)
       node = described_class::LocalWriteNode.new(
         name: :user,
         value: literal,
@@ -92,7 +94,7 @@ RSpec.describe TypeGuessr::Core::IR do
     end
 
     it "generates local_write node_hash" do
-      literal = described_class::LiteralNode.new(type: string_type, values: nil, loc: loc)
+      literal = described_class::LiteralNode.new(type: string_type, literal_value: nil, values: nil, loc: loc)
       node = described_class::LocalWriteNode.new(
         name: :user,
         value: literal,
@@ -106,7 +108,7 @@ RSpec.describe TypeGuessr::Core::IR do
 
   describe "InstanceVariableWriteNode" do
     it "stores instance variable information" do
-      literal = described_class::LiteralNode.new(type: string_type, values: nil, loc: loc)
+      literal = described_class::LiteralNode.new(type: string_type, literal_value: nil, values: nil, loc: loc)
       node = described_class::InstanceVariableWriteNode.new(
         name: :@user,
         class_name: "User",
@@ -135,7 +137,7 @@ RSpec.describe TypeGuessr::Core::IR do
 
   describe "ClassVariableWriteNode" do
     it "stores class variable information" do
-      literal = described_class::LiteralNode.new(type: string_type, values: nil, loc: loc)
+      literal = described_class::LiteralNode.new(type: string_type, literal_value: nil, values: nil, loc: loc)
       node = described_class::ClassVariableWriteNode.new(
         name: :@@count,
         class_name: "Counter",
@@ -308,7 +310,7 @@ RSpec.describe TypeGuessr::Core::IR do
 
   describe "ParamNode" do
     it "stores parameter information" do
-      default = described_class::LiteralNode.new(type: string_type, values: nil, loc: loc)
+      default = described_class::LiteralNode.new(type: string_type, literal_value: nil, values: nil, loc: loc)
       node = described_class::ParamNode.new(
         name: :name,
         kind: :optional,
@@ -323,7 +325,7 @@ RSpec.describe TypeGuessr::Core::IR do
     end
 
     it "returns default_value in dependencies when present" do
-      default = described_class::LiteralNode.new(type: string_type, values: nil, loc: loc)
+      default = described_class::LiteralNode.new(type: string_type, literal_value: nil, values: nil, loc: loc)
       node = described_class::ParamNode.new(
         name: :name,
         kind: :optional,
@@ -378,7 +380,7 @@ RSpec.describe TypeGuessr::Core::IR do
         called_methods: [],
         loc: loc
       )
-      arg = described_class::LiteralNode.new(type: string_type, values: nil, loc: loc)
+      arg = described_class::LiteralNode.new(type: string_type, literal_value: nil, values: nil, loc: loc)
       node = described_class::CallNode.new(
         method: :update,
         receiver: receiver,
@@ -444,8 +446,8 @@ RSpec.describe TypeGuessr::Core::IR do
 
   describe "MergeNode" do
     it "stores branch nodes" do
-      then_node = described_class::LiteralNode.new(type: string_type, values: nil, loc: loc)
-      else_node = described_class::LiteralNode.new(type: string_type, values: nil, loc: loc)
+      then_node = described_class::LiteralNode.new(type: string_type, literal_value: nil, values: nil, loc: loc)
+      else_node = described_class::LiteralNode.new(type: string_type, literal_value: nil, values: nil, loc: loc)
       merge = described_class::MergeNode.new(
         branches: [then_node, else_node],
         loc: loc
@@ -455,8 +457,8 @@ RSpec.describe TypeGuessr::Core::IR do
     end
 
     it "returns branches as dependencies" do
-      then_node = described_class::LiteralNode.new(type: string_type, values: nil, loc: loc)
-      else_node = described_class::LiteralNode.new(type: string_type, values: nil, loc: loc)
+      then_node = described_class::LiteralNode.new(type: string_type, literal_value: nil, values: nil, loc: loc)
+      else_node = described_class::LiteralNode.new(type: string_type, literal_value: nil, values: nil, loc: loc)
       merge = described_class::MergeNode.new(
         branches: [then_node, else_node],
         loc: loc
@@ -475,7 +477,7 @@ RSpec.describe TypeGuessr::Core::IR do
         called_methods: [],
         loc: loc
       )
-      return_node = described_class::LiteralNode.new(type: string_type, values: nil, loc: loc)
+      return_node = described_class::LiteralNode.new(type: string_type, literal_value: nil, values: nil, loc: loc)
       def_node = described_class::DefNode.new(
         name: :foo,
         params: [param],
@@ -497,7 +499,7 @@ RSpec.describe TypeGuessr::Core::IR do
         called_methods: [],
         loc: loc
       )
-      return_node = described_class::LiteralNode.new(type: string_type, values: nil, loc: loc)
+      return_node = described_class::LiteralNode.new(type: string_type, literal_value: nil, values: nil, loc: loc)
       def_node = described_class::DefNode.new(
         name: :foo,
         params: [param],
