@@ -329,7 +329,7 @@ module TypeGuessr
           when Prism::HashNode
             infer_hash_element_types(prism_node)
           when Prism::RangeNode
-            Types::ClassInstance.new("Range")
+            infer_range_element_type(prism_node)
           when Prism::RegularExpressionNode, Prism::InterpolatedRegularExpressionNode
             Types::ClassInstance.new("Regexp")
           when Prism::ImaginaryNode
@@ -341,6 +341,26 @@ module TypeGuessr
           else
             Types::Unknown.instance
           end
+        end
+
+        def infer_range_element_type(range_node)
+          left_type = range_node.left ? infer_literal_type(range_node.left) : nil
+          right_type = range_node.right ? infer_literal_type(range_node.right) : nil
+
+          types = [left_type, right_type].compact
+
+          # No bounds at all (shouldn't happen in valid Ruby, but handle gracefully)
+          return Types::RangeType.new if types.empty?
+
+          unique_types = types.uniq
+
+          element_type = if unique_types.size == 1
+                           unique_types.first
+                         else
+                           Types::Union.new(unique_types)
+                         end
+
+          Types::RangeType.new(element_type)
         end
 
         def convert_local_variable_write(prism_node, context)

@@ -267,6 +267,43 @@ module TypeGuessr
         end
       end
 
+      # RangeType - range with element type
+      class RangeType < Type
+        attr_reader :element_type
+
+        def initialize(element_type = Unknown.instance)
+          super()
+          @element_type = element_type
+        end
+
+        def eql?(other)
+          super && @element_type == other.element_type
+        end
+
+        def hash
+          [self.class, @element_type].hash
+        end
+
+        def to_s
+          "Range[#{@element_type}]"
+        end
+
+        def substitute(substitutions)
+          new_element = @element_type.substitute(substitutions)
+          return self if new_element.equal?(@element_type)
+
+          RangeType.new(new_element)
+        end
+
+        def rbs_class_name
+          "Range"
+        end
+
+        def type_variable_substitutions
+          { Elem: @element_type }
+        end
+      end
+
       # HashShape - hash with known field types (Symbol/String keys only)
       class HashShape < Type
         attr_reader :fields

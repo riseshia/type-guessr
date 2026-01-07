@@ -46,8 +46,8 @@ RSpec.describe "Literal Type Inference from TypeProf Scenarios" do
         RUBY
       end
 
-      it "→ Range[Integer | nil]" do
-        expect_hover_type(line: 4, column: 0, expected: "Range[Integer | nil]")
+      it "→ Range[Integer]" do
+        expect_hover_type(line: 4, column: 0, expected: "Range[Integer]")
       end
     end
 
@@ -61,8 +61,8 @@ RSpec.describe "Literal Type Inference from TypeProf Scenarios" do
         RUBY
       end
 
-      it "→ Range[Integer | nil]" do
-        expect_hover_type(line: 4, column: 0, expected: "Range[Integer | nil]")
+      it "→ Range[Integer]" do
+        expect_hover_type(line: 4, column: 0, expected: "Range[Integer]")
       end
     end
 
