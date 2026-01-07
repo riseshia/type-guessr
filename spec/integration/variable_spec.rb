@@ -199,9 +199,7 @@ RSpec.describe "Variable Type Inference from TypeProf Scenarios" do
       end
 
       it "infers lv as Symbol union" do
-        response = hover_on_source(source, { line: 5, character: 6 })
-        expect(response).not_to be_nil
-        # Should be :LVar0 | :LVar
+        expect_hover_type(line: 5, column: 4, expected: "Symbol")
       end
     end
   end
