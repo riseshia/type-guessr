@@ -957,12 +957,12 @@ module TypeGuessr
 
           # Convert else branch (could be IfNode, ElseNode, or nil)
           else_context = context.fork(:else)
-          else_node = if prism_node.consequent
-                        case prism_node.consequent
+          else_node = if prism_node.subsequent
+                        case prism_node.subsequent
                         when Prism::IfNode
-                          convert_if(prism_node.consequent, else_context)
+                          convert_if(prism_node.subsequent, else_context)
                         when Prism::ElseNode
-                          convert(prism_node.consequent.statements, else_context)
+                          convert(prism_node.subsequent.statements, else_context)
                         end
                       end
 
@@ -978,12 +978,7 @@ module TypeGuessr
           unless_node = convert(prism_node.statements, unless_context) if prism_node.statements
 
           else_context = context.fork(:else)
-          else_node = if prism_node.consequent
-                        case prism_node.consequent
-                        when Prism::ElseNode
-                          convert(prism_node.consequent.statements, else_context)
-                        end
-                      end
+          else_node = (convert(prism_node.else_clause.statements, else_context) if prism_node.else_clause)
 
           merge_modified_variables(context, unless_context, else_context, unless_node, else_node, prism_node.location)
         end
@@ -1006,9 +1001,9 @@ module TypeGuessr
           end
 
           # Convert else clause
-          if prism_node.consequent
+          if prism_node.else_clause
             else_context = context.fork(:else)
-            else_result = convert(prism_node.consequent.statements, else_context)
+            else_result = convert(prism_node.else_clause.statements, else_context)
             branches << (else_result || create_nil_literal(prism_node.location))
             branch_contexts << else_context
           else
