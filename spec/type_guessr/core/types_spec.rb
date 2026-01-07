@@ -68,6 +68,46 @@ RSpec.describe TypeGuessr::Core::Types do
     end
   end
 
+  describe "SingletonType" do
+    it "stores the class name" do
+      type = TypeGuessr::Core::Types::SingletonType.new("User")
+      expect(type.name).to eq("User")
+    end
+
+    it "equals another SingletonType with the same name" do
+      type1 = TypeGuessr::Core::Types::SingletonType.new("User")
+      type2 = TypeGuessr::Core::Types::SingletonType.new("User")
+      expect(type1).to eq(type2)
+    end
+
+    it "does not equal SingletonType with different name" do
+      type1 = TypeGuessr::Core::Types::SingletonType.new("User")
+      type2 = TypeGuessr::Core::Types::SingletonType.new("Admin")
+      expect(type1).not_to eq(type2)
+    end
+
+    it "does not equal ClassInstance with same name" do
+      singleton = TypeGuessr::Core::Types::SingletonType.new("User")
+      instance = TypeGuessr::Core::Types::ClassInstance.new("User")
+      expect(singleton).not_to eq(instance)
+    end
+
+    it "has a string representation" do
+      type = TypeGuessr::Core::Types::SingletonType.new("User")
+      expect(type.to_s).to eq("singleton(User)")
+    end
+
+    it "handles namespaced classes" do
+      type = TypeGuessr::Core::Types::SingletonType.new("Foo::Bar")
+      expect(type.to_s).to eq("singleton(Foo::Bar)")
+    end
+
+    it "returns the class name for rbs_class_name" do
+      type = TypeGuessr::Core::Types::SingletonType.new("String")
+      expect(type.rbs_class_name).to eq("String")
+    end
+  end
+
   describe "Union" do
     it "creates a union of types" do
       type1 = TypeGuessr::Core::Types::ClassInstance.new("String")
@@ -451,6 +491,18 @@ RSpec.describe TypeGuessr::Core::Types do
       end
     end
 
+    describe "SingletonType" do
+      it "returns the class name" do
+        type = described_class::SingletonType.new("User")
+        expect(type.rbs_class_name).to eq("User")
+      end
+
+      it "returns namespaced class name" do
+        type = described_class::SingletonType.new("ActiveRecord::Base")
+        expect(type.rbs_class_name).to eq("ActiveRecord::Base")
+      end
+    end
+
     describe "ArrayType" do
       it "returns 'Array'" do
         array_type = described_class::ArrayType.new
@@ -504,6 +556,13 @@ RSpec.describe TypeGuessr::Core::Types do
     describe "ClassInstance" do
       it "returns empty hash" do
         type = described_class::ClassInstance.new("String")
+        expect(type.type_variable_substitutions).to eq({})
+      end
+    end
+
+    describe "SingletonType" do
+      it "returns empty hash" do
+        type = described_class::SingletonType.new("User")
         expect(type.type_variable_substitutions).to eq({})
       end
     end
@@ -610,6 +669,14 @@ RSpec.describe TypeGuessr::Core::Types do
       it "returns self (no type variables)" do
         result = integer_type.substitute({ Elem: string_type })
         expect(result).to be(integer_type)
+      end
+    end
+
+    describe "SingletonType" do
+      it "returns self (no type variables)" do
+        singleton_type = described_class::SingletonType.new("User")
+        result = singleton_type.substitute({ Elem: string_type })
+        expect(result).to be(singleton_type)
       end
     end
 

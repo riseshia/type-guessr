@@ -18,14 +18,20 @@ module TypeGuessr
         # @return [Proc, nil] A proc that takes class_name and returns array of ancestor names
         attr_accessor :ancestry_provider
 
+        # Callback for checking if a constant is a class or module
+        # @return [Proc, nil] A proc that takes constant_name and returns :class, :module, or nil
+        attr_accessor :constant_kind_provider
+
         def initialize(signature_provider)
           @signature_provider = signature_provider
           @cache = {}.compare_by_identity
           @project_methods = {} # { "ClassName" => { "method_name" => DefNode } }
           @instance_variables = {} # { "ClassName" => { :@name => InstanceVariableWriteNode } }
           @class_variables = {} # { "ClassName" => { :@@name => ClassVariableWriteNode } }
+          @project_classes = {} # { "ClassName" => :class or :module }
           @duck_type_resolver = nil
           @ancestry_provider = nil
+          @constant_kind_provider = nil
         end
 
         # Register a project method definition for later lookup
@@ -277,10 +283,25 @@ module TypeGuessr
         end
 
         def infer_constant(node)
-          return Result.new(Types::Unknown.instance, "undefined constant", :unknown) unless node.dependency
+          # If there's a dependency (e.g., constant write), infer from it
+          if node.dependency
+            dep_result = infer(node.dependency)
+            return Result.new(dep_result.type, "constant #{node.name}: #{dep_result.reason}", dep_result.source)
+          end
 
-          dep_result = infer(node.dependency)
-          Result.new(dep_result.type, "constant #{node.name}: #{dep_result.reason}", dep_result.source)
+          # Check if constant is a class or module using RubyIndexer
+          if @constant_kind_provider
+            kind = @constant_kind_provider.call(node.name)
+            if %i[class module].include?(kind)
+              return Result.new(
+                Types::SingletonType.new(node.name),
+                "class constant #{node.name}",
+                :inference
+              )
+            end
+          end
+
+          Result.new(Types::Unknown.instance, "undefined constant", :unknown)
         end
 
         def infer_call(node)

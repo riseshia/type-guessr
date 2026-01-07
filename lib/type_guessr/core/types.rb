@@ -81,6 +81,32 @@ module TypeGuessr
         end
       end
 
+      # SingletonType - represents the class object itself (singleton class)
+      class SingletonType < Type
+        attr_reader :name
+
+        def initialize(name)
+          super()
+          @name = name
+        end
+
+        def eql?(other)
+          super && @name == other.name
+        end
+
+        def hash
+          [self.class, @name].hash
+        end
+
+        def to_s
+          "singleton(#{@name})"
+        end
+
+        def rbs_class_name
+          @name
+        end
+      end
+
       # Union - union of multiple types
       class Union < Type
         attr_reader :types

@@ -21,6 +21,10 @@ module TypeGuessr
             Types::TypeVariable.new(rbs_type.name)
           when RBS::Types::ClassInstance
             convert_class_instance(rbs_type)
+          when RBS::Types::ClassSingleton
+            # Class singleton type (e.g., singleton(String))
+            class_name = rbs_type.name.to_s.delete_prefix("::")
+            Types::SingletonType.new(class_name)
           when RBS::Types::Union
             convert_union(rbs_type)
           when RBS::Types::Tuple

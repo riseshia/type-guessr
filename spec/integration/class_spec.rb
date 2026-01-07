@@ -58,9 +58,9 @@ RSpec.describe "Class Instance Type Inference from TypeProf Scenarios" do
       end
 
       it "infers klass as singleton(C)" do
-        response = hover_on_source(source, { line: 7, character: 0 })
+        response = hover_on_source(source, { line: 6, character: 0 })
         expect(response).not_to be_nil
-        # Should be singleton(C) or Class
+        expect(response.contents.value).to include("singleton(C)")
       end
     end
 
@@ -80,9 +80,9 @@ RSpec.describe "Class Instance Type Inference from TypeProf Scenarios" do
       end
 
       it "infers klass as singleton(C)" do
-        response = hover_on_source(source, { line: 9, character: 0 })
+        response = hover_on_source(source, { line: 8, character: 0 })
         expect(response).not_to be_nil
-        # Should be singleton(C) or Class
+        expect(response.contents.value).to include("singleton(C)")
       end
     end
   end

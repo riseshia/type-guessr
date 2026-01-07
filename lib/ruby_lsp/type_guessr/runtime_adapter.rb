@@ -31,6 +31,9 @@ module RubyLsp
 
         # Set up ancestry provider callback
         @resolver.ancestry_provider = ->(class_name) { get_class_ancestors(class_name) }
+
+        # Set up constant kind provider callback
+        @resolver.constant_kind_provider = ->(name) { get_constant_kind(name) }
       end
 
       # Swap ruby-lsp's TypeInferrer with TypeGuessr's custom implementation
@@ -465,6 +468,22 @@ module RubyLsp
         @global_state.index.linearized_ancestors_of(class_name)
       rescue RubyIndexer::Index::NonExistingNamespaceError
         []
+      end
+
+      # Get constant kind from RubyIndexer
+      # @param constant_name [String] Constant name
+      # @return [Symbol, nil] :class, :module, or nil
+      def get_constant_kind(constant_name)
+        return nil unless @global_state.index
+
+        entries = @global_state.index[constant_name]
+        return nil if entries.nil? || entries.empty?
+
+        entry = entries.first
+        case entry
+        when RubyIndexer::Entry::Class then :class
+        when RubyIndexer::Entry::Module then :module
+        end
       end
 
       def log_message(message)

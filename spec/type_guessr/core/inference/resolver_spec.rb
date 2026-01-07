@@ -171,6 +171,66 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
         expect(result.type.name).to eq("String")
         expect(result.reason).to include("constant DEFAULT_NAME")
       end
+
+      it "infers singleton type for class constant" do
+        resolver.constant_kind_provider = ->(name) { name == "User" ? :class : nil }
+
+        const = TypeGuessr::Core::IR::ConstantNode.new(
+          name: "User",
+          dependency: nil,
+          loc: loc
+        )
+
+        result = resolver.infer(const)
+        expect(result.type).to be_a(TypeGuessr::Core::Types::SingletonType)
+        expect(result.type.name).to eq("User")
+        expect(result.reason).to eq("class constant User")
+        expect(result.source).to eq(:inference)
+      end
+
+      it "infers singleton type for module constant" do
+        resolver.constant_kind_provider = ->(name) { name == "MyModule" ? :module : nil }
+
+        const = TypeGuessr::Core::IR::ConstantNode.new(
+          name: "MyModule",
+          dependency: nil,
+          loc: loc
+        )
+
+        result = resolver.infer(const)
+        expect(result.type).to be_a(TypeGuessr::Core::Types::SingletonType)
+        expect(result.type.name).to eq("MyModule")
+        expect(result.reason).to eq("class constant MyModule")
+        expect(result.source).to eq(:inference)
+      end
+
+      it "returns Unknown for non-class constant when provider returns nil" do
+        resolver.constant_kind_provider = ->(_name) {}
+
+        const = TypeGuessr::Core::IR::ConstantNode.new(
+          name: "MAX_SIZE",
+          dependency: nil,
+          loc: loc
+        )
+
+        result = resolver.infer(const)
+        expect(result.type).to be(TypeGuessr::Core::Types::Unknown.instance)
+        expect(result.reason).to eq("undefined constant")
+        expect(result.source).to eq(:unknown)
+      end
+
+      it "returns Unknown when constant_kind_provider is not set" do
+        const = TypeGuessr::Core::IR::ConstantNode.new(
+          name: "SomeConstant",
+          dependency: nil,
+          loc: loc
+        )
+
+        result = resolver.infer(const)
+        expect(result.type).to be(TypeGuessr::Core::Types::Unknown.instance)
+        expect(result.reason).to eq("undefined constant")
+        expect(result.source).to eq(:unknown)
+      end
     end
 
     context "with CallNode" do

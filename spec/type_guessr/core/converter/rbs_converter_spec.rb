@@ -54,6 +54,35 @@ RSpec.describe TypeGuessr::Core::Converter::RBSConverter do
       end
     end
 
+    context "with ClassSingleton types" do
+      it "converts singleton class type" do
+        rbs_type = RBS::Types::ClassSingleton.new(
+          name: RBS::TypeName.new(name: :String, namespace: RBS::Namespace.root),
+          location: nil
+        )
+
+        result = converter.convert(rbs_type)
+        expect(result).to be_a(TypeGuessr::Core::Types::SingletonType)
+        expect(result.name).to eq("String")
+        expect(result.to_s).to eq("singleton(String)")
+      end
+
+      it "converts namespaced singleton class type" do
+        rbs_type = RBS::Types::ClassSingleton.new(
+          name: RBS::TypeName.new(
+            name: :Base,
+            namespace: RBS::Namespace.parse("ActiveRecord")
+          ),
+          location: nil
+        )
+
+        result = converter.convert(rbs_type)
+        expect(result).to be_a(TypeGuessr::Core::Types::SingletonType)
+        expect(result.name).to eq("ActiveRecord::Base")
+        expect(result.to_s).to eq("singleton(ActiveRecord::Base)")
+      end
+    end
+
     context "with Union types" do
       it "converts union of simple types" do
         string_type = RBS::Types::ClassInstance.new(
