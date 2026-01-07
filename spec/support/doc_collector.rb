@@ -167,13 +167,29 @@ module TypeGuessrDocHelper
     # Perform actual hover test
     response = hover_on_source(source, { line: line - 1, character: column })
 
-    # Extract actual type from response (format: **Guessed Type:** `ActualType`)
-    match = response.contents.value.match(/Guessed Type:\*\*\s*`([^`]+)`/)
-    actual_type = match ? match[1] : nil
+    # Extract actual type from response
+    # Formats:
+    #   Plain: **Guessed Type:** `Recipe`
+    #   Linked: **Guessed Type:** [`Recipe`](file://...)
+    actual_type = extract_guessed_type(response.contents.value)
 
     expect(actual_type).to eq(expected),
                            "Expected type '#{expected}' but got '#{actual_type}'\n" \
                            "Full response: #{response.contents.value}"
+  end
+
+  def extract_guessed_type(content)
+    # Try linked format first: [`Type`](url)
+    if (match = content.match(/Guessed Type:\*\*\s*\[`([^`]+)`\]/))
+      return match[1]
+    end
+
+    # Try plain format: `Type`
+    if (match = content.match(/Guessed Type:\*\*\s*`([^`]+)`/))
+      return match[1]
+    end
+
+    nil
   end
 
   def expect_hover_method_signature(line:, column:, expected_signature:)
