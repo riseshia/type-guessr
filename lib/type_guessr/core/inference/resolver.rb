@@ -588,6 +588,9 @@ module TypeGuessr
             all_methods_for_class(class_name).superset?(methods.to_set)
           end
 
+          # Filter out subclasses when parent is also matched (prefer most general type)
+          matching_classes = filter_to_most_general_types(matching_classes)
+
           case matching_classes.size
           when 0
             nil
@@ -619,6 +622,20 @@ module TypeGuessr
           end
 
           class_methods
+        end
+
+        # Filter out classes whose ancestor is also in the list
+        # This ensures we return the most general type that satisfies the constraint
+        # @param classes [Array<String>] List of class names
+        # @return [Array<String>] Filtered list with only the most general types
+        def filter_to_most_general_types(classes)
+          return classes unless @ancestry_provider
+
+          classes.reject do |class_name|
+            ancestors = @ancestry_provider.call(class_name)
+            # Check if any ancestor (excluding self) is also in the matching list
+            ancestors.any? { |ancestor| ancestor != class_name && classes.include?(ancestor) }
+          end
         end
       end
     end

@@ -593,6 +593,38 @@ RSpec.describe "Hover Integration" do
       end
     end
 
+    context "parent methods only called" do
+      let(:source) do
+        <<~RUBY
+          class Recipe
+            def ingredients
+              []
+            end
+
+            def steps
+              []
+            end
+          end
+
+          class Recipe2 < Recipe
+            def notes
+              "Some notes"
+            end
+          end
+
+          def process(recipe)
+            recipe.ingredients
+            recipe.steps
+            recipe
+          end
+        RUBY
+      end
+
+      it "infers Recipe (most general type) when only parent methods are called" do
+        expect_hover_type(line: 18, column: 4, expected: "Recipe")
+      end
+    end
+
     context "multiple classes match" do
       let(:source) do
         <<~RUBY

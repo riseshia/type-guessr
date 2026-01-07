@@ -614,4 +614,83 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
       expect(results).to eq([])
     end
   end
+
+  describe "duck type resolution with inheritance" do
+    let(:recipe_ingredients) do
+      TypeGuessr::Core::IR::DefNode.new(
+        name: :ingredients, params: [], return_node: nil, body_nodes: [], loc: loc
+      )
+    end
+    let(:recipe_steps) do
+      TypeGuessr::Core::IR::DefNode.new(
+        name: :steps, params: [], return_node: nil, body_nodes: [], loc: loc
+      )
+    end
+    let(:recipe2_notes) do
+      TypeGuessr::Core::IR::DefNode.new(
+        name: :notes, params: [], return_node: nil, body_nodes: [], loc: loc
+      )
+    end
+
+    before do
+      # Register methods: Recipe has ingredients, steps; Recipe2 has only notes (directly)
+      resolver.register_method("Recipe", "ingredients", recipe_ingredients)
+      resolver.register_method("Recipe", "steps", recipe_steps)
+      resolver.register_method("Recipe2", "notes", recipe2_notes)
+
+      # Set up ancestry: Recipe2 inherits from Recipe
+      resolver.ancestry_provider = lambda do |class_name|
+        case class_name
+        when "Recipe2" then %w[Recipe2 Recipe Object BasicObject]
+        when "Recipe" then %w[Recipe Object BasicObject]
+        else []
+        end
+      end
+    end
+
+    context "when only parent methods are called" do
+      it "returns parent type (most general) instead of union" do
+        duck_type = TypeGuessr::Core::Types::DuckType.new(%i[ingredients steps])
+        result = resolver.send(:resolve_duck_type_from_project_methods, duck_type)
+
+        # Should return Recipe only, not Recipe | Recipe2
+        expect(result).to be_a(TypeGuessr::Core::Types::ClassInstance)
+        expect(result.name).to eq("Recipe")
+      end
+    end
+
+    context "when child-only method is called" do
+      it "returns child type" do
+        duck_type = TypeGuessr::Core::Types::DuckType.new(%i[ingredients steps notes])
+        result = resolver.send(:resolve_duck_type_from_project_methods, duck_type)
+
+        # Only Recipe2 has all three methods
+        expect(result).to be_a(TypeGuessr::Core::Types::ClassInstance)
+        expect(result.name).to eq("Recipe2")
+      end
+    end
+
+    context "without ancestry_provider" do
+      before do
+        resolver.ancestry_provider = nil
+      end
+
+      it "returns only directly matching class" do
+        duck_type = TypeGuessr::Core::Types::DuckType.new(%i[ingredients steps])
+        result = resolver.send(:resolve_duck_type_from_project_methods, duck_type)
+
+        # Without ancestry_provider, only Recipe directly has both methods
+        expect(result).to be_a(TypeGuessr::Core::Types::ClassInstance)
+        expect(result.name).to eq("Recipe")
+      end
+
+      it "returns nil when no class has all methods directly" do
+        duck_type = TypeGuessr::Core::Types::DuckType.new(%i[ingredients steps notes])
+        result = resolver.send(:resolve_duck_type_from_project_methods, duck_type)
+
+        # Without ancestry, Recipe2 doesn't have ingredients/steps, Recipe doesn't have notes
+        expect(result).to be_nil
+      end
+    end
+  end
 end
