@@ -135,7 +135,7 @@ module TypeGuessr
           elsif optional_type?
             "?#{non_nil_type}"
           else
-            @types.map(&:to_s).join(" | ")
+            @types.map(&:to_s).sort.join(" | ")
           end
         end
 

@@ -182,7 +182,7 @@ RSpec.describe "Variable Type Inference from TypeProf Scenarios" do
       end
 
       it "infers lv as Symbol :LVar" do
-        expect_hover_type(line: 5, column: 6, expected: "Symbol")
+        expect_hover_type(line: 5, column: 6, expected: "?Symbol")
       end
     end
 

@@ -112,7 +112,7 @@ module RubyLsp
         return_type_str = return_result.type.to_s
 
         signature = "(#{params_str}) -> #{return_type_str}"
-        content = "**Method Signature:** `#{signature}`"
+        content = "**Guessed Signature:** `#{signature}`"
 
         content += build_debug_info(return_result) if debug_enabled?
 
@@ -137,7 +137,7 @@ module RubyLsp
             if signatures.any?
               # Format the signature(s)
               sig_strs = signatures.map { |sig| sig.method_type.to_s }
-              content = "**Method Signature:** `#{sig_strs.first}`"
+              content = "**Guessed Signature:** `#{sig_strs.first}`"
 
               if debug_enabled?
                 content += "\n\n**[TypeGuessr Debug]**"

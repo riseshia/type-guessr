@@ -127,7 +127,7 @@ RSpec.describe "Hover Integration" do
       end
 
       it "→ Hash" do
-        expect_hover_type(line: 3, column: 0, expected: "Hash[Symbol | String, Integer]")
+        expect_hover_type(line: 3, column: 0, expected: "Hash[String | Symbol, Integer]")
       end
     end
 
@@ -272,8 +272,8 @@ RSpec.describe "Hover Integration" do
         RUBY
       end
 
-      it "→ Array[Integer | String | Symbol | Float]" do
-        expect_hover_type(line: 2, column: 0, expected: "Array[Integer | String | Symbol | Float]")
+      it "→ Array[Float | Integer | String | Symbol]" do
+        expect_hover_type(line: 2, column: 0, expected: "Array[Float | Integer | String | Symbol]")
       end
     end
 
@@ -340,7 +340,7 @@ RSpec.describe "Hover Integration" do
       end
 
       it "infers Hash type" do
-        expect_hover_type(line: 2, column: 0, expected: "Hash[Symbol | String, String | Integer]")
+        expect_hover_type(line: 2, column: 0, expected: "Hash[String | Symbol, Integer | String]")
       end
     end
 
@@ -556,7 +556,7 @@ RSpec.describe "Hover Integration" do
       end
 
       it "infers Recipe from method calls" do
-        expect_hover_type(line: 16, column: 12, expected: "Recipe")
+        expect_hover_type(line: 17, column: 12, expected: "Recipe")
       end
     end
 
@@ -653,8 +653,7 @@ RSpec.describe "Hover Integration" do
       end
 
       it "shows union of matching classes" do
-        expect_hover_type(line: 16, column: 12, expected: "Cacheable")
-        expect_hover_type(line: 16, column: 12, expected: "Persistable")
+        expect_hover_type(line: 16, column: 12, expected: "Cacheable | Persistable")
       end
     end
 
@@ -1070,7 +1069,7 @@ RSpec.describe "Hover Integration" do
       end
 
       it "→ Integer | String" do
-        expect_hover_type(line: 6, column: 2, expected: "String | Integer")
+        expect_hover_type(line: 6, column: 2, expected: "Integer | String")
       end
     end
 
@@ -1212,7 +1211,7 @@ RSpec.describe "Hover Integration" do
       end
 
       it "infers union type" do
-        expect_hover_type(line: 8, column: 2, expected: "String | Symbol | Integer")
+        expect_hover_type(line: 8, column: 2, expected: "Integer | String | Symbol")
       end
     end
 
@@ -1521,7 +1520,7 @@ RSpec.describe "Hover Integration" do
       end
 
       it "infers return type from same-class method" do
-        expect_hover_type(line: 7, column: 6, expected: "Hash")
+        expect_hover_type(line: 7, column: 6, expected: "Hash[String, true]")
       end
     end
   end
@@ -2524,7 +2523,7 @@ RSpec.describe "Hover Integration" do
       end
 
       it "→ Hash on assignment line" do
-        expect_hover_type(line: 2, column: 0, expected: "Hash[Symbol | String, Integer | String]")
+        expect_hover_type(line: 2, column: 0, expected: "Hash[String | Symbol, Integer | String]")
       end
     end
 

@@ -250,7 +250,7 @@ RSpec.describe RubyLsp::TypeGuessr::GraphBuilder do
       nodes["Test:lit:ClassInstance:10"] = literal
 
       result = graph_builder.build("Test:lit:ClassInstance:10")
-      expect(result[:nodes].first[:inferred_type]).to eq("String | Integer")
+      expect(result[:nodes].first[:inferred_type]).to eq("Integer | String")
     end
   end
 

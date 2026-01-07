@@ -55,8 +55,8 @@ RSpec.describe "IR-based Hover", :doc do
         RUBY
       end
 
-      it "→ Array" do
-        expect_hover_type(line: 2, column: 0, expected: "Array")
+      it "→ Array[Integer]" do
+        expect_hover_type(line: 2, column: 0, expected: "Array[Integer]")
       end
     end
   end
@@ -170,8 +170,8 @@ RSpec.describe "IR-based Hover", :doc do
         RUBY
       end
 
-      it "widens to Hash[Symbol | String, String]" do
-        expect_hover_type(line: 4, column: 0, expected: "Hash[Symbol | String, String]")
+      it "widens to Hash[String | Symbol, String]" do
+        expect_hover_type(line: 4, column: 0, expected: "Hash[String | Symbol, String]")
       end
     end
   end

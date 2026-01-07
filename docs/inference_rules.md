@@ -29,14 +29,14 @@ price = 19.99
 
 ```ruby
 items = []
-[i]tems  # Guessed Type: Array
+[i]tems  # Guessed Type: Array[untyped]
 ```
 
 ### Hash literal
 
 ```ruby
 data = {}
-[d]ata  # Guessed Type: Hash
+[d]ata  # Guessed Type: Hash[untyped, untyped]
 ```
 
 ### Hash indexed assignment - empty hash
@@ -52,7 +52,7 @@ a[:x] = 1
 ```ruby
 a = { a: 1 }
 a["str_key"] = 2
-[a]  # Guessed Type: Hash
+[a]  # Guessed Type: Hash[String | Symbol, Integer]
 ```
 
 ### Symbol literal
@@ -66,7 +66,7 @@ status = :active
 
 ```ruby
 numbers = 1..10
-[n]umbers  # Guessed Type: Range
+[n]umbers  # Guessed Type: Range[Integer]
 ```
 
 ### Regexp literal
@@ -132,7 +132,7 @@ mixed = [1, "a", :sym]
 
 ```ruby
 mixed = [1, "a", :sym, 1.0]
-[m]ixed  # Guessed Type: Array[Integer | String | Symbol | Float]
+[m]ixed  # Guessed Type: Array[Float | Integer | String | Symbol]
 ```
 
 ### Nested array
@@ -457,6 +457,6 @@ result = numbers.map { |n| n.next }
 
 ```ruby
 a = { a: 1 }
-[a]["f"] = "a"  # Guessed Type: Hash
+[a]["f"] = "a"  # Guessed Type: Hash[String | Symbol, Integer | String]
 ```
 

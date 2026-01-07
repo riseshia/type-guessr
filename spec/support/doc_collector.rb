@@ -189,7 +189,13 @@ module TypeGuessrDocHelper
       return match[1]
     end
 
-    nil
+    # Try Guessed Signature format: `(params) -> ReturnType`
+    # Extract return type from signature
+    if (match = content.match(/Guessed Signature:\*\*\s*`\([^)]*\)\s*->\s*([^`]+)`/))
+      return match[1]
+    end
+
+    ""
   end
 
   def expect_hover_method_signature(line:, column:, expected_signature:)
