@@ -3,13 +3,7 @@ description: Create a git commit with auto-generated message
 allowed-tools: Bash(git add:*), Bash(git status:*), Bash(git commit:*), Bash(git diff:*)
 ---
 
-## Step 1: Knowledge Extraction
-
-First, use the `retrospective` skill to extract any reusable knowledge from this session before committing.
-
-## Step 2: Create Commit
-
-### Context
+## Context
 
 - Current branch: !`git branch --show-current`
 - Recent commits: !`git log --oneline -5`
