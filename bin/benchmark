@@ -1,0 +1,539 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Benchmark TypeGuessr performance (indexing & inference)
+#
+# Usage:
+#   bin/benchmark [options]
+#
+# Options:
+#   --target=indexing|inference|all  What to benchmark (default: all)
+#   --warmup=N                       Warmup time in seconds (default: 2)
+#   --time=N                         Benchmark time in seconds (default: 5)
+#   --samples=N                      Number of inference samples (default: 2000)
+#   --report                         Generate markdown report
+#
+# Examples:
+#   bin/benchmark                         # Benchmark everything
+#   bin/benchmark --target=indexing       # Benchmark indexing only
+#   bin/benchmark --target=inference      # Benchmark inference only
+#   bin/benchmark --report                # Generate markdown report
+
+require "bundler/setup"
+require "benchmark/ips"
+require "prism"
+require "optparse"
+require "fileutils"
+require "ruby_indexer/ruby_indexer"
+
+# Load TypeGuessr core components
+require_relative "../lib/type_guessr/core/ir/nodes"
+require_relative "../lib/type_guessr/core/types"
+require_relative "../lib/type_guessr/core/converter/prism_converter"
+require_relative "../lib/type_guessr/core/index/location_index"
+require_relative "../lib/type_guessr/core/inference/resolver"
+require_relative "../lib/type_guessr/core/rbs_provider"
+require_relative "../lib/type_guessr/core/signature_provider"
+
+module BenchmarkRunner
+  # Memory measurement helper
+  module Memory
+    def self.usage_kb
+      `ps -o rss= -p #{Process.pid}`.to_i
+    end
+
+    def self.measure
+      GC.start
+      before = usage_kb
+      yield
+      GC.start
+      after = usage_kb
+      after - before
+    end
+  end
+
+  # Runs benchmarks on TypeGuessr
+  class Runner
+    def initialize(target:, warmup:, time:, samples:, report:)
+      @target = target.to_sym
+      @warmup = warmup
+      @time = time
+      @samples = samples
+      @report = report
+      @results = {}
+    end
+
+    def run
+      files = collect_indexable_files
+      puts "Found #{files.size} indexable files\n\n"
+
+      case @target
+      when :indexing
+        benchmark_indexing(files)
+      when :inference
+        benchmark_inference(files)
+      when :all
+        benchmark_indexing(files)
+        puts
+        benchmark_inference(files)
+      end
+
+      generate_report(files) if @report
+    end
+
+    private
+
+    def collect_indexable_files
+      config = RubyIndexer::Configuration.new
+      config.indexable_uris.map { |uri| uri.full_path.to_s }
+    end
+
+    def benchmark_indexing(files)
+      puts "=" * 60
+      puts "INDEXING BENCHMARK"
+      puts "=" * 60
+
+      # Single-run metrics
+      puts "\n### Single Run Metrics ###\n\n"
+
+      converter = TypeGuessr::Core::Converter::PrismConverter.new
+      location_index = TypeGuessr::Core::Index::LocationIndex.new
+
+      memory_before = Memory.usage_kb
+      GC.start
+
+      start_time = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+
+      files.each do |file_path|
+        source = File.read(file_path)
+        parsed = Prism.parse(source)
+        next unless parsed.value
+
+        context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+        nodes = parsed.value.statements&.body&.filter_map do |stmt|
+          converter.convert(stmt, context)
+        end
+
+        location_index.remove_file(file_path)
+        nodes&.each { |node| index_node_recursively(location_index, file_path, node, "") }
+      rescue StandardError => e
+        warn "Error: #{file_path}: #{e.message}"
+      end
+
+      location_index.finalize!
+      end_time = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+
+      GC.start
+      memory_after = Memory.usage_kb
+
+      total_time = end_time - start_time
+      total_nodes = location_index.stats[:total_nodes]
+      nodes_per_sec = total_nodes / total_time
+      files_per_sec = files.size / total_time
+      memory_delta = memory_after - memory_before
+
+      @results[:indexing] = {
+        files: files.size,
+        nodes: total_nodes,
+        time: total_time,
+        nodes_per_sec: nodes_per_sec,
+        files_per_sec: files_per_sec,
+        memory_kb: memory_delta
+      }
+
+      puts format("Files indexed:     %d", files.size)
+      puts format("Total nodes:       %d", total_nodes)
+      puts format("Total time:        %.3f seconds", total_time)
+      puts format("Throughput:        %.0f nodes/sec", nodes_per_sec)
+      puts format("                   %.1f files/sec", files_per_sec)
+      puts format("Memory delta:      %+d KB", memory_delta)
+
+      # IPS benchmark (per-file)
+      puts "\n### IPS Benchmark (per-file indexing) ###\n\n"
+
+      # Take a sample of files for IPS measurement
+      sample_files = files.sample([100, files.size].min)
+
+      Benchmark.ips do |x|
+        x.config(warmup: @warmup, time: @time)
+
+        x.report("index single file") do |times|
+          converter = TypeGuessr::Core::Converter::PrismConverter.new
+          location_index = TypeGuessr::Core::Index::LocationIndex.new
+          file = sample_files.sample
+
+          times.times do
+            source = File.read(file)
+            parsed = Prism.parse(source)
+            next unless parsed.value
+
+            context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+            nodes = parsed.value.statements&.body&.filter_map do |stmt|
+              converter.convert(stmt, context)
+            end
+
+            location_index.remove_file(file)
+            nodes&.each { |node| index_node_recursively(location_index, file, node, "") }
+          end
+        end
+
+        x.report("Prism.parse only") do |times|
+          file = sample_files.sample
+
+          times.times do
+            source = File.read(file)
+            Prism.parse(source)
+          end
+        end
+
+        x.report("convert only") do |times|
+          converter = TypeGuessr::Core::Converter::PrismConverter.new
+          file = sample_files.sample
+          source = File.read(file)
+          parsed = Prism.parse(source)
+
+          times.times do
+            next unless parsed.value
+
+            context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+            parsed.value.statements&.body&.filter_map do |stmt|
+              converter.convert(stmt, context)
+            end
+          end
+        end
+      end
+    end
+
+    def benchmark_inference(files)
+      puts "=" * 60
+      puts "INFERENCE BENCHMARK"
+      puts "=" * 60
+
+      # First, index all files
+      puts "\nPre-indexing files for inference benchmark..."
+
+      converter = TypeGuessr::Core::Converter::PrismConverter.new
+      location_index = TypeGuessr::Core::Index::LocationIndex.new
+      indexed_nodes = []
+
+      files.each do |file_path|
+        source = File.read(file_path)
+        parsed = Prism.parse(source)
+        next unless parsed.value
+
+        context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+        nodes = parsed.value.statements&.body&.filter_map do |stmt|
+          converter.convert(stmt, context)
+        end
+
+        location_index.remove_file(file_path)
+        nodes&.each do |node|
+          index_node_recursively(location_index, file_path, node, "")
+          indexed_nodes << node if should_sample_node?(node)
+        end
+      rescue StandardError
+        # Ignore errors during pre-indexing
+      end
+
+      location_index.finalize!
+
+      # Sample nodes for inference
+      step = [indexed_nodes.size / @samples, 1].max
+      sample_nodes = indexed_nodes.each_slice(step).map(&:first).first(@samples)
+
+      puts "Indexed #{files.size} files, #{indexed_nodes.size} inferrable nodes"
+      puts "Sampling #{sample_nodes.size} nodes for inference benchmark"
+
+      # Build resolver
+      provider = TypeGuessr::Core::SignatureProvider.new
+      provider.add_provider(TypeGuessr::Core::RBSProvider.instance)
+      resolver = TypeGuessr::Core::Inference::Resolver.new(provider)
+
+      # Single-run metrics
+      puts "\n### Single Run Metrics ###\n\n"
+
+      GC.start
+      start_time = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+
+      inferred_count = 0
+      sample_nodes.each do |node|
+        resolver.infer(node)
+        inferred_count += 1
+      rescue StandardError
+        # Ignore inference errors
+      end
+
+      end_time = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      total_time = end_time - start_time
+      inferences_per_sec = inferred_count / total_time
+
+      @results[:inference] = {
+        nodes_sampled: sample_nodes.size,
+        inferred: inferred_count,
+        time: total_time,
+        inferences_per_sec: inferences_per_sec
+      }
+
+      puts format("Nodes inferred:    %d", inferred_count)
+      puts format("Total time:        %.3f seconds", total_time)
+      puts format("Throughput:        %.0f inferences/sec", inferences_per_sec)
+      puts format("Avg per node:      %.3f ms", (total_time / inferred_count) * 1000)
+
+      # IPS benchmark
+      puts "\n### IPS Benchmark (single node inference) ###\n\n"
+
+      # Group nodes by type for type-specific benchmarks
+      nodes_by_type = sample_nodes.group_by { |n| n.class.name.split("::").last }
+
+      Benchmark.ips do |x|
+        x.config(warmup: @warmup, time: @time)
+
+        x.report("infer (mixed)") do |times|
+          times.times do
+            node = sample_nodes.sample
+            resolver.infer(node)
+          rescue StandardError
+            # Ignore
+          end
+        end
+
+        # Type-specific benchmarks
+        %w[CallNode LocalWriteNode DefNode ParamNode].each do |type|
+          type_nodes = nodes_by_type[type]
+          next unless type_nodes && type_nodes.size >= 10
+
+          x.report("infer #{type}") do |times|
+            times.times do
+              node = type_nodes.sample
+              resolver.infer(node)
+            rescue StandardError
+              # Ignore
+            end
+          end
+        end
+
+        x.compare!
+      end
+    end
+
+    def index_node_recursively(location_index, file_path, node, scope_id)
+      return unless node
+
+      location_index.add(file_path, node, scope_id)
+
+      case node
+      when TypeGuessr::Core::IR::ClassModuleNode
+        new_scope = scope_id.empty? ? node.name : "#{scope_id}::#{node.name}"
+        node.methods&.each do |method|
+          if method.is_a?(TypeGuessr::Core::IR::ClassModuleNode)
+            index_node_recursively(location_index, file_path, method,
+                                   scope_id.empty? ? node.name : "#{scope_id}::#{node.name}")
+          else
+            index_node_recursively(location_index, file_path, method, new_scope)
+          end
+        end
+
+      when TypeGuessr::Core::IR::DefNode
+        new_scope = scope_id.empty? ? "##{node.name}" : "#{scope_id}##{node.name}"
+        node.params&.each { |param| index_node_recursively(location_index, file_path, param, new_scope) }
+        node.body_nodes&.each { |body_node| index_node_recursively(location_index, file_path, body_node, new_scope) }
+
+      when TypeGuessr::Core::IR::LocalWriteNode
+        index_node_recursively(location_index, file_path, node.value, scope_id) if node.value
+
+      when TypeGuessr::Core::IR::InstanceVariableWriteNode
+        index_node_recursively(location_index, file_path, node.value, scope_id) if node.value
+
+      when TypeGuessr::Core::IR::ClassVariableWriteNode
+        index_node_recursively(location_index, file_path, node.value, scope_id) if node.value
+
+      when TypeGuessr::Core::IR::CallNode
+        index_node_recursively(location_index, file_path, node.receiver, scope_id) if node.receiver
+        node.args&.each { |arg| index_node_recursively(location_index, file_path, arg, scope_id) }
+        node.block_params&.each { |param| index_node_recursively(location_index, file_path, param, scope_id) }
+        index_node_recursively(location_index, file_path, node.block_body, scope_id) if node.block_body
+
+      when TypeGuessr::Core::IR::ParamNode
+        index_node_recursively(location_index, file_path, node.default_value, scope_id) if node.default_value
+
+      when TypeGuessr::Core::IR::MergeNode
+        node.branches&.each { |branch| index_node_recursively(location_index, file_path, branch, scope_id) }
+
+      when TypeGuessr::Core::IR::ReturnNode
+        index_node_recursively(location_index, file_path, node.value, scope_id) if node.value
+
+      when TypeGuessr::Core::IR::ConstantNode
+        index_node_recursively(location_index, file_path, node.dependency, scope_id) if node.dependency
+      end
+    end
+
+    def should_sample_node?(node)
+      case node
+      when TypeGuessr::Core::IR::DefNode,
+           TypeGuessr::Core::IR::LocalWriteNode,
+           TypeGuessr::Core::IR::LocalReadNode,
+           TypeGuessr::Core::IR::ParamNode,
+           TypeGuessr::Core::IR::CallNode
+        true
+      else
+        false
+      end
+    end
+
+    def generate_report(files)
+      puts "\n=== Generating Benchmark Report ==="
+
+      FileUtils.mkdir_p("docs")
+      report_path = "docs/benchmark-report.md"
+      File.write(report_path, build_report_content(files))
+      puts "Report saved to: #{report_path}"
+    end
+
+    def build_report_content(files)
+      <<~MARKDOWN
+        # TypeGuessr Benchmark Report
+
+        Generated: #{Time.now.strftime("%Y-%m-%d %H:%M:%S")}
+
+        ## Configuration
+
+        - **Target:** #{@target}
+        - **Files:** #{files.size}
+        - **Warmup:** #{@warmup}s
+        - **Benchmark time:** #{@time}s
+        - **Inference samples:** #{@samples}
+
+        ---
+
+        #{indexing_report_section}
+
+        #{inference_report_section}
+
+        ## Performance Summary
+
+        #{performance_summary}
+
+        ---
+
+        ## How to Use
+
+        ```bash
+        # Full benchmark
+        bin/benchmark
+
+        # With report (saved to docs/benchmark-report.md)
+        bin/benchmark --report
+
+        # Indexing only
+        bin/benchmark --target=indexing
+
+        # Inference only
+        bin/benchmark --target=inference
+        ```
+      MARKDOWN
+    end
+
+    def indexing_report_section
+      return "" unless @results[:indexing]
+
+      r = @results[:indexing]
+      <<~SECTION
+        ## Indexing Results
+
+        | Metric | Value |
+        |--------|-------|
+        | Files indexed | #{r[:files]} |
+        | Total nodes | #{r[:nodes]} |
+        | Total time | #{format("%.3f", r[:time])} sec |
+        | Throughput (nodes) | #{format("%.0f", r[:nodes_per_sec])} nodes/sec |
+        | Throughput (files) | #{format("%.1f", r[:files_per_sec])} files/sec |
+        | Memory delta | #{format("%+d", r[:memory_kb])} KB |
+        | Avg time per file | #{format("%.2f", r[:time] / r[:files] * 1000)} ms |
+        | Avg nodes per file | #{r[:nodes] / r[:files]} |
+      SECTION
+    end
+
+    def inference_report_section
+      return "" unless @results[:inference]
+
+      r = @results[:inference]
+      <<~SECTION
+        ## Inference Results
+
+        | Metric | Value |
+        |--------|-------|
+        | Nodes sampled | #{r[:nodes_sampled]} |
+        | Nodes inferred | #{r[:inferred]} |
+        | Total time | #{format("%.3f", r[:time])} sec |
+        | Throughput | #{format("%.0f", r[:inferences_per_sec])} inferences/sec |
+        | Avg per inference | #{format("%.3f", r[:time] / r[:inferred] * 1000)} ms |
+      SECTION
+    end
+
+    def performance_summary
+      summary = []
+
+      if @results[:indexing]
+        r = @results[:indexing]
+        summary << "- **Indexing**: #{format("%.0f", r[:nodes_per_sec])} nodes/sec " \
+                   "(#{format("%.1f", r[:files_per_sec])} files/sec)"
+      end
+
+      if @results[:inference]
+        r = @results[:inference]
+        summary << "- **Inference**: #{format("%.0f", r[:inferences_per_sec])} inferences/sec " \
+                   "(#{format("%.3f", r[:time] / r[:inferred] * 1000)} ms/inference)"
+      end
+
+      summary.join("\n")
+    end
+  end
+end
+
+# Parse command line options
+options = {
+  target: "all",
+  warmup: 2,
+  time: 5,
+  samples: 2000,
+  report: false
+}
+
+OptionParser.new do |opts|
+  opts.banner = "Usage: #{$PROGRAM_NAME} [options]"
+
+  opts.on("--target=TARGET", "What to benchmark: indexing, inference, all (default: all)") do |v|
+    options[:target] = v
+  end
+
+  opts.on("--warmup=N", Integer, "Warmup time in seconds (default: 2)") do |v|
+    options[:warmup] = v
+  end
+
+  opts.on("--time=N", Integer, "Benchmark time in seconds (default: 5)") do |v|
+    options[:time] = v
+  end
+
+  opts.on("--samples=N", Integer, "Number of inference samples (default: 2000)") do |v|
+    options[:samples] = v
+  end
+
+  opts.on("--report", "Generate markdown report") do
+    options[:report] = true
+  end
+
+  opts.on("-h", "--help", "Show this help") do
+    puts opts
+    exit
+  end
+end.parse!
+
+runner = BenchmarkRunner::Runner.new(
+  target: options[:target],
+  warmup: options[:warmup],
+  time: options[:time],
+  samples: options[:samples],
+  report: options[:report]
+)
+
+runner.run

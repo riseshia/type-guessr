@@ -14,3 +14,4 @@ gem "rubocop-rspec", require: false
 gem "rspec", require: false
 
 gem "stackprof", require: false
+gem "benchmark-ips", require: false
