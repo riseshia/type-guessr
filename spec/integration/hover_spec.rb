@@ -560,6 +560,39 @@ RSpec.describe "Hover Integration" do
       end
     end
 
+    context "subclass method combined with inherited methods" do
+      let(:source) do
+        <<~RUBY
+          class Recipe
+            def ingredients
+              []
+            end
+
+            def steps
+              []
+            end
+          end
+
+          class Recipe2 < Recipe
+            def notes
+              "Some notes"
+            end
+          end
+
+          def process(recipe)
+            recipe.ingredients
+            recipe.steps
+            recipe.notes
+            recipe
+          end
+        RUBY
+      end
+
+      it "infers Recipe2 from duck typing with inherited methods" do
+        expect_hover_type(line: 21, column: 4, expected: "Recipe2")
+      end
+    end
+
     context "multiple classes match" do
       let(:source) do
         <<~RUBY

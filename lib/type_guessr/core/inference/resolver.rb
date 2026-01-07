@@ -583,10 +583,9 @@ module TypeGuessr
           methods = duck_type.methods.map(&:to_s)
           return nil if methods.empty?
 
-          # Find classes that define all the methods
+          # Find classes that define all the methods (including inherited ones)
           matching_classes = @project_methods.keys.select do |class_name|
-            class_methods = @project_methods[class_name]&.keys || []
-            methods.all? { |m| class_methods.include?(m) }
+            all_methods_for_class(class_name).superset?(methods.to_set)
           end
 
           case matching_classes.size
@@ -599,6 +598,27 @@ module TypeGuessr
             Types::Union.new(types)
           end
           # 4+ matches → nil (too ambiguous)
+        end
+
+        # Get all methods available on a class (including inherited methods from project)
+        # @param class_name [String] Class name
+        # @return [Set<String>] Set of method names
+        def all_methods_for_class(class_name)
+          # Start with directly defined methods
+          class_methods = (@project_methods[class_name]&.keys || []).to_set
+
+          # Add inherited methods if ancestry_provider is available
+          if @ancestry_provider
+            ancestors = @ancestry_provider.call(class_name)
+            ancestors.each do |ancestor_name|
+              next if ancestor_name == class_name # Skip self
+
+              ancestor_methods = @project_methods[ancestor_name]&.keys || []
+              class_methods.merge(ancestor_methods)
+            end
+          end
+
+          class_methods
         end
       end
     end
