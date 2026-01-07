@@ -167,14 +167,13 @@ module TypeGuessrDocHelper
     # Perform actual hover test
     response = hover_on_source(source, { line: line - 1, character: column })
 
-    # Parse union types at top level only (e.g., "Integer | String" but not "Array[Integer | String]")
-    types = parse_top_level_union(expected)
+    # Extract actual type from response (format: **Guessed Type:** `ActualType`)
+    match = response.contents.value.match(/Guessed Type:\*\*\s*`([^`]+)`/)
+    actual_type = match ? match[1] : nil
 
-    types.each do |type|
-      # Escape special regex characters but keep [ and ] as literals
-      escaped_type = Regexp.escape(type).gsub("\\[", "\\[").gsub("\\]", "\\]")
-      expect(response.contents.value).to match(/#{escaped_type}/)
-    end
+    expect(actual_type).to eq(expected),
+                           "Expected type '#{expected}' but got '#{actual_type}'\n" \
+                           "Full response: #{response.contents.value}"
   end
 
   def expect_hover_method_signature(line:, column:, expected_signature:)
@@ -234,36 +233,6 @@ module TypeGuessrDocHelper
                                              "Expected hover NOT to include type '#{type}', got: #{response.contents.value}"
     end
     response
-  end
-
-  def parse_top_level_union(type_string)
-    # Split by | only at top level (not inside brackets)
-    types = []
-    current = +""
-    depth = 0
-
-    type_string.each_char do |char|
-      case char
-      when "["
-        depth += 1
-        current << char
-      when "]"
-        depth -= 1
-        current << char
-      when "|"
-        if depth.zero?
-          types << current.strip
-          current = +""
-        else
-          current << char
-        end
-      else
-        current << char
-      end
-    end
-
-    types << current.strip unless current.strip.empty?
-    types
   end
 
   private
