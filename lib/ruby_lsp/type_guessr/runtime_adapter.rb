@@ -28,6 +28,9 @@ module RubyLsp
 
         # Set up duck type resolver callback
         @resolver.duck_type_resolver = ->(duck_type) { resolve_duck_type_to_class(duck_type) }
+
+        # Set up ancestry provider callback
+        @resolver.ancestry_provider = ->(class_name) { get_class_ancestors(class_name) }
       end
 
       # Swap ruby-lsp's TypeInferrer with TypeGuessr's custom implementation
@@ -451,6 +454,17 @@ module RubyLsp
         # provider.add_provider(ProjectRBSProvider.new, priority: :high)
 
         provider
+      end
+
+      # Get class ancestors from RubyIndexer
+      # @param class_name [String] Class name
+      # @return [Array<String>] Array of ancestor names
+      def get_class_ancestors(class_name)
+        return [] unless @global_state.index
+
+        @global_state.index.linearized_ancestors_of(class_name)
+      rescue RubyIndexer::Index::NonExistingNamespaceError
+        []
       end
 
       def log_message(message)

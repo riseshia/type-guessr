@@ -14,6 +14,10 @@ module TypeGuessr
         # @return [Proc, nil] A proc that takes DuckType and returns resolved type or nil
         attr_accessor :duck_type_resolver
 
+        # Callback for getting class ancestors
+        # @return [Proc, nil] A proc that takes class_name and returns array of ancestor names
+        attr_accessor :ancestry_provider
+
         def initialize(signature_provider)
           @signature_provider = signature_provider
           @cache = {}.compare_by_identity
@@ -21,6 +25,7 @@ module TypeGuessr
           @instance_variables = {} # { "ClassName" => { :@name => InstanceVariableWriteNode } }
           @class_variables = {} # { "ClassName" => { :@@name => ClassVariableWriteNode } }
           @duck_type_resolver = nil
+          @ancestry_provider = nil
         end
 
         # Register a project method definition for later lookup
@@ -84,7 +89,24 @@ module TypeGuessr
         # @param name [Symbol] Instance variable name
         # @return [IR::InstanceVariableWriteNode, nil]
         def lookup_instance_variable(class_name, name)
-          @instance_variables.dig(class_name, name)
+          return nil unless class_name
+
+          # Try current class first
+          result = @instance_variables.dig(class_name, name)
+          return result if result
+
+          # Traverse ancestor chain if provider available
+          return nil unless @ancestry_provider
+
+          ancestors = @ancestry_provider.call(class_name)
+          ancestors.each do |ancestor_name|
+            next if ancestor_name == class_name # Skip self
+
+            result = @instance_variables.dig(ancestor_name, name)
+            return result if result
+          end
+
+          nil
         end
 
         # Register a class variable write for deferred lookup
