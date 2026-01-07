@@ -1248,11 +1248,21 @@ module TypeGuessr
           end
         end
 
-        # Collect all ReturnNode instances from body nodes (non-recursive)
+        # Collect all ReturnNode instances from body nodes (recursive)
+        # Searches inside MergeNode branches to find nested returns from if/case
         # @param nodes [Array<IR::Node>] Nodes to search
         # @return [Array<IR::ReturnNode>] All explicit return nodes
         def collect_returns(nodes)
-          nodes.select { |n| n.is_a?(IR::ReturnNode) }
+          returns = []
+          nodes.each do |node|
+            case node
+            when IR::ReturnNode
+              returns << node
+            when IR::MergeNode
+              returns.concat(collect_returns(node.branches))
+            end
+          end
+          returns
         end
 
         # Check if the last node in body is a ReturnNode
