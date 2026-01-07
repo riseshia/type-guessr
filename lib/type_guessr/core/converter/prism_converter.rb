@@ -19,6 +19,7 @@ module TypeGuessr
             @parent = parent
             @variables = {} # name => node
             @instance_variables = {} # @name => node (only for class-level context)
+            @constants = {} # name => dependency node (for constant alias tracking)
             @scope_type = nil # :class, :method, :block, :top_level
             @current_class = nil
             @current_method = nil
@@ -54,6 +55,16 @@ module TypeGuessr
             else
               @instance_variables[name]
             end
+          end
+
+          # Register a constant's dependency node for alias tracking
+          def register_constant(name, dependency_node)
+            @constants[name] = dependency_node
+          end
+
+          # Lookup a constant's dependency node (for alias resolution)
+          def lookup_constant(name)
+            @constants[name] || @parent&.lookup_constant(name)
           end
 
           def fork(scope_type)
@@ -1272,9 +1283,7 @@ module TypeGuessr
           body_nodes.last.is_a?(IR::ReturnNode)
         end
 
-        def convert_constant_read(prism_node, _context)
-          # For now, we don't have constant definition tracking
-          # Return a constant node with no dependency
+        def convert_constant_read(prism_node, context)
           name = case prism_node
                  when Prism::ConstantReadNode
                    prism_node.name.to_s
@@ -1286,13 +1295,14 @@ module TypeGuessr
 
           IR::ConstantNode.new(
             name: name,
-            dependency: nil,
+            dependency: context.lookup_constant(name),
             loc: convert_loc(prism_node.location)
           )
         end
 
         def convert_constant_write(prism_node, context)
           value_node = convert(prism_node.value, context)
+          context.register_constant(prism_node.name.to_s, value_node)
           IR::ConstantNode.new(
             name: prism_node.name.to_s,
             dependency: value_node,

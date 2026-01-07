@@ -2324,9 +2324,9 @@ RSpec.describe "Hover Integration" do
         RUBY
       end
 
-      it "→ Service" do
-        # Hover on "svc" variable - should show Service type
-        expect_hover_type(line: 12, column: 2, expected: "Service")
+      it "→ MyApp::Service" do
+        # Hover on "svc" variable - should show full path Service type
+        expect_hover_type(line: 12, column: 2, expected: "MyApp::Service")
       end
     end
 

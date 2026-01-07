@@ -351,7 +351,12 @@ module TypeGuessr
         def infer_call(node)
           # Special case: Class method calls (ClassName.method)
           if node.receiver.is_a?(IR::ConstantNode)
-            class_name = node.receiver.name
+            # Resolve constant first (handles aliases like RecipeAlias = Recipe)
+            receiver_result = infer(node.receiver)
+            class_name = case receiver_result.type
+                         when Types::SingletonType then receiver_result.type.name
+                         else node.receiver.name
+                         end
 
             # ClassName.new returns instance of that class
             if node.method == :new
