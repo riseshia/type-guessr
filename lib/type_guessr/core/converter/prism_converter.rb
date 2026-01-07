@@ -163,6 +163,12 @@ module TypeGuessr
           when Prism::UnlessNode
             convert_unless(prism_node, context)
 
+          when Prism::CaseNode
+            convert_case(prism_node, context)
+
+          when Prism::CaseMatchNode
+            convert_case_match(prism_node, context)
+
           when Prism::StatementsNode
             convert_statements(prism_node, context)
 
@@ -926,6 +932,44 @@ module TypeGuessr
           merge_modified_variables(context, unless_context, else_context, unless_node, else_node, prism_node.location)
         end
 
+        def convert_case(prism_node, context)
+          branches = []
+          branch_contexts = []
+
+          # Convert each when clause
+          prism_node.conditions&.each do |when_node|
+            when_context = context.fork(:when)
+            when_result = convert(when_node.statements, when_context) if when_node.statements
+            branches << when_result if when_result
+            branch_contexts << when_context
+          end
+
+          # Convert else clause
+          if prism_node.consequent
+            else_context = context.fork(:else)
+            else_result = convert(prism_node.consequent.statements, else_context)
+            branches << else_result if else_result
+            branch_contexts << else_context
+          else
+            # If no else clause, nil is possible
+            nil_node = IR::LiteralNode.new(
+              type: Types::ClassInstance.new("NilClass"),
+              values: nil,
+              loc: convert_loc(prism_node.location)
+            )
+            branches << nil_node
+          end
+
+          # Merge modified variables across all branches
+          merge_case_variables(context, branch_contexts, branches, prism_node.location)
+        end
+
+        def convert_case_match(prism_node, context)
+          # Pattern matching case (Ruby 3.0+)
+          # For now, treat it similarly to regular case
+          convert_case(prism_node, context)
+        end
+
         def convert_statements(prism_node, context)
           last_node = nil
           prism_node.body.each do |stmt|
@@ -1263,6 +1307,46 @@ module TypeGuessr
             )
           else
             then_node || else_node
+          end
+        end
+
+        def merge_case_variables(parent_context, branch_contexts, branches, location)
+          # Collect all variables modified in any branch
+          all_modified_vars = branch_contexts.flat_map { |ctx| ctx&.local_variables || [] }.uniq
+
+          # Create MergeNode for each modified variable
+          all_modified_vars.each do |var_name|
+            # Collect values from all branches
+            branch_contexts.map { |ctx| ctx&.variables&.[](var_name) }
+
+            # Get original value from parent context
+            original_val = parent_context.lookup_variable(var_name)
+
+            # Build branches array
+            merge_branches = branch_contexts.map.with_index do |ctx, _idx|
+              ctx&.variables&.[](var_name) || original_val
+            end.compact.uniq
+
+            # Create MergeNode if we have multiple different values
+            if merge_branches.size > 1
+              merge_node = IR::MergeNode.new(
+                branches: merge_branches,
+                loc: convert_loc(location)
+              )
+              parent_context.register_variable(var_name, merge_node)
+            elsif merge_branches.size == 1
+              parent_context.register_variable(var_name, merge_branches.first)
+            end
+          end
+
+          # Return MergeNode for the case expression value
+          if branches.size > 1
+            IR::MergeNode.new(
+              branches: branches.compact.uniq,
+              loc: convert_loc(location)
+            )
+          elsif branches.size == 1
+            branches.first
           end
         end
 

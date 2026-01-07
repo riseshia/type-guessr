@@ -375,6 +375,8 @@ module RubyLsp
         when ::TypeGuessr::Core::IR::DefNode
           # Enter method scope
           new_scope = scope_id.empty? ? "##{node.name}" : "#{scope_id}##{node.name}"
+          # Register top-level methods for project method lookup
+          @resolver.register_method("", node.name.to_s, node) if scope_id.empty?
           # Index parameters
           node.params&.each { |param| index_node_recursively(file_path, param, new_scope) }
           # Index all body nodes (including intermediate statements)

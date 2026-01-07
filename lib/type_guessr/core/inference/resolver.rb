@@ -366,6 +366,13 @@ module TypeGuessr
           end
 
           # Method call without receiver or unknown receiver type
+          # First, try to lookup top-level method
+          def_node = lookup_method("", node.method.to_s)
+          if def_node
+            return_type = infer(def_node.return_node)
+            return Result.new(return_type.type, "top-level method #{node.method}", :project)
+          end
+
           # Fallback to Object to query RBS for common methods (==, to_s, etc.)
           arg_types = node.args.map { |arg| infer(arg).type }
           return_type = @signature_provider.get_method_return_type("Object", node.method.to_s, arg_types)
