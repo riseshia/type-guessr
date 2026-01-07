@@ -143,5 +143,29 @@ RSpec.describe "Class Instance Type Inference from TypeProf Scenarios" do
       end
     end
   end
+
+  describe "Module extend" do
+    context "class method from extended module" do
+      let(:source) do
+        <<~RUBY
+          module M
+            def foo
+              42
+            end
+          end
+
+          class C
+            extend M
+          end
+
+          result = C.foo
+        RUBY
+      end
+
+      it "infers result as Integer from extended module method" do
+        expect_hover_type(line: 11, column: 0, expected: "Integer")
+      end
+    end
+  end
 end
 # rubocop:enable RSpec/DescribeClass

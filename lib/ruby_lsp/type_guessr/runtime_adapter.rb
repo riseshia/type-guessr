@@ -34,6 +34,11 @@ module RubyLsp
 
         # Set up constant kind provider callback
         @resolver.constant_kind_provider = ->(name) { get_constant_kind(name) }
+
+        # Set up class method lookup provider callback
+        @resolver.class_method_lookup_provider = lambda do |class_name, method_name|
+          lookup_class_method_owner(class_name, method_name)
+        end
       end
 
       # Swap ruby-lsp's TypeInferrer with TypeGuessr's custom implementation
@@ -484,6 +489,24 @@ module RubyLsp
         when RubyIndexer::Entry::Class then :class
         when RubyIndexer::Entry::Module then :module
         end
+      end
+
+      # Look up class method owner via RubyIndexer singleton class ancestry
+      # @param class_name [String] Class name (e.g., "C")
+      # @param method_name [String] Method name (e.g., "foo")
+      # @return [String, nil] Owner name (module or singleton class name) or nil
+      def lookup_class_method_owner(class_name, method_name)
+        return nil unless @global_state.index
+
+        # Query singleton class (e.g., "C::<Class:C>") for the method
+        singleton_name = "#{class_name}::<Class:#{class_name}>"
+        entries = @global_state.index.resolve_method(method_name, singleton_name)
+        return nil if entries.nil? || entries.empty?
+
+        entry = entries.first
+        entry.owner&.name
+      rescue RubyIndexer::Index::NonExistingNamespaceError
+        nil
       end
 
       def log_message(message)

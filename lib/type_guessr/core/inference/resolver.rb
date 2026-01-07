@@ -22,6 +22,10 @@ module TypeGuessr
         # @return [Proc, nil] A proc that takes constant_name and returns :class, :module, or nil
         attr_accessor :constant_kind_provider
 
+        # Callback for looking up class methods via RubyIndexer
+        # @return [Proc, nil] A proc that takes (class_name, method_name) and returns owner_name or nil
+        attr_accessor :class_method_lookup_provider
+
         def initialize(signature_provider)
           @signature_provider = signature_provider
           @cache = {}.compare_by_identity
@@ -32,6 +36,7 @@ module TypeGuessr
           @duck_type_resolver = nil
           @ancestry_provider = nil
           @constant_kind_provider = nil
+          @class_method_lookup_provider = nil
         end
 
         # Register a project method definition for later lookup
@@ -48,7 +53,22 @@ module TypeGuessr
         # @param method_name [String] Method name
         # @return [IR::DefNode, nil] Method definition node or nil
         def lookup_method(class_name, method_name)
-          @project_methods.dig(class_name, method_name)
+          # Try current class first
+          result = @project_methods.dig(class_name, method_name)
+          return result if result
+
+          # Traverse ancestor chain if provider available
+          return nil unless @ancestry_provider
+
+          ancestors = @ancestry_provider.call(class_name)
+          ancestors.each do |ancestor_name|
+            next if ancestor_name == class_name # Skip self
+
+            result = @project_methods.dig(ancestor_name, method_name)
+            return result if result
+          end
+
+          nil
         end
 
         # Get all registered class names
@@ -318,7 +338,24 @@ module TypeGuessr
               )
             end
 
-            # For other class methods, query signature provider
+            # Try project class methods first (includes extended module methods)
+            if @class_method_lookup_provider
+              owner_name = @class_method_lookup_provider.call(class_name, node.method.to_s)
+              if owner_name
+                # Look up method from owner (module or singleton class)
+                def_node = lookup_method(owner_name, node.method.to_s)
+                if def_node
+                  return_result = infer(def_node)
+                  return Result.new(
+                    return_result.type,
+                    "#{class_name}.#{node.method} (project)",
+                    :project
+                  )
+                end
+              end
+            end
+
+            # Fall back to RBS signature provider
             arg_types = node.args.map { |arg| infer(arg).type }
             return_type = @signature_provider.get_class_method_return_type(
               class_name,
