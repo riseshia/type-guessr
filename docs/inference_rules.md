@@ -228,7 +228,7 @@ path = Dir.pwd
 
 ```ruby
 class Test
-  def [f]lip(flag = true)  # Signature: (?true flag) -> false | true
+  def [f]lip(flag = true)  # Signature: (?true flag) -> bool
     return false if flag
     flag
   end
@@ -449,5 +449,14 @@ end
 numbers = [1, 2, 3]
 result = numbers.map { |n| n.next }
 [r]esult  # Guessed Type: Array[Integer]
+```
+
+## Container Mutating Methods - Current Line Hover
+
+### Hash indexed assignment with string key
+
+```ruby
+a = { a: 1 }
+[a]["f"] = "a"  # Guessed Type: Hash
 ```
 

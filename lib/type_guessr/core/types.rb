@@ -130,8 +130,9 @@ module TypeGuessr
         end
 
         def to_s
-          # Handle optional type: exactly 2 types where one is NilClass → ?Type
-          if optional_type?
+          if bool_type?
+            "bool"
+          elsif optional_type?
             "?#{non_nil_type}"
           else
             @types.map(&:to_s).join(" | ")
@@ -146,6 +147,14 @@ module TypeGuessr
         end
 
         private
+
+        def bool_type?
+          return false unless @types.size == 2
+
+          has_true = @types.any? { |t| t.is_a?(ClassInstance) && t.name == "TrueClass" }
+          has_false = @types.any? { |t| t.is_a?(ClassInstance) && t.name == "FalseClass" }
+          has_true && has_false
+        end
 
         def optional_type?
           @types.size == 2 && @types.any? { |t| nil_type?(t) }

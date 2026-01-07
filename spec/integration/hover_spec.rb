@@ -503,8 +503,8 @@ RSpec.describe "Hover Integration" do
         RUBY
       end
 
-      it "→ (?true flag) -> false | true" do
-        expect_hover_method_signature(line: 2, column: 6, expected_signature: "(?true flag) -> false | true")
+      it "→ (?true flag) -> bool" do
+        expect_hover_method_signature(line: 2, column: 6, expected_signature: "(?true flag) -> bool")
       end
     end
 

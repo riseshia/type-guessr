@@ -180,6 +180,20 @@ RSpec.describe TypeGuessr::Core::Types do
       expect(union.to_s).not_to start_with("?")
     end
 
+    it "formats TrueClass | FalseClass as bool" do
+      true_type = TypeGuessr::Core::Types::ClassInstance.new("TrueClass")
+      false_type = TypeGuessr::Core::Types::ClassInstance.new("FalseClass")
+      union = TypeGuessr::Core::Types::Union.new([true_type, false_type])
+      expect(union.to_s).to eq("bool")
+    end
+
+    it "formats bool regardless of order" do
+      true_type = TypeGuessr::Core::Types::ClassInstance.new("TrueClass")
+      false_type = TypeGuessr::Core::Types::ClassInstance.new("FalseClass")
+      union = TypeGuessr::Core::Types::Union.new([false_type, true_type])
+      expect(union.to_s).to eq("bool")
+    end
+
     it "equals another Union with the same types" do
       type1 = TypeGuessr::Core::Types::ClassInstance.new("String")
       type2 = TypeGuessr::Core::Types::ClassInstance.new("Integer")
