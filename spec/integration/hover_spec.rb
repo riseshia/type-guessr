@@ -2575,5 +2575,38 @@ RSpec.describe "Hover Integration" do
       end
     end
   end
+
+  describe "Parameter Inference via Instance Variable" do
+    context "parameter assigned to instance variable with method calls" do
+      let(:source) do
+        <<~RUBY
+          class RuntimeAdapter
+            def find_node_by_key(key)
+            end
+          end
+
+          class GraphBuilder
+            def initialize(adapter)
+              @adapter = adapter
+            end
+
+            def build
+              @adapter.find_node_by_key("key")
+            end
+          end
+        RUBY
+      end
+
+      it "infers parameter type from methods called on instance variable" do
+        # Hover on "adapter" parameter in initialize - should infer RuntimeAdapter
+        expect_hover_type(line: 7, column: 20, expected: "RuntimeAdapter")
+      end
+
+      it "infers instance variable type from method calls" do
+        # Hover on "@adapter" in build method - should infer RuntimeAdapter
+        expect_hover_type(line: 12, column: 6, expected: "RuntimeAdapter")
+      end
+    end
+  end
 end
 # rubocop:enable RSpec/DescribeClass

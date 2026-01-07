@@ -407,11 +407,19 @@ module TypeGuessr
         def convert_instance_variable_write(prism_node, context)
           value_node = convert(prism_node.value, context)
           class_name = context.current_class_name
+
+          # Share called_methods with the underlying param/variable node for type propagation
+          called_methods = if value_node.is_a?(IR::LocalReadNode) || value_node.is_a?(IR::ParamNode)
+                             value_node.called_methods
+                           else
+                             []
+                           end
+
           write_node = IR::InstanceVariableWriteNode.new(
             name: prism_node.name,
             class_name: class_name,
             value: value_node,
-            called_methods: [],
+            called_methods: called_methods,
             loc: convert_loc(prism_node.location)
           )
           # Register at class level so it's visible across methods
@@ -441,11 +449,19 @@ module TypeGuessr
         def convert_class_variable_write(prism_node, context)
           value_node = convert(prism_node.value, context)
           class_name = context.current_class_name
+
+          # Share called_methods with the underlying param/variable node for type propagation
+          called_methods = if value_node.is_a?(IR::LocalReadNode) || value_node.is_a?(IR::ParamNode)
+                             value_node.called_methods
+                           else
+                             []
+                           end
+
           write_node = IR::ClassVariableWriteNode.new(
             name: prism_node.name,
             class_name: class_name,
             value: value_node,
-            called_methods: [],
+            called_methods: called_methods,
             loc: convert_loc(prism_node.location)
           )
           context.register_variable(prism_node.name, write_node)

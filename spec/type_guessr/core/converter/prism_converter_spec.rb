@@ -248,6 +248,56 @@ RSpec.describe TypeGuessr::Core::Converter::PrismConverter do
     end
   end
 
+  describe "instance variable called_methods sharing" do
+    it "shares called_methods with parameter when assigned from parameter" do
+      source = <<~RUBY
+        class Foo
+          def initialize(adapter)
+            @adapter = adapter
+          end
+
+          def process
+            @adapter.call_method
+          end
+        end
+      RUBY
+      parsed = Prism.parse(source)
+      context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+      class_node = converter.convert(parsed.value.statements.body.first, context)
+
+      # Get the initialize method's parameter
+      init_method = class_node.methods.find { |m| m.name == :initialize }
+      param_node = init_method.params.first
+
+      # The InstanceVariableWriteNode should share called_methods with the ParamNode
+      # When @adapter.call_method is called, :call_method should be in param's called_methods
+      expect(param_node.called_methods).to include(:call_method)
+    end
+  end
+
+  describe "class variable called_methods sharing" do
+    it "shares called_methods with parameter when assigned from parameter" do
+      source = <<~RUBY
+        class Foo
+          def setup(adapter)
+            @@adapter = adapter
+            @@adapter.call_method
+          end
+        end
+      RUBY
+      parsed = Prism.parse(source)
+      context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+      class_node = converter.convert(parsed.value.statements.body.first, context)
+
+      # Get the setup method's parameter
+      setup_method = class_node.methods.find { |m| m.name == :setup }
+      param_node = setup_method.params.first
+
+      # The ClassVariableWriteNode should share called_methods with the ParamNode
+      expect(param_node.called_methods).to include(:call_method)
+    end
+  end
+
   describe "method call conversion" do
     it "converts simple method call" do
       source = "foo"
