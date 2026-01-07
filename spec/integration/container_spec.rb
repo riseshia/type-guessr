@@ -55,7 +55,7 @@ RSpec.describe "Container Type Inference from TypeProf Scenarios" do
       end
 
       it "infers hash type" do
-        response = hover_on_source(source, { line: 8, character: 0 })
+        response = hover_on_source(source, { line: 7, character: 0 })
         expect(response).not_to be_nil
         # Should contain both :a and :b keys
       end
@@ -104,7 +104,7 @@ RSpec.describe "Container Type Inference from TypeProf Scenarios" do
       end
 
       it "infers union type after assignment" do
-        response = hover_on_source(source, { line: 13, character: 0 })
+        response = hover_on_source(source, { line: 12, character: 0 })
         expect(response).not_to be_nil
         # Should include Float
       end
@@ -126,7 +126,7 @@ RSpec.describe "Container Type Inference from TypeProf Scenarios" do
       end
 
       it "infers merged hash type" do
-        response = hover_on_source(source, { line: 9, character: 0 })
+        response = hover_on_source(source, { line: 8, character: 0 })
         expect(response).not_to be_nil
         # Should be Hash with :a and :b keys
       end
@@ -146,7 +146,7 @@ RSpec.describe "Container Type Inference from TypeProf Scenarios" do
       end
 
       it "infers hash with implicit keys" do
-        response = hover_on_source(source, { line: 7, character: 0 })
+        response = hover_on_source(source, { line: 6, character: 0 })
         expect(response).not_to be_nil
         # Should be Hash with :x and :y keys
       end
