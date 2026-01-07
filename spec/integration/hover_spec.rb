@@ -69,7 +69,7 @@ RSpec.describe "Hover Integration" do
       end
 
       it "→ Array" do
-        expect_hover_type(line: 2, column: 0, expected: "Array")
+        expect_hover_type(line: 2, column: 0, expected: "Array[untyped]")
       end
     end
 
@@ -82,7 +82,7 @@ RSpec.describe "Hover Integration" do
       end
 
       it "→ Hash" do
-        expect_hover_type(line: 2, column: 0, expected: "Hash")
+        expect_hover_type(line: 2, column: 0, expected: "Hash[untyped, untyped]")
       end
     end
 
@@ -127,7 +127,7 @@ RSpec.describe "Hover Integration" do
       end
 
       it "→ Hash" do
-        expect_hover_type(line: 3, column: 0, expected: "Hash")
+        expect_hover_type(line: 3, column: 0, expected: "Hash[Symbol | String, Integer]")
       end
     end
 
@@ -153,7 +153,7 @@ RSpec.describe "Hover Integration" do
       end
 
       it "→ Range" do
-        expect_hover_type(line: 2, column: 0, expected: "Range")
+        expect_hover_type(line: 2, column: 0, expected: "Range[Integer]")
       end
     end
 
@@ -327,7 +327,7 @@ RSpec.describe "Hover Integration" do
       end
 
       it "infers Hash type" do
-        expect_hover_type(line: 2, column: 0, expected: "Hash")
+        expect_hover_type(line: 2, column: 0, expected: "Hash[String, String]")
       end
     end
 
@@ -340,7 +340,7 @@ RSpec.describe "Hover Integration" do
       end
 
       it "infers Hash type" do
-        expect_hover_type(line: 2, column: 0, expected: "Hash")
+        expect_hover_type(line: 2, column: 0, expected: "Hash[Symbol | String, String | Integer]")
       end
     end
 
@@ -907,7 +907,7 @@ RSpec.describe "Hover Integration" do
       end
 
       it "infers Array type" do
-        expect_hover_type(line: 2, column: 4, expected: "Array")
+        expect_hover_type(line: 2, column: 4, expected: "Array[untyped]")
       end
     end
 
@@ -1100,7 +1100,7 @@ RSpec.describe "Hover Integration" do
       end
 
       it "→ Integer | String" do
-        expect_hover_type(line: 6, column: 2, expected: "Integer | String")
+        expect_hover_type(line: 6, column: 2, expected: "String | Integer")
       end
     end
 
@@ -1242,7 +1242,7 @@ RSpec.describe "Hover Integration" do
       end
 
       it "infers union type" do
-        expect_hover_type(line: 8, column: 2, expected: "Integer | String | Symbol")
+        expect_hover_type(line: 8, column: 2, expected: "String | Symbol | Integer")
       end
     end
 
@@ -1531,7 +1531,7 @@ RSpec.describe "Hover Integration" do
       end
 
       it "uses RBS when available" do
-        expect_hover_type(line: 4, column: 2, expected: "Array")
+        expect_hover_type(line: 4, column: 2, expected: "Array[Integer]")
       end
     end
 
@@ -2554,7 +2554,7 @@ RSpec.describe "Hover Integration" do
       end
 
       it "→ Hash on assignment line" do
-        expect_hover_type(line: 2, column: 0, expected: "Hash")
+        expect_hover_type(line: 2, column: 0, expected: "Hash[Symbol | String, Integer | String]")
       end
     end
 
