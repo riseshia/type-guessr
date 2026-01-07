@@ -108,7 +108,8 @@ module TypeGuessr
           when Prism::IntegerNode, Prism::FloatNode, Prism::StringNode,
                Prism::SymbolNode, Prism::TrueNode, Prism::FalseNode,
                Prism::NilNode, Prism::InterpolatedStringNode, Prism::RangeNode,
-               Prism::RegularExpressionNode, Prism::InterpolatedRegularExpressionNode
+               Prism::RegularExpressionNode, Prism::InterpolatedRegularExpressionNode,
+               Prism::ImaginaryNode, Prism::RationalNode
             convert_literal(prism_node)
 
           when Prism::ArrayNode
@@ -313,6 +314,10 @@ module TypeGuessr
             Types::ClassInstance.new("Range")
           when Prism::RegularExpressionNode, Prism::InterpolatedRegularExpressionNode
             Types::ClassInstance.new("Regexp")
+          when Prism::ImaginaryNode
+            Types::ClassInstance.new("Complex")
+          when Prism::RationalNode
+            Types::ClassInstance.new("Rational")
           else
             Types::Unknown.instance
           end
