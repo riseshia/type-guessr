@@ -12,3 +12,5 @@ gem "rubocop", require: false
 gem "rubocop-rspec", require: false
 
 gem "rspec", require: false
+
+gem "stackprof", require: false

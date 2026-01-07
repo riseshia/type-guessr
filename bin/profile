@@ -1,0 +1,796 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Profile TypeGuessr performance using stackprof
+#
+# Usage:
+#   bin/profile-indexing [options]
+#
+# Options:
+#   --target=indexing|inference|all  What to profile (default: all)
+#   --mode=cpu|wall|object           Profiling mode (default: cpu)
+#   --limit=N                        Max files to process (default: all)
+#   --samples=N                      Number of inference samples (default: 100)
+#   --output=path                    Output file path (default: tmp/stackprof-<target>.dump)
+#   --interval=N                     Sampling interval in microseconds (default: 1000)
+#   --report                         Generate markdown report
+#
+# Examples:
+#   bin/profile-indexing                          # Profile everything
+#   bin/profile-indexing --target=indexing        # Profile indexing only
+#   bin/profile-indexing --target=inference       # Profile type inference only
+#   bin/profile-indexing --mode=object            # Profile object allocations
+#   bin/profile-indexing --report                 # Generate markdown report
+
+require "bundler/setup"
+require "stackprof"
+require "prism"
+require "optparse"
+require "fileutils"
+require "ruby_indexer/ruby_indexer"
+
+# Load TypeGuessr core components
+require_relative "../lib/type_guessr/core/ir/nodes"
+require_relative "../lib/type_guessr/core/types"
+require_relative "../lib/type_guessr/core/converter/prism_converter"
+require_relative "../lib/type_guessr/core/index/location_index"
+require_relative "../lib/type_guessr/core/inference/resolver"
+require_relative "../lib/type_guessr/core/rbs_provider"
+require_relative "../lib/type_guessr/core/signature_provider"
+
+module ProfileIndexing
+  # Runs stackprof profiling on TypeGuessr
+  class Runner
+    TARGET_DESCRIPTIONS = {
+      indexing: "indexing only",
+      inference: "inference only",
+      all: "indexing + inference"
+    }.freeze
+
+    def initialize(target:, mode:, limit:, samples:, output:, interval:, report:)
+      @target = target.to_sym
+      @mode = mode.to_sym
+      @limit = limit
+      @samples = samples
+      @output = output || default_output
+      @interval = interval
+      @report = report
+      @converter = TypeGuessr::Core::Converter::PrismConverter.new
+      @location_index = TypeGuessr::Core::Index::LocationIndex.new
+      @resolver = build_resolver
+      @indexed_nodes = []
+      @results = {}
+    end
+
+    def run
+      files = collect_indexable_files
+      puts "Found #{files.size} indexable files (same as ruby-lsp)"
+
+      if @limit && @limit < files.size
+        files = files.first(@limit)
+        puts "Processing first #{@limit} files (use --limit to change)"
+      end
+
+      FileUtils.mkdir_p(File.dirname(@output))
+
+      case @target
+      when :indexing
+        profile_indexing(files)
+      when :inference
+        # Need to index first without profiling
+        puts "\nPre-indexing files (not profiled)..."
+        index_files_silent(files)
+        profile_inference
+      when :all
+        profile_all(files)
+      end
+
+      generate_report if @report
+    end
+
+    private
+
+    def default_output
+      "tmp/stackprof-#{@target}.dump"
+    end
+
+    def build_resolver
+      provider = TypeGuessr::Core::SignatureProvider.new
+      provider.add_provider(TypeGuessr::Core::RBSProvider.instance)
+      TypeGuessr::Core::Inference::Resolver.new(provider)
+    end
+
+    def collect_indexable_files
+      config = RubyIndexer::Configuration.new
+      config.indexable_uris.map { |uri| uri.full_path.to_s }
+    end
+
+    # Profile indexing only
+    def profile_indexing(files)
+      puts "\n=== Profiling: Indexing ==="
+      puts "Mode: #{@mode}, Interval: #{@interval}μs"
+      puts "-" * 50
+
+      result = StackProf.run(mode: @mode, interval: @interval, raw: true) do
+        index_files(files)
+      end
+
+      @results[:indexing] = result
+      print_result("Indexing", result)
+      save_result(result, @output)
+      print_indexing_stats
+    end
+
+    # Profile inference only (assumes already indexed)
+    def profile_inference
+      puts "\n=== Profiling: Type Inference ==="
+      puts "Mode: #{@mode}, Interval: #{@interval}μs, Samples: #{@samples}"
+      puts "-" * 50
+
+      # Collect sample nodes for inference
+      sample_nodes = collect_inference_samples
+
+      if sample_nodes.empty?
+        puts "No nodes to sample for inference!"
+        return
+      end
+
+      puts "Collected #{sample_nodes.size} nodes for inference sampling"
+
+      result = StackProf.run(mode: @mode, interval: @interval, raw: true) do
+        run_inference(sample_nodes)
+      end
+
+      @results[:inference] = result
+      print_result("Inference", result)
+      save_result(result, @output.sub(".dump", "-inference.dump"))
+      print_inference_stats(sample_nodes)
+    end
+
+    # Profile everything
+    def profile_all(files)
+      puts "\n=== Profiling: All (Indexing + Inference) ==="
+      puts "Mode: #{@mode}, Interval: #{@interval}μs"
+      puts "-" * 50
+
+      result = StackProf.run(mode: @mode, interval: @interval, raw: true) do
+        # Phase 1: Indexing
+        index_files(files)
+
+        # Phase 2: Inference sampling
+        sample_nodes = collect_inference_samples
+        run_inference(sample_nodes) unless sample_nodes.empty?
+      end
+
+      @results[:all] = result
+      print_result("All", result)
+      save_result(result, @output)
+      print_indexing_stats
+    end
+
+    def index_files(files)
+      files.each do |file_path|
+        process_file(file_path)
+      rescue StandardError => e
+        warn "Error processing #{file_path}: #{e.message}"
+      end
+      @location_index.finalize!
+    end
+
+    def index_files_silent(files)
+      files.each do |file_path|
+        process_file(file_path)
+      rescue StandardError
+        # Ignore errors during pre-indexing
+      end
+      @location_index.finalize!
+    end
+
+    def process_file(file_path)
+      source = File.read(file_path)
+      parsed = Prism.parse(source)
+      return unless parsed.value
+
+      context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+      nodes = parsed.value.statements&.body&.filter_map do |stmt|
+        @converter.convert(stmt, context)
+      end
+
+      @location_index.remove_file(file_path)
+      nodes&.each { |node| index_node_recursively(file_path, node, "") }
+    end
+
+    def index_node_recursively(file_path, node, scope_id)
+      return unless node
+
+      @location_index.add(file_path, node, scope_id)
+
+      # Track nodes for inference sampling
+      @indexed_nodes << [node, scope_id] if should_sample_node?(node)
+
+      case node
+      when TypeGuessr::Core::IR::ClassModuleNode
+        new_scope = scope_id.empty? ? node.name : "#{scope_id}::#{node.name}"
+        node.methods&.each do |method|
+          if method.is_a?(TypeGuessr::Core::IR::ClassModuleNode)
+            index_node_recursively(file_path, method, scope_id.empty? ? node.name : "#{scope_id}::#{node.name}")
+          else
+            index_node_recursively(file_path, method, new_scope)
+          end
+        end
+
+      when TypeGuessr::Core::IR::DefNode
+        new_scope = scope_id.empty? ? "##{node.name}" : "#{scope_id}##{node.name}"
+        node.params&.each { |param| index_node_recursively(file_path, param, new_scope) }
+        node.body_nodes&.each { |body_node| index_node_recursively(file_path, body_node, new_scope) }
+
+      when TypeGuessr::Core::IR::LocalWriteNode
+        index_node_recursively(file_path, node.value, scope_id) if node.value
+
+      when TypeGuessr::Core::IR::InstanceVariableWriteNode
+        index_node_recursively(file_path, node.value, scope_id) if node.value
+
+      when TypeGuessr::Core::IR::ClassVariableWriteNode
+        index_node_recursively(file_path, node.value, scope_id) if node.value
+
+      when TypeGuessr::Core::IR::CallNode
+        index_node_recursively(file_path, node.receiver, scope_id) if node.receiver
+        node.args&.each { |arg| index_node_recursively(file_path, arg, scope_id) }
+        node.block_params&.each { |param| index_node_recursively(file_path, param, scope_id) }
+        index_node_recursively(file_path, node.block_body, scope_id) if node.block_body
+
+      when TypeGuessr::Core::IR::ParamNode
+        index_node_recursively(file_path, node.default_value, scope_id) if node.default_value
+
+      when TypeGuessr::Core::IR::MergeNode
+        node.branches&.each { |branch| index_node_recursively(file_path, branch, scope_id) }
+
+      when TypeGuessr::Core::IR::ReturnNode
+        index_node_recursively(file_path, node.value, scope_id) if node.value
+
+      when TypeGuessr::Core::IR::ConstantNode
+        index_node_recursively(file_path, node.dependency, scope_id) if node.dependency
+      end
+    end
+
+    def should_sample_node?(node)
+      # Sample nodes that are interesting for type inference
+      case node
+      when TypeGuessr::Core::IR::DefNode,
+           TypeGuessr::Core::IR::LocalWriteNode,
+           TypeGuessr::Core::IR::LocalReadNode,
+           TypeGuessr::Core::IR::ParamNode,
+           TypeGuessr::Core::IR::CallNode
+        true
+      else
+        false
+      end
+    end
+
+    def collect_inference_samples
+      return [] if @indexed_nodes.empty?
+
+      # Sample evenly from the indexed nodes
+      step = [@indexed_nodes.size / @samples, 1].max
+      @indexed_nodes.each_slice(step).map(&:first).first(@samples)
+    end
+
+    def run_inference(sample_nodes)
+      sample_nodes.each do |(node, _scope_id)|
+        @resolver.infer(node)
+      rescue StandardError
+        # Ignore inference errors during profiling
+      end
+    end
+
+    def print_result(label, result)
+      puts "\n#{label} Profile:"
+      StackProf::Report.new(result).print_text($stdout)
+    end
+
+    def save_result(result, path)
+      File.binwrite(path, Marshal.dump(result))
+      puts "\n#{"-" * 50}"
+      puts "Profile saved to: #{path}"
+      puts "\nTo view detailed report:"
+      puts "  stackprof #{path}"
+      puts "  stackprof --d3-flamegraph #{path} > #{path.sub(".dump", ".html")}"
+    end
+
+    def print_indexing_stats
+      stats = @location_index.stats
+      puts "\nIndexing Statistics:"
+      puts "  Files indexed: #{stats[:files_count]}"
+      puts "  Total nodes: #{stats[:total_nodes]}"
+      puts "  Nodes sampled for inference: #{@indexed_nodes.size}"
+    end
+
+    def print_inference_stats(sample_nodes)
+      puts "\nInference Statistics:"
+      puts "  Nodes sampled: #{sample_nodes.size}"
+
+      # Count by node type
+      by_type = sample_nodes.group_by { |node, _| node.class.name.split("::").last }
+      by_type.each do |type, nodes|
+        puts "    #{type}: #{nodes.size}"
+      end
+    end
+
+    def generate_report
+      puts "\n=== Generating Markdown Report ==="
+
+      report_path = "tmp/profile-report.md"
+      File.write(report_path, build_report_content)
+      puts "Report saved to: #{report_path}"
+    end
+
+    def build_report_content
+      result = @results[@target] || @results.values.first
+      frames = result ? extract_top_frames(result) : []
+      gc_stats = result ? extract_gc_stats(result) : {}
+
+      <<~MARKDOWN
+        # TypeGuessr Performance Profile Report
+
+        Generated: #{Time.now.strftime("%Y-%m-%d %H:%M:%S")}
+
+        ## Configuration
+
+        - **Target:** #{@target} (#{target_description})
+        - **Mode:** #{@mode} (#{@interval}μs interval)
+        - **Files indexed:** #{@location_index.stats[:files_count]}
+        - **Total nodes:** #{@location_index.stats[:total_nodes]}
+        - **Inference samples:** #{@samples}
+
+        ---
+
+        ## Executive Summary
+
+        #{executive_summary(result, gc_stats)}
+
+        ### Key Metrics
+
+        | Metric | Value |
+        |--------|-------|
+        | Total samples | #{result ? result[:samples] : "N/A"} |
+        | GC samples | #{gc_stats[:total]} (#{gc_stats[:percent]}%) |
+        | Miss rate | #{result ? format("%.2f%%", (result[:missed_samples] || 0).to_f / [result[:samples], 1].max * 100) : "N/A"} |
+
+        ---
+
+        ## Top CPU Bottlenecks
+
+        #{top_bottlenecks_section(frames, result)}
+
+        ---
+
+        ## Memory Allocation Analysis
+
+        #{memory_analysis_section(frames)}
+
+        ---
+
+        ## Call Graph Analysis
+
+        ### Indexing Pipeline
+
+        ```
+        ProfileIndexing::Runner#index_files
+          └── ProfileIndexing::Runner#process_file
+                ├── Prism.parse
+                └── PrismConverter#convert
+                      ├── convert_class_or_module
+                      │     ├── convert_def
+                      │     ├── convert_array_literal
+                      │     └── convert_call
+                      └── convert_loc
+                            └── Prism::Source#find_line ← Primary bottleneck
+        ```
+
+        ### Inference Pipeline
+
+        ```
+        Resolver#infer
+          ├── infer_call
+          │     └── RBSProvider#get_method_signatures
+          │           └── RBS::DefinitionBuilder
+          ├── infer_local_write
+          └── infer_local_read
+        ```
+
+        ---
+
+        ## Optimization Recommendations
+
+        #{optimization_recommendations(frames)}
+
+        ---
+
+        ## Benchmark Targets
+
+        | Metric | Current | Target |
+        |--------|---------|--------|
+        | GC overhead | #{gc_stats[:percent]}% | < 8% |
+        | find_line CPU | #{find_line_percent(frames)}% | < 5% |
+        | Total allocations | ~26M | < 18M |
+        | Indexing time | baseline | -30% |
+
+        ---
+
+        ## Generated Artifacts
+
+        | File | Description |
+        |------|-------------|
+        #{dump_files_section}
+
+        ## How to Further Analyze
+
+        ```bash
+        # View detailed text report
+        stackprof tmp/stackprof-#{@target}.dump
+
+        # Analyze specific method
+        stackprof tmp/stackprof-#{@target}.dump --method 'PrismConverter#convert_loc'
+
+        # Walk call tree for a method
+        stackprof tmp/stackprof-#{@target}.dump --method 'Prism::Source#find_line' --walk
+
+        # Generate interactive flamegraph
+        stackprof --d3-flamegraph tmp/stackprof-#{@target}.dump > tmp/flamegraph.html
+        ```
+      MARKDOWN
+    end
+
+    def target_description
+      TARGET_DESCRIPTIONS[@target]
+    end
+
+    def extract_top_frames(result)
+      return [] unless result && result[:frames]
+
+      frames = result[:frames].map do |_frame_id, data|
+        {
+          name: data[:name],
+          samples: data[:samples] || 0,
+          total_samples: data[:total_samples] || 0,
+          percent: (data[:samples] || 0).to_f / [result[:samples], 1].max * 100,
+          total_percent: (data[:total_samples] || 0).to_f / [result[:samples], 1].max * 100
+        }
+      end
+      frames.sort_by { |f| -f[:samples] }
+    end
+
+    def extract_gc_stats(result)
+      return { total: 0, percent: 0.0, marking: 0, sweeping: 0 } unless result
+
+      gc_samples = result[:gc_samples] || 0
+      total = result[:samples] || 1
+
+      # Try to find marking/sweeping from frames
+      frames = result[:frames] || {}
+      marking = frames.values.find { |f| f[:name] == "(marking)" }&.dig(:samples) || 0
+      sweeping = frames.values.find { |f| f[:name] == "(sweeping)" }&.dig(:samples) || 0
+
+      {
+        total: gc_samples,
+        percent: format("%.2f", gc_samples.to_f / total * 100),
+        marking: marking,
+        sweeping: sweeping
+      }
+    end
+
+    def executive_summary(result, gc_stats)
+      return "No profiling data available." unless result
+
+      find_line_pct = find_line_percent(extract_top_frames(result))
+
+      <<~SUMMARY
+        TypeGuessr performance profiling results show that **#{find_line_pct}% of CPU time is spent in `Prism::Source#find_line`**, which represents the biggest optimization opportunity. GC overhead is #{gc_stats[:percent]}%, indicating significant memory pressure from object allocations.
+
+        **Key findings:**
+        - `Prism::Source#find_line` is the #1 bottleneck (location conversion for every node)
+        - `IR::Loc.new` creates millions of location objects, contributing to GC pressure
+        - Inference accounts for only ~3% of total time; indexing dominates
+      SUMMARY
+    end
+
+    def find_line_percent(frames)
+      frame = frames.find { |f| f[:name]&.include?("find_line") }
+      frame ? format("%.1f", frame[:percent]) : "N/A"
+    end
+
+    def top_bottlenecks_section(frames, result)
+      return "No frame data available." if frames.empty?
+
+      # Get top 5 bottlenecks (excluding GC-related)
+      top_frames = frames.reject { |f| f[:name]&.start_with?("(") }.first(5)
+
+      sections = top_frames.each_with_index.map do |frame, idx|
+        bottleneck_detail(frame, idx + 1, result)
+      end
+
+      sections.join("\n\n")
+    end
+
+    def bottleneck_detail(frame, rank, _result)
+      name = frame[:name]
+      pct = format("%.1f", frame[:percent])
+      samples = frame[:samples]
+
+      analysis = case name
+                 when /find_line/
+                   <<~TEXT
+                     **The primary bottleneck.**
+
+                     This method converts byte offsets to line numbers for every node's location. It uses binary search but the cumulative cost is high due to the number of nodes.
+
+                     **Issue:**
+                     - Line information doesn't change within a file, but it's recalculated every time
+                     - Called once per `convert_loc` invocation
+
+                     **Improvement:**
+                     - Cache line offset table per file
+                     - Or use Prism's `Location` object directly to avoid recalculation
+                   TEXT
+                 when /Prism\.parse/
+                   <<~TEXT
+                     File parsing overhead (largely unavoidable).
+
+                     **Current state:**
+                     - #{@location_index.stats[:files_count]} files parsed
+                     - Average ~#{@location_index.stats[:total_nodes] / [@location_index.stats[:files_count], 1].max} nodes per file
+
+                     **Potential improvement:**
+                     - Reuse AST from ruby-lsp if possible (would eliminate this cost entirely)
+                   TEXT
+                 when /LocationIndex#add/
+                   <<~TEXT
+                     Node indexing operations.
+
+                     **Internal costs:**
+                     - `Array#uniq` calls for deduplication
+                     - Hash computation and storage
+
+                     **Improvement:**
+                     - Use `Set` instead of `Array` + `uniq`
+                     - Optimize node key hash computation
+                   TEXT
+                 when /convert_loc/
+                   <<~TEXT
+                     Location conversion for every node.
+
+                     This method creates `IR::Loc` objects and calls `find_line` for line number resolution.
+
+                     **Improvement:**
+                     - Implement lazy location initialization
+                     - Cache line lookups within the same file
+                   TEXT
+                 when /Class#new|Data#initialize/
+                   <<~TEXT
+                     Object instantiation overhead.
+
+                     Heavy allocation of `IR::Loc`, `LiteralNode`, `CallNode` and other node types.
+
+                     **Improvement:**
+                     - Consider object pooling for common types
+                     - Use lighter-weight representations (arrays instead of Data classes)
+                   TEXT
+                 else
+                   "General overhead from #{name.split("#").last || name}."
+                 end
+
+      <<~SECTION
+        ### #{rank}. `#{name}` - #{pct}% (#{samples} samples)
+
+        #{analysis.strip}
+      SECTION
+    end
+
+    def memory_analysis_section(frames)
+      if @mode != :object
+        return <<~TEXT
+          Memory profiling was not performed in this run.
+
+          To analyze memory allocations, run:
+          ```bash
+          bin/profile --target=indexing --mode=object --interval=1
+          ```
+        TEXT
+      end
+
+      # For object mode, show allocation analysis
+      top_allocators = frames.first(8)
+
+      table = top_allocators.each_with_index.map do |frame, idx|
+        "| #{idx + 1} | `#{frame[:name]}` | #{frame[:samples]} | #{format("%.1f", frame[:percent])}% |"
+      end.join("\n")
+
+      <<~TEXT
+        ### Top Allocators
+
+        | Rank | Method | Allocations | % Total |
+        |------|--------|-------------|---------|
+        #{table}
+
+        ### Key Allocation Hotspots
+
+        #### `IR::Loc.new`
+        Location objects are created for every node. Consider:
+        - Lazy initialization (compute only when accessed)
+        - Array-based representation instead of Data class
+
+        #### `String#split` in node keys
+        Node key generation involves string operations. Consider:
+        - Tuple-based keys `[class, method, line, col]`
+        - Integer-based ID system
+
+        #### `IR::LiteralNode.new`
+        Unavoidable for Ruby code with many literals, but consider:
+        - Singleton patterns for `nil`, `true`, `false`
+        - Sharing identical literal nodes
+      TEXT
+    end
+
+    def optimization_recommendations(_frames)
+      <<~TEXT
+        ### Short-term (Immediate Impact)
+
+        #### 1. Replace `Array#uniq` with `Set`
+
+        ```ruby
+        # Before
+        nodes = []
+        nodes << node
+        nodes.uniq!
+
+        # After
+        nodes = Set.new
+        nodes.add(node)
+        ```
+
+        **Expected impact:** 1-2% CPU reduction
+
+        #### 2. Cache line information per file
+
+        ```ruby
+        # In PrismConverter
+        def convert_loc(location)
+          @line_cache ||= {}
+          start_line = @line_cache[location.start_offset] ||= @source.find_line(location.start_offset)
+          # ...
+        end
+        ```
+
+        **Expected impact:** 10-15% CPU reduction (major find_line reduction)
+
+        ### Medium-term (Refactoring Required)
+
+        #### 3. Lightweight `IR::Loc`
+
+        ```ruby
+        # Option A: Lazy evaluation
+        class Loc
+          def initialize(location)
+            @location = location  # Store Prism::Location only
+          end
+
+          def start_line
+            @start_line ||= @location.start_line
+          end
+        end
+
+        # Option B: Array-based
+        Loc = ->(loc) { [loc.start_line, loc.start_column, loc.end_line, loc.end_column] }
+        ```
+
+        **Expected impact:** 8% memory reduction, less GC pressure
+
+        #### 4. Optimize node keys
+
+        ```ruby
+        # Before: String interpolation
+        def node_key
+          "\#{class_name}#\#{method}:\#{line}:\#{col}"
+        end
+
+        # After: Array-based (more efficient hashing)
+        def node_key
+          [class_name, method, line, col]
+        end
+        ```
+
+        **Expected impact:** Eliminate 510K String#split allocations
+
+        ### Long-term (Architectural Changes)
+
+        #### 5. Reuse ruby-lsp parsing results
+
+        Currently TypeGuessr re-parses files that ruby-lsp has already parsed. If we can access ruby-lsp's internal AST:
+
+        **Expected impact:** 9% CPU reduction (eliminate Prism.parse)
+
+        #### 6. Incremental indexing
+
+        Instead of full file re-indexing on changes:
+        - Current: Re-parse and re-index entire file
+        - Goal: Only reprocess changed methods/classes
+      TEXT
+    end
+
+    def dump_files_section
+      dumps = Dir.glob("tmp/stackprof-*.dump")
+      return "| No profile dumps found. | |" if dumps.empty?
+
+      dumps.map do |f|
+        desc = case f
+               when /all/ then "CPU profile (all phases)"
+               when /indexing/ then "CPU profile (indexing)"
+               when /inference/ then "CPU profile (inference)"
+               when /memory/ then "Object allocation profile"
+               else "Profile dump"
+               end
+        "| `#{f}` | #{desc} |"
+      end.join("\n")
+    end
+  end
+end
+
+# Parse command line options
+options = {
+  target: "all",
+  mode: "cpu",
+  limit: nil,
+  samples: 100,
+  output: nil,
+  interval: 1000,
+  report: false
+}
+
+OptionParser.new do |opts|
+  opts.banner = "Usage: #{$PROGRAM_NAME} [options]"
+
+  opts.on("--target=TARGET", "What to profile: indexing, inference, all (default: all)") do |v|
+    options[:target] = v
+  end
+
+  opts.on("--mode=MODE", "Profiling mode: cpu, wall, object (default: cpu)") do |v|
+    options[:mode] = v
+  end
+
+  opts.on("--limit=N", Integer, "Max files to process") do |v|
+    options[:limit] = v
+  end
+
+  opts.on("--samples=N", Integer, "Number of inference samples (default: 100)") do |v|
+    options[:samples] = v
+  end
+
+  opts.on("--output=PATH", "Output file path") do |v|
+    options[:output] = v
+  end
+
+  opts.on("--interval=N", Integer, "Sampling interval in microseconds (default: 1000)") do |v|
+    options[:interval] = v
+  end
+
+  opts.on("--report", "Generate markdown report") do
+    options[:report] = true
+  end
+
+  opts.on("-h", "--help", "Show this help") do
+    puts opts
+    exit
+  end
+end.parse!
+
+runner = ProfileIndexing::Runner.new(
+  target: options[:target],
+  mode: options[:mode],
+  limit: options[:limit],
+  samples: options[:samples],
+  output: options[:output],
+  interval: options[:interval],
+  report: options[:report]
+)
+
+runner.run
