@@ -148,6 +148,16 @@ module RubyLsp
         end
       end
 
+      # Look up a method definition by class name and method name
+      # @param class_name [String] Class name (e.g., "User", "Admin::User")
+      # @param method_name [String] Method name (e.g., "initialize", "save")
+      # @return [TypeGuessr::Core::IR::DefNode, nil] DefNode or nil if not found
+      def lookup_method(class_name, method_name)
+        @mutex.synchronize do
+          @resolver.lookup_method(class_name, method_name)
+        end
+      end
+
       # Resolve method list to a type (for use during inference)
       # @param methods [Array<Symbol>] Method names called on the parameter
       # @return [Type, nil] Resolved type or nil if not resolvable

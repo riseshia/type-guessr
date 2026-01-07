@@ -199,6 +199,33 @@ obj[ ]= A::B::C::D.new  # Guessed Type: A::B::C::D
 obj
 ```
 
+### .new hover with initialize parameters
+
+```ruby
+class Recipe
+  def initialize(a, b)
+  end
+end
+
+Recipe.[n]ew(1, 2)  # Signature: (untyped a, untyped b) -> Recipe
+```
+
+```ruby
+class Empty
+end
+
+Empty.[n]ew  # Signature: () -> Empty
+```
+
+```ruby
+class Config
+  def initialize(host, port = 8080)
+  end
+end
+
+Config.[n]ew("localhost")  # Signature: (untyped host, ?Integer port) -> Config
+```
+
 ## Class Method Calls
 
 ### File.read

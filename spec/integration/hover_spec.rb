@@ -447,6 +447,58 @@ RSpec.describe "Hover Integration" do
         expect(response).to be_nil.or(be_a(RubyLsp::Interface::Hover))
       end
     end
+
+    describe ".new hover with initialize parameters", :doc do
+      context "when class has initialize with required params" do
+        let(:source) do
+          <<~RUBY
+            class Recipe
+              def initialize(a, b)
+              end
+            end
+
+            Recipe.new(1, 2)
+          RUBY
+        end
+
+        it "→ (untyped a, untyped b) -> Recipe" do
+          # Hover on "new" at line 6, column 7
+          expect_hover_method_signature(line: 6, column: 7, expected_signature: "(untyped a, untyped b) -> Recipe")
+        end
+      end
+
+      context "when class has no initialize" do
+        let(:source) do
+          <<~RUBY
+            class Empty
+            end
+
+            Empty.new
+          RUBY
+        end
+
+        it "→ () -> Empty" do
+          expect_hover_method_signature(line: 4, column: 6, expected_signature: "() -> Empty")
+        end
+      end
+
+      context "when class has initialize with optional params" do
+        let(:source) do
+          <<~RUBY
+            class Config
+              def initialize(host, port = 8080)
+              end
+            end
+
+            Config.new("localhost")
+          RUBY
+        end
+
+        it "→ (untyped host, ?Integer port) -> Config" do
+          expect_hover_method_signature(line: 6, column: 7, expected_signature: "(untyped host, ?Integer port) -> Config")
+        end
+      end
+    end
   end
 
   describe "Class Method Calls", :doc do
