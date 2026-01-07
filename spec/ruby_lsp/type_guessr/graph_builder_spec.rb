@@ -252,29 +252,6 @@ RSpec.describe RubyLsp::TypeGuessr::GraphBuilder do
       result = graph_builder.build("Test:lit:ClassInstance:10")
       expect(result[:nodes].first[:inferred_type]).to eq("String | Integer")
     end
-
-    it "formats DuckType correctly" do
-      allow(runtime_adapter).to receive(:infer_type).and_return(
-        TypeGuessr::Core::Inference::Result.new(
-          TypeGuessr::Core::Types::DuckType.new(%i[foo bar]),
-          "test",
-          :test
-        )
-      )
-
-      param = TypeGuessr::Core::IR::ParamNode.new(
-        name: :x,
-        kind: :required,
-        default_value: nil,
-        called_methods: %i[foo bar],
-        loc: loc
-      )
-      nodes["Test:param:x:10"] = param
-
-      result = graph_builder.build("Test:param:x:10")
-      inferred_type = result[:nodes].first[:inferred_type]
-      expect(inferred_type).to match(/responds to #(foo|bar), #(foo|bar)/)
-    end
   end
 
   describe "node details extraction" do

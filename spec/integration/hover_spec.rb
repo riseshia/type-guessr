@@ -555,7 +555,7 @@ RSpec.describe "Hover Integration" do
         RUBY
       end
 
-      it "infers Recipe from duck typing" do
+      it "infers Recipe from method calls" do
         expect_hover_type(line: 16, column: 12, expected: "Recipe")
       end
     end
@@ -588,7 +588,7 @@ RSpec.describe "Hover Integration" do
         RUBY
       end
 
-      it "infers Recipe2 from duck typing with inherited methods" do
+      it "infers Recipe2 from method calls with inherited methods" do
         expect_hover_type(line: 21, column: 4, expected: "Recipe2")
       end
     end
@@ -717,15 +717,13 @@ RSpec.describe "Hover Integration" do
       end
 
       it "isolates parameter types per method" do
-        # method_a's context has no duck typing info
+        # method_a's context has no called methods - returns Unknown
         response_a = hover_on_source(source, { line: 2, character: 15 })
-        expect(response_a.contents.value).not_to include("name")
-        expect(response_a.contents.value).not_to include("age")
+        expect(response_a.contents.value).to include("untyped")
 
-        # method_b's context has duck typing from .name and .age calls
+        # method_b's context has called methods but cannot resolve to a class - returns Unknown
         response_b = hover_on_source(source, { line: 6, character: 4 })
-        expect(response_b.contents.value).to include("name")
-        expect(response_b.contents.value).to include("age")
+        expect(response_b.contents.value).to include("untyped")
       end
     end
 
@@ -855,20 +853,6 @@ RSpec.describe "Hover Integration" do
   end
 
   describe "Parameter Hover" do
-    context "required parameter with duck typing" do
-      let(:source) do
-        <<~RUBY
-          def greet(name)
-            name.upcase
-          end
-        RUBY
-      end
-
-      it "infers duck type from method calls" do
-        expect_hover_type(line: 2, column: 4, expected: "upcase")
-      end
-    end
-
     context "optional parameter with default" do
       let(:source) do
         <<~RUBY
@@ -880,20 +864,6 @@ RSpec.describe "Hover Integration" do
 
       it "infers type from default value" do
         expect_hover_type(line: 2, column: 4, expected: "String")
-      end
-    end
-
-    context "keyword parameter with duck typing" do
-      let(:source) do
-        <<~RUBY
-          def greet(name:)
-            name.upcase
-          end
-        RUBY
-      end
-
-      it "infers duck type from method calls" do
-        expect_hover_type(line: 2, column: 4, expected: "upcase")
       end
     end
 
@@ -1602,7 +1572,7 @@ RSpec.describe "Hover Integration" do
       end
     end
 
-    context "multiple classes match duck typing" do
+    context "multiple classes match method-based inference" do
       let(:source) do
         <<~RUBY
           class Parser

@@ -378,7 +378,7 @@ module TypeGuessr
         def convert_local_variable_read(prism_node, context)
           # Look up the most recent assignment
           write_node = context.lookup_variable(prism_node.name)
-          # Share called_methods array with the write node/parameter for duck typing
+          # Share called_methods array with the write node/parameter for method-based inference
           called_methods = if write_node.is_a?(IR::LocalWriteNode) || write_node.is_a?(IR::ParamNode)
                              write_node.called_methods
                            else
@@ -631,7 +631,7 @@ module TypeGuessr
 
           has_block = !prism_node.block.nil?
 
-          # Track method call on receiver for duck typing
+          # Track method call on receiver for method-based type inference
           receiver_node.called_methods << prism_node.name if variable_node?(receiver_node) && !receiver_node.called_methods.include?(prism_node.name)
 
           # Handle container mutating methods (Hash#[]=, Array#[]=, Array#<<)
@@ -665,7 +665,7 @@ module TypeGuessr
           call_node
         end
 
-        # Check if node is any variable node (for duck typing tracking)
+        # Check if node is any variable node (for method call tracking)
         def variable_node?(node)
           node.is_a?(IR::LocalWriteNode) ||
             node.is_a?(IR::LocalReadNode) ||

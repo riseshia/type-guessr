@@ -143,7 +143,7 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
         expect(result.reason).to eq("parameter without type info")
       end
 
-      it "records called methods for duck typing" do
+      it "returns Unknown when called methods cannot be resolved" do
         param = TypeGuessr::Core::IR::ParamNode.new(
           name: :recipe,
           kind: :required,
@@ -153,8 +153,8 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
         )
 
         result = resolver.infer(param)
-        expect(result.type).to be_a(TypeGuessr::Core::Types::DuckType)
-        expect(result.type.methods).to eq(%i[comments title])
+        expect(result.type).to be(TypeGuessr::Core::Types::Unknown.instance)
+        expect(result.reason).to include("unresolved methods")
       end
     end
 
@@ -615,7 +615,7 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
     end
   end
 
-  describe "duck type resolution with inheritance" do
+  describe "called methods resolution with inheritance" do
     let(:recipe_ingredients) do
       TypeGuessr::Core::IR::DefNode.new(
         name: :ingredients, params: [], return_node: nil, body_nodes: [], loc: loc
@@ -650,8 +650,7 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
 
     context "when only parent methods are called" do
       it "returns parent type (most general) instead of union" do
-        duck_type = TypeGuessr::Core::Types::DuckType.new(%i[ingredients steps])
-        result = resolver.send(:resolve_duck_type_from_project_methods, duck_type)
+        result = resolver.send(:resolve_called_methods_from_project, %w[ingredients steps])
 
         # Should return Recipe only, not Recipe | Recipe2
         expect(result).to be_a(TypeGuessr::Core::Types::ClassInstance)
@@ -661,8 +660,7 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
 
     context "when child-only method is called" do
       it "returns child type" do
-        duck_type = TypeGuessr::Core::Types::DuckType.new(%i[ingredients steps notes])
-        result = resolver.send(:resolve_duck_type_from_project_methods, duck_type)
+        result = resolver.send(:resolve_called_methods_from_project, %w[ingredients steps notes])
 
         # Only Recipe2 has all three methods
         expect(result).to be_a(TypeGuessr::Core::Types::ClassInstance)
@@ -676,8 +674,7 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
       end
 
       it "returns only directly matching class" do
-        duck_type = TypeGuessr::Core::Types::DuckType.new(%i[ingredients steps])
-        result = resolver.send(:resolve_duck_type_from_project_methods, duck_type)
+        result = resolver.send(:resolve_called_methods_from_project, %w[ingredients steps])
 
         # Without ancestry_provider, only Recipe directly has both methods
         expect(result).to be_a(TypeGuessr::Core::Types::ClassInstance)
@@ -685,10 +682,39 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
       end
 
       it "returns nil when no class has all methods directly" do
-        duck_type = TypeGuessr::Core::Types::DuckType.new(%i[ingredients steps notes])
-        result = resolver.send(:resolve_duck_type_from_project_methods, duck_type)
+        result = resolver.send(:resolve_called_methods_from_project, %w[ingredients steps notes])
 
         # Without ancestry, Recipe2 doesn't have ingredients/steps, Recipe doesn't have notes
+        expect(result).to be_nil
+      end
+    end
+
+    describe "#classes_to_type" do
+      it "returns nil for empty list" do
+        result = resolver.classes_to_type([])
+        expect(result).to be_nil
+      end
+
+      it "returns ClassInstance for single class" do
+        result = resolver.classes_to_type(["Recipe"])
+        expect(result).to be_a(TypeGuessr::Core::Types::ClassInstance)
+        expect(result.name).to eq("Recipe")
+      end
+
+      it "returns Union for two classes" do
+        result = resolver.classes_to_type(%w[Parser Compiler])
+        expect(result).to be_a(TypeGuessr::Core::Types::Union)
+        expect(result.types.map(&:name)).to contain_exactly("Parser", "Compiler")
+      end
+
+      it "returns Union for three classes" do
+        result = resolver.classes_to_type(%w[Parser Compiler Optimizer])
+        expect(result).to be_a(TypeGuessr::Core::Types::Union)
+        expect(result.types.map(&:name)).to contain_exactly("Parser", "Compiler", "Optimizer")
+      end
+
+      it "returns nil for four or more classes (too ambiguous)" do
+        result = resolver.classes_to_type(%w[A B C D])
         expect(result).to be_nil
       end
     end

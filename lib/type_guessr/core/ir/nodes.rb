@@ -141,7 +141,7 @@ module TypeGuessr
       # Local variable write node (assignment)
       # @param name [Symbol] Variable name
       # @param value [Node] The node of the assigned value
-      # @param called_methods [Array<Symbol>] Methods called on this variable (for duck typing)
+      # @param called_methods [Array<Symbol>] Methods called on this variable (for method-based inference)
       # @param loc [Loc] Location information
       #
       # Note: called_methods is a shared array object that can be mutated during parsing
@@ -172,10 +172,10 @@ module TypeGuessr
       # Local variable read node (reference)
       # @param name [Symbol] Variable name
       # @param write_node [LocalWriteNode, nil] The LocalWriteNode this read references
-      # @param called_methods [Array<Symbol>] Methods called on this variable (for duck typing)
+      # @param called_methods [Array<Symbol>] Methods called on this variable (for method-based inference)
       # @param loc [Loc] Location information
       #
-      # Note: called_methods is shared with LocalWriteNode for duck typing propagation
+      # Note: called_methods is shared with LocalWriteNode for method-based inference propagation
       LocalReadNode = Data.define(:name, :write_node, :called_methods, :loc) do
         include TreeInspect
 
@@ -204,7 +204,7 @@ module TypeGuessr
       # @param name [Symbol] Variable name (e.g., :@recipe)
       # @param class_name [String, nil] Enclosing class name for deferred resolution
       # @param value [Node] The node of the assigned value
-      # @param called_methods [Array<Symbol>] Methods called on this variable (for duck typing)
+      # @param called_methods [Array<Symbol>] Methods called on this variable (for method-based inference)
       # @param loc [Loc] Location information
       InstanceVariableWriteNode = Data.define(:name, :class_name, :value, :called_methods, :loc) do
         include TreeInspect
@@ -235,7 +235,7 @@ module TypeGuessr
       # @param name [Symbol] Variable name (e.g., :@recipe)
       # @param class_name [String, nil] Enclosing class name for deferred resolution
       # @param write_node [InstanceVariableWriteNode, nil] The write node this read references
-      # @param called_methods [Array<Symbol>] Methods called on this variable (for duck typing)
+      # @param called_methods [Array<Symbol>] Methods called on this variable (for method-based inference)
       # @param loc [Loc] Location information
       #
       # Note: write_node may be nil at conversion time if assignment appears later.
@@ -269,7 +269,7 @@ module TypeGuessr
       # @param name [Symbol] Variable name (e.g., :@@count)
       # @param class_name [String, nil] Enclosing class name for deferred resolution
       # @param value [Node] The node of the assigned value
-      # @param called_methods [Array<Symbol>] Methods called on this variable (for duck typing)
+      # @param called_methods [Array<Symbol>] Methods called on this variable (for method-based inference)
       # @param loc [Loc] Location information
       ClassVariableWriteNode = Data.define(:name, :class_name, :value, :called_methods, :loc) do
         include TreeInspect
@@ -300,7 +300,7 @@ module TypeGuessr
       # @param name [Symbol] Variable name (e.g., :@@count)
       # @param class_name [String, nil] Enclosing class name for deferred resolution
       # @param write_node [ClassVariableWriteNode, nil] The write node this read references
-      # @param called_methods [Array<Symbol>] Methods called on this variable (for duck typing)
+      # @param called_methods [Array<Symbol>] Methods called on this variable (for method-based inference)
       # @param loc [Loc] Location information
       ClassVariableReadNode = Data.define(:name, :class_name, :write_node, :called_methods, :loc) do
         include TreeInspect
@@ -332,7 +332,7 @@ module TypeGuessr
       # @param kind [Symbol] Parameter kind (:required, :optional, :rest, :keyword_required,
       #                      :keyword_optional, :keyword_rest, :block, :forwarding)
       # @param default_value [Node, nil] Default value node (nil if no default)
-      # @param called_methods [Array<Symbol>] Methods called on this parameter (for duck typing)
+      # @param called_methods [Array<Symbol>] Methods called on this parameter (for method-based inference)
       # @param loc [Loc] Location information
       #
       # Note: called_methods is a shared array object that can be mutated during parsing

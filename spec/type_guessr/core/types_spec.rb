@@ -437,40 +437,6 @@ RSpec.describe TypeGuessr::Core::Types do
     end
   end
 
-  describe "DuckType" do
-    it "creates a duck type with methods" do
-      duck_type = TypeGuessr::Core::Types::DuckType.new(%i[foo bar])
-      expect(duck_type.methods).to eq(%i[bar foo])
-    end
-
-    it "sorts methods alphabetically" do
-      duck_type = TypeGuessr::Core::Types::DuckType.new(%i[zebra apple middle])
-      expect(duck_type.methods).to eq(%i[apple middle zebra])
-    end
-
-    it "has a string representation" do
-      duck_type = TypeGuessr::Core::Types::DuckType.new(%i[foo bar])
-      expect(duck_type.to_s).to eq("(responds to #bar, #foo)")
-    end
-
-    it "has a string representation for single method" do
-      duck_type = TypeGuessr::Core::Types::DuckType.new([:save])
-      expect(duck_type.to_s).to eq("(responds to #save)")
-    end
-
-    it "equals another DuckType with the same methods" do
-      duck1 = TypeGuessr::Core::Types::DuckType.new(%i[foo bar])
-      duck2 = TypeGuessr::Core::Types::DuckType.new(%i[bar foo])
-      expect(duck1).to eq(duck2)
-    end
-
-    it "does not equal DuckType with different methods" do
-      duck1 = TypeGuessr::Core::Types::DuckType.new(%i[foo bar])
-      duck2 = TypeGuessr::Core::Types::DuckType.new(%i[foo baz])
-      expect(duck1).not_to eq(duck2)
-    end
-  end
-
   describe "ForwardingArgs" do
     it "is a singleton" do
       forwarding1 = TypeGuessr::Core::Types::ForwardingArgs.instance
@@ -545,13 +511,6 @@ RSpec.describe TypeGuessr::Core::Types do
                                              described_class::ClassInstance.new("Integer"),
                                            ])
         expect(union.rbs_class_name).to be_nil
-      end
-    end
-
-    describe "DuckType" do
-      it "returns nil" do
-        duck_type = described_class::DuckType.new(%i[foo bar])
-        expect(duck_type.rbs_class_name).to be_nil
       end
     end
   end
@@ -640,13 +599,6 @@ RSpec.describe TypeGuessr::Core::Types do
       it "returns empty hash" do
         union = described_class::Union.new([integer_type, string_type])
         expect(union.type_variable_substitutions).to eq({})
-      end
-    end
-
-    describe "DuckType" do
-      it "returns empty hash" do
-        duck_type = described_class::DuckType.new(%i[foo bar])
-        expect(duck_type.type_variable_substitutions).to eq({})
       end
     end
 
@@ -794,14 +746,6 @@ RSpec.describe TypeGuessr::Core::Types do
         result = union.substitute({ Elem: symbol_type })
 
         expect(result).to be(union)
-      end
-    end
-
-    describe "DuckType" do
-      it "returns self (no type variables)" do
-        duck_type = described_class::DuckType.new(%i[foo bar])
-        result = duck_type.substitute({ Elem: integer_type })
-        expect(result).to be(duck_type)
       end
     end
 

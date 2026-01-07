@@ -35,7 +35,7 @@ TypeGuessr is a Ruby LSP addon that provides heuristic type inference without re
 │  │ - VariableNode  │  │ - ArrayType │  │ - return types  │  │
 │  │ - CallNode      │  │ - HashShape │  │                 │  │
 │  │ - ParamNode     │  │ - Union     │  │                 │  │
-│  │ - DefNode       │  │ - DuckType  │  │                 │  │
+│  │ - DefNode       │  │             │  │                 │  │
 │  │ - BlockParamSlot│  │             │  │                 │  │
 │  └─────────────────┘  └─────────────┘  └─────────────────┘  │
 └─────────────────────────────────────────────────────────────┘
@@ -51,7 +51,7 @@ Nodes form a reverse dependency graph where each node points to the nodes it dep
 |-----------|---------|------------|
 | `LiteralNode` | Literals (string, integer, array, hash) | None (leaf node) |
 | `VariableNode` | Variable assignments and reads | Points to assigned value node |
-| `ParamNode` | Method parameters | Points to default value or duck type |
+| `ParamNode` | Method parameters | Points to default value (called_methods tracked for inference) |
 | `CallNode` | Method calls | Points to receiver + args |
 | `DefNode` | Method definitions | Points to body (return value) |
 | `BlockParamSlot` | Block parameters | Filled by CallNode inference |
@@ -91,7 +91,7 @@ Resolves nodes to types by traversing the dependency graph.
 - Caches inference results per node
 - Handles RBS method signature lookup
 - Resolves block parameter types from receiver's element type
-- Duck type resolution for method-based type inference
+- Method-based type inference via called method resolution
 
 ### Types (`lib/type_guessr/core/types.rb`)
 
@@ -104,7 +104,6 @@ Type representations:
 | `HashType` | `Hash[Symbol, String]` | Hash with key/value types |
 | `HashShape` | `{ a: Integer, b: String }` | Hash with known fields |
 | `Union` | `Integer \| String` | Union of types |
-| `DuckType` | methods: [:foo, :bar] | Type inferred from method calls |
 | `Unknown` | `untyped` | Unknown type (singleton) |
 | `TypeVariable` | `Elem`, `K`, `V` | RBS type variables |
 

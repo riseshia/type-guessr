@@ -10,9 +10,9 @@ module TypeGuessr
       # Resolves types by traversing the IR dependency graph
       # Each node points to nodes it depends on (reverse dependency graph)
       class Resolver
-        # Callback for resolving duck types to class instances
-        # @return [Proc, nil] A proc that takes DuckType and returns resolved type or nil
-        attr_accessor :duck_type_resolver
+        # Callback for resolving method lists to class instances
+        # @return [Proc, nil] A proc that takes Array<Symbol> and returns resolved type or nil
+        attr_accessor :method_list_resolver
 
         # Callback for getting class ancestors
         # @return [Proc, nil] A proc that takes class_name and returns array of ancestor names
@@ -33,7 +33,7 @@ module TypeGuessr
           @instance_variables = {} # { "ClassName" => { :@name => InstanceVariableWriteNode } }
           @class_variables = {} # { "ClassName" => { :@@name => ClassVariableWriteNode } }
           @project_classes = {} # { "ClassName" => :class or :module }
-          @duck_type_resolver = nil
+          @method_list_resolver = nil
           @ancestry_provider = nil
           @constant_kind_provider = nil
           @class_method_lookup_provider = nil
@@ -174,6 +174,22 @@ module TypeGuessr
           @cache.clear
         end
 
+        # Convert a list of matching class names to a type
+        # @param classes [Array<String>] List of class names
+        # @return [Type, nil] ClassInstance (1 match), Union (2-3 matches), or nil
+        def classes_to_type(classes)
+          case classes.size
+          when 0
+            nil
+          when 1
+            Types::ClassInstance.new(classes.first)
+          when 2, 3
+            types = classes.map { |c| Types::ClassInstance.new(c) }
+            Types::Union.new(types)
+          end
+          # 4+ matches → nil (too ambiguous)
+        end
+
         private
 
         def infer_node(node)
@@ -289,13 +305,21 @@ module TypeGuessr
             return Result.new(dep_result.type, "parameter default: #{dep_result.reason}", dep_result.source)
           end
 
-          # Try duck typing based on called methods
+          # Try to resolve type from called methods
           if node.called_methods.any?
-            duck_type = Types::DuckType.new(node.called_methods)
+            resolved_type = resolve_called_methods(node.called_methods)
+            if resolved_type
+              return Result.new(
+                resolved_type,
+                "parameter inferred from #{node.called_methods.join(", ")}",
+                :project
+              )
+            end
+
             return Result.new(
-              duck_type,
-              "parameter with duck typing",
-              :inference
+              Types::Unknown.instance,
+              "parameter with unresolved methods: #{node.called_methods.join(", ")}",
+              :unknown
             )
           end
 
@@ -376,21 +400,6 @@ module TypeGuessr
           if node.receiver
             receiver_result = infer(node.receiver)
             receiver_type = receiver_result.type
-
-            # Try to resolve DuckType to ClassInstance if possible
-            if receiver_type.is_a?(Types::DuckType)
-              # First try external resolver (RubyIndexer)
-              if @duck_type_resolver
-                resolved = @duck_type_resolver.call(receiver_type)
-                receiver_type = resolved if resolved && !resolved.is_a?(Types::Unknown)
-              end
-
-              # If still DuckType, try project methods
-              if receiver_type.is_a?(Types::DuckType)
-                resolved = resolve_duck_type_from_project_methods(receiver_type)
-                receiver_type = resolved if resolved
-              end
-            end
 
             # Query for method return type: project first, then RBS
             case receiver_type
@@ -577,10 +586,28 @@ module TypeGuessr
           end
         end
 
-        # Resolve DuckType to ClassInstance using registered project methods
+        # Resolve called methods to a type
+        # First tries external resolver (RubyIndexer), then project methods
+        # @param called_methods [Array<Symbol>] Methods called on the parameter
+        # @return [Type, nil] Resolved type or nil
+        def resolve_called_methods(called_methods)
+          return nil if called_methods.empty?
+
+          # First try external resolver (RubyIndexer)
+          if @method_list_resolver
+            resolved = @method_list_resolver.call(called_methods)
+            return resolved if resolved && !resolved.is_a?(Types::Unknown)
+          end
+
+          # Then try project methods
+          resolve_called_methods_from_project(called_methods.map(&:to_s))
+        end
+
+        # Resolve called methods from project method registry
         # Returns ClassInstance if exactly one class matches, Union if 2-3 match, nil otherwise
-        def resolve_duck_type_from_project_methods(duck_type)
-          methods = duck_type.methods.map(&:to_s)
+        # @param methods [Array<String>] Method names
+        # @return [Type, nil] Resolved type or nil
+        def resolve_called_methods_from_project(methods)
           return nil if methods.empty?
 
           # Find classes that define all the methods (including inherited ones)
@@ -591,16 +618,7 @@ module TypeGuessr
           # Filter out subclasses when parent is also matched (prefer most general type)
           matching_classes = filter_to_most_general_types(matching_classes)
 
-          case matching_classes.size
-          when 0
-            nil
-          when 1
-            Types::ClassInstance.new(matching_classes.first)
-          when 2, 3
-            types = matching_classes.map { |c| Types::ClassInstance.new(c) }
-            Types::Union.new(types)
-          end
-          # 4+ matches → nil (too ambiguous)
+          classes_to_type(matching_classes)
         end
 
         # Get all methods available on a class (including inherited methods from project)

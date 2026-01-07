@@ -402,29 +402,6 @@ module TypeGuessr
         end
       end
 
-      # DuckType - represents a type inferred from method calls (duck typing)
-      class DuckType < Type
-        attr_reader :methods
-
-        def initialize(methods)
-          super()
-          @methods = methods.sort
-        end
-
-        def eql?(other)
-          super && @methods == other.methods
-        end
-
-        def hash
-          [self.class, @methods].hash
-        end
-
-        def to_s
-          methods_str = @methods.map { |m| "##{m}" }.join(", ")
-          "(responds to #{methods_str})"
-        end
-      end
-
       # ForwardingArgs - represents the forwarding parameter (...)
       class ForwardingArgs < Type
         include Singleton

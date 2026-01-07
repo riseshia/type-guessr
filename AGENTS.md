@@ -132,7 +132,7 @@ The project is organized into two main layers:
 - Handles RBS method signature lookup
 
 #### 6. Types (`types.rb`)
-- Type representations: `ClassInstance`, `ArrayType`, `HashType`, `HashShape`, `Union`, `DuckType`, `Unknown`, etc.
+- Type representations: `ClassInstance`, `ArrayType`, `HashType`, `HashShape`, `Union`, `Unknown`, etc.
 
 #### 7. RBSProvider (`rbs_provider.rb`)
 - Provides RBS method signatures and return types
