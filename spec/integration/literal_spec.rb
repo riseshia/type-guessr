@@ -151,7 +151,7 @@ RSpec.describe "Literal Type Inference from TypeProf Scenarios" do
   describe "Interpolated strings" do
     context "string with interpolation" do
       let(:source) do
-        <<~RUBY
+        <<~'RUBY'
           def bar(n)
             "bar"
           end
@@ -201,7 +201,7 @@ RSpec.describe "Literal Type Inference from TypeProf Scenarios" do
 
     context "string with global variable interpolation" do
       let(:source) do
-        <<~RUBY
+        <<~'RUBY'
           def foo
             "#{Regexp.last_match(1)}"
           end
