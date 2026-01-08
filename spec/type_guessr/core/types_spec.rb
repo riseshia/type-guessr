@@ -132,11 +132,11 @@ RSpec.describe TypeGuessr::Core::Types do
       expect(outer_union.types).to contain_exactly(type1, type2, type3)
     end
 
-    it "removes Unknown when other types are present" do
+    it "simplifies to Unknown when Unknown is present with other types" do
       unknown = TypeGuessr::Core::Types::Unknown.instance
       type1 = TypeGuessr::Core::Types::ClassInstance.new("String")
       union = TypeGuessr::Core::Types::Union.new([unknown, type1])
-      expect(union.types).to contain_exactly(type1)
+      expect(union.types).to contain_exactly(unknown)
     end
 
     it "keeps Unknown when it is the only type" do

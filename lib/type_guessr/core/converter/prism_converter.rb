@@ -1008,20 +1008,27 @@ module TypeGuessr
             when_context = context.fork(:when)
             if when_node.statements
               when_result = convert(when_node.statements, when_context)
-              branches << (when_result || create_nil_literal(prism_node.location))
+              # Skip non-returning branches (raise, fail, etc.)
+              unless non_returning?(when_result)
+                branches << (when_result || create_nil_literal(prism_node.location))
+                branch_contexts << when_context
+              end
             else
               # Empty when clause → nil
               branches << create_nil_literal(prism_node.location)
+              branch_contexts << when_context
             end
-            branch_contexts << when_context
           end
 
           # Convert else clause
           if prism_node.else_clause
             else_context = context.fork(:else)
             else_result = convert(prism_node.else_clause.statements, else_context)
-            branches << (else_result || create_nil_literal(prism_node.location))
-            branch_contexts << else_context
+            # Skip non-returning else clause (raise, fail, etc.)
+            unless non_returning?(else_result)
+              branches << (else_result || create_nil_literal(prism_node.location))
+              branch_contexts << else_context
+            end
           else
             # If no else clause, nil is possible
             branches << create_nil_literal(prism_node.location)
@@ -1322,6 +1329,10 @@ module TypeGuessr
         end
 
         def merge_modified_variables(parent_context, then_context, else_context, then_node, else_node, location)
+          # Skip non-returning branches (raise, fail, etc.)
+          then_node = nil if non_returning?(then_node)
+          else_node = nil if non_returning?(else_node)
+
           # Track which variables were modified in each branch
           then_vars = then_context&.local_variables || []
           else_vars = else_context&.local_variables || []
@@ -1445,6 +1456,14 @@ module TypeGuessr
             values: nil,
             loc: convert_loc(location)
           )
+        end
+
+        # Check if a node represents a non-returning expression (raise, fail, exit, abort)
+        # These should be excluded from branch type inference
+        def non_returning?(node)
+          return false unless node.is_a?(IR::CallNode)
+
+          node.receiver.nil? && %i[raise fail exit abort].include?(node.method)
         end
 
         def convert_class_or_module(prism_node, context)

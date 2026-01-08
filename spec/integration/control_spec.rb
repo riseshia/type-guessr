@@ -47,8 +47,8 @@ RSpec.describe "Control Flow Type Inference from TypeProf Scenarios" do
         RUBY
       end
 
-      it "infers n as Integer after assignment" do
-        expect_hover_type(line: 5, column: 0, expected: "Integer")
+      it "infers n as untyped (parameter type unknown, merge with Integer)" do
+        expect_hover_type(line: 5, column: 0, expected: "untyped")
       end
     end
 

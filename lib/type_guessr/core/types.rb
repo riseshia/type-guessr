@@ -175,8 +175,8 @@ module TypeGuessr
           # Deduplicate
           deduplicated = flattened.uniq
 
-          # Remove Unknown if other types are present
-          filtered = remove_unknown_if_others_present(deduplicated)
+          # Simplify to Unknown if Unknown is present (T | untyped = untyped)
+          filtered = simplify_if_unknown_present(deduplicated)
 
           # Apply cutoff
           apply_cutoff(filtered, cutoff)
@@ -188,11 +188,11 @@ module TypeGuessr
           end
         end
 
-        def remove_unknown_if_others_present(types)
+        def simplify_if_unknown_present(types)
           return types if types.size <= 1
 
-          non_unknown = types.reject { |t| t.is_a?(Unknown) }
-          non_unknown.empty? ? types : non_unknown
+          has_unknown = types.any? { |t| t.is_a?(Unknown) }
+          has_unknown ? [Unknown.instance] : types
         end
 
         def apply_cutoff(types, cutoff)
