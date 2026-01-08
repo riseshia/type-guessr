@@ -6,6 +6,7 @@ require_relative "../../type_guessr/core/index/location_index"
 require_relative "../../type_guessr/core/inference/resolver"
 require_relative "../../type_guessr/core/signature_provider"
 require_relative "../../type_guessr/core/rbs_provider"
+require_relative "../../type_guessr/core/type_simplifier"
 require_relative "type_inferrer"
 
 module RubyLsp
@@ -39,6 +40,11 @@ module RubyLsp
         @resolver.class_method_lookup_provider = lambda do |class_name, method_name|
           lookup_class_method_owner(class_name, method_name)
         end
+
+        # Set up type simplifier with ancestry provider
+        @resolver.type_simplifier = ::TypeGuessr::Core::TypeSimplifier.new(
+          ancestry_provider: @resolver.ancestry_provider
+        )
       end
 
       # Swap ruby-lsp's TypeInferrer with TypeGuessr's custom implementation

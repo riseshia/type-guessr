@@ -2,6 +2,7 @@
 
 require_relative "../ir/nodes"
 require_relative "../types"
+require_relative "../type_simplifier"
 require_relative "result"
 
 module TypeGuessr
@@ -26,6 +27,10 @@ module TypeGuessr
         # @return [Proc, nil] A proc that takes (class_name, method_name) and returns owner_name or nil
         attr_accessor :class_method_lookup_provider
 
+        # Type simplifier for normalizing union types
+        # @return [TypeSimplifier, nil]
+        attr_accessor :type_simplifier
+
         def initialize(signature_provider)
           @signature_provider = signature_provider
           @cache = {}.compare_by_identity
@@ -37,6 +42,7 @@ module TypeGuessr
           @ancestry_provider = nil
           @constant_kind_provider = nil
           @class_method_lookup_provider = nil
+          @type_simplifier = nil
         end
 
         # Register a project method definition for later lookup
@@ -165,6 +171,10 @@ module TypeGuessr
           return cached if cached
 
           result = infer_node(node)
+
+          # Apply type simplification if available
+          result = simplify_result(result) if @type_simplifier
+
           @cache[node] = result
           result
         end
@@ -711,6 +721,16 @@ module TypeGuessr
             # Check if any ancestor (excluding self) is also in the matching list
             ancestors.any? { |ancestor| ancestor != class_name && classes.include?(ancestor) }
           end
+        end
+
+        # Apply type simplification to a result
+        # @param result [Result] The inference result
+        # @return [Result] Result with simplified type
+        def simplify_result(result)
+          simplified_type = @type_simplifier.simplify(result.type)
+          return result if simplified_type.equal?(result.type)
+
+          Result.new(simplified_type, result.reason, result.source)
         end
       end
     end
