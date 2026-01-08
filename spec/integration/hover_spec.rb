@@ -1649,6 +1649,57 @@ RSpec.describe "Hover Integration" do
         expect(response.contents.value).to match(/Parser.*Compiler|Compiler.*Parser/)
       end
     end
+
+    context "infer return type from Unknown receiver with unique method" do
+      let(:source) do
+        <<~RUBY
+          class Store
+            def depot
+              42
+            end
+          end
+
+          def example(store)
+            result = store.depot
+            result
+          end
+        RUBY
+      end
+
+      it "infers return type from inferred receiver" do
+        # store parameter is Unknown (no called_methods)
+        # but depot is unique to Store, so we infer Store#depot return type
+        expect_hover_type(line: 8, column: 2, expected: "Integer")
+      end
+    end
+
+    context "infer return type when receiver is from complex method" do
+      let(:source) do
+        <<~RUBY
+          class Store
+            def depot
+              42
+            end
+          end
+
+          def get_store(param)
+            param.unknown_method # returns Unknown
+          end
+
+          def example
+            store = get_store(nil)
+            result = store.depot
+            result
+          end
+        RUBY
+      end
+
+      it "infers return type from inferred receiver" do
+        # store has Unknown type (from get_store which returns Unknown)
+        # depot is unique to Store, so we infer Store#depot return type
+        expect_hover_type(line: 14, column: 2, expected: "Integer")
+      end
+    end
   end
 
   describe "Call Node Hover" do

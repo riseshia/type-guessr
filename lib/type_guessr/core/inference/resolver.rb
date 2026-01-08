@@ -243,7 +243,25 @@ module TypeGuessr
         def infer_local_read(node)
           return Result.new(Types::Unknown.instance, "unassigned variable", :unknown) unless node.write_node
 
-          infer(node.write_node)
+          write_result = infer(node.write_node)
+
+          # If type is Unknown (or Union of only Unknown), try to resolve from called_methods
+          type_is_unknown = write_result.type.is_a?(Types::Unknown) ||
+                            (write_result.type.is_a?(Types::Union) &&
+                             write_result.type.types.all? { |t| t.is_a?(Types::Unknown) })
+
+          if type_is_unknown && node.called_methods.any?
+            resolved_type = resolve_called_methods(node.called_methods)
+            if resolved_type
+              return Result.new(
+                resolved_type,
+                "variable inferred from #{node.called_methods.join(", ")}",
+                :inference
+              )
+            end
+          end
+
+          write_result
         end
 
         def infer_instance_variable_write(node)
@@ -483,6 +501,40 @@ module TypeGuessr
                 "Hash[#{receiver_type.key_type}, #{receiver_type.value_type}]##{node.method}",
                 :stdlib
               )
+            end
+
+            # Try to infer Unknown receiver type from method uniqueness
+            # Also handle Union types that are effectively Unknown (only contain Unknown)
+            receiver_is_unknown = receiver_type.is_a?(Types::Unknown) ||
+                                  (receiver_type.is_a?(Types::Union) &&
+                                   receiver_type.types.all? { |t| t.is_a?(Types::Unknown) })
+            if receiver_is_unknown
+              inferred_receiver = resolve_called_methods([node.method])
+              if inferred_receiver.is_a?(Types::ClassInstance)
+                # Try project methods with inferred receiver type
+                def_node = lookup_method(inferred_receiver.name, node.method.to_s)
+                if def_node
+                  return_result = infer(def_node)
+                  return Result.new(
+                    return_result.type,
+                    "#{inferred_receiver.name}##{node.method} (inferred receiver)",
+                    :project
+                  )
+                end
+
+                # Fall back to RBS
+                arg_types = node.args.map { |arg| infer(arg).type }
+                return_type = @signature_provider.get_method_return_type(
+                  inferred_receiver.name,
+                  node.method.to_s,
+                  arg_types
+                )
+                return Result.new(
+                  return_type,
+                  "#{inferred_receiver.name}##{node.method} (inferred receiver)",
+                  :stdlib
+                )
+              end
             end
           end
 

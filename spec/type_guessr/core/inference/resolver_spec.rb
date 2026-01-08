@@ -453,6 +453,48 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
         result = resolver.infer(call)
         expect(result.type).to be(TypeGuessr::Core::Types::Unknown.instance)
       end
+
+      it "infers receiver type from method uniqueness when receiver is Unknown" do
+        # Register Store#depot that returns an Integer
+        depot_return = TypeGuessr::Core::IR::LiteralNode.new(
+          type: TypeGuessr::Core::Types::ClassInstance.new("Integer"),
+          literal_value: 42,
+          values: nil,
+          loc: loc
+        )
+        depot_def = TypeGuessr::Core::IR::DefNode.new(
+          name: :depot,
+          params: [],
+          return_node: depot_return,
+          body_nodes: [depot_return],
+          loc: loc
+        )
+        resolver.register_method("Store", "depot", depot_def)
+
+        # Create Unknown type receiver
+        unknown_receiver = TypeGuessr::Core::IR::LiteralNode.new(
+          type: TypeGuessr::Core::Types::Unknown.instance,
+          literal_value: nil,
+          values: nil,
+          loc: loc
+        )
+
+        # Call depot on Unknown receiver
+        call = TypeGuessr::Core::IR::CallNode.new(
+          method: :depot,
+          receiver: unknown_receiver,
+          args: [],
+          block_params: [],
+          block_body: nil,
+          has_block: false,
+          loc: loc
+        )
+
+        result = resolver.infer(call)
+        expect(result.type).to be_a(TypeGuessr::Core::Types::ClassInstance)
+        expect(result.type.name).to eq("Integer")
+        expect(result.reason).to include("inferred receiver")
+      end
     end
 
     context "with DefNode" do
