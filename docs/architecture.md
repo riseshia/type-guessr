@@ -200,8 +200,6 @@ RuntimeAdapter uses a single Mutex to protect:
 
 ## Known Issues
 
-See `todo.md` for current bugs and investigation notes.
-
 ### File Path Mismatch Problem
 
 The main issue is that file_path format may differ between:

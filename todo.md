@@ -1,3 +1,0 @@
-# TypeGuessr TODO
-
-## Future Features
