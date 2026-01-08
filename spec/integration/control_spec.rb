@@ -4,7 +4,7 @@ require "spec_helper"
 require "ruby_lsp/internal"
 
 # rubocop:disable RSpec/DescribeClass
-RSpec.describe "Control Flow Type Inference from TypeProf Scenarios" do
+RSpec.describe "Control Flow Type Inference" do
   include TypeGuessrTestHelper
 
   def hover_on_source(source, position)
