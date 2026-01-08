@@ -3,9 +3,14 @@
 
 # REPL for testing TypeGuessr hover results with actual ruby-lsp server.
 # Usage:
-#   bin/hover-repl
-#   > lib/ruby_lsp/type_guessr/config.rb 40 6
-#   > exit
+#   Interactive mode:
+#     bin/hover-repl
+#     > lib/ruby_lsp/type_guessr/config.rb 40 6
+#     > exit
+#
+#   Non-interactive mode (single query):
+#     bin/hover-repl lib/ruby_lsp/type_guessr/config.rb 40 6
+#     bin/hover-repl lib/ruby_lsp/type_guessr/config.rb 40 6 --json
 
 require "open3"
 require "json"
@@ -120,8 +125,9 @@ class HoverRepl
     @indexing_complete = false
   end
 
-  def start
-    puts "Starting ruby-lsp server..."
+  def start(interactive: true)
+    @interactive = interactive
+    puts "Starting ruby-lsp server..." if interactive
     @stdin, @stdout, @stderr, @wait_thr = Open3.popen3(
       "bundle", "exec", "ruby-lsp",
       chdir: Dir.pwd
@@ -143,6 +149,8 @@ class HoverRepl
     end
 
     initialize_server
+    return unless interactive
+
     puts "Ready! Type '<file> <line> <column>' or 'exit'"
     puts "Example: lib/ruby_lsp/type_guessr/config.rb 40 6"
   end
@@ -155,7 +163,7 @@ class HoverRepl
     when "window/logMessage"
       message = params&.dig("message") || ""
       if message.include?("[TypeGuessr]")
-        puts "  #{message}"
+        puts "  #{message}" if @interactive
         @indexing_complete = true if message.include?("File indexing completed")
       end
     when "$/progress"
@@ -184,6 +192,26 @@ class HoverRepl
     shutdown
   end
 
+  # Public API for non-interactive mode
+  def hover_query(file_path, line, column)
+    absolute_path = File.expand_path(file_path, Dir.pwd)
+    return { error: "File not found: #{absolute_path}" } unless File.exist?(absolute_path)
+
+    hover_result(absolute_path, line, column)
+  end
+
+  def shutdown
+    return unless @client
+
+    puts "\nShutting down..." if @interactive
+    @client.send_request("shutdown", nil)
+    @client.send_notification("exit", nil)
+    @stdin&.close
+    @stdout&.close
+    @stderr&.close
+    @wait_thr&.value
+  end
+
   private
 
   def initialize_server
@@ -205,12 +233,12 @@ class HoverRepl
                                     })
 
     if response&.dig("error")
-      puts "Initialize error: #{response["error"]}"
+      warn "Initialize error: #{response["error"]}"
       exit 1
     end
 
     @client.send_notification("initialized", {})
-    puts "Server initialized, waiting for indexing..."
+    puts "Server initialized, waiting for indexing..." if @interactive
 
     # Wait for indexing to complete by reading progress notifications
     wait_for_indexing
@@ -223,8 +251,8 @@ class HoverRepl
     @client.drain_notifications(timeout: 0.5) until @indexing_complete || Time.now > timeout
 
     if @indexing_complete
-      puts "TypeGuessr indexing complete!"
-    else
+      puts "TypeGuessr indexing complete!" if @interactive
+    elsif @interactive
       puts "Timeout waiting for indexing, continuing anyway..."
     end
   end
@@ -246,10 +274,11 @@ class HoverRepl
       return
     end
 
-    hover(absolute_path, line, column)
+    result = hover_result(absolute_path, line, column)
+    puts result || "(no hover info)"
   end
 
-  def hover(file_path, line, column)
+  def hover_result(file_path, line, column)
     uri = "file://#{file_path}"
 
     # Open file if not already opened
@@ -261,26 +290,21 @@ class HoverRepl
                                       position: { line: line - 1, character: column - 1 }
                                     })
 
-    if response&.dig("error")
-      puts "Error: #{response["error"]["message"]}"
-      return
-    end
+    return nil if response&.dig("error")
 
     result = response&.dig("result")
-    if result.nil?
-      puts "(no hover info)"
-      return
-    end
+    return nil if result.nil?
 
-    contents = result["contents"]
+    extract_hover_content(result["contents"])
+  end
+
+  def extract_hover_content(contents)
     if contents.is_a?(Hash)
-      puts contents["value"]
+      contents["value"]
     elsif contents.is_a?(Array)
-      contents.each do |c|
-        puts c.is_a?(Hash) ? c["value"] : c
-      end
+      contents.map { |c| c.is_a?(Hash) ? c["value"] : c }.join("\n")
     else
-      puts contents
+      contents.to_s
     end
   end
 
@@ -298,18 +322,46 @@ class HoverRepl
     # Give server time to process the file
     sleep 0.5
   end
+end
 
-  def shutdown
-    return unless @client
+def parse_args
+  args = ARGV.dup
+  json_mode = args.delete("--json")
 
-    puts "\nShutting down..."
-    @client.send_request("shutdown", nil)
-    @client.send_notification("exit", nil)
-    @stdin&.close
-    @stdout&.close
-    @stderr&.close
-    @wait_thr&.value
+  if args.size >= 3
+    # Non-interactive mode
+    { mode: :query, file: args[0], line: args[1].to_i, column: args[2].to_i, json: json_mode }
+  else
+    # Interactive mode
+    { mode: :repl }
   end
 end
 
-HoverRepl.new.run
+options = parse_args
+repl = HoverRepl.new
+
+case options[:mode]
+when :query
+  repl.start(interactive: false)
+  result = repl.hover_query(options[:file], options[:line], options[:column])
+
+  if result.is_a?(Hash) && result[:error]
+    warn result[:error]
+    repl.shutdown
+    exit 1
+  end
+
+  if options[:json]
+    puts JSON.pretty_generate({
+                                file: options[:file],
+                                line: options[:line],
+                                column: options[:column],
+                                hover: result
+                              })
+  else
+    puts result || "(no hover info)"
+  end
+  repl.shutdown
+when :repl
+  repl.run
+end
