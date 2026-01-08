@@ -104,106 +104,105 @@ module BenchmarkRunner
       puts "INDEXING BENCHMARK"
       puts "=" * 60
 
-      # Single-run metrics
-      puts "\n### Single Run Metrics ###\n\n"
+      # Full indexing benchmark (multiple iterations for reliability)
+      puts "\n### Full Indexing (3 iterations) ###\n\n"
 
-      converter = TypeGuessr::Core::Converter::PrismConverter.new
-      location_index = TypeGuessr::Core::Index::LocationIndex.new
+      times = []
+      nodes_counts = []
+      memory_deltas = []
 
-      memory_before = Memory.usage_kb
-      GC.start
+      3.times do |i|
+        converter = TypeGuessr::Core::Converter::PrismConverter.new
+        location_index = TypeGuessr::Core::Index::LocationIndex.new
 
-      start_time = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+        GC.start
+        memory_before = Memory.usage_kb
+        start_time = Process.clock_gettime(Process::CLOCK_MONOTONIC)
 
-      files.each do |file_path|
-        source = File.read(file_path)
-        parsed = Prism.parse(source)
-        next unless parsed.value
+        files.each do |file_path|
+          source = File.read(file_path)
+          parsed = Prism.parse(source)
+          next unless parsed.value
 
-        context = TypeGuessr::Core::Converter::PrismConverter::Context.new
-        nodes = parsed.value.statements&.body&.filter_map do |stmt|
-          converter.convert(stmt, context)
+          context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+          nodes = parsed.value.statements&.body&.filter_map do |stmt|
+            converter.convert(stmt, context)
+          end
+
+          location_index.remove_file(file_path)
+          nodes&.each { |node| index_node_recursively(location_index, file_path, node, "") }
+        rescue StandardError => e
+          warn "Error: #{file_path}: #{e.message}"
         end
 
-        location_index.remove_file(file_path)
-        nodes&.each { |node| index_node_recursively(location_index, file_path, node, "") }
-      rescue StandardError => e
-        warn "Error: #{file_path}: #{e.message}"
+        location_index.finalize!
+        end_time = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+
+        GC.start
+        memory_after = Memory.usage_kb
+
+        elapsed = end_time - start_time
+        times << elapsed
+        nodes_counts << location_index.stats[:total_nodes]
+        memory_deltas << (memory_after - memory_before)
+
+        puts format("  Run %<run>d: %<time>.3f sec (%<nodes>d nodes, %<mem>+d KB)",
+                    run: i + 1, time: elapsed, nodes: location_index.stats[:total_nodes], mem: memory_after - memory_before)
       end
 
-      location_index.finalize!
-      end_time = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      avg_time = times.sum / times.size
+      min_time = times.min
+      max_time = times.max
+      total_nodes = nodes_counts.first
+      avg_memory = memory_deltas.sum / memory_deltas.size
 
-      GC.start
-      memory_after = Memory.usage_kb
-
-      total_time = end_time - start_time
-      total_nodes = location_index.stats[:total_nodes]
-      nodes_per_sec = total_nodes / total_time
-      files_per_sec = files.size / total_time
-      memory_delta = memory_after - memory_before
+      nodes_per_sec = total_nodes / avg_time
+      files_per_sec = files.size / avg_time
 
       @results[:indexing] = {
         files: files.size,
         nodes: total_nodes,
-        time: total_time,
+        time: avg_time,
+        min_time: min_time,
+        max_time: max_time,
         nodes_per_sec: nodes_per_sec,
         files_per_sec: files_per_sec,
-        memory_kb: memory_delta
+        memory_kb: avg_memory,
+        iterations: 3
       }
 
+      puts "\n### Summary ###\n\n"
       puts format("Files indexed:     %d", files.size)
       puts format("Total nodes:       %d", total_nodes)
-      puts format("Total time:        %.3f seconds", total_time)
+      puts format("Avg time:          %<avg>.3f sec (min: %<min>.3f, max: %<max>.3f)", avg: avg_time, min: min_time, max: max_time)
       puts format("Throughput:        %.0f nodes/sec", nodes_per_sec)
       puts format("                   %.1f files/sec", files_per_sec)
-      puts format("Memory delta:      %+d KB", memory_delta)
+      puts format("Avg memory delta:  %+d KB", avg_memory)
 
-      # IPS benchmark (per-file)
-      puts "\n### IPS Benchmark (per-file indexing) ###\n\n"
+      # IPS benchmark (per-file for component breakdown)
+      puts "\n### Component Breakdown (IPS) ###\n\n"
 
-      # Take a sample of files for IPS measurement
       sample_files = files.sample([100, files.size].min)
 
       Benchmark.ips do |x|
         x.config(warmup: @warmup, time: @time)
 
-        x.report("index single file") do |times|
-          converter = TypeGuessr::Core::Converter::PrismConverter.new
-          location_index = TypeGuessr::Core::Index::LocationIndex.new
+        x.report("Prism.parse") do |n|
           file = sample_files.sample
 
-          times.times do
-            source = File.read(file)
-            parsed = Prism.parse(source)
-            next unless parsed.value
-
-            context = TypeGuessr::Core::Converter::PrismConverter::Context.new
-            nodes = parsed.value.statements&.body&.filter_map do |stmt|
-              converter.convert(stmt, context)
-            end
-
-            location_index.remove_file(file)
-            nodes&.each { |node| index_node_recursively(location_index, file, node, "") }
-          end
-        end
-
-        x.report("Prism.parse only") do |times|
-          file = sample_files.sample
-
-          times.times do
+          n.times do
             source = File.read(file)
             Prism.parse(source)
           end
         end
 
-        x.report("convert only") do |times|
+        x.report("PrismConverter#convert") do |n|
           converter = TypeGuessr::Core::Converter::PrismConverter.new
           file = sample_files.sample
           source = File.read(file)
           parsed = Prism.parse(source)
 
-          times.times do
+          n.times do
             next unless parsed.value
 
             context = TypeGuessr::Core::Converter::PrismConverter::Context.new
@@ -212,6 +211,8 @@ module BenchmarkRunner
             end
           end
         end
+
+        x.compare!
       end
     end
 
@@ -455,10 +456,12 @@ module BenchmarkRunner
         |--------|-------|
         | Files indexed | #{r[:files]} |
         | Total nodes | #{r[:nodes]} |
-        | Total time | #{format("%.3f", r[:time])} sec |
+        | Iterations | #{r[:iterations]} |
+        | Avg time | #{format("%.3f", r[:time])} sec |
+        | Min/Max time | #{format("%.3f", r[:min_time])} / #{format("%.3f", r[:max_time])} sec |
         | Throughput (nodes) | #{format("%.0f", r[:nodes_per_sec])} nodes/sec |
         | Throughput (files) | #{format("%.1f", r[:files_per_sec])} files/sec |
-        | Memory delta | #{format("%+d", r[:memory_kb])} KB |
+        | Avg memory delta | #{format("%+d", r[:memory_kb])} KB |
         | Avg time per file | #{format("%.2f", r[:time] / r[:files] * 1000)} ms |
         | Avg nodes per file | #{r[:nodes] / r[:files]} |
       SECTION

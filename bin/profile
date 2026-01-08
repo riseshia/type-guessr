@@ -158,25 +158,81 @@ module ProfileIndexing
       print_inference_stats(sample_nodes)
     end
 
-    # Profile everything
+    # Profile everything (indexing and inference separately, with both CPU and wall time)
     def profile_all(files)
-      puts "\n=== Profiling: All (Indexing + Inference) ==="
+      # Phase 1: Indexing (CPU)
+      puts "\n=== Profiling: Indexing (CPU) ==="
       puts "Mode: #{@mode}, Interval: #{@interval}μs"
       puts "-" * 50
 
-      result = StackProf.run(mode: @mode, interval: @interval, raw: true) do
-        # Phase 1: Indexing
+      indexing_result = StackProf.run(mode: @mode, interval: @interval, raw: true) do
         index_files(files)
-
-        # Phase 2: Inference sampling
-        sample_nodes = collect_inference_samples
-        run_inference(sample_nodes) unless sample_nodes.empty?
       end
 
-      @results[:all] = result
-      print_result("All", result)
-      save_result(result, @output)
+      @results[:indexing] = indexing_result
+      print_result("Indexing (CPU)", indexing_result)
+      save_result(indexing_result, @output.sub(".dump", "-indexing.dump"))
       print_indexing_stats
+
+      # Phase 1b: Indexing (Wall) - if CPU mode, also run wall time
+      if @mode == :cpu
+        puts "\n=== Profiling: Indexing (Wall Time) ==="
+        puts "Mode: wall, Interval: #{@interval}μs"
+        puts "-" * 50
+
+        # Reset for wall time profiling
+        reset_state
+        indexing_wall_result = StackProf.run(mode: :wall, interval: @interval, raw: true) do
+          index_files(files)
+        end
+
+        @results[:indexing_wall] = indexing_wall_result
+        print_result("Indexing (Wall)", indexing_wall_result)
+        save_result(indexing_wall_result, @output.sub(".dump", "-indexing-wall.dump"))
+      end
+
+      # Phase 2: Inference (CPU)
+      puts "\n=== Profiling: Inference (CPU) ==="
+      puts "Mode: #{@mode}, Interval: #{@interval}μs, Samples: #{@samples}"
+      puts "-" * 50
+
+      sample_nodes = collect_inference_samples
+      if sample_nodes.empty?
+        puts "No nodes to sample for inference!"
+        return
+      end
+
+      puts "Collected #{sample_nodes.size} nodes for inference sampling"
+
+      inference_result = StackProf.run(mode: @mode, interval: @interval, raw: true) do
+        run_inference(sample_nodes)
+      end
+
+      @results[:inference] = inference_result
+      print_result("Inference (CPU)", inference_result)
+      save_result(inference_result, @output.sub(".dump", "-inference.dump"))
+      print_inference_stats(sample_nodes)
+
+      # Phase 2b: Inference (Wall) - if CPU mode, also run wall time
+      return unless @mode == :cpu
+
+      puts "\n=== Profiling: Inference (Wall Time) ==="
+      puts "Mode: wall, Interval: #{@interval}μs"
+      puts "-" * 50
+
+      inference_wall_result = StackProf.run(mode: :wall, interval: @interval, raw: true) do
+        run_inference(sample_nodes)
+      end
+
+      @results[:inference_wall] = inference_wall_result
+      print_result("Inference (Wall)", inference_wall_result)
+      save_result(inference_wall_result, @output.sub(".dump", "-inference-wall.dump"))
+    end
+
+    def reset_state
+      @converter = TypeGuessr::Core::Converter::PrismConverter.new
+      @location_index = TypeGuessr::Core::Index::LocationIndex.new
+      @indexed_nodes = []
     end
 
     def index_files(files)
@@ -336,10 +392,6 @@ module ProfileIndexing
     end
 
     def build_report_content
-      result = @results[@target] || @results.values.first
-      frames = result ? extract_top_frames(result) : []
-      gc_stats = result ? extract_gc_stats(result) : {}
-
       <<~MARKDOWN
         # TypeGuessr Performance Profile Report
 
@@ -355,31 +407,9 @@ module ProfileIndexing
 
         ---
 
-        ## Executive Summary
+        #{indexing_report_section}
 
-        #{executive_summary(result, gc_stats)}
-
-        ### Key Metrics
-
-        | Metric | Value |
-        |--------|-------|
-        | Total samples | #{result ? result[:samples] : "N/A"} |
-        | GC samples | #{gc_stats[:total]} (#{gc_stats[:percent]}%) |
-        | Miss rate | #{result ? format("%.2f%%", (result[:missed_samples] || 0).to_f / [result[:samples], 1].max * 100) : "N/A"} |
-
-        ---
-
-        ## Top CPU Bottlenecks
-
-        #{top_bottlenecks_section(frames, result)}
-
-        ---
-
-        ## Memory Allocation Analysis
-
-        #{memory_analysis_section(frames)}
-
-        ---
+        #{inference_report_section}
 
         ## Call Graph Analysis
 
@@ -395,7 +425,7 @@ module ProfileIndexing
                       │     ├── convert_array_literal
                       │     └── convert_call
                       └── convert_loc
-                            └── Prism::Source#find_line ← Primary bottleneck
+                            └── Prism::Source#find_line
         ```
 
         ### Inference Pipeline
@@ -411,20 +441,7 @@ module ProfileIndexing
 
         ---
 
-        ## Optimization Recommendations
-
-        #{optimization_recommendations(frames)}
-
-        ---
-
-        ## Benchmark Targets
-
-        | Metric | Current | Target |
-        |--------|---------|--------|
-        | GC overhead | #{gc_stats[:percent]}% | < 8% |
-        | find_line CPU | #{find_line_percent(frames)}% | < 5% |
-        | Total allocations | ~26M | < 18M |
-        | Indexing time | baseline | -30% |
+        #{optimization_recommendations_section}
 
         ---
 
@@ -438,18 +455,165 @@ module ProfileIndexing
 
         ```bash
         # View detailed text report
-        stackprof tmp/stackprof-#{@target}.dump
+        stackprof tmp/stackprof-all-indexing.dump
+        stackprof tmp/stackprof-all-inference.dump
 
         # Analyze specific method
-        stackprof tmp/stackprof-#{@target}.dump --method 'PrismConverter#convert_loc'
+        stackprof tmp/stackprof-all-indexing.dump --method 'PrismConverter#convert_loc'
 
         # Walk call tree for a method
-        stackprof tmp/stackprof-#{@target}.dump --method 'Prism::Source#find_line' --walk
+        stackprof tmp/stackprof-all-indexing.dump --method 'Prism::Source#find_line' --walk
 
         # Generate interactive flamegraph
-        stackprof --d3-flamegraph tmp/stackprof-#{@target}.dump > tmp/flamegraph.html
+        stackprof --d3-flamegraph tmp/stackprof-all-indexing.dump > tmp/flamegraph-indexing.html
+        stackprof --d3-flamegraph tmp/stackprof-all-inference.dump > tmp/flamegraph-inference.html
         ```
       MARKDOWN
+    end
+
+    def indexing_report_section
+      result = @results[:indexing]
+      return "## Indexing\n\nNo indexing profile data available.\n" unless result
+
+      frames = extract_top_frames(result)
+      gc_stats = extract_gc_stats(result)
+
+      section = <<~SECTION
+        ## Indexing Profile
+
+        ### Key Metrics (CPU)
+
+        | Metric | Value |
+        |--------|-------|
+        | Total samples | #{result[:samples]} |
+        | GC samples | #{gc_stats[:total]} (#{gc_stats[:percent]}%) |
+        | Miss rate | #{format("%.2f%%", (result[:missed_samples] || 0).to_f / [result[:samples], 1].max * 100)} |
+
+        ### Top CPU Bottlenecks
+
+        #{top_bottlenecks_section(frames, result, :indexing)}
+
+      SECTION
+
+      # Add wall time analysis if available
+      wall_result = @results[:indexing_wall]
+      if wall_result
+        wall_frames = extract_top_frames(wall_result)
+        io_analysis = analyze_io_wait(result, wall_result)
+
+        section += <<~WALL
+
+          ### Wall Time Analysis
+
+          #{io_analysis}
+
+          ### Top Wall Time Bottlenecks
+
+          #{top_bottlenecks_section(wall_frames, wall_result, :indexing)}
+
+        WALL
+      end
+
+      "#{section}---\n\n"
+    end
+
+    def inference_report_section
+      result = @results[:inference]
+      return "## Inference\n\nNo inference profile data available.\n" unless result
+
+      frames = extract_top_frames(result)
+      gc_stats = extract_gc_stats(result)
+
+      section = <<~SECTION
+        ## Inference Profile
+
+        ### Key Metrics (CPU)
+
+        | Metric | Value |
+        |--------|-------|
+        | Total samples | #{result[:samples]} |
+        | GC samples | #{gc_stats[:total]} (#{gc_stats[:percent]}%) |
+        | Miss rate | #{format("%.2f%%", (result[:missed_samples] || 0).to_f / [result[:samples], 1].max * 100)} |
+
+        ### Top CPU Bottlenecks
+
+        #{top_bottlenecks_section(frames, result, :inference)}
+
+      SECTION
+
+      # Add wall time analysis if available
+      wall_result = @results[:inference_wall]
+      if wall_result
+        wall_frames = extract_top_frames(wall_result)
+        io_analysis = analyze_io_wait(result, wall_result)
+
+        section += <<~WALL
+
+          ### Wall Time Analysis
+
+          #{io_analysis}
+
+          ### Top Wall Time Bottlenecks
+
+          #{top_bottlenecks_section(wall_frames, wall_result, :inference)}
+
+        WALL
+      end
+
+      "#{section}---\n\n"
+    end
+
+    def analyze_io_wait(cpu_result, wall_result)
+      cpu_result[:samples] || 1
+      wall_samples = wall_result[:samples] || 1
+
+      # Find I/O related frames in wall time
+      wall_frames = extract_top_frames(wall_result)
+      io_frames = wall_frames.select { |f| f[:name] =~ /IO\.|File\.|read|write|open/i }
+      io_percent = io_frames.sum { |f| f[:percent] }
+
+      # Compare CPU vs Wall for key methods
+      cpu_frames = extract_top_frames(cpu_result)
+      comparisons = []
+
+      %w[Prism.parse IO.read RBS::Parser].each do |method_pattern|
+        cpu_frame = cpu_frames.find { |f| f[:name]&.include?(method_pattern) }
+        wall_frame = wall_frames.find { |f| f[:name]&.include?(method_pattern) }
+        next unless cpu_frame && wall_frame
+
+        cpu_pct = cpu_frame[:percent]
+        wall_pct = wall_frame[:percent]
+        diff = wall_pct - cpu_pct
+
+        if diff.abs > 1.0
+          comparisons << "| `#{method_pattern}` | #{format("%.1f", cpu_pct)}% | #{format("%.1f", wall_pct)}% " \
+                         "| #{format("%+.1f", diff)}% |"
+        end
+      end
+
+      result = "| Metric | Value |\n|--------|-------|\n"
+      result += "| Wall samples | #{wall_samples} |\n"
+      result += "| I/O related | #{format("%.1f", io_percent)}% |\n"
+
+      if comparisons.any?
+        result += "\n**CPU vs Wall Comparison** (methods with >1% difference):\n\n"
+        result += "| Method | CPU % | Wall % | Diff |\n"
+        result += "|--------|-------|--------|------|\n"
+        result += comparisons.join("\n")
+      end
+
+      result
+    end
+
+    def optimization_recommendations_section
+      indexing_frames = @results[:indexing] ? extract_top_frames(@results[:indexing]) : []
+      inference_frames = @results[:inference] ? extract_top_frames(@results[:inference]) : []
+
+      <<~SECTION
+        ## Optimization Recommendations
+
+        #{optimization_recommendations(indexing_frames, inference_frames)}
+      SECTION
     end
 
     def target_description
@@ -510,91 +674,95 @@ module ProfileIndexing
       frame ? format("%.1f", frame[:percent]) : "N/A"
     end
 
-    def top_bottlenecks_section(frames, result)
+    def bottleneck_detail(frame, rank, _result, phase = nil)
+      name = frame[:name]
+      pct = format("%.1f", frame[:percent])
+      samples = frame[:samples]
+      info = bottleneck_info(name, phase)
+
+      "| #{rank} | `#{name}` | #{pct}% | #{samples} | #{info[:where]} | #{info[:what]} |"
+    end
+
+    def bottleneck_info(name, phase)
+      case name
+      when /Prism\.parse/
+        files = @location_index.stats[:files_count]
+        avg = @location_index.stats[:total_nodes] / [files, 1].max
+        { where: "process_file", what: "소스→AST 변환 (#{files}파일, ~#{avg}노드/파일). 병렬화 가능" }
+      when /Prism::Source#find_line/
+        { where: "convert_loc", what: "바이트 오프셋→라인 번호. 노드마다 호출" }
+      when /bsearch_index/
+        { where: "find_line 내부", what: "라인 번호 이진 탐색. 누적 비용 높음" }
+      when /PrismConverter#convert_loc/
+        { where: "모든 convert_*", what: "IR::Loc 생성. find_line+column 트리거" }
+      when /PrismConverter#convert_class/
+        { where: "convert 진입점", what: "클래스/모듈 변환. 내부 메서드 재귀 처리" }
+      when /PrismConverter#convert_def/
+        { where: "convert_class_or_module", what: "메서드 정의 변환. 파라미터+본문+반환값" }
+      when /PrismConverter#convert_call/
+        { where: "convert_*", what: "메서드 호출 변환. duck typing용 추적" }
+      when /PrismConverter#convert$/
+        { where: "process_file", what: "Prism AST→IR 노드 그래프 진입점" }
+      when /LocationIndex#add/
+        { where: "index_node_recursively", what: "노드를 인덱스에 추가. hash+uniq 포함" }
+      when /Class#new|Data#initialize/
+        { where: "IR 노드 생성", what: "객체 할당 (Loc, LiteralNode, CallNode 등)" }
+      when /Array#uniq/
+        { where: "LocationIndex#add", what: "중복 노드 제거. Set으로 대체 권장" }
+      when /Data#hash|Array#hash/
+        { where: "LocationIndex", what: "노드 키 해시 계산 (조회/저장용)" }
+      when /Prism::Node#location/
+        { where: "convert_loc", what: "Prism 노드에서 위치 정보 추출" }
+      when /IO\.read/
+        { where: "process_file", what: "파일 I/O. Wall time에서 비중 높음" }
+      when /RBS::Parser/
+        { where: "ensure_environment_loaded", what: "RBS 파일 파싱. 첫 추론 시 지연 로드" }
+      when /RBS::DefinitionBuilder#build/
+        { where: "get_method_signatures", what: "클래스 메서드 정의 빌드. 캐시됨" }
+      when /RBS::DefinitionBuilder/
+        { where: "RBSProvider", what: "RBS 타입 정의 구축. 첫 조회 후 캐시" }
+      when /RBS::Environment/
+        { where: "DefinitionBuilder", what: "RBS 환경 (타입 해석, 선언 등록)" }
+      when /RBSProvider|SignatureProvider/
+        { where: "Resolver#infer_call", what: "RBS에서 메서드 시그니처 조회" }
+      when /Resolver#infer_call/
+        { where: "infer_node", what: "메서드 호출 타입 추론. RBS 조회 포함" }
+      when /Resolver#infer_local/
+        { where: "infer_node", what: "지역 변수 읽기/쓰기 타입 추론" }
+      when /Resolver#infer/
+        { where: "Hover#type_at", what: "노드→타입 추론. 의존성 그래프 순회" }
+      when /\(marking\)/
+        { where: "Ruby GC", what: "마킹 단계. 살아있는 객체 탐색" }
+      when /\(sweeping\)/
+        { where: "Ruby GC", what: "스윕 단계. 죽은 객체 해제" }
+      when /garbage collection/
+        { where: "Ruby GC", what: "가비지 컬렉션. 객체 할당 줄이면 개선" }
+      else
+        if phase == :inference
+          { where: "추론 파이프라인", what: "RBS/타입 추론 관련 작업" }
+        else
+          { where: "인덱싱 파이프라인", what: "AST 변환/노드 생성 작업" }
+        end
+      end
+    end
+    # rubocop:enable Metrics/MethodLength, Metrics/CyclomaticComplexity
+
+    def top_bottlenecks_section(frames, result, phase = nil)
       return "No frame data available." if frames.empty?
 
       # Get top 5 bottlenecks (excluding GC-related)
       top_frames = frames.reject { |f| f[:name]&.start_with?("(") }.first(5)
 
-      sections = top_frames.each_with_index.map do |frame, idx|
-        bottleneck_detail(frame, idx + 1, result)
+      header = <<~TABLE
+        | Rank | Method | CPU % | Samples | Where | What |
+        |------|--------|-------|---------|-------|------|
+      TABLE
+
+      rows = top_frames.each_with_index.map do |frame, idx|
+        bottleneck_detail(frame, idx + 1, result, phase)
       end
 
-      sections.join("\n\n")
-    end
-
-    def bottleneck_detail(frame, rank, _result)
-      name = frame[:name]
-      pct = format("%.1f", frame[:percent])
-      samples = frame[:samples]
-
-      analysis = case name
-                 when /find_line/
-                   <<~TEXT
-                     **The primary bottleneck.**
-
-                     This method converts byte offsets to line numbers for every node's location. It uses binary search but the cumulative cost is high due to the number of nodes.
-
-                     **Issue:**
-                     - Line information doesn't change within a file, but it's recalculated every time
-                     - Called once per `convert_loc` invocation
-
-                     **Improvement:**
-                     - Cache line offset table per file
-                     - Or use Prism's `Location` object directly to avoid recalculation
-                   TEXT
-                 when /Prism\.parse/
-                   <<~TEXT
-                     File parsing overhead (largely unavoidable).
-
-                     **Current state:**
-                     - #{@location_index.stats[:files_count]} files parsed
-                     - Average ~#{@location_index.stats[:total_nodes] / [@location_index.stats[:files_count], 1].max} nodes per file
-
-                     **Potential improvement:**
-                     - Reuse AST from ruby-lsp if possible (would eliminate this cost entirely)
-                   TEXT
-                 when /LocationIndex#add/
-                   <<~TEXT
-                     Node indexing operations.
-
-                     **Internal costs:**
-                     - `Array#uniq` calls for deduplication
-                     - Hash computation and storage
-
-                     **Improvement:**
-                     - Use `Set` instead of `Array` + `uniq`
-                     - Optimize node key hash computation
-                   TEXT
-                 when /convert_loc/
-                   <<~TEXT
-                     Location conversion for every node.
-
-                     This method creates `IR::Loc` objects and calls `find_line` for line number resolution.
-
-                     **Improvement:**
-                     - Implement lazy location initialization
-                     - Cache line lookups within the same file
-                   TEXT
-                 when /Class#new|Data#initialize/
-                   <<~TEXT
-                     Object instantiation overhead.
-
-                     Heavy allocation of `IR::Loc`, `LiteralNode`, `CallNode` and other node types.
-
-                     **Improvement:**
-                     - Consider object pooling for common types
-                     - Use lighter-weight representations (arrays instead of Data classes)
-                   TEXT
-                 else
-                   "General overhead from #{name.split("#").last || name}."
-                 end
-
-      <<~SECTION
-        ### #{rank}. `#{name}` - #{pct}% (#{samples} samples)
-
-        #{analysis.strip}
-      SECTION
+      header + rows.join("\n")
     end
 
     def memory_analysis_section(frames)
@@ -642,89 +810,42 @@ module ProfileIndexing
       TEXT
     end
 
-    def optimization_recommendations(_frames)
+    def optimization_recommendations(_indexing_frames, _inference_frames)
       <<~TEXT
-        ### Short-term (Immediate Impact)
+        ### Indexing Optimizations
 
-        #### 1. Replace `Array#uniq` with `Set`
+        #### High Impact
 
-        ```ruby
-        # Before
-        nodes = []
-        nodes << node
-        nodes.uniq!
+        1. **Parallel file processing** - `Prism.parse` and file I/O can run in parallel
+           - Use `Parallel` gem or `Ractor` for concurrent parsing
+           - Expected: 2-4x speedup on multi-core systems
 
-        # After
-        nodes = Set.new
-        nodes.add(node)
-        ```
+        2. **Cache line offset table** - Reduce `find_line` overhead
+           - Line offsets don't change within a file
+           - Cache once per file, reuse for all nodes
 
-        **Expected impact:** 1-2% CPU reduction
+        #### Medium Impact
 
-        #### 2. Cache line information per file
+        3. **Lightweight `IR::Loc`** - Reduce object allocation
+           - Lazy evaluation: only compute line/column when accessed
+           - Or use frozen arrays instead of Data class
 
-        ```ruby
-        # In PrismConverter
-        def convert_loc(location)
-          @line_cache ||= {}
-          start_line = @line_cache[location.start_offset] ||= @source.find_line(location.start_offset)
-          # ...
-        end
-        ```
+        4. **Replace `Array#uniq` with `Set`** in LocationIndex
+           - `Set#add` is O(1) vs `Array#uniq` is O(n)
 
-        **Expected impact:** 10-15% CPU reduction (major find_line reduction)
+        ### Inference Optimizations
 
-        ### Medium-term (Refactoring Required)
+        1. **RBS lazy loading** - Already implemented, but first inference is slow
+           - Consider background preloading after indexing
 
-        #### 3. Lightweight `IR::Loc`
+        2. **Cache method signatures** - `DefinitionBuilder` results per class
+           - Already cached by RBS, but verify cache hits
 
-        ```ruby
-        # Option A: Lazy evaluation
-        class Loc
-          def initialize(location)
-            @location = location  # Store Prism::Location only
-          end
+        ### Memory Optimizations
 
-          def start_line
-            @start_line ||= @location.start_line
-          end
-        end
-
-        # Option B: Array-based
-        Loc = ->(loc) { [loc.start_line, loc.start_column, loc.end_line, loc.end_column] }
-        ```
-
-        **Expected impact:** 8% memory reduction, less GC pressure
-
-        #### 4. Optimize node keys
-
-        ```ruby
-        # Before: String interpolation
-        def node_key
-          "\#{class_name}#\#{method}:\#{line}:\#{col}"
-        end
-
-        # After: Array-based (more efficient hashing)
-        def node_key
-          [class_name, method, line, col]
-        end
-        ```
-
-        **Expected impact:** Eliminate 510K String#split allocations
-
-        ### Long-term (Architectural Changes)
-
-        #### 5. Reuse ruby-lsp parsing results
-
-        Currently TypeGuessr re-parses files that ruby-lsp has already parsed. If we can access ruby-lsp's internal AST:
-
-        **Expected impact:** 9% CPU reduction (eliminate Prism.parse)
-
-        #### 6. Incremental indexing
-
-        Instead of full file re-indexing on changes:
-        - Current: Re-parse and re-index entire file
-        - Goal: Only reprocess changed methods/classes
+        1. **Reduce GC pressure** - Target: < 10% GC overhead
+           - Pool common node types
+           - Use symbols instead of strings for keys
       TEXT
     end
 
