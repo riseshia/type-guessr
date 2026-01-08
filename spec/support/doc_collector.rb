@@ -40,7 +40,7 @@ module DocCollector
       FileUtils.mkdir_p("docs")
       File.write("docs/inference_rules.md", markdown)
 
-      puts "Generated docs/inference_rules.md with #{entries.size} examples"
+      warn "Generated docs/inference_rules.md with #{entries.size} examples"
     end
 
     def reset!
