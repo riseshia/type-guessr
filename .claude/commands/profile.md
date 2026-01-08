@@ -67,5 +67,21 @@ Focus on actionable insights, especially:
 --limit=N                        Max files to process
 --samples=N                      Inference samples (default: 100)
 --interval=N                     Sampling interval μs (default: 1000)
+--path=PATH                      Project directory to profile (default: current)
 --report                         Generate markdown report
+```
+
+## Profiling a Different Project
+
+To profile TypeGuessr's performance on a large external project:
+
+```bash
+# Profile a Rails app
+bin/profile --path=/path/to/rails-app --report
+
+# CPU profile with high resolution
+bin/profile --path=/path/to/large-project --target=indexing --mode=cpu --interval=100
+
+# Memory analysis on external project
+bin/profile --path=/path/to/project --mode=object --interval=1
 ```

@@ -56,6 +56,7 @@ The report is saved to `docs/benchmark-report.md` for version control.
 --warmup=N                       Warmup time in seconds (default: 2)
 --time=N                         Benchmark time in seconds (default: 5)
 --samples=N                      Inference samples (default: 2000)
+--path=PATH                      Project directory to benchmark (default: current)
 --report                         Generate markdown report
 ```
 
@@ -73,4 +74,7 @@ bin/benchmark --target=indexing
 
 # Inference only
 bin/benchmark --target=inference
+
+# Benchmark a different project (e.g., large Rails app)
+bin/benchmark --path=/path/to/rails-app --report
 ```

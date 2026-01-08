@@ -4,7 +4,7 @@
 # Profile TypeGuessr performance using stackprof
 #
 # Usage:
-#   bin/profile-indexing [options]
+#   bin/profile [options]
 #
 # Options:
 #   --target=indexing|inference|all  What to profile (default: all)
@@ -13,14 +13,16 @@
 #   --samples=N                      Number of inference samples (default: 100)
 #   --output=path                    Output file path (default: tmp/stackprof-<target>.dump)
 #   --interval=N                     Sampling interval in microseconds (default: 1000)
+#   --path=PATH                      Project directory to profile (default: current)
 #   --report                         Generate markdown report
 #
 # Examples:
-#   bin/profile-indexing                          # Profile everything
-#   bin/profile-indexing --target=indexing        # Profile indexing only
-#   bin/profile-indexing --target=inference       # Profile type inference only
-#   bin/profile-indexing --mode=object            # Profile object allocations
-#   bin/profile-indexing --report                 # Generate markdown report
+#   bin/profile                               # Profile everything
+#   bin/profile --target=indexing             # Profile indexing only
+#   bin/profile --target=inference            # Profile type inference only
+#   bin/profile --mode=object                 # Profile object allocations
+#   bin/profile --report                      # Generate markdown report
+#   bin/profile --path=/path/to/rails         # Profile a different project
 
 require "bundler/setup"
 require "stackprof"
@@ -47,13 +49,14 @@ module ProfileIndexing
       all: "indexing + inference"
     }.freeze
 
-    def initialize(target:, mode:, limit:, samples:, output:, interval:, report:)
+    def initialize(target:, mode:, limit:, samples:, output:, interval:, path:, report:)
       @target = target.to_sym
       @mode = mode.to_sym
       @limit = limit
       @samples = samples
       @output = output || default_output
       @interval = interval
+      @path = path
       @report = report
       @converter = TypeGuessr::Core::Converter::PrismConverter.new
       @location_index = TypeGuessr::Core::Index::LocationIndex.new
@@ -63,6 +66,7 @@ module ProfileIndexing
     end
 
     def run
+      puts "Project path: #{@path || Dir.pwd}"
       files = collect_indexable_files
       puts "Found #{files.size} indexable files (same as ruby-lsp)"
 
@@ -101,8 +105,15 @@ module ProfileIndexing
     end
 
     def collect_indexable_files
-      config = RubyIndexer::Configuration.new
-      config.indexable_uris.map { |uri| uri.full_path.to_s }
+      if @path
+        Dir.chdir(@path) do
+          config = RubyIndexer::Configuration.new
+          config.indexable_uris.map { |uri| uri.full_path.to_s }
+        end
+      else
+        config = RubyIndexer::Configuration.new
+        config.indexable_uris.map { |uri| uri.full_path.to_s }
+      end
     end
 
     # Profile indexing only
@@ -743,6 +754,7 @@ options = {
   samples: 100,
   output: nil,
   interval: 1000,
+  path: nil,
   report: false
 }
 
@@ -773,6 +785,10 @@ OptionParser.new do |opts|
     options[:interval] = v
   end
 
+  opts.on("--path=PATH", "Project directory to profile") do |v|
+    options[:path] = File.expand_path(v)
+  end
+
   opts.on("--report", "Generate markdown report") do
     options[:report] = true
   end
@@ -790,6 +806,7 @@ runner = ProfileIndexing::Runner.new(
   samples: options[:samples],
   output: options[:output],
   interval: options[:interval],
+  path: options[:path],
   report: options[:report]
 )
 

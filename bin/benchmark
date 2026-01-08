@@ -11,6 +11,7 @@
 #   --warmup=N                       Warmup time in seconds (default: 2)
 #   --time=N                         Benchmark time in seconds (default: 5)
 #   --samples=N                      Number of inference samples (default: 2000)
+#   --path=PATH                      Project directory to benchmark (default: current)
 #   --report                         Generate markdown report
 #
 # Examples:
@@ -18,6 +19,7 @@
 #   bin/benchmark --target=indexing       # Benchmark indexing only
 #   bin/benchmark --target=inference      # Benchmark inference only
 #   bin/benchmark --report                # Generate markdown report
+#   bin/benchmark --path=/path/to/rails   # Benchmark a different project
 
 require "bundler/setup"
 require "benchmark/ips"
@@ -54,16 +56,18 @@ module BenchmarkRunner
 
   # Runs benchmarks on TypeGuessr
   class Runner
-    def initialize(target:, warmup:, time:, samples:, report:)
+    def initialize(target:, warmup:, time:, samples:, path:, report:)
       @target = target.to_sym
       @warmup = warmup
       @time = time
       @samples = samples
+      @path = path
       @report = report
       @results = {}
     end
 
     def run
+      puts "Project path: #{@path || Dir.pwd}"
       files = collect_indexable_files
       puts "Found #{files.size} indexable files\n\n"
 
@@ -84,8 +88,15 @@ module BenchmarkRunner
     private
 
     def collect_indexable_files
-      config = RubyIndexer::Configuration.new
-      config.indexable_uris.map { |uri| uri.full_path.to_s }
+      if @path
+        Dir.chdir(@path) do
+          config = RubyIndexer::Configuration.new
+          config.indexable_uris.map { |uri| uri.full_path.to_s }
+        end
+      else
+        config = RubyIndexer::Configuration.new
+        config.indexable_uris.map { |uri| uri.full_path.to_s }
+      end
     end
 
     def benchmark_indexing(files)
@@ -496,6 +507,7 @@ options = {
   warmup: 2,
   time: 5,
   samples: 2000,
+  path: nil,
   report: false
 }
 
@@ -518,6 +530,10 @@ OptionParser.new do |opts|
     options[:samples] = v
   end
 
+  opts.on("--path=PATH", "Project directory to benchmark") do |v|
+    options[:path] = File.expand_path(v)
+  end
+
   opts.on("--report", "Generate markdown report") do
     options[:report] = true
   end
@@ -533,6 +549,7 @@ runner = BenchmarkRunner::Runner.new(
   warmup: options[:warmup],
   time: options[:time],
   samples: options[:samples],
+  path: options[:path],
   report: options[:report]
 )
 
