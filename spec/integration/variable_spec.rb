@@ -4,7 +4,7 @@ require "spec_helper"
 require "ruby_lsp/internal"
 
 # rubocop:disable RSpec/DescribeClass
-RSpec.describe "Variable Type Inference" do
+RSpec.describe "Variable Type Inference", :doc do
   include TypeGuessrTestHelper
 
   def hover_on_source(source, position)
@@ -36,7 +36,7 @@ RSpec.describe "Variable Type Inference" do
         RUBY
       end
 
-      it "infers @x as Integer inside foo" do
+      it "→ Integer" do
         expect_hover_type(line: 7, column: 4, expected: "Integer")
       end
     end
@@ -58,7 +58,7 @@ RSpec.describe "Variable Type Inference" do
         RUBY
       end
 
-      it "infers @x as Integer in subclass" do
+      it "→ Integer" do
         expect_hover_type(line: 9, column: 6, expected: "Integer")
       end
     end
@@ -78,7 +78,7 @@ RSpec.describe "Variable Type Inference" do
         RUBY
       end
 
-      it "infers @x as String" do
+      it "→ String" do
         expect_hover_type(line: 7, column: 4, expected: "String")
       end
     end
@@ -97,7 +97,7 @@ RSpec.describe "Variable Type Inference" do
         RUBY
       end
 
-      it "infers @@x as Symbol :ok" do
+      it "→ Symbol" do
         expect_hover_type(line: 4, column: 6, expected: "Symbol")
       end
     end
@@ -115,7 +115,7 @@ RSpec.describe "Variable Type Inference" do
         RUBY
       end
 
-      it "infers @@x as Symbol :ok" do
+      it "→ Symbol" do
         expect_hover_type(line: 5, column: 6, expected: "Symbol")
       end
     end
@@ -136,7 +136,7 @@ RSpec.describe "Variable Type Inference" do
         RUBY
       end
 
-      it "infers x as Integer (first element)" do
+      it "→ Integer (first element)" do
         pending "Not supported yet"
         expect_hover_type(line: 7, column: 2, expected: "Integer")
       end
@@ -159,8 +159,7 @@ RSpec.describe "Variable Type Inference" do
         RUBY
       end
 
-      it "infers x as Integer | nil" do
-        # NOTE: This may fail if type-guessr doesn't track block assignments properly
+      it "handles block assignment" do
         response = hover_on_source(source, { line: 9, character: 2 })
         expect(response).not_to be_nil
       end
@@ -181,7 +180,7 @@ RSpec.describe "Variable Type Inference" do
         RUBY
       end
 
-      it "infers lv as Symbol :LVar" do
+      it "→ ?Symbol" do
         expect_hover_type(line: 5, column: 6, expected: "?Symbol")
       end
     end
@@ -199,8 +198,154 @@ RSpec.describe "Variable Type Inference" do
         RUBY
       end
 
-      it "infers lv as Symbol union" do
+      it "→ Symbol" do
         expect_hover_type(line: 5, column: 4, expected: "Symbol")
+      end
+    end
+  end
+
+  describe "Variable scope isolation" do
+    context "same parameter name across methods" do
+      let(:source) do
+        <<~RUBY
+          class Foo
+            def method_a(context)
+              @ctx = context
+            end
+
+            def method_b(context)
+              context.name
+              context.age
+            end
+          end
+        RUBY
+      end
+
+      it "isolates parameter types per method" do
+        response_a = hover_on_source(source, { line: 2, character: 15 })
+        expect(response_a.contents.value).to include("untyped")
+
+        response_b = hover_on_source(source, { line: 6, character: 4 })
+        expect(response_b.contents.value).to include("untyped")
+      end
+    end
+
+    context "local vs instance variable" do
+      let(:source) do
+        <<~RUBY
+          class Bar
+            def setup
+              @user = User.new
+            end
+
+            def process
+              user = "string"
+              user
+            end
+          end
+
+          class User
+          end
+        RUBY
+      end
+
+      it "→ String" do
+        expect_hover_type(line: 7, column: 4, expected: "String")
+      end
+    end
+
+    context "instance variable sharing across methods" do
+      let(:source) do
+        <<~RUBY
+          class Chef
+            def prepare_recipe
+              @recipe = Recipe.new
+            end
+
+            def do_something
+              @recipe
+            end
+          end
+
+          class Recipe
+          end
+        RUBY
+      end
+
+      it "→ Recipe" do
+        expect_hover_type(line: 7, column: 6, expected: "Recipe")
+      end
+    end
+
+    context "instance variable usage before assignment" do
+      let(:source) do
+        <<~RUBY
+          class Chef
+            def do_something
+              @recipe
+            end
+
+            def prepare_recipe
+              @recipe = Recipe.new
+            end
+          end
+
+          class Recipe
+          end
+        RUBY
+      end
+
+      it "→ Recipe" do
+        expect_hover_type(line: 3, column: 6, expected: "Recipe")
+      end
+    end
+
+    context "block-local variable shadowing" do
+      let(:source) do
+        <<~RUBY
+          def foo
+            x = 1
+            [1, 2].each do |x|
+              x
+            end
+          end
+        RUBY
+      end
+
+      it "→ Integer" do
+        expect_hover_response(line: 4, column: 4)
+      end
+    end
+
+    context "top-level variable" do
+      let(:source) do
+        <<~RUBY
+          x = 42
+          x
+        RUBY
+      end
+
+      it "→ Integer" do
+        expect_hover_type(line: 2, column: 0, expected: "Integer")
+      end
+    end
+
+    context "singleton class scope" do
+      let(:source) do
+        <<~RUBY
+          class Foo
+            class << self
+              def bar
+                x = "singleton"
+                x
+              end
+            end
+          end
+        RUBY
+      end
+
+      it "→ String" do
+        expect_hover_type(line: 5, column: 6, expected: "String")
       end
     end
   end

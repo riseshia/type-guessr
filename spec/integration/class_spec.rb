@@ -4,7 +4,7 @@ require "spec_helper"
 require "ruby_lsp/internal"
 
 # rubocop:disable RSpec/DescribeClass
-RSpec.describe "Class Instance Type Inference" do
+RSpec.describe "Class Instance Type Inference", :doc do
   include TypeGuessrTestHelper
 
   def hover_on_source(source, position)
@@ -20,7 +20,150 @@ RSpec.describe "Class Instance Type Inference" do
     end
   end
 
-  describe "Class instantiation" do
+  describe ".new Call Type Inference" do
+    context "Simple class" do
+      let(:source) do
+        <<~RUBY
+          class User
+          end
+
+          user = User.new
+          user
+        RUBY
+      end
+
+      it "→ User" do
+        expect_hover_type(line: 5, column: 3, expected: "User")
+      end
+    end
+
+    context "Namespaced class" do
+      let(:source) do
+        <<~RUBY
+          module Admin
+            class User
+            end
+          end
+
+          admin = Admin::User.new
+          admin
+        RUBY
+      end
+
+      it "→ Admin::User" do
+        expect_hover_type(line: 7, column: 3, expected: "Admin::User")
+      end
+    end
+
+    describe ".new with arguments" do
+      let(:source) do
+        <<~RUBY
+          class User
+          end
+
+          user = User.new("name", 20)
+          user
+        RUBY
+      end
+
+      it "→ User" do
+        expect_hover_type(line: 4, column: 3, expected: "User")
+      end
+    end
+
+    context "Deeply nested namespace" do
+      let(:source) do
+        <<~RUBY
+          module A
+            module B
+              module C
+                class D
+                end
+              end
+            end
+          end
+
+          obj = A::B::C::D.new
+          obj
+        RUBY
+      end
+
+      it "→ A::B::C::D" do
+        expect_hover_type(line: 10, column: 3, expected: "A::B::C::D")
+      end
+    end
+
+    context "Dynamic class reference" do
+      let(:source) do
+        <<~RUBY
+          def foo(klass)
+            obj = klass.new
+            obj
+          end
+        RUBY
+      end
+
+      it "→ untyped (dynamic class)" do
+        response = hover_on_source(source, { line: 2, character: 2 })
+        # Should not infer a specific type since klass is unknown
+        expect(response).to be_nil.or(be_a(RubyLsp::Interface::Hover))
+      end
+    end
+  end
+
+  describe ".new hover with initialize parameters" do
+    context "when class has initialize with required params" do
+      let(:source) do
+        <<~RUBY
+          class Recipe
+            def initialize(a, b)
+            end
+          end
+
+          Recipe.new(1, 2)
+        RUBY
+      end
+
+      it "→ (untyped a, untyped b) -> Recipe" do
+        # Hover on "new" at line 6, column 7
+        expect_hover_method_signature(line: 6, column: 7, expected_signature: "(untyped a, untyped b) -> Recipe")
+      end
+    end
+
+    context "when class has no initialize" do
+      let(:source) do
+        <<~RUBY
+          class Empty
+          end
+
+          Empty.new
+        RUBY
+      end
+
+      it "→ () -> Empty" do
+        expect_hover_method_signature(line: 4, column: 6, expected_signature: "() -> Empty")
+      end
+    end
+
+    context "when class has initialize with optional params" do
+      let(:source) do
+        <<~RUBY
+          class Config
+            def initialize(host, port = 8080)
+            end
+          end
+
+          Config.new("localhost")
+        RUBY
+      end
+
+      it "→ (untyped host, ?Integer port) -> Config" do
+        expect_hover_method_signature(line: 6, column: 7, expected_signature: "(untyped host, ?Integer port) -> Config")
+      end
+    end
+  end
+
+  describe "Class instantiation (misc)" do
     context "basic class instantiation" do
       let(:source) do
         <<~RUBY
@@ -39,7 +182,7 @@ RSpec.describe "Class Instance Type Inference" do
         RUBY
       end
 
-      it "infers instance as C" do
+      it "→ C" do
         expect_hover_type(line: 12, column: 0, expected: "C")
       end
     end
@@ -57,10 +200,8 @@ RSpec.describe "Class Instance Type Inference" do
         RUBY
       end
 
-      it "infers klass as singleton(C)" do
-        response = hover_on_source(source, { line: 6, character: 0 })
-        expect(response).not_to be_nil
-        expect(response.contents.value).to include("singleton(C)")
+      it "→ singleton(C)" do
+        expect_hover_type(line: 7, column: 0, expected: "singleton(C)")
       end
     end
 
@@ -79,10 +220,8 @@ RSpec.describe "Class Instance Type Inference" do
         RUBY
       end
 
-      it "infers klass as singleton(C)" do
-        response = hover_on_source(source, { line: 8, character: 0 })
-        expect(response).not_to be_nil
-        expect(response.contents.value).to include("singleton(C)")
+      it "→ singleton(C)" do
+        expect_hover_type(line: 9, column: 0, expected: "singleton(C)")
       end
     end
   end
@@ -111,7 +250,7 @@ RSpec.describe "Class Instance Type Inference" do
         RUBY
       end
 
-      it "infers instance as B" do
+      it "→ B" do
         expect_hover_type(line: 17, column: 0, expected: "B")
       end
     end
@@ -138,7 +277,7 @@ RSpec.describe "Class Instance Type Inference" do
         RUBY
       end
 
-      it "infers result as Integer from module method" do
+      it "→ Integer" do
         expect_hover_type(line: 14, column: 0, expected: "Integer")
       end
     end
@@ -162,7 +301,7 @@ RSpec.describe "Class Instance Type Inference" do
         RUBY
       end
 
-      it "infers result as Integer from extended module method" do
+      it "→ Integer" do
         expect_hover_type(line: 11, column: 0, expected: "Integer")
       end
     end

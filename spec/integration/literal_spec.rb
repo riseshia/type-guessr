@@ -4,7 +4,7 @@ require "spec_helper"
 require "ruby_lsp/internal"
 
 # rubocop:disable RSpec/DescribeClass
-RSpec.describe "Literal Type Inference" do
+RSpec.describe "Literal Type Inference", :doc do
   include TypeGuessrTestHelper
 
   def hover_on_source(source, position)
@@ -17,6 +17,125 @@ RSpec.describe "Literal Type Inference" do
 
       result = pop_result(server)
       result.response
+    end
+  end
+
+  describe "Basic literals" do
+    context "String literal" do
+      let(:source) do
+        <<~RUBY
+          name = "John"
+          name
+        RUBY
+      end
+
+      it "→ String" do
+        expect_hover_type(line: 2, column: 0, expected: "String")
+      end
+    end
+
+    context "Integer literal" do
+      let(:source) do
+        <<~RUBY
+          count = 42
+          count
+        RUBY
+      end
+
+      it "→ Integer" do
+        expect_hover_type(line: 2, column: 0, expected: "Integer")
+      end
+    end
+
+    context "Float literal" do
+      let(:source) do
+        <<~RUBY
+          price = 19.99
+          price
+        RUBY
+      end
+
+      it "→ Float" do
+        expect_hover_type(line: 2, column: 0, expected: "Float")
+      end
+    end
+
+    context "Array literal" do
+      let(:source) do
+        <<~RUBY
+          items = []
+          items
+        RUBY
+      end
+
+      it "→ Array" do
+        expect_hover_type(line: 2, column: 0, expected: "Array[untyped]")
+      end
+    end
+
+    context "Hash literal" do
+      let(:source) do
+        <<~RUBY
+          data = {}
+          data
+        RUBY
+      end
+
+      it "→ Hash" do
+        expect_hover_type(line: 2, column: 0, expected: "Hash[untyped, untyped]")
+      end
+    end
+
+    context "Symbol literal" do
+      let(:source) do
+        <<~RUBY
+          status = :active
+          status
+        RUBY
+      end
+
+      it "→ Symbol" do
+        expect_hover_type(line: 2, column: 0, expected: "Symbol")
+      end
+    end
+
+    context "TrueClass literal" do
+      let(:source) do
+        <<~RUBY
+          flag = true
+          flag
+        RUBY
+      end
+
+      it "→ true" do
+        expect_hover_type(line: 2, column: 0, expected: "true")
+      end
+    end
+
+    context "FalseClass literal" do
+      let(:source) do
+        <<~RUBY
+          flag = false
+          flag
+        RUBY
+      end
+
+      it "→ false" do
+        expect_hover_type(line: 2, column: 0, expected: "false")
+      end
+    end
+
+    context "NilClass literal" do
+      let(:source) do
+        <<~RUBY
+          value = nil
+          value
+        RUBY
+      end
+
+      it "→ nil" do
+        expect_hover_type(line: 2, column: 0, expected: "nil")
+      end
     end
   end
 

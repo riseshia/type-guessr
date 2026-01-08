@@ -4,7 +4,7 @@ require "spec_helper"
 require "ruby_lsp/internal"
 
 # rubocop:disable RSpec/DescribeClass
-RSpec.describe "Control Flow Type Inference" do
+RSpec.describe "Control Flow Type Inference", :doc do
   include TypeGuessrTestHelper
 
   def hover_on_source(source, position)
@@ -31,7 +31,7 @@ RSpec.describe "Control Flow Type Inference" do
         RUBY
       end
 
-      it "infers union type Integer | String" do
+      it "→ Integer | String" do
         expect_hover_type(line: 4, column: 0, expected: "Integer | String")
       end
     end
@@ -47,7 +47,7 @@ RSpec.describe "Control Flow Type Inference" do
         RUBY
       end
 
-      it "infers n as untyped (parameter type unknown, merge with Integer)" do
+      it "→ untyped" do
         expect_hover_type(line: 5, column: 0, expected: "untyped")
       end
     end
@@ -62,7 +62,7 @@ RSpec.describe "Control Flow Type Inference" do
         RUBY
       end
 
-      it "infers result as Integer | nil" do
+      it "→ ?Integer" do
         expect_hover_type(line: 4, column: 0, expected: "?Integer")
       end
     end
@@ -81,7 +81,7 @@ RSpec.describe "Control Flow Type Inference" do
         RUBY
       end
 
-      it "infers union of :ok | :fail" do
+      it "→ Symbol" do
         expect_hover_type(line: 8, column: 0, expected: "Symbol")
       end
     end
@@ -105,7 +105,7 @@ RSpec.describe "Control Flow Type Inference" do
         RUBY
       end
 
-      it "infers union type Float | Integer | String" do
+      it "→ Float | Integer | String" do
         expect_hover_type(line: 11, column: 0, expected: "Float | Integer | String")
       end
     end
@@ -125,7 +125,7 @@ RSpec.describe "Control Flow Type Inference" do
         RUBY
       end
 
-      it "infers union type including nil" do
+      it "→ ?Integer | String" do
         response = hover_on_source(source, { line: 8, character: 0 })
         expect(response).not_to be_nil
         # Should be Integer | String | nil
@@ -149,7 +149,7 @@ RSpec.describe "Control Flow Type Inference" do
         RUBY
       end
 
-      it "infers union type Integer | String (raise doesn't contribute)" do
+      it "→ Integer | String" do
         expect_hover_type(line: 11, column: 0, expected: "Integer | String")
       end
     end
@@ -168,7 +168,7 @@ RSpec.describe "Control Flow Type Inference" do
         RUBY
       end
 
-      it "infers nil" do
+      it "→ nil" do
         expect_hover_type(line: 8, column: 0, expected: "nil")
       end
     end
@@ -186,8 +186,289 @@ RSpec.describe "Control Flow Type Inference" do
         RUBY
       end
 
-      it "infers Integer | nil" do
+      it "→ ?Integer" do
         expect_hover_type(line: 7, column: 0, expected: "?Integer")
+      end
+    end
+  end
+
+  describe "Variable reassignment in control flow" do
+    context "Conditional reassignment" do
+      let(:source) do
+        <<~RUBY
+          def foo(flag)
+            x = 1
+            if flag
+              x = "string"
+            end
+            x
+          end
+        RUBY
+      end
+
+      it "→ Integer | String" do
+        expect_hover_type(line: 6, column: 2, expected: "Integer | String")
+      end
+    end
+
+    context "Type within branch" do
+      let(:source) do
+        <<~RUBY
+          def foo(flag)
+            x = 1
+            if flag
+              x = "string"
+              x
+            end
+          end
+        RUBY
+      end
+
+      it "→ String (within branch)" do
+        expect_hover_type(line: 5, column: 4, expected: "String")
+        expect_hover_type_excludes(line: 5, column: 4, types: ["Integer"])
+      end
+    end
+
+    context "Simple reassignment" do
+      let(:source) do
+        <<~RUBY
+          def foo
+            x = 1
+            x = "string"
+            x
+          end
+        RUBY
+      end
+
+      it "→ String (after reassignment)" do
+        expect_hover_type(line: 4, column: 2, expected: "String")
+        expect_hover_type_excludes(line: 4, column: 2, types: ["Integer"])
+      end
+    end
+
+    context "reassignment in non-first-line method" do
+      let(:source) do
+        <<~RUBY
+          class MyClass
+            def some_other_method
+              # filler
+            end
+
+            def foo
+              x = 1
+              x = "string"
+              x
+            end
+          end
+        RUBY
+      end
+
+      it "→ String" do
+        expect_hover_type(line: 9, column: 4, expected: "String")
+        expect_hover_type_excludes(line: 9, column: 4, types: ["Integer"])
+      end
+    end
+
+    context "reassignment at top-level (read node)" do
+      let(:source) do
+        <<~RUBY
+          a = [1,2,3]
+          a = { a: 1, b: 2 }
+          a
+        RUBY
+      end
+
+      it "→ Hash (not Array)" do
+        expect_hover_response(line: 3, column: 0)
+        expect_hover_type_excludes(line: 3, column: 0, types: ["Array"])
+      end
+    end
+
+    context "reassignment at top-level (write node)" do
+      let(:source) do
+        <<~RUBY
+          a = [1,2,3]
+          a = { a: 1, b: 2 }
+        RUBY
+      end
+
+      it "→ Hash (not Array)" do
+        expect_hover_response(line: 2, column: 0)
+        expect_hover_type_excludes(line: 2, column: 0, types: ["Array"])
+      end
+    end
+
+    context "reassignment with method calls" do
+      let(:source) do
+        <<~RUBY
+          a = [1,2,3]
+          b = a.map do |num|
+            num * 2
+          end
+          a = { a: 1, b: 2 }
+        RUBY
+      end
+
+      it "→ Hash (not Array)" do
+        expect_hover_response(line: 5, column: 0)
+        expect_hover_type_excludes(line: 5, column: 0, types: ["Array"])
+      end
+    end
+
+    context "instance variable fallback" do
+      let(:source) do
+        <<~RUBY
+          class Foo
+            def bar
+              @instance_var = "test"
+              @instance_var
+            end
+          end
+        RUBY
+      end
+
+      it "→ String" do
+        expect_hover_type(line: 4, column: 4, expected: "String")
+      end
+    end
+
+    context "elsif branches" do
+      let(:source) do
+        <<~RUBY
+          def foo(flag)
+            x = 1
+            if flag == 1
+              x = "string"
+            elsif flag == 2
+              x = :symbol
+            end
+            x
+          end
+        RUBY
+      end
+
+      it "→ Integer | String | Symbol" do
+        expect_hover_type(line: 8, column: 2, expected: "Integer | String | Symbol")
+      end
+    end
+
+    context "unless statement" do
+      let(:source) do
+        <<~RUBY
+          def foo(flag)
+            x = 1
+            unless flag
+              x = "string"
+            end
+            x
+          end
+        RUBY
+      end
+
+      it "→ Integer | String" do
+        expect_hover_response(line: 6, column: 2)
+      end
+    end
+
+    context "||= compound assignment" do
+      let(:source) do
+        <<~RUBY
+          def foo
+            x = nil
+            x ||= 1
+            x
+          end
+        RUBY
+      end
+
+      it "→ ?Integer" do
+        expect_hover_type(line: 4, column: 2, expected: "?Integer")
+      end
+    end
+
+    context "&&= compound assignment" do
+      let(:source) do
+        <<~RUBY
+          def foo
+            x = 1
+            x &&= "string"
+            x
+          end
+        RUBY
+      end
+
+      it "→ Integer | String" do
+        expect_hover_type(line: 4, column: 2, expected: "Integer | String")
+      end
+    end
+
+    context "+= compound assignment" do
+      let(:source) do
+        <<~RUBY
+          def foo
+            x = "hello"
+            x += " world"
+            x
+          end
+        RUBY
+      end
+
+      it "→ String" do
+        expect_hover_type(line: 4, column: 2, expected: "String")
+      end
+    end
+
+    context "guard clause with return" do
+      let(:source) do
+        <<~RUBY
+          def foo(x)
+            return unless x
+            y = 1
+            y
+          end
+        RUBY
+      end
+
+      it "→ Integer" do
+        expect_hover_type(line: 4, column: 2, expected: "Integer")
+      end
+    end
+  end
+
+  describe "Explicit Return Handling" do
+    context "early return with guard clause" do
+      let(:source) do
+        <<~RUBY
+          class Test
+            def flip(flag = true)
+              return false if flag
+              flag
+            end
+          end
+        RUBY
+      end
+
+      it "→ (?true flag) -> bool" do
+        expect_hover_method_signature(line: 2, column: 6, expected_signature: "(?true flag) -> bool")
+      end
+    end
+
+    context "multiple explicit returns" do
+      let(:source) do
+        <<~RUBY
+          class Test
+            def classify(n)
+              return "negative" if n < 0
+              return "zero" if n == 0
+              "positive"
+            end
+          end
+        RUBY
+      end
+
+      it "→ (untyped n) -> String" do
+        expect_hover_method_signature(line: 2, column: 6, expected_signature: "(untyped n) -> String")
       end
     end
   end

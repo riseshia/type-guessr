@@ -9,7 +9,7 @@ module DocCollector
       @entries ||= []
     end
 
-    def record(source:, line:, column:, expected:, group_hierarchy:, description:)
+    def record(source:, line:, column:, expected:, group_hierarchy:, description:, spec_file:)
       entries << {
         type: :type_inference,
         source: source,
@@ -17,11 +17,12 @@ module DocCollector
         column: column,
         expected: expected,
         group_hierarchy: group_hierarchy,
-        description: description
+        description: description,
+        spec_file: spec_file
       }
     end
 
-    def record_method_signature(source:, line:, column:, expected_signature:, group_hierarchy:, description:)
+    def record_method_signature(source:, line:, column:, expected_signature:, group_hierarchy:, description:, spec_file:)
       entries << {
         type: :method_signature,
         source: source,
@@ -29,18 +30,40 @@ module DocCollector
         column: column,
         expected: expected_signature,
         group_hierarchy: group_hierarchy,
-        description: description
+        description: description,
+        spec_file: spec_file
       }
     end
 
     def generate!
       return if entries.empty?
 
-      markdown = build_markdown
       FileUtils.mkdir_p("docs")
-      File.write("docs/inference_rules.md", markdown)
 
-      warn "Generated docs/inference_rules.md with #{entries.size} examples"
+      # Group entries by spec file
+      entries_by_file = entries.group_by { |e| e[:spec_file] }
+
+      total_examples = 0
+      generated_files = []
+
+      entries_by_file.each do |spec_file, file_entries|
+        # Skip hover_spec.rb
+        next if spec_file.include?("hover_spec.rb")
+
+        doc_name = File.basename(spec_file, "_spec.rb")
+        output_file = "docs/#{doc_name}.md"
+
+        markdown = build_markdown_for_file(file_entries, doc_name)
+        File.write(output_file, markdown)
+
+        total_examples += file_entries.size
+        generated_files << output_file
+      end
+
+      generated_files.each do |file|
+        warn "Generated #{file}"
+      end
+      warn "Total: #{total_examples} examples in #{generated_files.size} files"
     end
 
     def reset!
@@ -49,12 +72,14 @@ module DocCollector
 
     private
 
-    def build_markdown
-      output = "# Type Inference Rules\n\n"
+    def build_markdown_for_file(file_entries, doc_name)
+      title = doc_name.split("_").map(&:capitalize).join(" ")
+      output = "# #{title} Type Inference\n\n"
       output += "This document is auto-generated from tests tagged with `:doc`.\n\n"
+      output += "> `[x]` marks the cursor position where hover was triggered.\n\n"
 
       # Group entries by hierarchy
-      grouped = group_by_hierarchy(entries)
+      grouped = group_by_hierarchy(file_entries)
 
       grouped.each do |top_level, contexts|
         output += "## #{top_level}\n\n"
@@ -71,10 +96,10 @@ module DocCollector
       output
     end
 
-    def group_by_hierarchy(entries)
+    def group_by_hierarchy(file_entries)
       result = {}
 
-      entries.each do |entry|
+      file_entries.each do |entry|
         hierarchy = entry[:group_hierarchy]
         top_level = hierarchy[0]
         context = hierarchy[1] || "General"
@@ -160,7 +185,8 @@ module TypeGuessrDocHelper
         column: column,
         expected: expected,
         group_hierarchy: group_hierarchy,
-        description: RSpec.current_example.description
+        description: RSpec.current_example.description,
+        spec_file: RSpec.current_example.metadata[:file_path]
       )
     end
 
@@ -210,7 +236,8 @@ module TypeGuessrDocHelper
         column: column,
         expected_signature: expected_signature,
         group_hierarchy: group_hierarchy,
-        description: RSpec.current_example.description
+        description: RSpec.current_example.description,
+        spec_file: RSpec.current_example.metadata[:file_path]
       )
     end
 
