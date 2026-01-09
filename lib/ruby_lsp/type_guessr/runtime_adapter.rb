@@ -393,7 +393,16 @@ module RubyLsp
             index_node_recursively(file_path, method, new_scope)
           else
             index_node_recursively(file_path, method, new_scope)
-            @resolver.register_method(new_scope, method.name.to_s, method)
+
+            # Register with appropriate scope based on singleton status
+            # Singleton methods use "<Class:ClassName>" suffix to match RubyIndexer lookup
+            method_scope = if method.singleton
+                             parent_name = new_scope.split("::").last
+                             "#{new_scope}::<Class:#{parent_name}>"
+                           else
+                             new_scope
+                           end
+            @resolver.register_method(method_scope, method.name.to_s, method)
           end
         end
       end
