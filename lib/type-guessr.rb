@@ -26,10 +26,3 @@ require_relative "ruby_lsp/type_guessr/config"
 require_relative "ruby_lsp/type_guessr/runtime_adapter"
 require_relative "ruby_lsp/type_guessr/hover"
 require_relative "ruby_lsp/type_guessr/debug_server"
-
-# Backward compatibility: Create version alias in old namespace
-module RubyLsp
-  module TypeGuessr
-    VERSION = ::TypeGuessr::VERSION
-  end
-end

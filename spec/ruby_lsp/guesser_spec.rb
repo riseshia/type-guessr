@@ -6,7 +6,7 @@ require "ruby_lsp/type_guessr/addon"
 RSpec.describe RubyLsp::TypeGuessr do
   describe "VERSION" do
     it "has a version number" do
-      expect(RubyLsp::TypeGuessr::VERSION).not_to be_nil
+      expect(TypeGuessr::VERSION).not_to be_nil
     end
   end
 
