@@ -439,9 +439,7 @@ module TypeGuessr
               )
             when Types::ArrayType
               # Handle Array methods with element type substitution
-              # Start with substitutions from receiver type (e.g., Elem)
-              substitutions = receiver_type.type_variable_substitutions.dup
-              substitutions[:self] = receiver_type
+              substitutions = build_substitutions(receiver_type)
 
               # Check for block presence and infer its return type for U substitution
               if node.has_block
@@ -470,8 +468,7 @@ module TypeGuessr
               end
 
               # Fall back to Hash RBS for other methods
-              substitutions = receiver_type.type_variable_substitutions.dup
-              substitutions[:self] = receiver_type
+              substitutions = build_substitutions(receiver_type)
               raw_return_type = @signature_provider.get_method_return_type("Hash", node.method.to_s)
               return_type = raw_return_type.substitute(substitutions)
               return Result.new(
@@ -481,8 +478,7 @@ module TypeGuessr
               )
             when Types::HashType
               # Handle generic HashType
-              substitutions = receiver_type.type_variable_substitutions.dup
-              substitutions[:self] = receiver_type
+              substitutions = build_substitutions(receiver_type)
               raw_return_type = @signature_provider.get_method_return_type("Hash", node.method.to_s)
               return_type = raw_return_type.substitute(substitutions)
               return Result.new(
@@ -562,9 +558,7 @@ module TypeGuessr
 
           # Type#substitute applies type variable and self substitutions
           raw_type = raw_block_param_types[node.index]
-          substitutions = receiver_type.type_variable_substitutions.dup
-          substitutions[:self] = receiver_type
-          resolved_type = raw_type.substitute(substitutions)
+          resolved_type = raw_type.substitute(build_substitutions(receiver_type))
 
           Result.new(resolved_type, "block param from #{class_name}##{node.call_node.method}", :stdlib)
         end
@@ -768,6 +762,15 @@ module TypeGuessr
           return result if simplified_type.equal?(result.type)
 
           Result.new(simplified_type, result.reason, result.source)
+        end
+
+        # Build substitutions hash with type variables and self
+        # @param receiver_type [Type] The receiver type
+        # @return [Hash{Symbol => Type}] Substitutions including :self
+        def build_substitutions(receiver_type)
+          substitutions = receiver_type.type_variable_substitutions.dup
+          substitutions[:self] = receiver_type
+          substitutions
         end
       end
     end
