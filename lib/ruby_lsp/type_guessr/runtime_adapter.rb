@@ -365,15 +365,7 @@ module RubyLsp
       end
 
       def index_def_node(file_path, node, scope_id)
-        # For singleton methods (def self.method_name), add <Class:ClassName> to scope
-        # to match Ruby LSP's NodeContext behavior
-        method_scope = if node.singleton
-                         parent_name = scope_id.split("::").last || "Object"
-                         scope_id.empty? ? "<Class:Object>" : "#{scope_id}::<Class:#{parent_name}>"
-                       else
-                         scope_id
-                       end
-
+        method_scope = singleton_scope_for(scope_id, singleton: node.singleton)
         @location_index.add(file_path, node, method_scope)
 
         new_scope = method_scope.empty? ? "##{node.name}" : "#{method_scope}##{node.name}"
@@ -394,14 +386,7 @@ module RubyLsp
           else
             index_node_recursively(file_path, method, new_scope)
 
-            # Register with appropriate scope based on singleton status
-            # Singleton methods use "<Class:ClassName>" suffix to match RubyIndexer lookup
-            method_scope = if method.singleton
-                             parent_name = new_scope.split("::").last
-                             "#{new_scope}::<Class:#{parent_name}>"
-                           else
-                             new_scope
-                           end
+            method_scope = singleton_scope_for(new_scope, singleton: method.singleton)
             @resolver.register_method(method_scope, method.name.to_s, method)
           end
         end
@@ -420,6 +405,18 @@ module RubyLsp
         # provider.add_provider(ProjectRBSProvider.new, priority: :high)
 
         provider
+      end
+
+      # Build singleton class scope for method registration/lookup
+      # Singleton methods use "<Class:ClassName>" suffix to match RubyIndexer convention
+      # @param scope [String] Base scope (e.g., "RBS::Environment2")
+      # @param singleton [Boolean] Whether the method is a singleton method
+      # @return [String] Scope with singleton class suffix if applicable
+      def singleton_scope_for(scope, singleton:)
+        return scope unless singleton
+
+        parent_name = scope.split("::").last || "Object"
+        scope.empty? ? "<Class:Object>" : "#{scope}::<Class:#{parent_name}>"
       end
 
       # Get class ancestors from RubyIndexer
