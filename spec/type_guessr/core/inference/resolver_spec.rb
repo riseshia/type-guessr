@@ -9,6 +9,19 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
   let(:resolver) { described_class.new(rbs_provider) }
   let(:loc) { TypeGuessr::Core::IR::Loc.new(line: 1, col_range: 0...10) }
 
+  # Helper to create DefNode with common defaults
+  def create_def_node(name:, class_name: nil, params: [], return_node: nil, body_nodes: [], singleton: false)
+    TypeGuessr::Core::IR::DefNode.new(
+      name: name,
+      class_name: class_name,
+      params: params,
+      return_node: return_node,
+      body_nodes: body_nodes,
+      loc: loc,
+      singleton: singleton
+    )
+  end
+
   describe "#infer" do
     context "with nil node" do
       it "returns Unknown" do
@@ -462,14 +475,11 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
           values: nil,
           loc: loc
         )
-        depot_def = TypeGuessr::Core::IR::DefNode.new(
+        depot_def = create_def_node(
           name: :depot,
           class_name: "Store",
-          params: [],
           return_node: depot_return,
-          body_nodes: [depot_return],
-          loc: loc,
-          singleton: false
+          body_nodes: [depot_return]
         )
         resolver.register_method("Store", "depot", depot_def)
 
@@ -507,15 +517,7 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
           values: nil,
           loc: loc
         )
-        def_node = TypeGuessr::Core::IR::DefNode.new(
-          name: :foo,
-          class_name: nil,
-          params: [],
-          return_node: return_node,
-          body_nodes: [return_node],
-          loc: loc,
-          singleton: false
-        )
+        def_node = create_def_node(name: :foo, return_node: return_node, body_nodes: [return_node])
 
         result = resolver.infer(def_node)
         expect(result.type.name).to eq("Integer")
@@ -524,15 +526,7 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
       end
 
       it "returns NilClass for method without body" do
-        def_node = TypeGuessr::Core::IR::DefNode.new(
-          name: :foo,
-          class_name: nil,
-          params: [],
-          return_node: nil,
-          body_nodes: [],
-          loc: loc,
-          singleton: false
-        )
+        def_node = create_def_node(name: :foo)
 
         result = resolver.infer(def_node)
         expect(result.type).to be_a(TypeGuessr::Core::Types::ClassInstance)
@@ -541,15 +535,7 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
       end
 
       it "returns self type for initialize method" do
-        def_node = TypeGuessr::Core::IR::DefNode.new(
-          name: :initialize,
-          class_name: "User",
-          params: [],
-          return_node: nil,
-          body_nodes: [],
-          loc: loc,
-          singleton: false
-        )
+        def_node = create_def_node(name: :initialize, class_name: "User")
 
         result = resolver.infer(def_node)
         expect(result.type).to be(TypeGuessr::Core::Types::SelfType.instance)
@@ -596,12 +582,8 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
     end
 
     it "returns list of registered class names" do
-      def_node1 = TypeGuessr::Core::IR::DefNode.new(
-        name: :save, class_name: "User", params: [], return_node: nil, body_nodes: [], loc: loc, singleton: false
-      )
-      def_node2 = TypeGuessr::Core::IR::DefNode.new(
-        name: :delete, class_name: "Post", params: [], return_node: nil, body_nodes: [], loc: loc, singleton: false
-      )
+      def_node1 = create_def_node(name: :save, class_name: "User")
+      def_node2 = create_def_node(name: :delete, class_name: "Post")
 
       resolver.register_method("User", "save", def_node1)
       resolver.register_method("Post", "delete", def_node2)
@@ -620,9 +602,7 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
     end
 
     it "returns methods hash for registered class" do
-      def_node = TypeGuessr::Core::IR::DefNode.new(
-        name: :save, class_name: "User", params: [], return_node: nil, body_nodes: [], loc: loc, singleton: false
-      )
+      def_node = create_def_node(name: :save, class_name: "User")
       resolver.register_method("User", "save", def_node)
 
       methods = resolver.methods_for_class("User")
@@ -637,15 +617,9 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
 
   describe "#search_methods" do
     before do
-      user_save = TypeGuessr::Core::IR::DefNode.new(
-        name: :save, class_name: "User", params: [], return_node: nil, body_nodes: [], loc: loc, singleton: false
-      )
-      user_delete = TypeGuessr::Core::IR::DefNode.new(
-        name: :delete, class_name: "User", params: [], return_node: nil, body_nodes: [], loc: loc, singleton: false
-      )
-      post_save = TypeGuessr::Core::IR::DefNode.new(
-        name: :save, class_name: "Post", params: [], return_node: nil, body_nodes: [], loc: loc, singleton: false
-      )
+      user_save = create_def_node(name: :save, class_name: "User")
+      user_delete = create_def_node(name: :delete, class_name: "User")
+      post_save = create_def_node(name: :save, class_name: "Post")
 
       resolver.register_method("User", "save", user_save)
       resolver.register_method("User", "delete", user_delete)
@@ -680,21 +654,9 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
   end
 
   describe "called methods resolution with inheritance" do
-    let(:recipe_ingredients) do
-      TypeGuessr::Core::IR::DefNode.new(
-        name: :ingredients, class_name: "Recipe", params: [], return_node: nil, body_nodes: [], loc: loc, singleton: false
-      )
-    end
-    let(:recipe_steps) do
-      TypeGuessr::Core::IR::DefNode.new(
-        name: :steps, class_name: "Recipe", params: [], return_node: nil, body_nodes: [], loc: loc, singleton: false
-      )
-    end
-    let(:recipe2_notes) do
-      TypeGuessr::Core::IR::DefNode.new(
-        name: :notes, class_name: "Recipe2", params: [], return_node: nil, body_nodes: [], loc: loc, singleton: false
-      )
-    end
+    let(:recipe_ingredients) { create_def_node(name: :ingredients, class_name: "Recipe") }
+    let(:recipe_steps) { create_def_node(name: :steps, class_name: "Recipe") }
+    let(:recipe2_notes) { create_def_node(name: :notes, class_name: "Recipe2") }
 
     before do
       # Register methods: Recipe has ingredients, steps; Recipe2 has only notes (directly)
