@@ -359,11 +359,12 @@ RSpec.describe "Class Instance Type Inference", :doc do
       end
 
       it "shows Guessed Signature for instance method" do
-        # Even for gem instance methods without RBS definitions, show signature format
+        # With full indexing, RBS definitions are available for gem methods
+        # RBS::Environment#resolve_type_names has optional keyword parameter
         expect_hover_method_signature(
           line: 3,
           column: 15,
-          expected_signature: "() -> untyped"
+          expected_signature: "(?only: untyped) -> untyped"
         )
       end
     end

@@ -10,6 +10,9 @@ require "uri"
 # Load doc collector for generating documentation from tests
 require_relative "support/doc_collector"
 
+# Load full index helper for tests that need gem/stdlib method definitions
+require_relative "support/full_index_helper"
+
 RSpec.configure do |config|
   # Disable debug logging and server for all tests
   config.before do
@@ -38,31 +41,51 @@ end
 module TypeGuessrTestHelper
   include RubyLsp::TestHelper
 
-  # Custom helper that skips loading all addons (especially RuboCop which is slow)
-  # and only activates the TypeGuessr addon we're testing.
-  # This improves test performance significantly (~40x faster).
+  # Custom helper that uses a shared, fully-indexed server for all integration tests.
+  # The server is initialized once per test suite and reused, with caching for fast subsequent runs.
+  # This provides access to gem/stdlib method definitions while maintaining good performance.
   def with_server_and_addon(source, &block)
-    with_server(source, stub_no_typechecker: true, load_addons: false) do |server, uri|
-      # Manually activate only the TypeGuessr addon
-      addon = RubyLsp::TypeGuessr::Addon.new
-      addon.activate(server.global_state, server.instance_variable_get(:@outgoing_queue))
+    server = FullIndexHelper.server
+    uri = URI("file:///test_#{object_id}.rb")
 
-      # Register the addon so the server knows about it
-      RubyLsp::Addon.addons << addon
+    # Open the document in the server (required for hover/other LSP requests)
+    server.process_message({
+                             method: "textDocument/didOpen",
+                             params: {
+                               textDocument: {
+                                 uri: uri,
+                                 text: source,
+                                 version: 1,
+                                 languageId: "ruby"
+                               }
+                             }
+                           })
 
-      # Index the source directly for integration tests
-      # This works with in-memory test sources and doesn't require actual files
-      addon.runtime_adapter.index_source(uri.to_s, source)
+    # Manually activate only the TypeGuessr addon
+    addon = RubyLsp::TypeGuessr::Addon.new
+    addon.activate(server.global_state, server.instance_variable_get(:@outgoing_queue))
 
-      # Index the source in ruby-lsp's RubyIndexer for type definition links
-      server.global_state.index.index_single(uri, source)
+    # Register the addon so the server knows about it
+    RubyLsp::Addon.addons << addon
 
-      begin
-        block.call(server, uri)
-      ensure
-        addon.deactivate
-        RubyLsp::Addon.addons.delete(addon)
-      end
+    # Index the source directly for integration tests
+    addon.runtime_adapter.index_source(uri.to_s, source)
+
+    # Index the source in ruby-lsp's RubyIndexer for type definition links
+    server.global_state.index.index_single(uri, source)
+
+    begin
+      block.call(server, uri)
+    ensure
+      addon.deactivate
+      RubyLsp::Addon.addons.delete(addon)
+      # Close the document
+      server.process_message({
+                               method: "textDocument/didClose",
+                               params: { textDocument: { uri: uri } }
+                             })
+      # Remove test source from shared index (for next test)
+      server.global_state.index.delete(uri)
     end
   end
 end

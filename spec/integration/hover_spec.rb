@@ -673,16 +673,16 @@ RSpec.describe "Hover Integration" do
       let(:source) do
         <<~RUBY
           class Widget
-            def render
+            def render_widget
             end
 
-            def update
+            def update_widget
             end
           end
 
           def example(obj)
-            obj.render
-            obj.update
+            obj.render_widget
+            obj.update_widget
             obj
           end
         RUBY
@@ -932,7 +932,8 @@ RSpec.describe "Hover Integration" do
       end
 
       it "handles safe navigation" do
-        response = hover_on_source(source, { line: 7, character: 11 })
+        # Hover on "name" in user&.name (line 9, character 11)
+        response = hover_on_source(source, { line: 8, character: 11 })
         expect(response).not_to be_nil
       end
     end
@@ -1690,31 +1691,31 @@ RSpec.describe "Hover Integration" do
     context "parameter assigned to instance variable with method calls" do
       let(:source) do
         <<~RUBY
-          class RuntimeAdapter
-            def find_node_by_key(key)
+          class TestRuntimeAdapter
+            def find_test_node_by_key(key)
             end
           end
 
-          class GraphBuilder
+          class TestGraphBuilder
             def initialize(adapter)
               @adapter = adapter
             end
 
             def build
-              @adapter.find_node_by_key("key")
+              @adapter.find_test_node_by_key("key")
             end
           end
         RUBY
       end
 
       it "infers parameter type from methods called on instance variable" do
-        # Hover on "adapter" parameter in initialize - should infer RuntimeAdapter
-        expect_hover_type(line: 7, column: 20, expected: "RuntimeAdapter")
+        # Hover on "adapter" parameter in initialize - should infer TestRuntimeAdapter
+        expect_hover_type(line: 7, column: 20, expected: "TestRuntimeAdapter")
       end
 
       it "infers instance variable type from method calls" do
-        # Hover on "@adapter" in build method - should infer RuntimeAdapter
-        expect_hover_type(line: 12, column: 6, expected: "RuntimeAdapter")
+        # Hover on "@adapter" in build method - should infer TestRuntimeAdapter
+        expect_hover_type(line: 12, column: 6, expected: "TestRuntimeAdapter")
       end
     end
   end
