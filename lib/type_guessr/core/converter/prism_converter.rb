@@ -1243,7 +1243,8 @@ module TypeGuessr
             params: params,
             return_node: return_node,
             body_nodes: body_nodes,
-            loc: convert_loc(prism_node.name_loc)
+            loc: convert_loc(prism_node.name_loc),
+            singleton: prism_node.receiver.is_a?(Prism::SelfNode)
           )
         end
 

@@ -265,7 +265,8 @@ RSpec.describe RubyLsp::TypeGuessr::GraphBuilder do
         ],
         return_node: nil,
         body_nodes: [],
-        loc: loc
+        loc: loc,
+        singleton: false
       )
       nodes["Test:def:save:10"] = def_node
 

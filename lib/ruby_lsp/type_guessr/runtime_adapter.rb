@@ -314,12 +314,31 @@ module RubyLsp
       def index_node_recursively(file_path, node, scope_id)
         return unless node
 
-        # Add the node itself with current scope
-        @location_index.add(file_path, node, scope_id)
-
         # Recursively add children based on node type, updating scope as needed
         case node
+        when ::TypeGuessr::Core::IR::DefNode
+          # For singleton methods (def self.method_name), add <Class:ClassName> to scope
+          # to match Ruby LSP's NodeContext behavior
+          method_scope = if node.singleton
+                           parent_name = scope_id.split("::").last || "Object"
+                           scope_id.empty? ? "<Class:Object>" : "#{scope_id}::<Class:#{parent_name}>"
+                         else
+                           scope_id
+                         end
+          # Add DefNode with the correct scope (including singleton class for def self.method)
+          @location_index.add(file_path, node, method_scope)
+          # Enter method scope
+          new_scope = method_scope.empty? ? "##{node.name}" : "#{method_scope}##{node.name}"
+          # Register top-level methods for project method lookup
+          @resolver.register_method("", node.name.to_s, node) if scope_id.empty?
+          # Index parameters
+          node.params&.each { |param| index_node_recursively(file_path, param, new_scope) }
+          # Index all body nodes (including intermediate statements)
+          node.body_nodes&.each { |body_node| index_node_recursively(file_path, body_node, new_scope) }
+
         when ::TypeGuessr::Core::IR::ClassModuleNode
+          # Add the node itself with current scope
+          @location_index.add(file_path, node, scope_id)
           # Enter class/module scope (concatenate with parent scope)
           new_scope = scope_id.empty? ? node.name : "#{scope_id}::#{node.name}"
           # Index all methods and nested classes in the class/module
@@ -335,45 +354,46 @@ module RubyLsp
             end
           end
 
-        when ::TypeGuessr::Core::IR::DefNode
-          # Enter method scope
-          new_scope = scope_id.empty? ? "##{node.name}" : "#{scope_id}##{node.name}"
-          # Register top-level methods for project method lookup
-          @resolver.register_method("", node.name.to_s, node) if scope_id.empty?
-          # Index parameters
-          node.params&.each { |param| index_node_recursively(file_path, param, new_scope) }
-          # Index all body nodes (including intermediate statements)
-          node.body_nodes&.each { |body_node| index_node_recursively(file_path, body_node, new_scope) }
-
         when ::TypeGuessr::Core::IR::LocalWriteNode
+          # Add the node
+          @location_index.add(file_path, node, scope_id)
           # Index value
           index_node_recursively(file_path, node.value, scope_id) if node.value
 
         when ::TypeGuessr::Core::IR::LocalReadNode
+          # Add the node
+          @location_index.add(file_path, node, scope_id)
           # No recursive indexing needed (write_node is already indexed)
-          nil
 
         when ::TypeGuessr::Core::IR::InstanceVariableWriteNode
+          # Add the node
+          @location_index.add(file_path, node, scope_id)
           # Register with resolver for deferred lookup
           @resolver.register_instance_variable(node.class_name, node.name, node) if node.class_name
           # Index value
           index_node_recursively(file_path, node.value, scope_id) if node.value
 
         when ::TypeGuessr::Core::IR::InstanceVariableReadNode
+          # Add the node
+          @location_index.add(file_path, node, scope_id)
           # No recursive indexing needed (deferred lookup at inference time)
-          nil
 
         when ::TypeGuessr::Core::IR::ClassVariableWriteNode
+          # Add the node
+          @location_index.add(file_path, node, scope_id)
           # Register with resolver for deferred lookup
           @resolver.register_class_variable(node.class_name, node.name, node) if node.class_name
           # Index value
           index_node_recursively(file_path, node.value, scope_id) if node.value
 
         when ::TypeGuessr::Core::IR::ClassVariableReadNode
+          # Add the node
+          @location_index.add(file_path, node, scope_id)
           # No recursive indexing needed (deferred lookup at inference time)
-          nil
 
         when ::TypeGuessr::Core::IR::CallNode
+          # Add the node
+          @location_index.add(file_path, node, scope_id)
           # Index receiver
           index_node_recursively(file_path, node.receiver, scope_id) if node.receiver
           # Index arguments
@@ -384,20 +404,32 @@ module RubyLsp
           index_node_recursively(file_path, node.block_body, scope_id) if node.block_body
 
         when ::TypeGuessr::Core::IR::ParamNode
+          # Add the node
+          @location_index.add(file_path, node, scope_id)
           # Index default value
           index_node_recursively(file_path, node.default_value, scope_id) if node.default_value
 
         when ::TypeGuessr::Core::IR::MergeNode
+          # Add the node
+          @location_index.add(file_path, node, scope_id)
           # Index branches
           node.branches&.each { |branch| index_node_recursively(file_path, branch, scope_id) }
 
         when ::TypeGuessr::Core::IR::ReturnNode
+          # Add the node
+          @location_index.add(file_path, node, scope_id)
           # Index return value
           index_node_recursively(file_path, node.value, scope_id) if node.value
 
         when ::TypeGuessr::Core::IR::ConstantNode
+          # Add the node
+          @location_index.add(file_path, node, scope_id)
           # Index dependency
           index_node_recursively(file_path, node.dependency, scope_id) if node.dependency
+
+        else
+          # For all other node types, add to index with current scope
+          @location_index.add(file_path, node, scope_id)
         end
       end
 
@@ -451,7 +483,9 @@ module RubyLsp
         return nil unless @global_state.index
 
         # Query singleton class (e.g., "C::<Class:C>") for the method
-        singleton_name = "#{class_name}::<Class:#{class_name}>"
+        # Ruby LSP uses unqualified name for singleton class (e.g., "RBS::Environment::<Class:Environment>")
+        unqualified_name = class_name.split("::").last
+        singleton_name = "#{class_name}::<Class:#{unqualified_name}>"
         entries = @global_state.index.resolve_method(method_name, singleton_name)
         return nil if entries.nil? || entries.empty?
 

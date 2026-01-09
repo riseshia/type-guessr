@@ -264,7 +264,9 @@ module RubyLsp
         return nil unless @global_state&.index
 
         # Query singleton class for the method
-        singleton_name = "#{class_name}::<Class:#{class_name}>"
+        # Ruby LSP uses unqualified name for singleton class (e.g., "RBS::Environment::<Class:Environment>")
+        unqualified_name = class_name.split("::").last
+        singleton_name = "#{class_name}::<Class:#{unqualified_name}>"
         entries = @global_state.index.resolve_method(method_name, singleton_name)
         return nil if entries.nil? || entries.empty?
 

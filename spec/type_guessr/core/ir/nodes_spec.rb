@@ -483,7 +483,8 @@ RSpec.describe TypeGuessr::Core::IR do
         params: [param],
         return_node: return_node,
         body_nodes: [return_node],
-        loc: loc
+        loc: loc,
+        singleton: false
       )
 
       expect(def_node.name).to eq(:foo)
@@ -505,7 +506,8 @@ RSpec.describe TypeGuessr::Core::IR do
         params: [param],
         return_node: return_node,
         body_nodes: [return_node],
-        loc: loc
+        loc: loc,
+        singleton: false
       )
 
       # param, return_node, and body_nodes (which contains return_node again)

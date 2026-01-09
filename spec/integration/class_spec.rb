@@ -338,10 +338,11 @@ RSpec.describe "Class Instance Type Inference", :doc do
       it "shows Guessed Signature for class method" do
         # Even for gem classes without RBS definitions, show signature format
         # Argument type is inferred from the actual value (RBS::EnvironmentLoader)
+        # Parameter name is retrieved from RubyIndexer
         expect_hover_method_signature(
           line: 2,
           column: 23,
-          expected_signature: "(RBS::EnvironmentLoader arg1) -> untyped"
+          expected_signature: "(RBS::EnvironmentLoader loader) -> untyped"
         )
       end
     end
@@ -366,6 +367,48 @@ RSpec.describe "Class Instance Type Inference", :doc do
           column: 15,
           expected_signature: "(?only: untyped) -> untyped"
         )
+      end
+    end
+  end
+
+  describe "Singleton method definitions (def self.method)" do
+    context "project singleton method" do
+      let(:source) do
+        <<~RUBY
+          class Calculator
+            def self.add(a, b)
+              a + b
+            end
+          end
+        RUBY
+      end
+
+      it "shows signature for singleton method definition" do
+        # Hover on "add" in "def self.add(a, b)"
+        response = expect_hover_response(line: 2, column: 12)
+        expect(response.contents.value).to include("Guessed Signature")
+        expect(response.contents.value).to include("(untyped a, untyped b)")
+      end
+    end
+
+    context "namespaced singleton method" do
+      let(:source) do
+        <<~RUBY
+          module Math
+            class Utils
+              def self.square(x)
+                x * x
+              end
+            end
+          end
+        RUBY
+      end
+
+      it "shows signature for namespaced singleton method" do
+        # Hover on "square" in "def self.square(x)"
+        response = expect_hover_response(line: 3, column: 16)
+        expect(response.contents.value).to include("Guessed Signature")
+        expect(response.contents.value).to include("(untyped x)")
       end
     end
   end
