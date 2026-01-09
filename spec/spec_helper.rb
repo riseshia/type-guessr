@@ -44,9 +44,12 @@ module TypeGuessrTestHelper
   # Custom helper that uses a shared, fully-indexed server for all integration tests.
   # The server is initialized once per test suite and reused, with caching for fast subsequent runs.
   # This provides access to gem/stdlib method definitions while maintaining good performance.
+  #
+  # Uses a fixed URI (source.rb) so that handle_change properly invalidates RubyIndexer's
+  # ancestor cache when class definitions change between tests.
   def with_server_and_addon(source, &block)
     server = FullIndexHelper.server
-    uri = URI("file:///test_#{object_id}.rb")
+    uri = URI("file://#{Dir.pwd}/source.rb")
 
     # Open the document in the server (required for hover/other LSP requests)
     server.process_message({
@@ -71,8 +74,8 @@ module TypeGuessrTestHelper
     # Index the source directly for integration tests
     addon.runtime_adapter.index_source(uri.to_s, source)
 
-    # Index the source in ruby-lsp's RubyIndexer for type definition links
-    server.global_state.index.index_single(uri, source)
+    # Use handle_change for proper ancestor cache invalidation
+    server.global_state.index.handle_change(uri, source)
 
     begin
       block.call(server, uri)
@@ -84,8 +87,6 @@ module TypeGuessrTestHelper
                                method: "textDocument/didClose",
                                params: { textDocument: { uri: uri } }
                              })
-      # Remove test source from shared index (for next test)
-      server.global_state.index.delete(uri)
     end
   end
 end
