@@ -420,6 +420,18 @@ module TypeGuessr
                 arg_types
               )
 
+              # Fall back to Object if class-specific lookup returns Unknown
+              if return_type.is_a?(Types::Unknown) && receiver_type.name != "Object"
+                return_type = @signature_provider.get_method_return_type(
+                  "Object",
+                  node.method.to_s,
+                  arg_types
+                )
+              end
+
+              # Substitute self with receiver type
+              return_type = return_type.substitute({ self: receiver_type })
+
               return Result.new(
                 return_type,
                 "#{receiver_type.name}##{node.method}",
@@ -429,6 +441,7 @@ module TypeGuessr
               # Handle Array methods with element type substitution
               # Start with substitutions from receiver type (e.g., Elem)
               substitutions = receiver_type.type_variable_substitutions.dup
+              substitutions[:self] = receiver_type
 
               # Check for block presence and infer its return type for U substitution
               if node.has_block
@@ -457,7 +470,8 @@ module TypeGuessr
               end
 
               # Fall back to Hash RBS for other methods
-              substitutions = receiver_type.type_variable_substitutions
+              substitutions = receiver_type.type_variable_substitutions.dup
+              substitutions[:self] = receiver_type
               raw_return_type = @signature_provider.get_method_return_type("Hash", node.method.to_s)
               return_type = raw_return_type.substitute(substitutions)
               return Result.new(
@@ -467,7 +481,8 @@ module TypeGuessr
               )
             when Types::HashType
               # Handle generic HashType
-              substitutions = receiver_type.type_variable_substitutions
+              substitutions = receiver_type.type_variable_substitutions.dup
+              substitutions[:self] = receiver_type
               raw_return_type = @signature_provider.get_method_return_type("Hash", node.method.to_s)
               return_type = raw_return_type.substitute(substitutions)
               return Result.new(
@@ -537,11 +552,19 @@ module TypeGuessr
 
           # Get block parameter types (returns internal types with TypeVariables)
           raw_block_param_types = @signature_provider.get_block_param_types(class_name, node.call_node.method.to_s)
+
+          # Fall back to Object if class-specific lookup returns empty
+          if raw_block_param_types.empty? && class_name != "Object"
+            raw_block_param_types = @signature_provider.get_block_param_types("Object", node.call_node.method.to_s)
+          end
+
           return Result.new(Types::Unknown.instance, "block param without type info", :unknown) unless raw_block_param_types.size > node.index
 
-          # Type#substitute applies type variable substitutions
+          # Type#substitute applies type variable and self substitutions
           raw_type = raw_block_param_types[node.index]
-          resolved_type = raw_type.substitute(receiver_type.type_variable_substitutions)
+          substitutions = receiver_type.type_variable_substitutions.dup
+          substitutions[:self] = receiver_type
+          resolved_type = raw_type.substitute(substitutions)
 
           Result.new(resolved_type, "block param from #{class_name}##{node.call_node.method}", :stdlib)
         end

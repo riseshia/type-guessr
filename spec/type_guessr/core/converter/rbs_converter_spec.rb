@@ -171,11 +171,11 @@ RSpec.describe TypeGuessr::Core::Converter::RBSConverter do
     end
 
     context "with Self and Instance types" do
-      it "converts Self to Unknown" do
+      it "converts Self to SelfType" do
         rbs_type = RBS::Types::Bases::Self.new(location: nil)
 
         result = converter.convert(rbs_type)
-        expect(result).to be(TypeGuessr::Core::Types::Unknown.instance)
+        expect(result).to be(TypeGuessr::Core::Types::SelfType.instance)
       end
 
       it "converts Instance to Unknown" do
@@ -183,6 +183,16 @@ RSpec.describe TypeGuessr::Core::Converter::RBSConverter do
 
         result = converter.convert(rbs_type)
         expect(result).to be(TypeGuessr::Core::Types::Unknown.instance)
+      end
+
+      it "can substitute SelfType after conversion" do
+        rbs_type = RBS::Types::Bases::Self.new(location: nil)
+
+        raw_type = converter.convert(rbs_type)
+        result = raw_type.substitute({ self: TypeGuessr::Core::Types::ClassInstance.new("Recipe") })
+
+        expect(result).to be_a(TypeGuessr::Core::Types::ClassInstance)
+        expect(result.name).to eq("Recipe")
       end
     end
 

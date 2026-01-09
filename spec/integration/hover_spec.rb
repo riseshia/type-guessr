@@ -1719,5 +1719,72 @@ RSpec.describe "Hover Integration" do
       end
     end
   end
+
+  describe "Self-returning methods (tap, then)" do
+    context "tap block parameter" do
+      let(:source) do
+        <<~RUBY
+          class Recipe
+            def name; end
+          end
+          recipe = Recipe.new
+          recipe.tap { |x| x }
+        RUBY
+      end
+
+      it "infers block parameter as receiver type" do
+        # Hover on "x" in the block - should be Recipe
+        expect_hover_type(line: 5, column: 17, expected: "Recipe")
+      end
+    end
+
+    context "tap return type" do
+      let(:source) do
+        <<~RUBY
+          class Recipe
+            def name; end
+          end
+          y = Recipe.new.tap { |x| nil }
+          y
+        RUBY
+      end
+
+      it "infers return type as receiver type" do
+        # Hover on "y" on last line - should be Recipe
+        expect_hover_type(line: 5, column: 0, expected: "Recipe")
+      end
+    end
+
+    context "tap chained" do
+      let(:source) do
+        <<~RUBY
+          class Recipe
+            def name; end
+          end
+          z = Recipe.new.tap { }.tap { |r| r }
+          z
+        RUBY
+      end
+
+      it "preserves receiver type through chain" do
+        # Hover on "z" - should still be Recipe
+        expect_hover_type(line: 5, column: 0, expected: "Recipe")
+      end
+    end
+
+    context "Array tap" do
+      let(:source) do
+        <<~RUBY
+          arr = [1, 2, 3]
+          arr.tap { |a| a }
+        RUBY
+      end
+
+      it "infers block parameter as Array type" do
+        # Hover on "a" in the block - should be Array[Integer]
+        expect_hover_type(line: 2, column: 14, expected: "Array[Integer]")
+      end
+    end
+  end
 end
 # rubocop:enable RSpec/DescribeClass

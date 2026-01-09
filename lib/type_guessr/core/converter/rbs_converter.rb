@@ -36,7 +36,9 @@ module TypeGuessr
             Types::ClassInstance.new("void")
           when RBS::Types::Bases::Nil
             Types::ClassInstance.new("NilClass")
-          when RBS::Types::Bases::Self, RBS::Types::Bases::Instance
+          when RBS::Types::Bases::Self
+            Types::SelfType.instance
+          when RBS::Types::Bases::Instance
             # Cannot resolve without context - return Unknown
             Types::Unknown.instance
           else

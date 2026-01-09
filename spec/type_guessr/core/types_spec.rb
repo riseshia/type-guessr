@@ -450,6 +450,38 @@ RSpec.describe TypeGuessr::Core::Types do
     end
   end
 
+  describe "SelfType" do
+    it "is a singleton" do
+      self_type1 = TypeGuessr::Core::Types::SelfType.instance
+      self_type2 = TypeGuessr::Core::Types::SelfType.instance
+      expect(self_type1).to be(self_type2)
+    end
+
+    it "has a string representation" do
+      self_type = TypeGuessr::Core::Types::SelfType.instance
+      expect(self_type.to_s).to eq("self")
+    end
+
+    it "substitutes when :self key provided" do
+      self_type = TypeGuessr::Core::Types::SelfType.instance
+      string_type = TypeGuessr::Core::Types::ClassInstance.new("String")
+      result = self_type.substitute({ self: string_type })
+      expect(result).to eq(string_type)
+    end
+
+    it "returns self when no :self key in substitutions" do
+      self_type = TypeGuessr::Core::Types::SelfType.instance
+      result = self_type.substitute({ Elem: TypeGuessr::Core::Types::ClassInstance.new("String") })
+      expect(result).to be(self_type)
+    end
+
+    it "returns self with empty substitutions" do
+      self_type = TypeGuessr::Core::Types::SelfType.instance
+      result = self_type.substitute({})
+      expect(result).to be(self_type)
+    end
+  end
+
   describe "#rbs_class_name" do
     describe "Type (base class)" do
       it "returns nil by default" do

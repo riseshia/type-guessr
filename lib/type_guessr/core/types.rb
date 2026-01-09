@@ -402,6 +402,20 @@ module TypeGuessr
         end
       end
 
+      # SelfType - represents the 'self' type from RBS
+      # Gets substituted with the receiver type at resolution time
+      class SelfType < Type
+        include Singleton
+
+        def to_s
+          "self"
+        end
+
+        def substitute(substitutions)
+          substitutions[:self] || self
+        end
+      end
+
       # ForwardingArgs - represents the forwarding parameter (...)
       class ForwardingArgs < Type
         include Singleton
