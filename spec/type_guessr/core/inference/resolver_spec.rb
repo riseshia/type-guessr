@@ -464,6 +464,7 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
         )
         depot_def = TypeGuessr::Core::IR::DefNode.new(
           name: :depot,
+          class_name: "Store",
           params: [],
           return_node: depot_return,
           body_nodes: [depot_return],
@@ -508,6 +509,7 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
         )
         def_node = TypeGuessr::Core::IR::DefNode.new(
           name: :foo,
+          class_name: nil,
           params: [],
           return_node: return_node,
           body_nodes: [return_node],
@@ -524,6 +526,7 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
       it "returns NilClass for method without body" do
         def_node = TypeGuessr::Core::IR::DefNode.new(
           name: :foo,
+          class_name: nil,
           params: [],
           return_node: nil,
           body_nodes: [],
@@ -535,6 +538,22 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
         expect(result.type).to be_a(TypeGuessr::Core::Types::ClassInstance)
         expect(result.type.name).to eq("NilClass")
         expect(result.reason).to include("returns nil (empty body)")
+      end
+
+      it "returns self type for initialize method" do
+        def_node = TypeGuessr::Core::IR::DefNode.new(
+          name: :initialize,
+          class_name: "User",
+          params: [],
+          return_node: nil,
+          body_nodes: [],
+          loc: loc,
+          singleton: false
+        )
+
+        result = resolver.infer(def_node)
+        expect(result.type).to be(TypeGuessr::Core::Types::SelfType.instance)
+        expect(result.reason).to include("def initialize")
       end
     end
 
@@ -578,10 +597,10 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
 
     it "returns list of registered class names" do
       def_node1 = TypeGuessr::Core::IR::DefNode.new(
-        name: :save, params: [], return_node: nil, body_nodes: [], loc: loc, singleton: false
+        name: :save, class_name: "User", params: [], return_node: nil, body_nodes: [], loc: loc, singleton: false
       )
       def_node2 = TypeGuessr::Core::IR::DefNode.new(
-        name: :delete, params: [], return_node: nil, body_nodes: [], loc: loc, singleton: false
+        name: :delete, class_name: "Post", params: [], return_node: nil, body_nodes: [], loc: loc, singleton: false
       )
 
       resolver.register_method("User", "save", def_node1)
@@ -602,7 +621,7 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
 
     it "returns methods hash for registered class" do
       def_node = TypeGuessr::Core::IR::DefNode.new(
-        name: :save, params: [], return_node: nil, body_nodes: [], loc: loc, singleton: false
+        name: :save, class_name: "User", params: [], return_node: nil, body_nodes: [], loc: loc, singleton: false
       )
       resolver.register_method("User", "save", def_node)
 
@@ -619,13 +638,13 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
   describe "#search_methods" do
     before do
       user_save = TypeGuessr::Core::IR::DefNode.new(
-        name: :save, params: [], return_node: nil, body_nodes: [], loc: loc, singleton: false
+        name: :save, class_name: "User", params: [], return_node: nil, body_nodes: [], loc: loc, singleton: false
       )
       user_delete = TypeGuessr::Core::IR::DefNode.new(
-        name: :delete, params: [], return_node: nil, body_nodes: [], loc: loc, singleton: false
+        name: :delete, class_name: "User", params: [], return_node: nil, body_nodes: [], loc: loc, singleton: false
       )
       post_save = TypeGuessr::Core::IR::DefNode.new(
-        name: :save, params: [], return_node: nil, body_nodes: [], loc: loc, singleton: false
+        name: :save, class_name: "Post", params: [], return_node: nil, body_nodes: [], loc: loc, singleton: false
       )
 
       resolver.register_method("User", "save", user_save)
@@ -663,17 +682,17 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
   describe "called methods resolution with inheritance" do
     let(:recipe_ingredients) do
       TypeGuessr::Core::IR::DefNode.new(
-        name: :ingredients, params: [], return_node: nil, body_nodes: [], loc: loc, singleton: false
+        name: :ingredients, class_name: "Recipe", params: [], return_node: nil, body_nodes: [], loc: loc, singleton: false
       )
     end
     let(:recipe_steps) do
       TypeGuessr::Core::IR::DefNode.new(
-        name: :steps, params: [], return_node: nil, body_nodes: [], loc: loc, singleton: false
+        name: :steps, class_name: "Recipe", params: [], return_node: nil, body_nodes: [], loc: loc, singleton: false
       )
     end
     let(:recipe2_notes) do
       TypeGuessr::Core::IR::DefNode.new(
-        name: :notes, params: [], return_node: nil, body_nodes: [], loc: loc, singleton: false
+        name: :notes, class_name: "Recipe2", params: [], return_node: nil, body_nodes: [], loc: loc, singleton: false
       )
     end
 

@@ -1786,5 +1786,46 @@ RSpec.describe "Hover Integration" do
       end
     end
   end
+
+  describe "initialize method", :doc do
+    context "User.new call result" do
+      let(:source) do
+        <<~RUBY
+          class User
+            def initialize(name)
+              @name = name
+            end
+          end
+
+          user = User.new("alice")
+          user
+        RUBY
+      end
+
+      it "→ User" do
+        expect_hover_type(line: 8, column: 0, expected: "User")
+      end
+    end
+
+    context "initialize method signature" do
+      let(:source) do
+        <<~RUBY
+          class User
+            def initialize(name)
+              @name = name
+            end
+          end
+        RUBY
+      end
+
+      it "shows self as return type" do
+        # Hover on `initialize` method name (line 2, column 6 is 'i' in 'initialize')
+        response = hover_on_source(source, { line: 1, character: 6 })
+        contents = response&.contents&.value || ""
+        # The signature should include "self" as return type
+        expect(contents).to include("self")
+      end
+    end
+  end
 end
 # rubocop:enable RSpec/DescribeClass

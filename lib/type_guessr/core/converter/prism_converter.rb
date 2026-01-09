@@ -1245,6 +1245,7 @@ module TypeGuessr
 
           IR::DefNode.new(
             name: prism_node.name,
+            class_name: def_context.current_class_name,
             params: params,
             return_node: return_node,
             body_nodes: body_nodes,

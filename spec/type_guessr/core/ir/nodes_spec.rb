@@ -480,6 +480,7 @@ RSpec.describe TypeGuessr::Core::IR do
       return_node = described_class::LiteralNode.new(type: string_type, literal_value: nil, values: nil, loc: loc)
       def_node = described_class::DefNode.new(
         name: :foo,
+        class_name: nil,
         params: [param],
         return_node: return_node,
         body_nodes: [return_node],
@@ -503,6 +504,7 @@ RSpec.describe TypeGuessr::Core::IR do
       return_node = described_class::LiteralNode.new(type: string_type, literal_value: nil, values: nil, loc: loc)
       def_node = described_class::DefNode.new(
         name: :foo,
+        class_name: nil,
         params: [param],
         return_node: return_node,
         body_nodes: [return_node],

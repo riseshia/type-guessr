@@ -579,6 +579,15 @@ module TypeGuessr
         end
 
         def infer_def(node)
+          # initialize always returns self (the class instance)
+          if node.name == :initialize && node.class_name
+            return Result.new(
+              Types::SelfType.instance,
+              "def #{node.name} returns self",
+              :project
+            )
+          end
+
           # Empty method body returns nil
           unless node.return_node
             return Result.new(

@@ -482,12 +482,13 @@ module TypeGuessr
 
       # Method definition node
       # @param name [Symbol] Method name
+      # @param class_name [String, nil] Enclosing class name
       # @param params [Array<ParamNode>] Parameter nodes
       # @param return_node [Node] Node representing the return value
       # @param body_nodes [Array<Node>] All nodes in the method body
       # @param loc [Loc] Location information
       # @param singleton [Boolean] true if this is a singleton method (def self.method_name)
-      DefNode = Data.define(:name, :params, :return_node, :body_nodes, :loc, :singleton) do
+      DefNode = Data.define(:name, :class_name, :params, :return_node, :body_nodes, :loc, :singleton) do
         include TreeInspect
 
         def dependencies
@@ -508,6 +509,7 @@ module TypeGuessr
         def tree_inspect_fields(indent)
           [
             tree_field(:name, name, indent),
+            tree_field(:class_name, class_name, indent),
             tree_field(:params, params, indent),
             tree_field(:return_node, return_node, indent),
             tree_field(:body_nodes, body_nodes, indent),

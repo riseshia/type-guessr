@@ -258,6 +258,7 @@ RSpec.describe RubyLsp::TypeGuessr::GraphBuilder do
     it "extracts DefNode details" do
       def_node = TypeGuessr::Core::IR::DefNode.new(
         name: :save,
+        class_name: "Test",
         params: [
           TypeGuessr::Core::IR::ParamNode.new(
             name: :user, kind: :required, default_value: nil, called_methods: [], loc: loc

@@ -195,3 +195,31 @@ end
 [r]esult = C.foo  # Guessed Type: Integer
 ```
 
+## Class method calls (ClassName.method)
+
+### stdlib class method signature
+
+```ruby
+result = File.[e]xist?("test.txt")  # Signature: (::string | ::_ToPath | ::IO file_name) -> bool
+result
+```
+
+### gem class method signature
+
+```ruby
+loader = RBS::EnvironmentLoader.new
+env = RBS::Environment.[f]rom_loader(loader)  # Signature: (RBS::EnvironmentLoader loader) -> untyped
+env
+```
+
+## Instance method calls (receiver.method)
+
+### gem instance method signature
+
+```ruby
+loader = RBS::EnvironmentLoader.new
+env = RBS::Environment.from_loader(loader)
+resolved = env.[r]esolve_type_names  # Signature: (?only: untyped) -> untyped
+resolved
+```
+
