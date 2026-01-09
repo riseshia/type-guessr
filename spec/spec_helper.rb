@@ -41,40 +41,19 @@ end
 module TypeGuessrTestHelper
   include RubyLsp::TestHelper
 
-  # Custom helper that uses a shared, fully-indexed server for all integration tests.
-  # The server is initialized once per test suite and reused, with caching for fast subsequent runs.
-  # This provides access to gem/stdlib method definitions while maintaining good performance.
-  #
-  # Uses a fixed URI (source.rb) so that handle_change properly invalidates RubyIndexer's
-  # ancestor cache when class definitions change between tests.
+  # Shared, fully-indexed server for integration tests. Uses fixed URI (source.rb) so that
+  # handle_change properly invalidates RubyIndexer's ancestor cache between tests.
   def with_server_and_addon(source, &block)
     server = FullIndexHelper.server
     uri = URI("file://#{Dir.pwd}/source.rb")
 
-    # Open the document in the server (required for hover/other LSP requests)
-    server.process_message({
-                             method: "textDocument/didOpen",
-                             params: {
-                               textDocument: {
-                                 uri: uri,
-                                 text: source,
-                                 version: 1,
-                                 languageId: "ruby"
-                               }
-                             }
-                           })
+    server.process_message(did_open_message(uri, source))
 
-    # Manually activate only the TypeGuessr addon
     addon = RubyLsp::TypeGuessr::Addon.new
     addon.activate(server.global_state, server.instance_variable_get(:@outgoing_queue))
-
-    # Register the addon so the server knows about it
     RubyLsp::Addon.addons << addon
 
-    # Index the source directly for integration tests
     addon.runtime_adapter.index_source(uri.to_s, source)
-
-    # Use handle_change for proper ancestor cache invalidation
     server.global_state.index.handle_change(uri, source)
 
     begin
@@ -82,11 +61,25 @@ module TypeGuessrTestHelper
     ensure
       addon.deactivate
       RubyLsp::Addon.addons.delete(addon)
-      # Close the document
-      server.process_message({
-                               method: "textDocument/didClose",
-                               params: { textDocument: { uri: uri } }
-                             })
+      server.process_message(did_close_message(uri))
     end
+  end
+
+  private
+
+  def did_open_message(uri, source)
+    {
+      method: "textDocument/didOpen",
+      params: {
+        textDocument: { uri: uri, text: source, version: 1, languageId: "ruby" }
+      }
+    }
+  end
+
+  def did_close_message(uri)
+    {
+      method: "textDocument/didClose",
+      params: { textDocument: { uri: uri } }
+    }
   end
 end
