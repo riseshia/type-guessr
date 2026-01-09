@@ -82,6 +82,20 @@ module TypeGuessr
         end
         []
       end
+
+      # Get class method signatures for hover display (e.g., File.exist?, Dir.pwd)
+      # @param class_name [String] Class name
+      # @param method_name [String] Method name
+      # @return [Array<Signature>] Method signatures (empty if not found)
+      def get_class_method_signatures(class_name, method_name)
+        @providers.each do |provider|
+          next unless provider.respond_to?(:get_class_method_signatures)
+
+          result = provider.get_class_method_signatures(class_name, method_name)
+          return result unless result.empty?
+        end
+        []
+      end
     end
   end
 end

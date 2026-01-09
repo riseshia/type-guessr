@@ -128,17 +128,29 @@ module RubyLsp
 
         # Get receiver type to look up method signature
         if call_node.receiver
-          receiver_result = @runtime_adapter.infer_type(call_node.receiver)
-          receiver_type = receiver_result.type
+          # For ConstantNode receiver (e.g., File.exist?, RBS::Environment.from_loader),
+          # directly create SingletonType without relying on constant_kind_provider
+          receiver_type = if call_node.receiver.is_a?(IR::ConstantNode)
+                            Types::SingletonType.new(call_node.receiver.name)
+                          else
+                            @runtime_adapter.infer_type(call_node.receiver).type
+                          end
 
           # Get the class name for signature lookup
           class_name = extract_class_name(receiver_type)
 
           if class_name
             # Look up signature via SignatureProvider
-            signatures = @runtime_adapter.signature_provider.get_method_signatures(
-              class_name, call_node.method.to_s
-            )
+            # Use class method lookup for SingletonType (e.g., RBS::Environment.from_loader)
+            signatures = if receiver_type.is_a?(Types::SingletonType)
+                           @runtime_adapter.signature_provider.get_class_method_signatures(
+                             class_name, call_node.method.to_s
+                           )
+                         else
+                           @runtime_adapter.signature_provider.get_method_signatures(
+                             class_name, call_node.method.to_s
+                           )
+                         end
 
             if signatures.any?
               # Format the signature(s)
@@ -160,18 +172,117 @@ module RubyLsp
           end
         end
 
-        # Fallback: show inferred return type
+        # Fallback: show inferred return type as signature format
+        # All method calls should show signature format (not just project methods)
         result = @runtime_adapter.infer_type(call_node)
         type_str = result.type.to_s
 
-        # For project methods, show as signature format
-        content = if result.source == :project
-                    "**Guessed Signature:** `() -> #{type_str}`"
-                  else
-                    "**Guessed Type:** `#{type_str}`"
-                  end
+        # Build signature with parameter info from RubyIndexer
+        params_str = build_call_signature_params(call_node)
+        content = "**Guessed Signature:** `(#{params_str}) -> #{type_str}`"
         content += build_debug_info(result) if debug_enabled?
         @response_builder.push(content, category: :documentation)
+      end
+
+      # Build parameter signature for a method call using RubyIndexer
+      def build_call_signature_params(call_node)
+        method_entry = lookup_method_entry_for_call(call_node)
+
+        if method_entry&.signatures&.any?
+          format_params_from_entry(method_entry, call_node.args)
+        elsif call_node.args&.any?
+          format_params_from_args(call_node.args)
+        else
+          ""
+        end
+      end
+
+      # Look up method entry from RubyIndexer based on call node
+      def lookup_method_entry_for_call(call_node)
+        return nil unless @global_state&.index
+        return nil unless call_node.receiver
+
+        receiver_result = @runtime_adapter.infer_type(call_node.receiver)
+
+        case receiver_result.type
+        when Types::SingletonType
+          lookup_class_method_entry(receiver_result.type.name, call_node.method.to_s)
+        when Types::ClassInstance
+          lookup_instance_method_entry(receiver_result.type.name, call_node.method.to_s)
+        end
+      end
+
+      # Format parameters from RubyIndexer method entry with inferred argument types
+      def format_params_from_entry(method_entry, args)
+        params = method_entry.signatures.first.parameters
+        return "" if params.nil? || params.empty?
+
+        params.each_with_index.map do |param, i|
+          arg_type = if args && i < args.size
+                       @runtime_adapter.infer_type(args[i]).type.to_s
+                     else
+                       "untyped"
+                     end
+          format_single_param(param, arg_type)
+        end.join(", ")
+      end
+
+      # Format a single parameter based on its type
+      def format_single_param(param, arg_type)
+        param_name = param.name.to_s
+
+        case param
+        when RubyIndexer::Entry::RequiredParameter
+          "#{arg_type} #{param_name}"
+        when RubyIndexer::Entry::OptionalParameter
+          "?#{arg_type} #{param_name}"
+        when RubyIndexer::Entry::RestParameter
+          "*#{arg_type} #{param_name}"
+        when RubyIndexer::Entry::KeywordParameter
+          "#{param_name}: #{arg_type}"
+        when RubyIndexer::Entry::OptionalKeywordParameter
+          "?#{param_name}: #{arg_type}"
+        when RubyIndexer::Entry::KeywordRestParameter
+          "**#{arg_type} #{param_name}"
+        when RubyIndexer::Entry::BlockParameter
+          "&#{param_name}"
+        else
+          "#{arg_type} #{param_name}"
+        end
+      end
+
+      # Format arguments when no method entry is available
+      def format_params_from_args(args)
+        args.each_with_index.map do |arg, i|
+          arg_type = @runtime_adapter.infer_type(arg).type.to_s
+          "#{arg_type} arg#{i + 1}"
+        end.join(", ")
+      end
+
+      # Look up class method entry from RubyIndexer
+      def lookup_class_method_entry(class_name, method_name)
+        return nil unless @global_state&.index
+
+        # Query singleton class for the method
+        singleton_name = "#{class_name}::<Class:#{class_name}>"
+        entries = @global_state.index.resolve_method(method_name, singleton_name)
+        return nil if entries.nil? || entries.empty?
+
+        entries.first
+      rescue RubyIndexer::Index::NonExistingNamespaceError
+        nil
+      end
+
+      # Look up instance method entry from RubyIndexer
+      def lookup_instance_method_entry(class_name, method_name)
+        return nil unless @global_state&.index
+
+        entries = @global_state.index.resolve_method(method_name, class_name)
+        return nil if entries.nil? || entries.empty?
+
+        entries.first
+      rescue RubyIndexer::Index::NonExistingNamespaceError
+        nil
       end
 
       def extract_class_name(type)

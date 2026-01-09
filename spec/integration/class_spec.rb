@@ -306,5 +306,67 @@ RSpec.describe "Class Instance Type Inference", :doc do
       end
     end
   end
+
+  describe "Class method calls (ClassName.method)" do
+    context "stdlib class method signature" do
+      let(:source) do
+        <<~RUBY
+          result = File.exist?("test.txt")
+          result
+        RUBY
+      end
+
+      it "shows Guessed Signature for stdlib class method" do
+        # File.exist? is a stdlib class method with RBS definition
+        expect_hover_method_signature(
+          line: 1,
+          column: 14,
+          expected_signature: "(::string | ::_ToPath | ::IO file_name) -> bool"
+        )
+      end
+    end
+
+    context "gem class method signature" do
+      let(:source) do
+        <<~RUBY
+          loader = RBS::EnvironmentLoader.new
+          env = RBS::Environment.from_loader(loader)
+          env
+        RUBY
+      end
+
+      it "shows Guessed Signature for class method" do
+        # Even for gem classes without RBS definitions, show signature format
+        # Argument type is inferred from the actual value (RBS::EnvironmentLoader)
+        expect_hover_method_signature(
+          line: 2,
+          column: 23,
+          expected_signature: "(RBS::EnvironmentLoader arg1) -> untyped"
+        )
+      end
+    end
+  end
+
+  describe "Instance method calls (receiver.method)" do
+    context "gem instance method signature" do
+      let(:source) do
+        <<~RUBY
+          loader = RBS::EnvironmentLoader.new
+          env = RBS::Environment.from_loader(loader)
+          resolved = env.resolve_type_names
+          resolved
+        RUBY
+      end
+
+      it "shows Guessed Signature for instance method" do
+        # Even for gem instance methods without RBS definitions, show signature format
+        expect_hover_method_signature(
+          line: 3,
+          column: 15,
+          expected_signature: "() -> untyped"
+        )
+      end
+    end
+  end
 end
 # rubocop:enable RSpec/DescribeClass
