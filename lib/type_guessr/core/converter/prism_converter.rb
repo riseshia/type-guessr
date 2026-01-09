@@ -13,7 +13,7 @@ module TypeGuessr
         # Context for tracking variable bindings during conversion
         class Context
           attr_reader :variables
-          attr_accessor :current_class, :current_method
+          attr_accessor :current_class, :current_method, :in_singleton_method
 
           def initialize(parent = nil)
             @parent = parent
@@ -23,6 +23,7 @@ module TypeGuessr
             @scope_type = nil # :class, :method, :block, :top_level
             @current_class = nil
             @current_method = nil
+            @in_singleton_method = false
           end
 
           def register_variable(name, node)
@@ -72,6 +73,7 @@ module TypeGuessr
             child.instance_variable_set(:@scope_type, scope_type)
             child.current_class = current_class_name
             child.current_method = current_method_name
+            child.in_singleton_method = @in_singleton_method
             child
           end
 
@@ -219,9 +221,10 @@ module TypeGuessr
             )
 
           when Prism::SelfNode
-            # self keyword - returns the current class instance
+            # self keyword - returns the current class instance or singleton
             IR::SelfNode.new(
               class_name: context.current_class_name || "Object",
+              singleton: context.in_singleton_method,
               loc: convert_loc(prism_node.location)
             )
 
@@ -650,6 +653,7 @@ module TypeGuessr
                           elsif context.current_class_name
                             IR::SelfNode.new(
                               class_name: context.current_class_name,
+                              singleton: context.in_singleton_method,
                               loc: convert_loc(prism_node.location)
                             )
                           end
@@ -1110,6 +1114,7 @@ module TypeGuessr
         def convert_def(prism_node, context)
           def_context = context.fork(:method)
           def_context.current_method = prism_node.name.to_s
+          def_context.in_singleton_method = prism_node.receiver.is_a?(Prism::SelfNode)
 
           # Convert parameters
           params = []

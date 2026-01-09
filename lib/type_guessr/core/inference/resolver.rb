@@ -386,47 +386,8 @@ module TypeGuessr
                          else node.receiver.name
                          end
 
-            # ClassName.new returns instance of that class
-            if node.method == :new
-              return Result.new(
-                Types::ClassInstance.new(class_name),
-                "#{class_name}.new",
-                :inference
-              )
-            end
-
-            # Try project class methods first (includes extended module methods)
-            if @class_method_lookup_provider
-              owner_name = @class_method_lookup_provider.call(class_name, node.method.to_s)
-              if owner_name
-                # Look up method from owner (module or singleton class)
-                def_node = lookup_method(owner_name, node.method.to_s)
-                if def_node
-                  return_result = infer(def_node)
-                  return Result.new(
-                    return_result.type,
-                    "#{class_name}.#{node.method} (project)",
-                    :project
-                  )
-                end
-              end
-            end
-
-            # Fall back to RBS signature provider
-            arg_types = node.args.map { |arg| infer(arg).type }
-            return_type = @signature_provider.get_class_method_return_type(
-              class_name,
-              node.method.to_s,
-              arg_types
-            )
-
-            unless return_type.is_a?(Types::Unknown)
-              return Result.new(
-                return_type,
-                "#{class_name}.#{node.method} (RBS)",
-                :rbs
-              )
-            end
+            result = infer_class_method_call(class_name, node)
+            return result if result
           end
 
           # Infer receiver type first
@@ -436,6 +397,9 @@ module TypeGuessr
 
             # Query for method return type: project first, then RBS
             case receiver_type
+            when Types::SingletonType
+              result = infer_class_method_call(receiver_type.name, node)
+              return result if result
             when Types::ClassInstance
               # 1. Try project methods first
               def_node = lookup_method(receiver_type.name, node.method.to_s)
@@ -616,11 +580,12 @@ module TypeGuessr
         end
 
         def infer_self(node)
-          Result.new(
-            Types::ClassInstance.new(node.class_name),
-            "self in #{node.class_name}",
-            :inference
-          )
+          type = if node.singleton
+                   Types::SingletonType.new(node.class_name)
+                 else
+                   Types::ClassInstance.new(node.class_name)
+                 end
+          Result.new(type, "self in #{node.class_name}", :inference)
         end
 
         def infer_return(node)
@@ -630,6 +595,55 @@ module TypeGuessr
           else
             Result.new(Types::ClassInstance.new("NilClass"), "explicit return nil", :inference)
           end
+        end
+
+        # Infer class method call (ClassName.method or self.method in singleton context)
+        # @param class_name [String] The class name
+        # @param node [IR::CallNode] The call node
+        # @return [Result, nil] The result if resolved, nil otherwise
+        def infer_class_method_call(class_name, node)
+          # ClassName.new returns instance of that class
+          if node.method == :new
+            return Result.new(
+              Types::ClassInstance.new(class_name),
+              "#{class_name}.new",
+              :inference
+            )
+          end
+
+          # Try project class methods first (includes extended module methods)
+          if @class_method_lookup_provider
+            owner_name = @class_method_lookup_provider.call(class_name, node.method.to_s)
+            if owner_name
+              def_node = lookup_method(owner_name, node.method.to_s)
+              if def_node
+                return_result = infer(def_node)
+                return Result.new(
+                  return_result.type,
+                  "#{class_name}.#{node.method} (project)",
+                  :project
+                )
+              end
+            end
+          end
+
+          # Fall back to RBS signature provider
+          arg_types = node.args.map { |arg| infer(arg).type }
+          return_type = @signature_provider.get_class_method_return_type(
+            class_name,
+            node.method.to_s,
+            arg_types
+          )
+
+          unless return_type.is_a?(Types::Unknown)
+            return Result.new(
+              return_type,
+              "#{class_name}.#{node.method} (RBS)",
+              :rbs
+            )
+          end
+
+          nil
         end
 
         # Infer type for HashShape field access (hash[:key])

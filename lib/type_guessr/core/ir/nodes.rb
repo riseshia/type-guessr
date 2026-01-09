@@ -545,8 +545,9 @@ module TypeGuessr
 
       # Self reference node
       # @param class_name [String] Name of the enclosing class/module
+      # @param singleton [Boolean] Whether this self is in a singleton method context
       # @param loc [Loc] Location information
-      SelfNode = Data.define(:class_name, :loc) do
+      SelfNode = Data.define(:class_name, :singleton, :loc) do
         include TreeInspect
 
         def dependencies
@@ -562,7 +563,10 @@ module TypeGuessr
         end
 
         def tree_inspect_fields(indent)
-          [tree_field(:class_name, class_name, indent, last: true)]
+          [
+            tree_field(:class_name, class_name, indent),
+            tree_field(:singleton, singleton, indent, last: true),
+          ]
         end
       end
 
