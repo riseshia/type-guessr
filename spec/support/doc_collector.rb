@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "fileutils"
+require_relative "hover_matchers"
 
 # Collects documented test examples and generates markdown documentation
 module DocCollector
@@ -171,120 +172,51 @@ module DocCollector
   end
 end
 
-# Helper module for documented tests
+# Documentation-aware extension of HoverMatchers
+# Records test examples for documentation generation when :doc tag is present
 module TypeGuessrDocHelper
+  include HoverMatchers
+
   def expect_hover_type(line:, column:, expected:)
-    source = self.source
-
-    # Record if this is a documented example
-    if RSpec.current_example.metadata[:doc]
-      group_hierarchy = extract_group_hierarchy
-      DocCollector.record(
-        source: source,
-        line: line,
-        column: column,
-        expected: expected,
-        group_hierarchy: group_hierarchy,
-        description: RSpec.current_example.description,
-        spec_file: RSpec.current_example.metadata[:file_path]
-      )
-    end
-
-    # Perform actual hover test
-    response = hover_on_source(source, { line: line - 1, character: column })
-
-    # Extract actual type from response
-    # Formats:
-    #   Plain: **Guessed Type:** `Recipe`
-    #   Linked: **Guessed Type:** [`Recipe`](file://...)
-    actual_type = extract_guessed_type(response.contents.value)
-
-    expect(actual_type).to eq(expected),
-                           "Expected type '#{expected}' but got '#{actual_type}'\n" \
-                           "Full response: #{response.contents.value}"
-  end
-
-  def extract_guessed_type(content)
-    # Try linked format first: [`Type`](url)
-    if (match = content.match(/Guessed Type:\*\*\s*\[`([^`]+)`\]/))
-      return match[1]
-    end
-
-    # Try plain format: `Type`
-    if (match = content.match(/Guessed Type:\*\*\s*`([^`]+)`/))
-      return match[1]
-    end
-
-    # Try Guessed Signature format: `(params) -> ReturnType`
-    # Extract return type from signature
-    if (match = content.match(/Guessed Signature:\*\*\s*`\([^)]*\)\s*->\s*([^`]+)`/))
-      return match[1]
-    end
-
-    ""
+    record_for_doc(:type_inference, line: line, column: column, expected: expected)
+    super
   end
 
   def expect_hover_method_signature(line:, column:, expected_signature:)
-    source = self.source
+    record_for_doc(:method_signature, line: line, column: column, expected_signature: expected_signature)
+    super
+  end
 
-    # Record if this is a documented example
-    if RSpec.current_example.metadata[:doc]
-      group_hierarchy = extract_group_hierarchy
+  private
+
+  def record_for_doc(type, **kwargs)
+    return unless RSpec.current_example.metadata[:doc]
+
+    group_hierarchy = extract_group_hierarchy
+
+    case type
+    when :type_inference
+      DocCollector.record(
+        source: source,
+        line: kwargs[:line],
+        column: kwargs[:column],
+        expected: kwargs[:expected],
+        group_hierarchy: group_hierarchy,
+        description: RSpec.current_example.description,
+        spec_file: RSpec.current_example.metadata[:file_path]
+      )
+    when :method_signature
       DocCollector.record_method_signature(
         source: source,
-        line: line,
-        column: column,
-        expected_signature: expected_signature,
+        line: kwargs[:line],
+        column: kwargs[:column],
+        expected_signature: kwargs[:expected_signature],
         group_hierarchy: group_hierarchy,
         description: RSpec.current_example.description,
         spec_file: RSpec.current_example.metadata[:file_path]
       )
     end
-
-    # Perform actual hover test
-    response = hover_on_source(source, { line: line - 1, character: column })
-
-    # Validate response exists
-    expect(response).not_to be_nil
-
-    # Match expected signature
-    escaped_signature = Regexp.escape(expected_signature)
-    expect(response.contents.value).to match(/#{escaped_signature}/)
   end
-
-  # Expect hover response exists with non-empty content
-  # Use this when you just want to verify hover works, regardless of specific type
-  def expect_hover_response(line:, column:)
-    response = hover_on_source(source, { line: line - 1, character: column })
-    expect(response).not_to be_nil, "Expected hover response at line #{line}, column #{column}"
-    expect(response.contents.value).not_to be_nil
-    expect(response.contents.value).not_to be_empty
-    response
-  end
-
-  # Expect no crash - hover may return nil or a valid response
-  # Use this for edge cases where inference might fail gracefully
-  def expect_no_hover_crash(line:, column:)
-    response = hover_on_source(source, { line: line - 1, character: column })
-    expect(response).to be_nil.or(be_a(RubyLsp::Interface::Hover))
-    response
-  end
-
-  # Expect hover type excludes ALL of the given types
-  # Use this to verify certain types are NOT inferred
-  def expect_hover_type_excludes(line:, column:, types:)
-    response = hover_on_source(source, { line: line - 1, character: column })
-    expect(response).not_to be_nil, "Expected hover response at line #{line}, column #{column}"
-
-    types.each do |type|
-      escaped_type = Regexp.escape(type)
-      expect(response.contents.value).not_to match(/#{escaped_type}/),
-                                             "Expected hover NOT to include type '#{type}', got: #{response.contents.value}"
-    end
-    response
-  end
-
-  private
 
   def extract_group_hierarchy
     hierarchy = []
