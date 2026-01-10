@@ -17,23 +17,21 @@ A Ruby LSP addon that provides heuristic type inference to enhance IDE features 
 
 ## Installation
 
-Add this line to your application's Gemfile:
+TypeGuessr is a Ruby LSP addon. Add it to your project's Gemfile under the development group:
 
 ```ruby
-gem 'type-guessr'
+group :development do
+  gem 'type-guessr', require: false
+end
 ```
 
-And then execute:
+Then run:
 
 ```bash
 bundle install
 ```
 
-Or install it yourself as:
-
-```bash
-gem install type-guessr
-```
+After installation, restart your editor or reload the Ruby LSP server to activate the addon.
 
 ## Usage
 
