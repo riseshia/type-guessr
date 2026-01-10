@@ -336,5 +336,49 @@ RSpec.describe "Variable Type Inference", :doc do
       end
     end
   end
+
+  describe "Block parameter references" do
+    context "tap block parameter referenced in keyword argument" do
+      let(:source) do
+        <<~RUBY
+          module RBS
+            class Environment2
+              def self.from_loader(loader)
+                self.new.tap do |env|
+                  loader.load(env: env)
+                end
+              end
+            end
+          end
+        RUBY
+      end
+
+      it "→ RBS::Environment2" do
+        # The `env` in `env: env` should be inferred as RBS::Environment2
+        # Column 25 is where the second env (the value) starts
+        expect_hover_type(line: 5, column: 25, expected: "RBS::Environment2")
+      end
+    end
+
+    context "block parameter referenced in regular method argument" do
+      let(:source) do
+        <<~RUBY
+          class User
+            def self.build
+              self.new.tap do |user|
+                validate(user)
+              end
+            end
+          end
+        RUBY
+      end
+
+      it "→ User" do
+        # The `user` in `validate(user)` should be inferred as User
+        # Column 15 is where user starts in `validate(user)`
+        expect_hover_type(line: 4, column: 15, expected: "User")
+      end
+    end
+  end
 end
 # rubocop:enable RSpec/DescribeClass

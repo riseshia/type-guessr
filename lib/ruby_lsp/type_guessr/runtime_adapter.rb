@@ -379,8 +379,13 @@ module RubyLsp
           @location_index.add(file_path, node, scope_id)
           index_node_recursively(file_path, node.dependency, scope_id) if node.dependency
 
+        when ::TypeGuessr::Core::IR::LiteralNode
+          @location_index.add(file_path, node, scope_id)
+          # Index value nodes (e.g., variable references in arrays/hashes/keyword args)
+          node.values&.each { |value| index_node_recursively(file_path, value, scope_id) }
+
         else
-          # LocalReadNode, InstanceVariableReadNode, ClassVariableReadNode, LiteralNode, etc.
+          # LocalReadNode, InstanceVariableReadNode, ClassVariableReadNode, etc.
           @location_index.add(file_path, node, scope_id)
         end
       end

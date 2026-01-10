@@ -32,6 +32,10 @@ Lint/DuplicateBranch:
 Style/NegatedIf:
   Enabled: false
 
+# LiteralNode.values is an Array, not a Hash
+Style/HashEachMethods:
+  Enabled: false
+
 # Disable all Metrics cops
 Metrics:
   Enabled: false

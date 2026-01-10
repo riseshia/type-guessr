@@ -132,6 +132,9 @@ module TypeGuessr
           when Prism::HashNode
             convert_hash_literal(prism_node, context)
 
+          when Prism::KeywordHashNode
+            convert_keyword_hash(prism_node, context)
+
           when Prism::LocalVariableWriteNode
             convert_local_variable_write(prism_node, context)
 
@@ -297,19 +300,23 @@ module TypeGuessr
 
         def convert_hash_literal(prism_node, context)
           type = infer_hash_element_types(prism_node)
+          build_hash_literal_node(prism_node, type, context)
+        end
 
-          # Convert each value expression to an IR node
-          value_nodes = []
-          prism_node.elements.each do |elem|
+        # Convert KeywordHashNode (keyword arguments in method calls like `foo(a: 1, b: x)`)
+        def convert_keyword_hash(prism_node, context)
+          type = infer_keyword_hash_type(prism_node)
+          build_hash_literal_node(prism_node, type, context)
+        end
+
+        # Shared helper for hash-like nodes (HashNode, KeywordHashNode)
+        def build_hash_literal_node(prism_node, type, context)
+          value_nodes = prism_node.elements.filter_map do |elem|
             case elem
             when Prism::AssocNode
-              # Convert value (key is just for type info, not tracked as dependency)
-              value_node = convert(elem.value, context)
-              value_nodes << value_node if value_node
+              convert(elem.value, context)
             when Prism::AssocSplatNode
-              # Handle **hash spread
-              splat_node = convert(elem.value, context)
-              value_nodes << splat_node if splat_node
+              convert(elem.value, context)
             end
           end
 
@@ -319,6 +326,18 @@ module TypeGuessr
             values: value_nodes.empty? ? nil : value_nodes,
             loc: convert_loc(prism_node.location)
           )
+        end
+
+        # Infer type for KeywordHashNode (always has symbol keys)
+        def infer_keyword_hash_type(keyword_hash_node)
+          return Types::HashShape.new({}) if keyword_hash_node.elements.empty?
+
+          fields = keyword_hash_node.elements.each_with_object({}) do |elem, hash|
+            next unless elem.is_a?(Prism::AssocNode) && elem.key.is_a?(Prism::SymbolNode)
+
+            hash[elem.key.value.to_sym] = infer_literal_type(elem.value)
+          end
+          Types::HashShape.new(fields)
         end
 
         def infer_literal_type(prism_node)
