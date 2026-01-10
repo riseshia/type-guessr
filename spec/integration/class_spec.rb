@@ -7,19 +7,6 @@ require "ruby_lsp/internal"
 RSpec.describe "Class Instance Type Inference", :doc do
   include TypeGuessrTestHelper
 
-  def hover_on_source(source, position)
-    with_server_and_addon(source) do |server, uri|
-      server.process_message(
-        id: 1,
-        method: "textDocument/hover",
-        params: { textDocument: { uri: uri }, position: position }
-      )
-
-      result = pop_result(server)
-      result.response
-    end
-  end
-
   describe ".new Call Type Inference" do
     context "Simple class" do
       let(:source) do

@@ -7,19 +7,6 @@ require "ruby_lsp/internal"
 RSpec.describe "Hover Integration" do
   include TypeGuessrTestHelper
 
-  def hover_on_source(source, position)
-    with_server_and_addon(source) do |server, uri|
-      server.process_message(
-        id: 1,
-        method: "textDocument/hover",
-        params: { textDocument: { uri: uri }, position: position }
-      )
-
-      result = pop_result(server)
-      result.response
-    end
-  end
-
   describe "Class Method Calls", :doc do
     context "File.read" do
       let(:source) do

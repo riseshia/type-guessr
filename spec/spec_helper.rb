@@ -45,6 +45,20 @@ end
 module TypeGuessrTestHelper
   include RubyLsp::TestHelper
 
+  # Helper to perform hover request on source code at given position
+  def hover_on_source(source, position)
+    with_server_and_addon(source) do |server, uri|
+      server.process_message(
+        id: 1,
+        method: "textDocument/hover",
+        params: { textDocument: { uri: uri }, position: position }
+      )
+
+      result = pop_result(server)
+      result.response
+    end
+  end
+
   # Shared, fully-indexed server for integration tests. Uses fixed URI (source.rb) so that
   # handle_change properly invalidates RubyIndexer's ancestor cache between tests.
   def with_server_and_addon(source, &block)

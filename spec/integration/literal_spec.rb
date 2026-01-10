@@ -7,19 +7,6 @@ require "ruby_lsp/internal"
 RSpec.describe "Literal Type Inference", :doc do
   include TypeGuessrTestHelper
 
-  def hover_on_source(source, position)
-    with_server_and_addon(source) do |server, uri|
-      server.process_message(
-        id: 1,
-        method: "textDocument/hover",
-        params: { textDocument: { uri: uri }, position: position }
-      )
-
-      result = pop_result(server)
-      result.response
-    end
-  end
-
   describe "Basic literals" do
     context "String literal" do
       let(:source) do
