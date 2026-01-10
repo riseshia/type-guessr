@@ -46,20 +46,13 @@ module FullIndexHelper
     private
 
     def create_server_with_cached_index
-      start_time = Time.now
-
       if cache_valid?
-        server = create_server_from_cache
-        elapsed = (Time.now - start_time).round(2)
-        warn "[FullIndexHelper] Loaded from cache in #{elapsed}s"
+        create_server_from_cache
       else
         server = create_fully_indexed_server
         save_cache(server.global_state.index)
-        elapsed = (Time.now - start_time).round(2)
-        warn "[FullIndexHelper] Full indexing complete in #{elapsed}s (cache saved)"
+        server
       end
-
-      server
     end
 
     def create_server_from_cache
@@ -75,8 +68,6 @@ module FullIndexHelper
     end
 
     def create_fully_indexed_server
-      warn "[FullIndexHelper] Creating fully-indexed server..."
-
       server = RubyLsp::Server.new(test_mode: false)
 
       # Send LSP initialize request to trigger full indexing
