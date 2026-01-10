@@ -16,7 +16,11 @@ require_relative "support/full_index_helper"
 RSpec.configure do |config|
   # Disable debug logging and server for all tests
   config.before do
-    allow(RubyLsp::TypeGuessr::Config).to receive_messages(debug?: false, debug_server_enabled?: false)
+    allow(RubyLsp::TypeGuessr::Config).to receive_messages(
+      debug?: false,
+      debug_server_enabled?: false,
+      debug_server_port: 7010
+    )
   end
 
   # Enable flags like --only-failures and --next-failure

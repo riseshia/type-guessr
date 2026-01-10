@@ -26,6 +26,7 @@ RSpec.describe RubyLsp::TypeGuessr::Config do
     # Allow real Config methods to be called (override spec_helper mock)
     allow(described_class).to receive(:debug?).and_call_original
     allow(described_class).to receive(:debug_server_enabled?).and_call_original
+    allow(described_class).to receive(:debug_server_port).and_call_original
   end
 
   it "defaults enabled to true when config is missing" do
@@ -50,6 +51,18 @@ RSpec.describe RubyLsp::TypeGuessr::Config do
       File.write(".type-guessr.yml", "debug: true\n")
       described_class.reset!
       expect(described_class.debug_server_enabled?).to be(true)
+    end
+  end
+
+  describe ".debug_server_port" do
+    it "defaults to 7010 when not specified" do
+      expect(described_class.debug_server_port).to eq(7010)
+    end
+
+    it "uses debug_server_port from config when set" do
+      File.write(".type-guessr.yml", "debug_server_port: 8080\n")
+      described_class.reset!
+      expect(described_class.debug_server_port).to eq(8080)
     end
   end
 

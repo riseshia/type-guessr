@@ -37,6 +37,10 @@ module RubyLsp
         debug?
       end
 
+      def debug_server_port
+        load_config.fetch("debug_server_port", 7010)
+      end
+
       def load_config
         path = File.join(Dir.pwd, CONFIG_FILENAME)
         return default_config if !File.exist?(path)

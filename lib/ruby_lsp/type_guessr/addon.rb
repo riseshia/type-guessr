@@ -124,10 +124,11 @@ module RubyLsp
       end
 
       def start_debug_server
-        warn("[TypeGuessr] Starting debug server on port 7010...")
-        @debug_server = DebugServer.new(@global_state, @runtime_adapter)
+        port = Config.debug_server_port
+        warn("[TypeGuessr] Starting debug server on port #{port}...")
+        @debug_server = DebugServer.new(@global_state, @runtime_adapter, port: port)
         @debug_server.start
-        warn("[TypeGuessr] Debug server started: http://127.0.0.1:7010")
+        warn("[TypeGuessr] Debug server started: http://127.0.0.1:#{port}")
       rescue StandardError => e
         warn("[TypeGuessr] Failed to start debug server: #{e.class}: #{e.message}")
         warn("[TypeGuessr] #{e.backtrace&.first(5)&.join("\n")}")

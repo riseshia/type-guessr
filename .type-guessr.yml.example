@@ -1,9 +1,21 @@
 # TypeGuessr Configuration
+# Copy this file to .type-guessr.yml and customize as needed.
 
-# Enable/disable TypeGuessr addon features
-# Default: true
+# Enable or disable TypeGuessr addon (default: true)
 enabled: true
 
-#
-# Enable debug mode to see method call logging in LSP output
+# Enable debug mode (default: false)
+# When enabled:
+# - Debug logging to stderr
+# - Shows inference basis in hover UI
+# - Starts debug web server (unless debug_server is false)
 debug: false
+
+# Enable debug web server independently from debug mode (default: follows debug setting)
+# Set to true to enable server without full debug logging,
+# or false to disable server while keeping debug logging.
+debug_server: false
+
+# Debug server port (default: 7010)
+# Change if port 7010 is already in use.
+debug_server_port: 7010

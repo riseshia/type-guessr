@@ -58,35 +58,25 @@ end
 
 The addon analyzes method calls (`ingredients`, `steps`) and finds that only the `Recipe` class has both methods, so it infers the type as `Recipe`.
 
+## Configuration
+
+Create a `.type-guessr.yml` file in your project root to customize behavior. See [.type-guessr.yml.example](.type-guessr.yml.example) for all available options.
+
+After changing configuration, restart Ruby LSP (VSCode: reload window).
+
 ### Debug Mode
 
-Enable debug mode to see method call information in the LSP output.
-
-Create a `.type-guessr.yml` file in your project root:
-
-```yaml
-enabled: true
-debug: true
-debug_server: true  # optional: can disable debug server independently
-```
-
-- `enabled` defaults to `true`. Set `enabled: false` to temporarily disable TypeGuessr.
-- `debug_server` defaults to `debug` value. Set `false` to keep debug logging without starting the web server.
-
-Then restart Ruby LSP (VSCode: reload window).
-
-In debug mode, the addon will:
-- Log method calls to stderr
-- Show method lists in hover tooltips when type cannot be inferred
-- Start a debug web server on `http://127.0.0.1:7010`
+When `debug: true`, the addon will:
+- Log debug information to stderr
+- Show inference basis in hover tooltips
+- Start a debug web server (unless `debug_server: false`)
 
 ### Debug Web Server
 
-When debug mode is enabled, a web server starts automatically at `http://127.0.0.1:7010`. This provides a web interface to inspect the variable index:
+When enabled, a web server starts at `http://127.0.0.1:<port>` (default port: 7010). This provides a web interface to inspect the type inference:
 
-- **Statistics**: Total indexed definitions, file count, variable counts by type
-- **Search**: Search by file path pattern to view indexed variables
-- **Variable details**: See guessed types and method calls for each variable
+- **Search**: Search for methods to visualize their IR dependency graphs
+- **Graph Visualization**: Interactive dependency graph
 
 This is useful for understanding how TypeGuessr analyzes your codebase and debugging type inference issues.
 
