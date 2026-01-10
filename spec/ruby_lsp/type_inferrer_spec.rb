@@ -43,28 +43,6 @@ RSpec.describe RubyLsp::TypeGuessr::TypeInferrer do
       nil
     end
 
-    context "when receiver is a literal" do
-      it "falls back to ruby-lsp for String literal" do
-        source = '"hello".upcase'
-        context = parse_and_create_context(source)
-
-        result = type_inferrer.infer_receiver_type(context)
-
-        expect(result).to be_a(RubyLsp::TypeInferrer::Type)
-        expect(result.name).to eq("String")
-      end
-
-      it "falls back to ruby-lsp for Integer literal" do
-        source = "42.to_s"
-        context = parse_and_create_context(source)
-
-        result = type_inferrer.infer_receiver_type(context)
-
-        expect(result).to be_a(RubyLsp::TypeInferrer::Type)
-        expect(result.name).to eq("Integer")
-      end
-    end
-
     context "when receiver is a variable" do
       it "infers type from indexed variable" do
         source = <<~RUBY

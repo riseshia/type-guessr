@@ -18,15 +18,12 @@ module RubyLsp
       end
 
       # Override to add TypeGuessr's heuristic type inference
-      # Falls back to ruby-lsp's default when type cannot be determined
+      # Returns nil when type cannot be determined (no fallback to ruby-lsp's default)
       #
       # @param node_context [RubyLsp::NodeContext] The context of the node
-      # @return [Type, GuessedType, nil] The inferred type or nil if unknown
+      # @return [GuessedType, nil] The inferred type or nil if unknown
       def infer_receiver_type(node_context)
-        guessed_type = guess_type_from_ir(node_context)
-        return guessed_type if guessed_type
-
-        super
+        guess_type_from_ir(node_context)
       end
 
       private
