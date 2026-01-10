@@ -1,11 +1,11 @@
 # TypeGuessr Benchmark Report
 
-Generated: 2026-01-08 14:17:08
+Generated: 2026-01-10 15:09:24
 
 ## Configuration
 
-- **Target:** indexing
-- **Files:** 3572
+- **Target:** all
+- **Files:** 3574
 - **Warmup:** 2s
 - **Benchmark time:** 5s
 - **Inference samples:** 2000
@@ -16,23 +16,33 @@ Generated: 2026-01-08 14:17:08
 
 | Metric | Value |
 |--------|-------|
-| Files indexed | 3572 |
-| Total nodes | 576310 |
+| Files indexed | 3574 |
+| Total nodes | 576878 |
 | Iterations | 3 |
-| Avg time | 11.588 sec |
-| Min/Max time | 11.005 / 12.121 sec |
-| Throughput (nodes) | 49735 nodes/sec |
-| Throughput (files) | 308.3 files/sec |
-| Avg memory delta | +233500 KB |
-| Avg time per file | 3.24 ms |
+| Avg time | 11.299 sec |
+| Min/Max time | 11.062 / 11.499 sec |
+| Throughput (nodes) | 51058 nodes/sec |
+| Throughput (files) | 316.3 files/sec |
+| Avg memory delta | +238144 KB |
+| Avg time per file | 3.16 ms |
 | Avg nodes per file | 161 |
 
 
+## Inference Results
+
+| Metric | Value |
+|--------|-------|
+| Nodes sampled | 2000 |
+| Nodes inferred | 2000 |
+| Total time | 3.356 sec |
+| Throughput | 596 inferences/sec |
+| Avg per inference | 1.678 ms |
 
 
 ## Performance Summary
 
-- **Indexing**: 49735 nodes/sec (308.3 files/sec)
+- **Indexing**: 51058 nodes/sec (316.3 files/sec)
+- **Inference**: 596 inferences/sec (1.678 ms/inference)
 
 ---
 
