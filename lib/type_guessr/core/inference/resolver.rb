@@ -534,6 +534,8 @@ module TypeGuessr
           # Fallback to Object to query RBS for common methods (==, to_s, etc.)
           arg_types = node.args.map { |arg| infer(arg).type }
           return_type = @signature_provider.get_method_return_type("Object", node.method.to_s, arg_types)
+          # Substitute self with receiver type if available (e.g., Object#dup returns self)
+          return_type = return_type.substitute({ self: receiver_type }) if receiver_type
           return Result.new(return_type, "Object##{node.method}", :stdlib) unless return_type.is_a?(Types::Unknown)
 
           Result.new(Types::Unknown.instance, "call #{node.method} on unknown receiver", :unknown)

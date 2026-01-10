@@ -507,6 +507,31 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
         expect(result.type.name).to eq("Integer")
         expect(result.reason).to include("inferred receiver")
       end
+
+      it "substitutes SelfType with Unknown when calling dup on Unknown receiver" do
+        # Create Unknown type receiver (simulating an untyped parameter)
+        unknown_receiver = TypeGuessr::Core::IR::LiteralNode.new(
+          type: TypeGuessr::Core::Types::Unknown.instance,
+          literal_value: nil,
+          values: nil,
+          loc: loc
+        )
+
+        # Call dup on Unknown receiver - Object#dup returns self
+        call = TypeGuessr::Core::IR::CallNode.new(
+          method: :dup,
+          receiver: unknown_receiver,
+          args: [],
+          block_params: [],
+          block_body: nil,
+          has_block: false,
+          loc: loc
+        )
+
+        result = resolver.infer(call)
+        # Object#dup returns self, but since receiver is Unknown, self should be substituted with Unknown
+        expect(result.type).to be(TypeGuessr::Core::Types::Unknown.instance)
+      end
     end
 
     context "with DefNode" do
