@@ -7,38 +7,54 @@ TypeGuessr is a Ruby LSP addon that provides heuristic type inference without re
 ## Architecture Layers
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    Ruby LSP Integration                      │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐  │
-│  │   Addon     │  │   Hover     │  │   RuntimeAdapter    │  │
-│  │             │  │             │  │                     │  │
-│  │ - activate  │  │ - listeners │  │ - index management  │  │
-│  │ - file      │  │ - type      │  │ - type inference    │  │
-│  │   watching  │  │   display   │  │ - mutex sync        │  │
-│  └─────────────┘  └─────────────┘  └─────────────────────┘  │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│                         Core Layer                           │
-│  ┌─────────────────┐  ┌─────────────┐  ┌─────────────────┐  │
-│  │ PrismConverter  │  │ LocationIdx │  │    Resolver     │  │
-│  │                 │  │             │  │                 │  │
-│  │ Prism AST → IR  │  │ (file,line) │  │ IR Node → Type  │  │
-│  │                 │  │  → IR Node  │  │                 │  │
-│  └─────────────────┘  └─────────────┘  └─────────────────┘  │
-│                                                              │
-│  ┌─────────────────┐  ┌─────────────┐  ┌─────────────────┐  │
-│  │   IR Nodes      │  │    Types    │  │  RBSProvider    │  │
-│  │                 │  │             │  │                 │  │
-│  │ - LiteralNode   │  │ - ClassInst │  │ - method sigs   │  │
-│  │ - VariableNode  │  │ - ArrayType │  │ - return types  │  │
-│  │ - CallNode      │  │ - HashShape │  │                 │  │
-│  │ - ParamNode     │  │ - Union     │  │                 │  │
-│  │ - DefNode       │  │             │  │                 │  │
-│  │ - BlockParamSlot│  │             │  │                 │  │
-│  └─────────────────┘  └─────────────┘  └─────────────────┘  │
-└─────────────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────────────────────┐
+│                           Ruby LSP Integration                                 │
+│  ┌───────────┐  ┌───────────┐  ┌───────────────┐  ┌─────────────────────────┐ │
+│  │   Addon   │  │   Hover   │  │ RuntimeAdapter│  │     TypeInferrer        │ │
+│  │           │  │           │  │               │  │                         │ │
+│  │ - activate│  │ - hover   │  │ - index mgmt  │  │ - ruby-lsp integration  │ │
+│  │ - file    │  │ - type    │  │ - inference   │  │ - type coordination     │ │
+│  │   watch   │  │   display │  │ - mutex sync  │  │                         │ │
+│  └───────────┘  └───────────┘  └───────────────┘  └─────────────────────────┘ │
+│  ┌───────────┐  ┌───────────┐  ┌───────────────┐                              │
+│  │  Config   │  │DebugServer│  │ GraphBuilder  │                              │
+│  │           │  │           │  │               │                              │
+│  │ - yaml    │  │ - http    │  │ - node graph  │                              │
+│  │ - env     │  │ - inspect │  │ - prism coord │                              │
+│  └───────────┘  └───────────┘  └───────────────┘                              │
+└───────────────────────────────────────────────────────────────────────────────┘
+                                        │
+                                        ▼
+┌───────────────────────────────────────────────────────────────────────────────┐
+│                                 Core Layer                                     │
+│  ┌───────────────┐  ┌───────────────┐  ┌───────────────┐  ┌───────────────┐   │
+│  │ PrismConverter│  │  RBSConverter │  │ LocationIndex │  │   Resolver    │   │
+│  │               │  │               │  │               │  │               │   │
+│  │ Prism AST→IR  │  │ RBS→Types     │  │ (file,line)   │  │ IR Node→Type  │   │
+│  │               │  │               │  │  → IR Node    │  │               │   │
+│  └───────────────┘  └───────────────┘  └───────────────┘  └───────────────┘   │
+│                                                                                │
+│  ┌───────────────┐  ┌───────────────┐  ┌───────────────┐  ┌───────────────┐   │
+│  │   IR Nodes    │  │    Types      │  │  RBSProvider  │  │SignatureProvdr│   │
+│  │               │  │               │  │               │  │               │   │
+│  │ - LiteralNode │  │ - ClassInst   │  │ - method sigs │  │ - sig format  │   │
+│  │ - Local*Node  │  │ - ArrayType   │  │ - return types│  │ - param types │   │
+│  │ - IVar*Node   │  │ - HashType    │  │               │  │               │   │
+│  │ - CVar*Node   │  │ - HashShape   │  │               │  │               │   │
+│  │ - CallNode    │  │ - RangeType   │  │               │  │               │   │
+│  │ - ParamNode   │  │ - Union       │  │               │  │               │   │
+│  │ - DefNode     │  │ - Singleton   │  │               │  │               │   │
+│  │ - SelfNode    │  │ - TypeVar     │  │               │  │               │   │
+│  │ - ReturnNode  │  │               │  │               │  │               │   │
+│  └───────────────┘  └───────────────┘  └───────────────┘  └───────────────┘   │
+│                                                                                │
+│  ┌───────────────┐  ┌───────────────┐                                          │
+│  │TypeSimplifier │  │    Logger     │                                          │
+│  │               │  │               │                                          │
+│  │ - union simp  │  │ - debug log   │                                          │
+│  │ - normalize   │  │               │                                          │
+│  └───────────────┘  └───────────────┘                                          │
+└───────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ## Core Components
@@ -50,7 +66,12 @@ Nodes form a reverse dependency graph where each node points to the nodes it dep
 | Node Type | Purpose | Dependency |
 |-----------|---------|------------|
 | `LiteralNode` | Literals (string, integer, array, hash) | None (leaf node) |
-| `VariableNode` | Variable assignments and reads | Points to assigned value node |
+| `LocalWriteNode` | Local variable assignment | Points to assigned value node |
+| `LocalReadNode` | Local variable reference | Points to LocalWriteNode |
+| `InstanceVariableWriteNode` | Instance variable assignment (@var =) | Points to assigned value node |
+| `InstanceVariableReadNode` | Instance variable reference (@var) | Points to InstanceVariableWriteNode |
+| `ClassVariableWriteNode` | Class variable assignment (@@var =) | Points to assigned value node |
+| `ClassVariableReadNode` | Class variable reference (@@var) | Points to ClassVariableWriteNode |
 | `ParamNode` | Method parameters | Points to default value (called_methods tracked for inference) |
 | `CallNode` | Method calls | Points to receiver + args |
 | `DefNode` | Method definitions | Points to body (return value) |
@@ -58,6 +79,8 @@ Nodes form a reverse dependency graph where each node points to the nodes it dep
 | `MergeNode` | Control flow merge (if/else) | Points to all branches |
 | `ConstantNode` | Constants | Points to assigned value |
 | `ClassModuleNode` | Class/module definitions | Contains method DefNodes |
+| `SelfNode` | Self reference | None (resolved from class context) |
+| `ReturnNode` | Explicit return statement | Points to return value node |
 
 ### PrismConverter (`lib/type_guessr/core/converter/prism_converter.rb`)
 
@@ -73,6 +96,15 @@ Converts Prism AST to node graph at indexing time.
 - Maintains variable → IR node mapping within a scope
 - Enables variable reassignment tracking
 - Handles Hash indexed assignment type updates
+
+### RBSConverter (`lib/type_guessr/core/converter/rbs_converter.rb`)
+
+Converts RBS types to internal type system.
+
+**Key responsibilities:**
+- Parse RBS type syntax
+- Convert to TypeGuessr::Core::Types representations
+- Isolate RBS dependencies from core inference logic
 
 ### LocationIndex (`lib/type_guessr/core/index/location_index.rb`)
 
@@ -100,12 +132,41 @@ Type representations:
 | Type | Example | Description |
 |------|---------|-------------|
 | `ClassInstance` | `String`, `Integer` | Single class type |
+| `SingletonType` | `singleton(User)` | Class object itself (singleton class) |
 | `ArrayType` | `Array[Integer]` | Array with element type |
 | `HashType` | `Hash[Symbol, String]` | Hash with key/value types |
 | `HashShape` | `{ a: Integer, b: String }` | Hash with known fields |
+| `RangeType` | `Range[Integer]` | Range with element type |
 | `Union` | `Integer \| String` | Union of types |
 | `Unknown` | `untyped` | Unknown type (singleton) |
 | `TypeVariable` | `Elem`, `K`, `V` | RBS type variables |
+| `SelfType` | `self` | RBS self type (substituted at resolution) |
+| `ForwardingArgs` | `...` | Forwarding parameter type |
+
+### RBSProvider (`lib/type_guessr/core/rbs_provider.rb`)
+
+Provides RBS method signatures and return types.
+
+**Key features:**
+- Method signature lookup from RBS definitions
+- Return type resolution
+- Type variable substitution for generics
+
+### SignatureProvider (`lib/type_guessr/core/signature_provider.rb`)
+
+Generates method signatures from inferred types.
+
+**Key features:**
+- Format parameter types for display
+- Format return types for hover UI
+
+### TypeSimplifier (`lib/type_guessr/core/type_simplifier.rb`)
+
+Simplifies complex union types.
+
+**Key features:**
+- Normalize type representations
+- Reduce union complexity for cleaner display
 
 ## Data Flow
 
