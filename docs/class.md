@@ -87,6 +87,29 @@ end
 Config.[n]ew("localhost")  # Signature: (untyped host, ?Integer port) -> Config
 ```
 
+### self.new in singleton method
+
+```ruby
+class User
+  def self.create
+    self.[n]ew  # Signature: () -> User
+  end
+end
+```
+
+### self.new with initialize params in singleton method
+
+```ruby
+class User
+  def initialize(name, age)
+  end
+
+  def self.create(name, age)
+    self.[n]ew(name, age)  # Signature: (untyped name, untyped age) -> User
+  end
+end
+```
+
 ## Class instantiation (misc)
 
 ### basic class instantiation

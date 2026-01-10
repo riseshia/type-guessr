@@ -2,7 +2,11 @@
 
 # TypeGuessr
 
-A Ruby LSP addon that provides hover tooltips with helpful information.
+> **Warning**: This project is under active development. Breaking changes may occur without notice.
+>
+> CHANGELOG will be maintained once the project reaches a stable phase. Until then, please refer to the commit history.
+
+A Ruby LSP addon that provides heuristic type inference to enhance IDE features like Hover and Go to Definition.
 
 ## Features
 
