@@ -282,7 +282,7 @@ module RubyLsp
 
       # Traverse and index a single file
       def traverse_file(uri)
-        file_path = uri.full_path.to_s # Ensure string
+        file_path = uri.to_standardized_path
         return unless file_path && File.exist?(file_path)
 
         # Parse outside mutex (CPU-bound, no shared state)
