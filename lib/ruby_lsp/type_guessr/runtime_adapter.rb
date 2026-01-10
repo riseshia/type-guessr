@@ -3,6 +3,8 @@
 require "prism"
 require_relative "../../type_guessr/core/converter/prism_converter"
 require_relative "../../type_guessr/core/index/location_index"
+require_relative "../../type_guessr/core/registry/method_registry"
+require_relative "../../type_guessr/core/registry/variable_registry"
 require_relative "../../type_guessr/core/inference/resolver"
 require_relative "../../type_guessr/core/signature_provider"
 require_relative "../../type_guessr/core/rbs_provider"
@@ -22,16 +24,35 @@ module RubyLsp
         @converter = ::TypeGuessr::Core::Converter::PrismConverter.new
         @location_index = ::TypeGuessr::Core::Index::LocationIndex.new
         @signature_provider = build_signature_provider
-        @resolver = ::TypeGuessr::Core::Inference::Resolver.new(@signature_provider)
         @indexing_completed = false
         @mutex = Mutex.new
         @original_type_inferrer = nil
+
+        # Create shared ancestry provider
+        ancestry_provider = ->(class_name) { get_class_ancestors(class_name) }
+
+        # Create method registry with ancestry provider
+        @method_registry = ::TypeGuessr::Core::Registry::MethodRegistry.new(
+          ancestry_provider: ancestry_provider
+        )
+
+        # Create variable registry with ancestry provider
+        @variable_registry = ::TypeGuessr::Core::Registry::VariableRegistry.new(
+          ancestry_provider: ancestry_provider
+        )
+
+        # Create resolver with injected registries
+        @resolver = ::TypeGuessr::Core::Inference::Resolver.new(
+          @signature_provider,
+          method_registry: @method_registry,
+          variable_registry: @variable_registry
+        )
 
         # Set up method list resolver callback
         @resolver.method_list_resolver = ->(methods) { resolve_methods_to_class(methods) }
 
         # Set up ancestry provider callback
-        @resolver.ancestry_provider = ->(class_name) { get_class_ancestors(class_name) }
+        @resolver.ancestry_provider = ancestry_provider
 
         # Set up constant kind provider callback
         @resolver.constant_kind_provider = ->(name) { get_constant_kind(name) }
@@ -43,7 +64,7 @@ module RubyLsp
 
         # Set up type simplifier with ancestry provider
         @resolver.type_simplifier = ::TypeGuessr::Core::TypeSimplifier.new(
-          ancestry_provider: @resolver.ancestry_provider
+          ancestry_provider: ancestry_provider
         )
       end
 
@@ -160,7 +181,7 @@ module RubyLsp
       # @return [TypeGuessr::Core::IR::DefNode, nil] DefNode or nil if not found
       def lookup_method(class_name, method_name)
         @mutex.synchronize do
-          @resolver.lookup_method(class_name, method_name)
+          @method_registry.lookup(class_name, method_name)
         end
       end
 
@@ -251,14 +272,14 @@ module RubyLsp
       # Get all registered class names (thread-safe)
       # @return [Array<String>] List of class names
       def registered_classes
-        @mutex.synchronize { @resolver.registered_classes }
+        @mutex.synchronize { @method_registry.registered_classes }
       end
 
       # Get all methods for a specific class (thread-safe)
       # @param class_name [String] Class name
       # @return [Hash<String, DefNode>] Methods hash
       def methods_for_class(class_name)
-        @mutex.synchronize { @resolver.methods_for_class(class_name) }
+        @mutex.synchronize { @method_registry.methods_for_class(class_name) }
       end
 
       # Search for methods matching a pattern (thread-safe)
@@ -266,7 +287,7 @@ module RubyLsp
       # @return [Array<Hash>] Array of method info hashes
       def search_project_methods(query)
         @mutex.synchronize do
-          @resolver.search_methods(query).map do |class_name, method_name, def_node|
+          @method_registry.search(query).map do |class_name, method_name, def_node|
             {
               class_name: class_name,
               method_name: method_name,
@@ -334,12 +355,12 @@ module RubyLsp
 
         when ::TypeGuessr::Core::IR::InstanceVariableWriteNode
           @location_index.add(file_path, node, scope_id)
-          @resolver.register_instance_variable(node.class_name, node.name, node) if node.class_name
+          @variable_registry.register_instance_variable(node.class_name, node.name, node) if node.class_name
           index_node_recursively(file_path, node.value, scope_id) if node.value
 
         when ::TypeGuessr::Core::IR::ClassVariableWriteNode
           @location_index.add(file_path, node, scope_id)
-          @resolver.register_class_variable(node.class_name, node.name, node) if node.class_name
+          @variable_registry.register_class_variable(node.class_name, node.name, node) if node.class_name
           index_node_recursively(file_path, node.value, scope_id) if node.value
 
         when ::TypeGuessr::Core::IR::LocalWriteNode
@@ -369,7 +390,7 @@ module RubyLsp
         @location_index.add(file_path, node, method_scope)
 
         new_scope = method_scope.empty? ? "##{node.name}" : "#{method_scope}##{node.name}"
-        @resolver.register_method("", node.name.to_s, node) if scope_id.empty?
+        @method_registry.register("", node.name.to_s, node) if scope_id.empty?
 
         node.params&.each { |param| index_node_recursively(file_path, param, new_scope) }
         node.body_nodes&.each { |body_node| index_node_recursively(file_path, body_node, new_scope) }
@@ -387,7 +408,7 @@ module RubyLsp
             index_node_recursively(file_path, method, new_scope)
 
             method_scope = singleton_scope_for(new_scope, singleton: method.singleton)
-            @resolver.register_method(method_scope, method.name.to_s, method)
+            @method_registry.register(method_scope, method.name.to_s, method)
           end
         end
       end

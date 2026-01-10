@@ -3,6 +3,8 @@
 require_relative "../ir/nodes"
 require_relative "../types"
 require_relative "../type_simplifier"
+require_relative "../registry/method_registry"
+require_relative "../registry/variable_registry"
 require_relative "result"
 
 module TypeGuessr
@@ -31,133 +33,27 @@ module TypeGuessr
         # @return [TypeSimplifier, nil]
         attr_accessor :type_simplifier
 
-        def initialize(signature_provider)
+        # Method registry for storing and looking up project method definitions
+        # @return [Registry::MethodRegistry]
+        attr_reader :method_registry
+
+        # Variable registry for storing and looking up instance/class variables
+        # @return [Registry::VariableRegistry]
+        attr_reader :variable_registry
+
+        # @param signature_provider [SignatureProvider] Provider for RBS method signatures
+        # @param method_registry [Registry::MethodRegistry, nil] Registry for project methods
+        # @param variable_registry [Registry::VariableRegistry, nil] Registry for variables
+        def initialize(signature_provider, method_registry: nil, variable_registry: nil)
           @signature_provider = signature_provider
+          @method_registry = method_registry || Registry::MethodRegistry.new
+          @variable_registry = variable_registry || Registry::VariableRegistry.new
           @cache = {}.compare_by_identity
-          @project_methods = {} # { "ClassName" => { "method_name" => DefNode } }
-          @instance_variables = {} # { "ClassName" => { :@name => InstanceVariableWriteNode } }
-          @class_variables = {} # { "ClassName" => { :@@name => ClassVariableWriteNode } }
-          @project_classes = {} # { "ClassName" => :class or :module }
           @method_list_resolver = nil
           @ancestry_provider = nil
           @constant_kind_provider = nil
           @class_method_lookup_provider = nil
           @type_simplifier = nil
-        end
-
-        # Register a project method definition for later lookup
-        # @param class_name [String] Class name
-        # @param method_name [String] Method name
-        # @param def_node [IR::DefNode] Method definition node
-        def register_method(class_name, method_name, def_node)
-          @project_methods[class_name] ||= {}
-          @project_methods[class_name][method_name] = def_node
-        end
-
-        # Look up a project method definition
-        # @param class_name [String] Class name
-        # @param method_name [String] Method name
-        # @return [IR::DefNode, nil] Method definition node or nil
-        def lookup_method(class_name, method_name)
-          # Try current class first
-          result = @project_methods.dig(class_name, method_name)
-          return result if result
-
-          # Traverse ancestor chain if provider available
-          return nil unless @ancestry_provider
-
-          ancestors = @ancestry_provider.call(class_name)
-          ancestors.each do |ancestor_name|
-            next if ancestor_name == class_name # Skip self
-
-            result = @project_methods.dig(ancestor_name, method_name)
-            return result if result
-          end
-
-          nil
-        end
-
-        # Get all registered class names
-        # @return [Array<String>] List of class names (frozen)
-        def registered_classes
-          @project_methods.keys.freeze
-        end
-
-        # Get all methods for a specific class
-        # @param class_name [String] Class name
-        # @return [Hash<String, IR::DefNode>] Methods hash (frozen)
-        def methods_for_class(class_name)
-          (@project_methods[class_name] || {}).freeze
-        end
-
-        # Search for methods matching a pattern
-        # @param pattern [String] Search pattern (partial match on "ClassName#method_name")
-        # @return [Array<Array>] Array of [class_name, method_name, def_node]
-        def search_methods(pattern)
-          results = []
-          @project_methods.each do |class_name, methods|
-            methods.each do |method_name, def_node|
-              full_name = "#{class_name}##{method_name}"
-              results << [class_name, method_name, def_node] if full_name.include?(pattern)
-            end
-          end
-          results
-        end
-
-        # Register an instance variable write for deferred lookup
-        # @param class_name [String] Class name
-        # @param name [Symbol] Instance variable name (e.g., :@recipe)
-        # @param write_node [IR::InstanceVariableWriteNode] Write node
-        def register_instance_variable(class_name, name, write_node)
-          return unless class_name
-
-          @instance_variables[class_name] ||= {}
-          # First write wins (preserves consistent behavior)
-          @instance_variables[class_name][name] ||= write_node
-        end
-
-        # Look up an instance variable write from the registry
-        # @param class_name [String] Class name
-        # @param name [Symbol] Instance variable name
-        # @return [IR::InstanceVariableWriteNode, nil]
-        def lookup_instance_variable(class_name, name)
-          return nil unless class_name
-
-          # Try current class first
-          result = @instance_variables.dig(class_name, name)
-          return result if result
-
-          # Traverse ancestor chain if provider available
-          return nil unless @ancestry_provider
-
-          ancestors = @ancestry_provider.call(class_name)
-          ancestors.each do |ancestor_name|
-            next if ancestor_name == class_name # Skip self
-
-            result = @instance_variables.dig(ancestor_name, name)
-            return result if result
-          end
-
-          nil
-        end
-
-        # Register a class variable write for deferred lookup
-        # @param class_name [String] Class name
-        # @param name [Symbol] Class variable name (e.g., :@@count)
-        # @param write_node [IR::ClassVariableWriteNode] Write node
-        def register_class_variable(class_name, name, write_node)
-          return unless class_name
-
-          @class_variables[class_name] ||= {}
-          @class_variables[class_name][name] ||= write_node
-        end
-
-        # Look up a class variable write from the registry
-        # @param class_name [String] Class name
-        # @param name [Symbol] Class variable name
-        # @return [IR::ClassVariableWriteNode, nil]
-        def lookup_class_variable(class_name, name)
-          @class_variables.dig(class_name, name)
         end
 
         # Infer the type of an IR node
@@ -285,7 +181,7 @@ module TypeGuessr
           write_node = node.write_node
 
           # Deferred lookup: if write_node is nil at conversion time, try registry
-          write_node = lookup_instance_variable(node.class_name, node.name) if write_node.nil? && node.class_name
+          write_node = @variable_registry.lookup_instance_variable(node.class_name, node.name) if write_node.nil? && node.class_name
 
           return Result.new(Types::Unknown.instance, "unassigned instance variable", :unknown) unless write_node
 
@@ -303,7 +199,7 @@ module TypeGuessr
           write_node = node.write_node
 
           # Deferred lookup: if write_node is nil at conversion time, try registry
-          write_node = lookup_class_variable(node.class_name, node.name) if write_node.nil? && node.class_name
+          write_node = @variable_registry.lookup_class_variable(node.class_name, node.name) if write_node.nil? && node.class_name
 
           return Result.new(Types::Unknown.instance, "unassigned class variable", :unknown) unless write_node
 
@@ -402,7 +298,7 @@ module TypeGuessr
               return result if result
             when Types::ClassInstance
               # 1. Try project methods first
-              def_node = lookup_method(receiver_type.name, node.method.to_s)
+              def_node = @method_registry.lookup(receiver_type.name, node.method.to_s)
               if def_node
                 return_result = infer(def_node)
                 return Result.new(
@@ -497,7 +393,7 @@ module TypeGuessr
               inferred_receiver = resolve_called_methods([node.method])
               if inferred_receiver.is_a?(Types::ClassInstance)
                 # Try project methods with inferred receiver type
-                def_node = lookup_method(inferred_receiver.name, node.method.to_s)
+                def_node = @method_registry.lookup(inferred_receiver.name, node.method.to_s)
                 if def_node
                   return_result = infer(def_node)
                   return Result.new(
@@ -525,7 +421,7 @@ module TypeGuessr
 
           # Method call without receiver or unknown receiver type
           # First, try to lookup top-level method
-          def_node = lookup_method("", node.method.to_s)
+          def_node = @method_registry.lookup("", node.method.to_s)
           if def_node
             return_type = infer(def_node.return_node)
             return Result.new(return_type.type, "top-level method #{node.method}", :project)
@@ -643,7 +539,7 @@ module TypeGuessr
           if @class_method_lookup_provider
             owner_name = @class_method_lookup_provider.call(class_name, node.method.to_s)
             if owner_name
-              def_node = lookup_method(owner_name, node.method.to_s)
+              def_node = @method_registry.lookup(owner_name, node.method.to_s)
               if def_node
                 return_result = infer(def_node)
                 return Result.new(
@@ -720,35 +616,14 @@ module TypeGuessr
           return nil if methods.empty?
 
           # Find classes that define all the methods (including inherited ones)
-          matching_classes = @project_methods.keys.select do |class_name|
-            all_methods_for_class(class_name).superset?(methods.to_set)
+          matching_classes = @method_registry.registered_classes.select do |class_name|
+            @method_registry.all_methods_for_class(class_name).superset?(methods.to_set)
           end
 
           # Filter out subclasses when parent is also matched (prefer most general type)
           matching_classes = filter_to_most_general_types(matching_classes)
 
           classes_to_type(matching_classes)
-        end
-
-        # Get all methods available on a class (including inherited methods from project)
-        # @param class_name [String] Class name
-        # @return [Set<String>] Set of method names
-        def all_methods_for_class(class_name)
-          # Start with directly defined methods
-          class_methods = (@project_methods[class_name]&.keys || []).to_set
-
-          # Add inherited methods if ancestry_provider is available
-          if @ancestry_provider
-            ancestors = @ancestry_provider.call(class_name)
-            ancestors.each do |ancestor_name|
-              next if ancestor_name == class_name # Skip self
-
-              ancestor_methods = @project_methods[ancestor_name]&.keys || []
-              class_methods.merge(ancestor_methods)
-            end
-          end
-
-          class_methods
         end
 
         # Filter out classes whose ancestor is also in the list

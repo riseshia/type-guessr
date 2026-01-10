@@ -481,7 +481,7 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
           return_node: depot_return,
           body_nodes: [depot_return]
         )
-        resolver.register_method("Store", "depot", depot_def)
+        resolver.method_registry.register("Store", "depot", depot_def)
 
         # Create Unknown type receiver
         unknown_receiver = TypeGuessr::Core::IR::LiteralNode.new(
@@ -601,83 +601,6 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
     end
   end
 
-  describe "#registered_classes" do
-    it "returns empty array when no methods registered" do
-      expect(resolver.registered_classes).to eq([])
-    end
-
-    it "returns list of registered class names" do
-      def_node1 = create_def_node(name: :save, class_name: "User")
-      def_node2 = create_def_node(name: :delete, class_name: "Post")
-
-      resolver.register_method("User", "save", def_node1)
-      resolver.register_method("Post", "delete", def_node2)
-
-      expect(resolver.registered_classes).to contain_exactly("User", "Post")
-    end
-
-    it "returns frozen array" do
-      expect(resolver.registered_classes).to be_frozen
-    end
-  end
-
-  describe "#methods_for_class" do
-    it "returns empty hash for unknown class" do
-      expect(resolver.methods_for_class("Unknown")).to eq({})
-    end
-
-    it "returns methods hash for registered class" do
-      def_node = create_def_node(name: :save, class_name: "User")
-      resolver.register_method("User", "save", def_node)
-
-      methods = resolver.methods_for_class("User")
-      expect(methods.keys).to eq(["save"])
-      expect(methods["save"]).to eq(def_node)
-    end
-
-    it "returns frozen hash" do
-      expect(resolver.methods_for_class("User")).to be_frozen
-    end
-  end
-
-  describe "#search_methods" do
-    before do
-      user_save = create_def_node(name: :save, class_name: "User")
-      user_delete = create_def_node(name: :delete, class_name: "User")
-      post_save = create_def_node(name: :save, class_name: "Post")
-
-      resolver.register_method("User", "save", user_save)
-      resolver.register_method("User", "delete", user_delete)
-      resolver.register_method("Post", "save", post_save)
-    end
-
-    it "finds methods by method name" do
-      results = resolver.search_methods("save")
-      expect(results.size).to eq(2)
-      expect(results.map { |r| r[0..1] }).to contain_exactly(
-        %w[User save],
-        %w[Post save]
-      )
-    end
-
-    it "finds methods by class name" do
-      results = resolver.search_methods("User")
-      expect(results.size).to eq(2)
-      expect(results.map { |r| r[1] }).to contain_exactly("save", "delete")
-    end
-
-    it "finds methods by full name" do
-      results = resolver.search_methods("User#save")
-      expect(results.size).to eq(1)
-      expect(results[0][0..1]).to eq(%w[User save])
-    end
-
-    it "returns empty array for no match" do
-      results = resolver.search_methods("Unknown")
-      expect(results).to eq([])
-    end
-  end
-
   describe "called methods resolution with inheritance" do
     let(:recipe_ingredients) { create_def_node(name: :ingredients, class_name: "Recipe") }
     let(:recipe_steps) { create_def_node(name: :steps, class_name: "Recipe") }
@@ -685,18 +608,20 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
 
     before do
       # Register methods: Recipe has ingredients, steps; Recipe2 has only notes (directly)
-      resolver.register_method("Recipe", "ingredients", recipe_ingredients)
-      resolver.register_method("Recipe", "steps", recipe_steps)
-      resolver.register_method("Recipe2", "notes", recipe2_notes)
+      resolver.method_registry.register("Recipe", "ingredients", recipe_ingredients)
+      resolver.method_registry.register("Recipe", "steps", recipe_steps)
+      resolver.method_registry.register("Recipe2", "notes", recipe2_notes)
 
       # Set up ancestry: Recipe2 inherits from Recipe
-      resolver.ancestry_provider = lambda do |class_name|
+      ancestry_provider = lambda do |class_name|
         case class_name
         when "Recipe2" then %w[Recipe2 Recipe Object BasicObject]
         when "Recipe" then %w[Recipe Object BasicObject]
         else []
         end
       end
+      resolver.ancestry_provider = ancestry_provider
+      resolver.method_registry.ancestry_provider = ancestry_provider
     end
 
     context "when only parent methods are called" do
@@ -722,6 +647,7 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
     context "without ancestry_provider" do
       before do
         resolver.ancestry_provider = nil
+        resolver.method_registry.ancestry_provider = nil
       end
 
       it "returns only directly matching class" do

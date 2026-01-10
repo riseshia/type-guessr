@@ -48,12 +48,13 @@ TypeGuessr is a Ruby LSP addon that provides heuristic type inference without re
 │  │ - ReturnNode  │  │               │  │               │  │               │   │
 │  └───────────────┘  └───────────────┘  └───────────────┘  └───────────────┘   │
 │                                                                                │
-│  ┌───────────────┐  ┌───────────────┐                                          │
-│  │TypeSimplifier │  │    Logger     │                                          │
-│  │               │  │               │                                          │
-│  │ - union simp  │  │ - debug log   │                                          │
-│  │ - normalize   │  │               │                                          │
-│  └───────────────┘  └───────────────┘                                          │
+│  ┌───────────────┐  ┌───────────────┐  ┌───────────────┐  ┌───────────────┐   │
+│  │TypeSimplifier │  │    Logger     │  │MethodRegistry │  │VariableRegstry│   │
+│  │               │  │               │  │               │  │               │   │
+│  │ - union simp  │  │ - debug log   │  │ - register    │  │ - ivar store  │   │
+│  │ - normalize   │  │               │  │ - lookup      │  │ - cvar store  │   │
+│  │               │  │               │  │ - inheritance │  │ - inheritance │   │
+│  └───────────────┘  └───────────────┘  └───────────────┘  └───────────────┘   │
 └───────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -124,6 +125,27 @@ Resolves nodes to types by traversing the dependency graph.
 - Handles RBS method signature lookup
 - Resolves block parameter types from receiver's element type
 - Method-based type inference via called method resolution
+- Uses injected `MethodRegistry` and `VariableRegistry` for storage
+
+### MethodRegistry (`lib/type_guessr/core/registry/method_registry.rb`)
+
+Stores and retrieves method definitions.
+
+**Key features:**
+- `register(class_name, method_name, def_node)` - Store method definition
+- `lookup(class_name, method_name)` - Find method (supports inheritance via ancestry_provider)
+- `all_methods_for_class(class_name)` - Get all methods including inherited
+- `search(pattern)` - Search methods by pattern
+
+### VariableRegistry (`lib/type_guessr/core/registry/variable_registry.rb`)
+
+Stores and retrieves instance/class variable definitions.
+
+**Key features:**
+- `register_instance_variable(class_name, name, write_node)` - Store instance variable
+- `lookup_instance_variable(class_name, name)` - Find instance variable (supports inheritance)
+- `register_class_variable(class_name, name, write_node)` - Store class variable
+- `lookup_class_variable(class_name, name)` - Find class variable
 
 ### Types (`lib/type_guessr/core/types.rb`)
 
