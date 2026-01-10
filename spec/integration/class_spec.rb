@@ -161,6 +161,43 @@ RSpec.describe "Class Instance Type Inference", :doc do
         expect_hover_method_signature(line: 6, column: 7, expected_signature: "(untyped host, ?Integer port) -> Config")
       end
     end
+
+    context "self.new in singleton method" do
+      let(:source) do
+        <<~RUBY
+          class User
+            def self.create
+              self.new
+            end
+          end
+        RUBY
+      end
+
+      it "→ () -> User" do
+        # Hover on "new" at line 3, column 9
+        expect_hover_method_signature(line: 3, column: 9, expected_signature: "() -> User")
+      end
+    end
+
+    context "self.new with initialize params in singleton method" do
+      let(:source) do
+        <<~RUBY
+          class User
+            def initialize(name, age)
+            end
+
+            def self.create(name, age)
+              self.new(name, age)
+            end
+          end
+        RUBY
+      end
+
+      it "→ (untyped name, untyped age) -> User" do
+        # Hover on "new" at line 6, column 9
+        expect_hover_method_signature(line: 6, column: 9, expected_signature: "(untyped name, untyped age) -> User")
+      end
+    end
   end
 
   describe "Class instantiation (misc)" do

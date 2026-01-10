@@ -121,7 +121,9 @@ module RubyLsp
 
       def add_call_node_hover(call_node)
         # Special case: Handle .new calls to show constructor signature
-        if call_node.method == :new && call_node.receiver.is_a?(IR::ConstantNode)
+        # Support both ClassName.new (ConstantNode) and self.new (SelfNode) in singleton methods
+        if call_node.method == :new &&
+           (call_node.receiver.is_a?(IR::ConstantNode) || call_node.receiver.is_a?(IR::SelfNode))
           add_new_call_hover(call_node)
           return
         end
