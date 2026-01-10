@@ -24,7 +24,8 @@ Gem::Specification.new do |spec|
   spec.files = IO.popen(%w[git ls-files -z], chdir: __dir__, err: IO::NULL) do |ls|
     ls.readlines("\x0", chomp: true).reject do |f|
       (f == gemspec) ||
-        f.start_with?(*%w[bin/ Gemfile .gitignore test/ .github/ .rubocop.yml])
+        f.start_with?(*%w[bin/ spec/ docs/ .claude/ .github/]) ||
+        %w[Gemfile .gitignore .rubocop.yml .rspec CLAUDE.md CONTRIBUTING.md .type-guessr.yml.example].include?(f)
     end
   end
   spec.bindir = "exe"
