@@ -134,8 +134,8 @@ end
 # RSpec configuration for full index tests
 RSpec.configure do |config|
   config.before(:suite) do
-    # Always pre-warm the shared server for integration tests
-    FullIndexHelper.server
+    # Only initialize server when ruby_lsp/internal is loaded (integration tests)
+    FullIndexHelper.server if defined?(RubyLsp::Server)
   end
 
   config.after(:suite) do
