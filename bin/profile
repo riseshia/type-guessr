@@ -12,7 +12,7 @@
 #   --limit=N                        Max files to process (default: all)
 #   --samples=N                      Number of inference samples (default: 100)
 #   --output=path                    Output file path (default: tmp/stackprof-<target>.dump)
-#   --interval=N                     Sampling interval in microseconds (default: 1000)
+#   --interval=N                     Sampling interval in microseconds (default: 10)
 #   --path=PATH                      Project directory to profile (default: current)
 #   --report                         Generate markdown report
 #
@@ -903,7 +903,7 @@ options = {
   limit: nil,
   samples: 100,
   output: nil,
-  interval: 1000,
+  interval: 10,
   path: nil,
   report: false
 }
@@ -931,7 +931,7 @@ OptionParser.new do |opts|
     options[:output] = v
   end
 
-  opts.on("--interval=N", Integer, "Sampling interval in microseconds (default: 1000)") do |v|
+  opts.on("--interval=N", Integer, "Sampling interval in microseconds (default: 10)") do |v|
     options[:interval] = v
   end
 
