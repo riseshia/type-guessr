@@ -56,14 +56,13 @@ module BenchmarkRunner
 
   # Runs benchmarks on TypeGuessr
   class Runner
-    def initialize(target:, warmup:, time:, samples:, path:, report:, files_list:)
+    def initialize(target:, warmup:, time:, samples:, path:, report:)
       @target = target.to_sym
       @warmup = warmup
       @time = time
       @samples = samples
       @path = path
       @report = report
-      @files_list = files_list
       @results = {}
     end
 
@@ -89,9 +88,7 @@ module BenchmarkRunner
     private
 
     def collect_indexable_files
-      if @files_list
-        File.readlines(@files_list).map(&:chomp)
-      elsif @path
+      if @path
         # Collect files in the target project's Bundler environment
         collect_files_from_project(@path)
       else
@@ -543,8 +540,7 @@ options = {
   time: 5,
   samples: 2000,
   path: nil,
-  report: false,
-  files_list: nil
+  report: false
 }
 
 OptionParser.new do |opts|
@@ -570,10 +566,6 @@ OptionParser.new do |opts|
     options[:path] = File.expand_path(v)
   end
 
-  opts.on("--files-list=PATH", "Path to file containing list of files to benchmark") do |v|
-    options[:files_list] = File.expand_path(v)
-  end
-
   opts.on("--report", "Generate markdown report") do
     options[:report] = true
   end
@@ -590,8 +582,7 @@ runner = BenchmarkRunner::Runner.new(
   time: options[:time],
   samples: options[:samples],
   path: options[:path],
-  report: options[:report],
-  files_list: options[:files_list]
+  report: options[:report]
 )
 
 runner.run
