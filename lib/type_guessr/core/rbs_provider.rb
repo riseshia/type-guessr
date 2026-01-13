@@ -26,6 +26,7 @@ module TypeGuessr
       def initialize
         @env = nil
         @loader = nil
+        @builder = nil
         @converter = Converter::RBSConverter.new
       end
 
@@ -50,7 +51,6 @@ module TypeGuessr
         return [] unless @env.class_decl?(type_name)
 
         # Use RBS::DefinitionBuilder to get method definitions
-        builder = RBS::DefinitionBuilder.new(env: @env)
         definition = builder.build_instance(type_name)
 
         # Get the method definition
@@ -109,7 +109,6 @@ module TypeGuessr
         return [] unless @env.class_decl?(type_name)
 
         # Use RBS::DefinitionBuilder to get singleton method definitions
-        builder = RBS::DefinitionBuilder.new(env: @env)
         definition = builder.build_singleton(type_name)
 
         # Get the method definition
@@ -144,6 +143,10 @@ module TypeGuessr
       end
 
       private
+
+      def builder
+        @builder ||= RBS::DefinitionBuilder.new(env: @env)
+      end
 
       # Find a method signature that has a block
       # @param class_name [String] the receiver class name
