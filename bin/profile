@@ -779,8 +779,8 @@ module ProfileIndexing
     def top_bottlenecks_section(frames, result, phase = nil)
       return "No frame data available." if frames.empty?
 
-      # Get top 5 bottlenecks (excluding GC-related)
-      top_frames = frames.reject { |f| f[:name]&.start_with?("(") }.first(5)
+      # Get top 10 bottlenecks (excluding GC-related)
+      top_frames = frames.reject { |f| f[:name]&.start_with?("(") }.first(10)
 
       header = <<~TABLE
         | Rank | Method | CPU % | Samples | Where | What |
@@ -839,44 +839,108 @@ module ProfileIndexing
       TEXT
     end
 
+    # rubocop:disable Metrics/MethodLength
     def optimization_recommendations(_indexing_frames, _inference_frames)
       <<~TEXT
         ### Indexing Optimizations
 
         #### High Impact
 
-        1. **Parallel file processing** - `Prism.parse` and file I/O can run in parallel
-           - Use `Parallel` gem or `Ractor` for concurrent parsing
+        1. **Parallel file processing**
+           - Current: Files parsed sequentially
+           - Solution: Use `Parallel` gem or `Ractor` for concurrent parsing
            - Expected: 2-4x speedup on multi-core systems
+           - Complexity: Medium (thread safety required)
+           - Files: `runtime_adapter.rb`, `graph_builder.rb`
 
-        2. **Cache line offset table** - Reduce `find_line` overhead
-           - Line offsets don't change within a file
-           - Cache once per file, reuse for all nodes
+        2. **Cache line offset table** (`Prism::Source#find_line` optimization)
+           - Current: Binary search (`bsearch_index`) for every node's line number
+           - Solution: Compute line offsets once per file, reuse for all nodes
+           - Expected: ~20% CPU reduction in `convert_loc`
+           - Complexity: Low
+           - Files: `prism_converter.rb`
+
+        3. **Minimize `Array#bsearch_index` calls**
+           - Current: Location conversion performed for every node during indexing
+           - Solution: Lazy location computation (only on hover)
+           - Expected: 10-15% indexing time reduction
+           - Complexity: Medium (requires `IR::Loc` redesign)
+           - Files: `ir/nodes.rb`, `prism_converter.rb`
 
         #### Medium Impact
 
-        3. **Lightweight `IR::Loc`** - Reduce object allocation
-           - Lazy evaluation: only compute line/column when accessed
-           - Or use frozen arrays instead of Data class
+        4. **Lightweight `IR::Loc`**
+           - Current: Data class creates location object for every node
+           - Solution:
+             - Lazy evaluation: compute line/column only when accessed
+             - Or use frozen Array `[start_line, start_col, end_line, end_col]`
+           - Expected: Reduced object allocation, less GC pressure
+           - Complexity: Low
+           - Files: `ir/nodes.rb`
 
-        4. **Replace `Array#uniq` with `Set`** in LocationIndex
-           - `Set#add` is O(1) vs `Array#uniq` is O(n)
+        5. **Replace `Array#uniq` with `Set` in LocationIndex**
+           - Current: Add to array, then dedupe with `uniq`
+           - Solution: Use `Set#add` for O(1) duplicate check
+           - Expected: Performance improvement for large files
+           - Complexity: Low
+           - Files: `index/location_index.rb`
+
+        6. **Minimize `Class#new` calls**
+           - Current: Type objects (`ClassInstance`, `ArrayType`, etc.) created every time
+           - Solution:
+             - Singleton common types (`String`, `Integer`, `nil`, etc.)
+             - Type interning pool
+           - Expected: 5-10% reduction in object allocation
+           - Complexity: Medium
+           - Files: `types.rb`
 
         ### Inference Optimizations
 
-        1. **RBS lazy loading** - Already implemented, but first inference is slow
-           - Consider background preloading after indexing
+        1. **RBS background preloading**
+           - Current: RBS environment loaded on first inference (~140ms)
+           - Solution: Preload in background after indexing completes
+           - Expected: Faster first hover response
+           - Complexity: Low (`preload` method already exists)
+           - Files: `rbs_provider.rb`, `addon.rb`
 
-        2. **Cache method signatures** - `DefinitionBuilder` results per class
-           - Already cached by RBS, but verify cache hits
+        2. **Verify method signature caching**
+           - Current: `DefinitionBuilder` cache in use
+           - Action: Measure cache hit rate, analyze misses
+           - Expected: Potential further RBS lookup speedup
+           - Complexity: Low (measurement only)
+           - Files: `rbs_provider.rb`
+
+        3. **Cache `String#split` in `build_type_name`**
+           - Current: Class name parsed on every call (`Foo::Bar` → namespace split)
+           - Solution: Cache parsing results in a hash
+           - Expected: ~1% CPU reduction
+           - Complexity: Low
+           - Files: `rbs_provider.rb`
 
         ### Memory Optimizations
 
-        1. **Reduce GC pressure** - Target: < 10% GC overhead
-           - Pool common node types
-           - Use symbols instead of strings for keys
+        1. **Reduce GC pressure** (Target: < 10% GC overhead)
+           - Current: ~14% GC during indexing
+           - Solution:
+             - Pool common node types
+             - Use symbols instead of strings for keys
+             - Eliminate unnecessary intermediate array creation
+           - Expected: 5-10% overall processing time reduction
+           - Complexity: Medium
+           - Files: `prism_converter.rb`, `types.rb`, `ir/nodes.rb`
+
+        ### Recommended Priority
+
+        | Rank | Optimization | Impact | Complexity | ROI |
+        |------|--------------|--------|------------|-----|
+        | 1 | Line offset caching | High | Low | ⭐⭐⭐ |
+        | 2 | IR::Loc lightweight | Medium | Low | ⭐⭐⭐ |
+        | 3 | Type object singletons | Medium | Medium | ⭐⭐ |
+        | 4 | Parallel file processing | High | High | ⭐⭐ |
+        | 5 | LocationIndex Set replacement | Low | Low | ⭐⭐ |
       TEXT
     end
+    # rubocop:enable Metrics/MethodLength
 
     def dump_files_section
       dumps = Dir.glob("tmp/stackprof-*.dump")
