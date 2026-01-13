@@ -106,14 +106,43 @@ module ProfileIndexing
 
     def collect_indexable_files
       if @path
-        Dir.chdir(@path) do
-          config = RubyIndexer::Configuration.new
-          config.indexable_uris.map { |uri| uri.full_path.to_s }
-        end
+        # Collect files in the target project's Bundler environment
+        collect_files_from_project(@path)
       else
         config = RubyIndexer::Configuration.new
         config.indexable_uris.map { |uri| uri.full_path.to_s }
       end
+    end
+
+    def collect_files_from_project(project_path)
+      # Run ruby in the target project directory to get file list with its Gemfile
+      script = <<~RUBY
+        require 'bundler/setup'
+        require 'ruby_indexer/ruby_indexer'
+        config = RubyIndexer::Configuration.new
+        config.indexable_uris.each { |uri| puts uri.full_path }
+      RUBY
+
+      # Clean bundler environment variables for subprocess
+      clean_env = ENV.to_h.reject { |k, _| k.start_with?('BUNDLE_', 'RUBYGEMS_', 'GEM_') }
+      clean_env['BUNDLE_GEMFILE'] = File.join(project_path, 'Gemfile')
+
+      output = IO.popen(clean_env, ['ruby'], 'r+', chdir: project_path, err: [:child, :out]) do |io|
+        io.write(script)
+        io.close_write
+        io.read
+      end
+
+      unless $?.success?
+        warn "Warning: Failed to collect files from #{project_path}"
+        warn "Falling back to current directory scan"
+        Dir.chdir(project_path) do
+          config = RubyIndexer::Configuration.new
+          return config.indexable_uris.map { |uri| uri.full_path.to_s }
+        end
+      end
+
+      output.lines.map(&:chomp)
     end
 
     # Profile indexing only
