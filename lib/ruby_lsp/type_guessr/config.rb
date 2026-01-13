@@ -22,7 +22,6 @@ module RubyLsp
 
       def reset!
         @cached_config = nil
-        @cached_mtime = nil
       end
 
       def enabled?
@@ -58,11 +57,13 @@ module RubyLsp
       end
 
       def load_config
-        path = File.join(Dir.pwd, CONFIG_FILENAME)
-        return default_config if !File.exist?(path)
+        return @cached_config if @cached_config
 
-        mtime = File.mtime(path)
-        return @cached_config if @cached_config && @cached_mtime == mtime
+        path = File.join(Dir.pwd, CONFIG_FILENAME)
+        if !File.exist?(path)
+          @cached_config = default_config
+          return @cached_config
+        end
 
         require "yaml"
 
@@ -71,8 +72,6 @@ module RubyLsp
         data = {} unless data.is_a?(Hash)
 
         @cached_config = default_config.merge(data)
-        @cached_mtime = mtime
-        @cached_config
       rescue StandardError => e
         warn("[TypeGuessr] Error loading config file: #{e.message}")
         default_config
