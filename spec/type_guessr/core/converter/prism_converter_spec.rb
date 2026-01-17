@@ -1809,7 +1809,7 @@ RSpec.describe TypeGuessr::Core::Converter::PrismConverter do
     end
 
     describe "SuperNode and ForwardingSuperNode" do
-      it "converts super with arguments to SuperNode" do
+      it "converts super with arguments to CallNode" do
         source = <<~RUBY
           class Child < Parent
             def initialize(name)
@@ -1823,10 +1823,12 @@ RSpec.describe TypeGuessr::Core::Converter::PrismConverter do
 
         init_method = class_node.methods.first
         expect(init_method.body_nodes).not_to be_empty
-        expect(init_method.body_nodes.first).to be_a(TypeGuessr::Core::IR::SuperNode)
+        # super is treated as a special method call
+        expect(init_method.body_nodes.first).to be_a(TypeGuessr::Core::IR::CallNode)
+        expect(init_method.body_nodes.first.method).to eq(:super)
       end
 
-      it "converts super without arguments to SuperNode" do
+      it "converts super without arguments to CallNode" do
         source = <<~RUBY
           class Child < Parent
             def process
@@ -1840,6 +1842,7 @@ RSpec.describe TypeGuessr::Core::Converter::PrismConverter do
 
         process_method = class_node.methods.first
         expect(process_method.body_nodes).not_to be_empty
+        expect(process_method.return_node).to be_a(TypeGuessr::Core::IR::CallNode)
       end
 
       it "converts super && expression properly" do
