@@ -1734,18 +1734,20 @@ RSpec.describe TypeGuessr::Core::Converter::PrismConverter do
   end
 
   describe "unhandled node types" do
+    before { pending "Not yet implemented - these node types need PrismConverter support" }
+
     describe "OrNode (|| operator)" do
-      it "returns nil for standalone || expression" do
+      it "converts || to MergeNode with both branches" do
         source = "a || b"
         parsed = Prism.parse(source)
         context = TypeGuessr::Core::Converter::PrismConverter::Context.new
         node = converter.convert(parsed.value.statements.body.first, context)
 
-        # Currently not handled - returns nil
-        expect(node).to be_nil
+        expect(node).to be_a(TypeGuessr::Core::IR::MergeNode)
+        expect(node.branches.size).to eq(2)
       end
 
-      it "causes method to have nil return_node when body is || chain" do
+      it "converts method with || chain to have proper return_node" do
         source = <<~RUBY
           class Foo
             def lookup(name)
@@ -1758,12 +1760,10 @@ RSpec.describe TypeGuessr::Core::Converter::PrismConverter do
         class_node = converter.convert(parsed.value.statements.body.first, context)
 
         lookup_method = class_node.methods.first
-        # Body is empty because OrNode is not converted
-        expect(lookup_method.body_nodes).to be_empty
-        expect(lookup_method.return_node).to be_nil
+        expect(lookup_method.return_node).to be_a(TypeGuessr::Core::IR::MergeNode)
       end
 
-      it "causes method to have nil return_node for predicate methods with || chain" do
+      it "converts predicate method with || chain" do
         source = <<~RUBY
           class Foo
             def valid?(node)
@@ -1776,22 +1776,22 @@ RSpec.describe TypeGuessr::Core::Converter::PrismConverter do
         class_node = converter.convert(parsed.value.statements.body.first, context)
 
         valid_method = class_node.methods.first
-        expect(valid_method.return_node).to be_nil
+        expect(valid_method.return_node).to be_a(TypeGuessr::Core::IR::MergeNode)
       end
     end
 
     describe "AndNode (&& operator)" do
-      it "returns nil for standalone && expression" do
+      it "converts && to MergeNode with both branches" do
         source = "a && b"
         parsed = Prism.parse(source)
         context = TypeGuessr::Core::Converter::PrismConverter::Context.new
         node = converter.convert(parsed.value.statements.body.first, context)
 
-        # Currently not handled - returns nil
-        expect(node).to be_nil
+        expect(node).to be_a(TypeGuessr::Core::IR::MergeNode)
+        expect(node.branches.size).to eq(2)
       end
 
-      it "causes method to have nil return_node when body is && chain" do
+      it "converts method with && chain to have proper return_node" do
         source = <<~RUBY
           class Foo
             def eql?(other)
@@ -1804,12 +1804,12 @@ RSpec.describe TypeGuessr::Core::Converter::PrismConverter do
         class_node = converter.convert(parsed.value.statements.body.first, context)
 
         eql_method = class_node.methods.first
-        expect(eql_method.return_node).to be_nil
+        expect(eql_method.return_node).to be_a(TypeGuessr::Core::IR::MergeNode)
       end
     end
 
     describe "SuperNode and ForwardingSuperNode" do
-      it "returns nil for super with arguments" do
+      it "converts super with arguments to SuperNode" do
         source = <<~RUBY
           class Child < Parent
             def initialize(name)
@@ -1822,11 +1822,11 @@ RSpec.describe TypeGuessr::Core::Converter::PrismConverter do
         class_node = converter.convert(parsed.value.statements.body.first, context)
 
         init_method = class_node.methods.first
-        # super(name) is not converted, so body is empty
-        expect(init_method.body_nodes).to be_empty
+        expect(init_method.body_nodes).not_to be_empty
+        expect(init_method.body_nodes.first).to be_a(TypeGuessr::Core::IR::SuperNode)
       end
 
-      it "returns nil for super without arguments (forwarding)" do
+      it "converts super without arguments to SuperNode" do
         source = <<~RUBY
           class Child < Parent
             def process
@@ -1839,10 +1839,10 @@ RSpec.describe TypeGuessr::Core::Converter::PrismConverter do
         class_node = converter.convert(parsed.value.statements.body.first, context)
 
         process_method = class_node.methods.first
-        expect(process_method.body_nodes).to be_empty
+        expect(process_method.body_nodes).not_to be_empty
       end
 
-      it "causes nil return_node when method body uses super && expression" do
+      it "converts super && expression properly" do
         source = <<~RUBY
           class Child < Parent
             def eql?(other)
@@ -1855,45 +1855,34 @@ RSpec.describe TypeGuessr::Core::Converter::PrismConverter do
         class_node = converter.convert(parsed.value.statements.body.first, context)
 
         eql_method = class_node.methods.first
-        # ForwardingSuperNode + AndNode = nil return
-        expect(eql_method.return_node).to be_nil
+        expect(eql_method.return_node).to be_a(TypeGuessr::Core::IR::MergeNode)
       end
     end
 
     describe "MultiWriteNode (multiple assignment)" do
-      it "returns nil for multiple assignment" do
-        source = "a, b = [1, 2]"
-        parsed = Prism.parse(source)
-        context = TypeGuessr::Core::Converter::PrismConverter::Context.new
-        node = converter.convert(parsed.value.statements.body.first, context)
-
-        # Currently not handled
-        expect(node).to be_nil
-      end
-
-      it "returns nil for multiple assignment with splat" do
-        source = "first, *rest = array"
-        parsed = Prism.parse(source)
-        context = TypeGuessr::Core::Converter::PrismConverter::Context.new
-        node = converter.convert(parsed.value.statements.body.first, context)
-
-        expect(node).to be_nil
-      end
-
-      it "does not register variables from multiple assignment" do
+      it "converts multiple assignment and registers variables" do
         source = "a, b = [1, 2]"
         parsed = Prism.parse(source)
         context = TypeGuessr::Core::Converter::PrismConverter::Context.new
         converter.convert(parsed.value.statements.body.first, context)
 
-        # Variables are not registered because MultiWriteNode is not handled
-        expect(context.lookup_variable(:a)).to be_nil
-        expect(context.lookup_variable(:b)).to be_nil
+        expect(context.lookup_variable(:a)).not_to be_nil
+        expect(context.lookup_variable(:b)).not_to be_nil
+      end
+
+      it "converts multiple assignment with splat" do
+        source = "first, *rest = array"
+        parsed = Prism.parse(source)
+        context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+        converter.convert(parsed.value.statements.body.first, context)
+
+        expect(context.lookup_variable(:first)).not_to be_nil
+        expect(context.lookup_variable(:rest)).not_to be_nil
       end
     end
 
     describe "WhileNode and UntilNode" do
-      it "returns nil for while loop" do
+      it "converts while loop (returns nil type)" do
         source = <<~RUBY
           while condition
             do_something
@@ -1903,10 +1892,12 @@ RSpec.describe TypeGuessr::Core::Converter::PrismConverter do
         context = TypeGuessr::Core::Converter::PrismConverter::Context.new
         node = converter.convert(parsed.value.statements.body.first, context)
 
-        expect(node).to be_nil
+        # While loops return nil, should create LiteralNode with NilClass
+        expect(node).to be_a(TypeGuessr::Core::IR::LiteralNode)
+        expect(node.type.name).to eq("NilClass")
       end
 
-      it "returns nil for until loop" do
+      it "converts until loop" do
         source = <<~RUBY
           until done
             process
@@ -1916,71 +1907,41 @@ RSpec.describe TypeGuessr::Core::Converter::PrismConverter do
         context = TypeGuessr::Core::Converter::PrismConverter::Context.new
         node = converter.convert(parsed.value.statements.body.first, context)
 
-        expect(node).to be_nil
+        expect(node).to be_a(TypeGuessr::Core::IR::LiteralNode)
       end
 
-      it "returns nil for modifier while" do
+      it "converts modifier while" do
         source = "do_something while condition"
         parsed = Prism.parse(source)
         context = TypeGuessr::Core::Converter::PrismConverter::Context.new
         node = converter.convert(parsed.value.statements.body.first, context)
 
-        expect(node).to be_nil
-      end
-    end
-
-    describe "NextNode and BreakNode" do
-      it "returns nil for next statement" do
-        source = <<~RUBY
-          [1, 2, 3].each do |x|
-            next if x.even?
-            puts x
-          end
-        RUBY
-        parsed = Prism.parse(source)
-        context = TypeGuessr::Core::Converter::PrismConverter::Context.new
-        node = converter.convert(parsed.value.statements.body.first, context)
-
-        # The each call is converted, but next inside block is not handled
-        expect(node).to be_a(TypeGuessr::Core::IR::CallNode)
-        expect(node.method).to eq(:each)
-      end
-
-      it "returns nil for break statement" do
-        source = <<~RUBY
-          loop do
-            break if done
-          end
-        RUBY
-        parsed = Prism.parse(source)
-        context = TypeGuessr::Core::Converter::PrismConverter::Context.new
-        node = converter.convert(parsed.value.statements.body.first, context)
-
-        # loop is converted as CallNode
-        expect(node).to be_a(TypeGuessr::Core::IR::CallNode)
+        expect(node).not_to be_nil
       end
     end
 
     describe "LambdaNode" do
-      it "returns nil for lambda literal" do
+      it "converts lambda literal to LiteralNode with Proc type" do
         source = "-> { 42 }"
         parsed = Prism.parse(source)
         context = TypeGuessr::Core::Converter::PrismConverter::Context.new
         node = converter.convert(parsed.value.statements.body.first, context)
 
-        expect(node).to be_nil
+        expect(node).to be_a(TypeGuessr::Core::IR::LiteralNode)
+        expect(node.type.name).to eq("Proc")
       end
 
-      it "returns nil for lambda with parameters" do
+      it "converts lambda with parameters" do
         source = "->(x, y) { x + y }"
         parsed = Prism.parse(source)
         context = TypeGuessr::Core::Converter::PrismConverter::Context.new
         node = converter.convert(parsed.value.statements.body.first, context)
 
-        expect(node).to be_nil
+        expect(node).to be_a(TypeGuessr::Core::IR::LiteralNode)
+        expect(node.type.name).to eq("Proc")
       end
 
-      it "does not track lambda assigned to variable" do
+      it "tracks lambda assigned to variable with Proc type" do
         source = <<~RUBY
           processor = ->(x) { x * 2 }
         RUBY
@@ -1989,36 +1950,35 @@ RSpec.describe TypeGuessr::Core::Converter::PrismConverter do
         node = converter.convert(parsed.value.statements.body.first, context)
 
         expect(node).to be_a(TypeGuessr::Core::IR::LocalWriteNode)
-        # The lambda value is nil
-        expect(node.value).to be_nil
+        expect(node.value).to be_a(TypeGuessr::Core::IR::LiteralNode)
+        expect(node.value.type.name).to eq("Proc")
       end
     end
 
     describe "ParenthesesNode" do
-      it "returns nil for parenthesized expression" do
+      it "unwraps parenthesized expression" do
         source = "(1 + 2)"
         parsed = Prism.parse(source)
         context = TypeGuessr::Core::Converter::PrismConverter::Context.new
         node = converter.convert(parsed.value.statements.body.first, context)
 
-        # ParenthesesNode is not unwrapped
-        expect(node).to be_nil
+        expect(node).to be_a(TypeGuessr::Core::IR::CallNode)
+        expect(node.method).to eq(:+)
       end
 
-      it "causes issues with assignment from parenthesized expression" do
+      it "properly handles assignment from parenthesized expression" do
         source = "x = (a || b)"
         parsed = Prism.parse(source)
         context = TypeGuessr::Core::Converter::PrismConverter::Context.new
         node = converter.convert(parsed.value.statements.body.first, context)
 
         expect(node).to be_a(TypeGuessr::Core::IR::LocalWriteNode)
-        # Value is nil because ParenthesesNode containing OrNode is not handled
-        expect(node.value).to be_nil
+        expect(node.value).to be_a(TypeGuessr::Core::IR::MergeNode)
       end
     end
 
     describe "ForNode" do
-      it "returns nil for for loop" do
+      it "converts for loop (registers loop variable)" do
         source = <<~RUBY
           for i in 1..10
             puts i
@@ -2026,14 +1986,15 @@ RSpec.describe TypeGuessr::Core::Converter::PrismConverter do
         RUBY
         parsed = Prism.parse(source)
         context = TypeGuessr::Core::Converter::PrismConverter::Context.new
-        node = converter.convert(parsed.value.statements.body.first, context)
+        converter.convert(parsed.value.statements.body.first, context)
 
-        expect(node).to be_nil
+        # for loop should register variable i
+        expect(context.lookup_variable(:i)).not_to be_nil
       end
     end
 
     describe "YieldNode" do
-      it "returns nil for yield" do
+      it "converts yield statements" do
         source = <<~RUBY
           def each
             yield 1
@@ -2042,27 +2003,27 @@ RSpec.describe TypeGuessr::Core::Converter::PrismConverter do
         RUBY
         parsed = Prism.parse(source)
         context = TypeGuessr::Core::Converter::PrismConverter::Context.new
-        class_node = converter.convert(parsed.value.statements.body.first, context)
+        def_node = converter.convert(parsed.value.statements.body.first, context)
 
-        # yield statements are not converted
-        expect(class_node).to be_a(TypeGuessr::Core::IR::DefNode)
-        expect(class_node.body_nodes).to be_empty
+        expect(def_node).to be_a(TypeGuessr::Core::IR::DefNode)
+        expect(def_node.body_nodes).not_to be_empty
       end
     end
 
     describe "DefinedNode" do
-      it "returns nil for defined? expression" do
+      it "converts defined? to LiteralNode with optional String type" do
         source = "defined?(some_var)"
         parsed = Prism.parse(source)
         context = TypeGuessr::Core::Converter::PrismConverter::Context.new
         node = converter.convert(parsed.value.statements.body.first, context)
 
-        expect(node).to be_nil
+        # defined? returns String or nil
+        expect(node).to be_a(TypeGuessr::Core::IR::LiteralNode)
       end
     end
 
     describe "AliasMethodNode" do
-      it "returns nil for alias" do
+      it "registers aliased method" do
         source = <<~RUBY
           class Foo
             def original; end
@@ -2073,29 +2034,31 @@ RSpec.describe TypeGuessr::Core::Converter::PrismConverter do
         context = TypeGuessr::Core::Converter::PrismConverter::Context.new
         class_node = converter.convert(parsed.value.statements.body.first, context)
 
-        # Only the def is captured, alias is ignored
-        expect(class_node.methods.size).to eq(1)
-        expect(class_node.methods.first.name).to eq(:original)
+        # Both original and copy should be registered
+        expect(class_node.methods.size).to eq(2)
+        method_names = class_node.methods.map(&:name)
+        expect(method_names).to include(:original)
+        expect(method_names).to include(:copy)
       end
     end
 
     describe "GlobalVariableWriteNode and GlobalVariableReadNode" do
-      it "returns nil for global variable write" do
+      it "converts global variable write" do
         source = "$global = 42"
         parsed = Prism.parse(source)
         context = TypeGuessr::Core::Converter::PrismConverter::Context.new
         node = converter.convert(parsed.value.statements.body.first, context)
 
-        expect(node).to be_nil
+        expect(node).not_to be_nil
       end
 
-      it "returns nil for global variable read" do
+      it "converts global variable read" do
         source = "$global"
         parsed = Prism.parse(source)
         context = TypeGuessr::Core::Converter::PrismConverter::Context.new
         node = converter.convert(parsed.value.statements.body.first, context)
 
-        expect(node).to be_nil
+        expect(node).not_to be_nil
       end
     end
   end
