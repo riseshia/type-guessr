@@ -15,3 +15,7 @@ a.rb
 .rspec_status
 
 todo.md
+
+# Generated binstubs
+bin/rspec
+bin/rubocop

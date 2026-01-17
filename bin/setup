@@ -3,6 +3,16 @@ set -euo pipefail
 IFS=$'\n\t'
 set -vx
 
+# Workaround for CGI::@@accept_charset bug in Bundler 4.0.3
+# Bundler's vendored net-http-persistent calls CGI.unescape without
+# fully requiring the cgi library, causing NameError.
+# Pre-requiring cgi initializes @@accept_charset properly.
+# See: https://bugs.ruby-lang.org/issues/13539
+export RUBYOPT="${RUBYOPT:+$RUBYOPT }-rcgi"
+
 bundle install
+
+# Create binstubs for easier command execution
+bundle binstubs rspec-core rubocop --force
 
 # Do any other automated setup that you need to do here
