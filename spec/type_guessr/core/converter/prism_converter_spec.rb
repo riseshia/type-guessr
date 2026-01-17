@@ -624,4 +624,1112 @@ RSpec.describe TypeGuessr::Core::Converter::PrismConverter do
       expect(node.loc.col_range).to be_a(Range)
     end
   end
+
+  describe "compound assignments" do
+    describe "local variable ||= (or-assign)" do
+      it "creates LocalWriteNode with value for undefined variable" do
+        source = "x ||= 1"
+        parsed = Prism.parse(source)
+        context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+        node = converter.convert(parsed.value.statements.body.first, context)
+
+        expect(node).to be_a(TypeGuessr::Core::IR::LocalWriteNode)
+        expect(node.name).to eq(:x)
+        # For undefined variable, value is just the RHS
+        expect(node.value).to be_a(TypeGuessr::Core::IR::LiteralNode)
+      end
+
+      it "creates MergeNode for defined variable" do
+        source = <<~RUBY
+          x = nil
+          x ||= 1
+        RUBY
+        parsed = Prism.parse(source)
+        context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+
+        # Convert first assignment
+        converter.convert(parsed.value.statements.body[0], context)
+
+        # Convert ||=
+        node = converter.convert(parsed.value.statements.body[1], context)
+
+        expect(node).to be_a(TypeGuessr::Core::IR::LocalWriteNode)
+        expect(node.name).to eq(:x)
+        # Should be MergeNode with original and new value
+        expect(node.value).to be_a(TypeGuessr::Core::IR::MergeNode)
+        expect(node.value.branches.size).to eq(2)
+      end
+    end
+
+    describe "local variable &&= (and-assign)" do
+      it "creates LocalWriteNode with value for undefined variable" do
+        source = 'x &&= "string"'
+        parsed = Prism.parse(source)
+        context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+        node = converter.convert(parsed.value.statements.body.first, context)
+
+        expect(node).to be_a(TypeGuessr::Core::IR::LocalWriteNode)
+        expect(node.name).to eq(:x)
+      end
+
+      it "creates MergeNode for defined variable" do
+        source = <<~RUBY
+          x = "hello"
+          x &&= "world"
+        RUBY
+        parsed = Prism.parse(source)
+        context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+
+        converter.convert(parsed.value.statements.body[0], context)
+        node = converter.convert(parsed.value.statements.body[1], context)
+
+        expect(node).to be_a(TypeGuessr::Core::IR::LocalWriteNode)
+        expect(node.value).to be_a(TypeGuessr::Core::IR::MergeNode)
+        expect(node.value.branches.size).to eq(2)
+      end
+    end
+
+    describe "local variable operator writes (+=, -=, *=, /=)" do
+      it "creates CallNode for +=" do
+        source = <<~RUBY
+          x = 1
+          x += 2
+        RUBY
+        parsed = Prism.parse(source)
+        context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+
+        converter.convert(parsed.value.statements.body[0], context)
+        node = converter.convert(parsed.value.statements.body[1], context)
+
+        expect(node).to be_a(TypeGuessr::Core::IR::LocalWriteNode)
+        expect(node.name).to eq(:x)
+        expect(node.value).to be_a(TypeGuessr::Core::IR::CallNode)
+        expect(node.value.method).to eq(:+)
+        expect(node.value.args.size).to eq(1)
+      end
+
+      it "creates CallNode for -=" do
+        source = <<~RUBY
+          count = 10
+          count -= 1
+        RUBY
+        parsed = Prism.parse(source)
+        context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+
+        converter.convert(parsed.value.statements.body[0], context)
+        node = converter.convert(parsed.value.statements.body[1], context)
+
+        expect(node).to be_a(TypeGuessr::Core::IR::LocalWriteNode)
+        expect(node.value).to be_a(TypeGuessr::Core::IR::CallNode)
+        expect(node.value.method).to eq(:-)
+      end
+
+      it "creates CallNode for *=" do
+        source = <<~RUBY
+          x = 5
+          x *= 2
+        RUBY
+        parsed = Prism.parse(source)
+        context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+
+        converter.convert(parsed.value.statements.body[0], context)
+        node = converter.convert(parsed.value.statements.body[1], context)
+
+        expect(node.value).to be_a(TypeGuessr::Core::IR::CallNode)
+        expect(node.value.method).to eq(:*)
+      end
+
+      it "creates CallNode for /=" do
+        source = <<~RUBY
+          x = 10
+          x /= 2
+        RUBY
+        parsed = Prism.parse(source)
+        context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+
+        converter.convert(parsed.value.statements.body[0], context)
+        node = converter.convert(parsed.value.statements.body[1], context)
+
+        expect(node.value).to be_a(TypeGuessr::Core::IR::CallNode)
+        expect(node.value.method).to eq(:/)
+      end
+    end
+
+    describe "instance variable ||=" do
+      it "creates InstanceVariableWriteNode with MergeNode for defined variable" do
+        source = <<~RUBY
+          class Foo
+            def setup
+              @cache = nil
+              @cache ||= {}
+            end
+          end
+        RUBY
+        parsed = Prism.parse(source)
+        context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+        class_node = converter.convert(parsed.value.statements.body.first, context)
+
+        setup_method = class_node.methods.first
+        # The body should contain both assignments
+        body_nodes = setup_method.body_nodes
+
+        # Second node should be the ||= assignment
+        or_write_node = body_nodes[1]
+        expect(or_write_node).to be_a(TypeGuessr::Core::IR::InstanceVariableWriteNode)
+        expect(or_write_node.name).to eq(:@cache)
+        expect(or_write_node.value).to be_a(TypeGuessr::Core::IR::MergeNode)
+      end
+    end
+
+    describe "instance variable &&=" do
+      it "creates InstanceVariableWriteNode with MergeNode" do
+        source = <<~RUBY
+          class Foo
+            def process
+              @value = "initial"
+              @value &&= "updated"
+            end
+          end
+        RUBY
+        parsed = Prism.parse(source)
+        context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+        class_node = converter.convert(parsed.value.statements.body.first, context)
+
+        process_method = class_node.methods.first
+        and_write_node = process_method.body_nodes[1]
+
+        expect(and_write_node).to be_a(TypeGuessr::Core::IR::InstanceVariableWriteNode)
+        expect(and_write_node.name).to eq(:@value)
+        expect(and_write_node.value).to be_a(TypeGuessr::Core::IR::MergeNode)
+      end
+    end
+
+    describe "instance variable operator writes" do
+      it "creates InstanceVariableWriteNode with CallNode for +=" do
+        source = <<~RUBY
+          class Foo
+            def increment
+              @count = 0
+              @count += 1
+            end
+          end
+        RUBY
+        parsed = Prism.parse(source)
+        context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+        class_node = converter.convert(parsed.value.statements.body.first, context)
+
+        increment_method = class_node.methods.first
+        op_write_node = increment_method.body_nodes[1]
+
+        expect(op_write_node).to be_a(TypeGuessr::Core::IR::InstanceVariableWriteNode)
+        expect(op_write_node.name).to eq(:@count)
+        expect(op_write_node.value).to be_a(TypeGuessr::Core::IR::CallNode)
+        expect(op_write_node.value.method).to eq(:+)
+      end
+    end
+  end
+
+  describe "case statements" do
+    describe "case/when" do
+      it "creates MergeNode for case with multiple when clauses" do
+        source = <<~RUBY
+          case n
+          when 1 then "one"
+          when 2 then "two"
+          else "other"
+          end
+        RUBY
+        parsed = Prism.parse(source)
+        context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+        node = converter.convert(parsed.value.statements.body.first, context)
+
+        expect(node).to be_a(TypeGuessr::Core::IR::MergeNode)
+        expect(node.branches.size).to eq(3)
+        node.branches.each do |branch|
+          expect(branch).to be_a(TypeGuessr::Core::IR::LiteralNode)
+          expect(branch.type.name).to eq("String")
+        end
+      end
+
+      it "returns single branch when only one when clause" do
+        source = <<~RUBY
+          case n
+          when 1 then "one"
+          else "default"
+          end
+        RUBY
+        parsed = Prism.parse(source)
+        context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+        node = converter.convert(parsed.value.statements.body.first, context)
+
+        expect(node).to be_a(TypeGuessr::Core::IR::MergeNode)
+        expect(node.branches.size).to eq(2)
+      end
+    end
+
+    describe "case without else" do
+      it "includes nil as possible branch" do
+        source = <<~RUBY
+          case n
+          when 1 then "one"
+          when 2 then "two"
+          end
+        RUBY
+        parsed = Prism.parse(source)
+        context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+        node = converter.convert(parsed.value.statements.body.first, context)
+
+        expect(node).to be_a(TypeGuessr::Core::IR::MergeNode)
+        # 2 when clauses + nil for missing else
+        expect(node.branches.size).to eq(3)
+
+        # One of the branches should be nil
+        nil_branch = node.branches.find { |b| b.type.name == "NilClass" }
+        expect(nil_branch).not_to be_nil
+      end
+    end
+
+    describe "case with variable assignments" do
+      it "creates MergeNode for variables assigned in branches" do
+        source = <<~RUBY
+          case n
+          when 1 then x = "a"
+          when 2 then x = "b"
+          else x = "c"
+          end
+        RUBY
+        parsed = Prism.parse(source)
+        context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+        converter.convert(parsed.value.statements.body.first, context)
+
+        # Variable x should be a MergeNode
+        x_var = context.lookup_variable(:x)
+        expect(x_var).to be_a(TypeGuessr::Core::IR::MergeNode)
+        expect(x_var.branches.size).to eq(3)
+      end
+    end
+
+    describe "case without predicate" do
+      it "converts case without predicate (like if/elsif chain)" do
+        source = <<~RUBY
+          case
+          when flag then 1
+          when other then 2
+          else 3
+          end
+        RUBY
+        parsed = Prism.parse(source)
+        context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+        node = converter.convert(parsed.value.statements.body.first, context)
+
+        expect(node).to be_a(TypeGuessr::Core::IR::MergeNode)
+        expect(node.branches.size).to eq(3)
+        node.branches.each do |branch|
+          expect(branch).to be_a(TypeGuessr::Core::IR::LiteralNode)
+          expect(branch.type.name).to eq("Integer")
+        end
+      end
+    end
+
+    describe "case with empty when clause" do
+      it "treats empty when clause as nil" do
+        source = <<~RUBY
+          case n
+          when 1 then
+          when 2 then "two"
+          end
+        RUBY
+        parsed = Prism.parse(source)
+        context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+        node = converter.convert(parsed.value.statements.body.first, context)
+
+        expect(node).to be_a(TypeGuessr::Core::IR::MergeNode)
+        # Should have 3 branches: nil (empty when), String, nil (no else)
+        nil_branches = node.branches.select { |b| b.type.name == "NilClass" }
+        expect(nil_branches.size).to be >= 1
+      end
+    end
+
+    describe "case with non-returning branches" do
+      it "excludes raise from branch types" do
+        source = <<~RUBY
+          case n
+          when 1 then "one"
+          when 2 then raise "error"
+          else "other"
+          end
+        RUBY
+        parsed = Prism.parse(source)
+        context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+        node = converter.convert(parsed.value.statements.body.first, context)
+
+        expect(node).to be_a(TypeGuessr::Core::IR::MergeNode)
+        # raise branch should be excluded
+        expect(node.branches.size).to eq(2)
+        node.branches.each do |branch|
+          expect(branch.type.name).to eq("String")
+        end
+      end
+    end
+  end
+
+  describe "container mutation tracking" do
+    describe "hash mutations" do
+      it "adds field to HashShape on symbol key assignment" do
+        source = <<~RUBY
+          h = {}
+          h[:key] = "value"
+        RUBY
+        parsed = Prism.parse(source)
+        context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+
+        converter.convert(parsed.value.statements.body[0], context)
+        converter.convert(parsed.value.statements.body[1], context)
+
+        h_var = context.lookup_variable(:h)
+        expect(h_var.value.type).to be_a(TypeGuessr::Core::Types::HashShape)
+        expect(h_var.value.type.fields[:key].name).to eq("String")
+      end
+
+      it "widens HashShape to HashType on non-symbol key" do
+        source = <<~RUBY
+          h = { a: 1 }
+          h["string"] = 2
+        RUBY
+        parsed = Prism.parse(source)
+        context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+
+        converter.convert(parsed.value.statements.body[0], context)
+        converter.convert(parsed.value.statements.body[1], context)
+
+        h_var = context.lookup_variable(:h)
+        expect(h_var.value.type).to be_a(TypeGuessr::Core::Types::HashType)
+      end
+    end
+
+    describe "array mutations" do
+      it "updates ArrayType element type on indexed assignment" do
+        source = <<~RUBY
+          arr = []
+          arr[0] = "string"
+        RUBY
+        parsed = Prism.parse(source)
+        context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+
+        converter.convert(parsed.value.statements.body[0], context)
+        converter.convert(parsed.value.statements.body[1], context)
+
+        arr_var = context.lookup_variable(:arr)
+        expect(arr_var.value.type).to be_a(TypeGuessr::Core::Types::ArrayType)
+        expect(arr_var.value.type.element_type.name).to eq("String")
+      end
+
+      it "creates union element types with << operator" do
+        source = <<~RUBY
+          arr = [1]
+          arr << "string"
+        RUBY
+        parsed = Prism.parse(source)
+        context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+
+        converter.convert(parsed.value.statements.body[0], context)
+        converter.convert(parsed.value.statements.body[1], context)
+
+        arr_var = context.lookup_variable(:arr)
+        expect(arr_var.value.type).to be_a(TypeGuessr::Core::Types::ArrayType)
+        expect(arr_var.value.type.element_type).to be_a(TypeGuessr::Core::Types::Union)
+      end
+    end
+  end
+
+  describe "return statement handling" do
+    describe "explicit return" do
+      it "creates ReturnNode for return with value" do
+        source = <<~RUBY
+          def foo
+            return 1
+          end
+        RUBY
+        parsed = Prism.parse(source)
+        context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+        node = converter.convert(parsed.value.statements.body.first, context)
+
+        expect(node).to be_a(TypeGuessr::Core::IR::DefNode)
+        # return_node should be the explicit return
+        expect(node.return_node).to be_a(TypeGuessr::Core::IR::ReturnNode)
+        expect(node.return_node.value).to be_a(TypeGuessr::Core::IR::LiteralNode)
+        expect(node.return_node.value.type.name).to eq("Integer")
+      end
+    end
+
+    describe "return without value" do
+      it "creates ReturnNode with nil literal" do
+        source = <<~RUBY
+          def foo
+            return
+          end
+        RUBY
+        parsed = Prism.parse(source)
+        context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+        node = converter.convert(parsed.value.statements.body.first, context)
+
+        expect(node.return_node).to be_a(TypeGuessr::Core::IR::ReturnNode)
+        expect(node.return_node.value.type.name).to eq("NilClass")
+      end
+    end
+
+    describe "multiple return points" do
+      it "creates MergeNode for methods with multiple returns" do
+        source = <<~RUBY
+          def foo(flag)
+            return "early" if flag
+            "normal"
+          end
+        RUBY
+        parsed = Prism.parse(source)
+        context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+        node = converter.convert(parsed.value.statements.body.first, context)
+
+        expect(node.return_node).to be_a(TypeGuessr::Core::IR::MergeNode)
+        # Should have: explicit return "early" + implicit return "normal"
+        expect(node.return_node.branches.size).to eq(2)
+      end
+
+      it "handles return in case statement" do
+        source = <<~RUBY
+          def foo(n)
+            case n
+            when 1 then return "one"
+            when 2 then return "two"
+            end
+            "default"
+          end
+        RUBY
+        parsed = Prism.parse(source)
+        context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+        node = converter.convert(parsed.value.statements.body.first, context)
+
+        # Should have returns from case + implicit "default"
+        expect(node.return_node).to be_a(TypeGuessr::Core::IR::MergeNode)
+        expect(node.return_node.branches.size).to be >= 2
+      end
+    end
+
+    describe "implicit return" do
+      it "uses last expression as return when no explicit return" do
+        source = <<~RUBY
+          def foo
+            x = 1
+            x + 1
+          end
+        RUBY
+        parsed = Prism.parse(source)
+        context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+        node = converter.convert(parsed.value.statements.body.first, context)
+
+        expect(node.return_node).to be_a(TypeGuessr::Core::IR::CallNode)
+        expect(node.return_node.method).to eq(:+)
+      end
+    end
+  end
+
+  describe "self reference" do
+    describe "explicit self" do
+      it "creates SelfNode for self keyword" do
+        source = <<~RUBY
+          class Foo
+            def bar
+              self
+            end
+          end
+        RUBY
+        parsed = Prism.parse(source)
+        context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+        class_node = converter.convert(parsed.value.statements.body.first, context)
+
+        bar_method = class_node.methods.first
+        expect(bar_method.return_node).to be_a(TypeGuessr::Core::IR::SelfNode)
+        expect(bar_method.return_node.class_name).to eq("Foo")
+        expect(bar_method.return_node.singleton).to be false
+      end
+    end
+
+    describe "self in singleton method" do
+      it "creates SelfNode with singleton: true" do
+        source = <<~RUBY
+          class Foo
+            def self.bar
+              self
+            end
+          end
+        RUBY
+        parsed = Prism.parse(source)
+        context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+        class_node = converter.convert(parsed.value.statements.body.first, context)
+
+        bar_method = class_node.methods.first
+        expect(bar_method.return_node).to be_a(TypeGuessr::Core::IR::SelfNode)
+        expect(bar_method.return_node.singleton).to be true
+      end
+    end
+
+    describe "implicit self as receiver" do
+      it "creates SelfNode for method calls without explicit receiver" do
+        source = <<~RUBY
+          class Foo
+            def bar
+              baz
+            end
+          end
+        RUBY
+        parsed = Prism.parse(source)
+        context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+        class_node = converter.convert(parsed.value.statements.body.first, context)
+
+        bar_method = class_node.methods.first
+        call_node = bar_method.return_node
+
+        expect(call_node).to be_a(TypeGuessr::Core::IR::CallNode)
+        expect(call_node.receiver).to be_a(TypeGuessr::Core::IR::SelfNode)
+        expect(call_node.receiver.class_name).to eq("Foo")
+      end
+    end
+  end
+
+  describe "standalone begin/rescue/ensure" do
+    it "converts standalone begin/rescue block" do
+      source = <<~RUBY
+        begin
+          risky_operation
+        rescue => e
+          fallback
+        end
+      RUBY
+      parsed = Prism.parse(source)
+      context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+      node = converter.convert(parsed.value.statements.body.first, context)
+
+      # Should return the last node from the begin block
+      expect(node).to be_a(TypeGuessr::Core::IR::CallNode)
+    end
+
+    it "converts begin/rescue/else/ensure" do
+      source = <<~RUBY
+        begin
+          main_operation
+        rescue
+          handle_error
+        else
+          on_success
+        ensure
+          cleanup
+        end
+      RUBY
+      parsed = Prism.parse(source)
+      context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+      node = converter.convert(parsed.value.statements.body.first, context)
+
+      # Should return the last node (from ensure clause)
+      expect(node).to be_a(TypeGuessr::Core::IR::CallNode)
+    end
+  end
+
+  describe "splat operations" do
+    describe "splat in arrays" do
+      it "creates CallNode for to_a on splatted expression" do
+        source = <<~RUBY
+          arr = [1, 2, 3]
+          [*arr, 4]
+        RUBY
+        parsed = Prism.parse(source)
+        context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+
+        converter.convert(parsed.value.statements.body[0], context)
+        node = converter.convert(parsed.value.statements.body[1], context)
+
+        expect(node).to be_a(TypeGuessr::Core::IR::LiteralNode)
+        expect(node.type).to be_a(TypeGuessr::Core::Types::ArrayType)
+        # First element should be CallNode for to_a
+        expect(node.values.first).to be_a(TypeGuessr::Core::IR::CallNode)
+        expect(node.values.first.method).to eq(:to_a)
+      end
+    end
+
+    describe "double splat in hashes" do
+      it "tracks double splat in hash literals" do
+        source = <<~RUBY
+          h = { a: 1 }
+          { **h, b: 2 }
+        RUBY
+        parsed = Prism.parse(source)
+        context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+
+        converter.convert(parsed.value.statements.body[0], context)
+        node = converter.convert(parsed.value.statements.body[1], context)
+
+        expect(node).to be_a(TypeGuessr::Core::IR::LiteralNode)
+        # Double splat causes type inference to widen to HashType
+        expect(node.type).to be_a(TypeGuessr::Core::Types::HashType)
+        # Should have values including the splatted hash reference
+        expect(node.values).not_to be_nil
+      end
+    end
+  end
+
+  describe "complex edge cases" do
+    describe "nested compound assignments" do
+      it "handles chained ||= assignments" do
+        source = <<~RUBY
+          class Foo
+            def data
+              @cache ||= @backup ||= {}
+            end
+          end
+        RUBY
+        parsed = Prism.parse(source)
+        context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+        class_node = converter.convert(parsed.value.statements.body.first, context)
+
+        data_method = class_node.methods.first
+        # The return node should exist (chained ||= is valid)
+        expect(data_method.return_node).not_to be_nil
+      end
+
+      it "handles ||= with method call value" do
+        source = <<~RUBY
+          class Foo
+            def fetch
+              @data ||= load_data
+            end
+          end
+        RUBY
+        parsed = Prism.parse(source)
+        context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+        class_node = converter.convert(parsed.value.statements.body.first, context)
+
+        fetch_method = class_node.methods.first
+        # Return node should be the ||= result
+        expect(fetch_method.return_node).to be_a(TypeGuessr::Core::IR::InstanceVariableWriteNode)
+      end
+    end
+
+    describe "compound assignment in control flow" do
+      it "handles ||= inside case branch" do
+        source = <<~RUBY
+          case type
+          when :a then x ||= "default_a"
+          when :b then x ||= "default_b"
+          end
+        RUBY
+        parsed = Prism.parse(source)
+        context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+        node = converter.convert(parsed.value.statements.body.first, context)
+
+        expect(node).to be_a(TypeGuessr::Core::IR::MergeNode)
+        # Variable x should be registered
+        x_var = context.lookup_variable(:x)
+        expect(x_var).not_to be_nil
+      end
+
+      it "handles += inside if branches" do
+        source = <<~RUBY
+          x = 0
+          if condition
+            x += 1
+          else
+            x += 2
+          end
+        RUBY
+        parsed = Prism.parse(source)
+        context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+
+        converter.convert(parsed.value.statements.body[0], context)
+        converter.convert(parsed.value.statements.body[1], context)
+
+        x_var = context.lookup_variable(:x)
+        expect(x_var).to be_a(TypeGuessr::Core::IR::MergeNode)
+        expect(x_var.branches.size).to eq(2)
+      end
+    end
+
+    describe "deeply nested control flow" do
+      it "handles nested if statements with variable assignments" do
+        source = <<~RUBY
+          if a
+            if b
+              x = 1
+            else
+              x = 2
+            end
+          else
+            x = 3
+          end
+        RUBY
+        parsed = Prism.parse(source)
+        context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+        converter.convert(parsed.value.statements.body.first, context)
+
+        x_var = context.lookup_variable(:x)
+        expect(x_var).to be_a(TypeGuessr::Core::IR::MergeNode)
+        # Should merge outer branches (inner if merged + else)
+        expect(x_var.branches.size).to eq(2)
+      end
+
+      it "handles case inside if" do
+        source = <<~RUBY
+          if flag
+            case n
+            when 1 then result = "one"
+            when 2 then result = "two"
+            end
+          else
+            result = "none"
+          end
+        RUBY
+        parsed = Prism.parse(source)
+        context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+        converter.convert(parsed.value.statements.body.first, context)
+
+        result_var = context.lookup_variable(:result)
+        expect(result_var).to be_a(TypeGuessr::Core::IR::MergeNode)
+      end
+    end
+
+    describe "chained method calls with blocks" do
+      it "handles map followed by select" do
+        source = <<~RUBY
+          [1, 2, 3].map { |x| x * 2 }.select { |y| y > 2 }
+        RUBY
+        parsed = Prism.parse(source)
+        context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+        node = converter.convert(parsed.value.statements.body.first, context)
+
+        expect(node).to be_a(TypeGuessr::Core::IR::CallNode)
+        expect(node.method).to eq(:select)
+        expect(node.receiver).to be_a(TypeGuessr::Core::IR::CallNode)
+        expect(node.receiver.method).to eq(:map)
+      end
+
+      it "handles nested blocks" do
+        source = <<~RUBY
+          [[1, 2], [3, 4]].map { |arr| arr.map { |x| x * 2 } }
+        RUBY
+        parsed = Prism.parse(source)
+        context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+        node = converter.convert(parsed.value.statements.body.first, context)
+
+        expect(node).to be_a(TypeGuessr::Core::IR::CallNode)
+        expect(node.method).to eq(:map)
+        expect(node.block_body).to be_a(TypeGuessr::Core::IR::CallNode)
+        expect(node.block_body.method).to eq(:map)
+      end
+    end
+
+    describe "rescue with exception binding" do
+      it "converts rescue with exception variable" do
+        source = <<~RUBY
+          def risky
+            dangerous_operation
+          rescue StandardError => e
+            handle_error(e)
+          end
+        RUBY
+        parsed = Prism.parse(source)
+        context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+        node = converter.convert(parsed.value.statements.body.first, context)
+
+        expect(node).to be_a(TypeGuessr::Core::IR::DefNode)
+        expect(node.body_nodes.size).to be >= 2
+      end
+
+      it "converts multiple rescue clauses" do
+        source = <<~RUBY
+          def multi_rescue
+            operation
+          rescue TypeError => e
+            handle_type_error(e)
+          rescue ArgumentError => e
+            handle_arg_error(e)
+          rescue => e
+            handle_generic(e)
+          end
+        RUBY
+        parsed = Prism.parse(source)
+        context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+        node = converter.convert(parsed.value.statements.body.first, context)
+
+        expect(node).to be_a(TypeGuessr::Core::IR::DefNode)
+        # Should have body nodes from main body + all rescue clauses
+        expect(node.body_nodes.size).to be >= 4
+      end
+    end
+
+    describe "pattern matching (case/in)" do
+      it "converts simple pattern matching" do
+        source = <<~RUBY
+          case data
+          in { name: n }
+            n
+          in [first, *rest]
+            first
+          else
+            "unknown"
+          end
+        RUBY
+        parsed = Prism.parse(source)
+        context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+        node = converter.convert(parsed.value.statements.body.first, context)
+
+        # Pattern matching is converted similarly to case/when
+        expect(node).to be_a(TypeGuessr::Core::IR::MergeNode)
+      end
+    end
+
+    describe "multiple assignment (destructuring)" do
+      it "converts simple multiple assignment" do
+        source = "a, b = [1, 2]"
+        parsed = Prism.parse(source)
+        context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+
+        # Multiple assignment may not create nodes for individual variables
+        # depending on implementation - just ensure no crash
+        expect { converter.convert(parsed.value.statements.body.first, context) }.not_to raise_error
+      end
+
+      it "converts splat in multiple assignment" do
+        source = "first, *rest = [1, 2, 3, 4]"
+        parsed = Prism.parse(source)
+        context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+
+        expect { converter.convert(parsed.value.statements.body.first, context) }.not_to raise_error
+      end
+    end
+
+    describe "complex return scenarios" do
+      it "handles return inside rescue" do
+        source = <<~RUBY
+          def safe_load
+            return load_data
+          rescue
+            return default_data
+          end
+        RUBY
+        parsed = Prism.parse(source)
+        context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+        node = converter.convert(parsed.value.statements.body.first, context)
+
+        expect(node).to be_a(TypeGuessr::Core::IR::DefNode)
+        # Should have return nodes from both main body and rescue
+        expect(node.return_node).not_to be_nil
+      end
+
+      it "handles return with complex expression" do
+        source = <<~RUBY
+          def compute
+            return items.map { |i| i * 2 }.sum
+          end
+        RUBY
+        parsed = Prism.parse(source)
+        context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+        node = converter.convert(parsed.value.statements.body.first, context)
+
+        expect(node.return_node).to be_a(TypeGuessr::Core::IR::ReturnNode)
+        expect(node.return_node.value).to be_a(TypeGuessr::Core::IR::CallNode)
+        expect(node.return_node.value.method).to eq(:sum)
+      end
+    end
+
+    describe "class and module nesting" do
+      it "handles deeply nested classes" do
+        source = <<~RUBY
+          class Outer
+            class Middle
+              class Inner
+                def foo
+                  "inner"
+                end
+              end
+            end
+          end
+        RUBY
+        parsed = Prism.parse(source)
+        context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+        node = converter.convert(parsed.value.statements.body.first, context)
+
+        expect(node).to be_a(TypeGuessr::Core::IR::ClassModuleNode)
+        expect(node.name).to eq("Outer")
+
+        # Find nested class
+        middle = node.methods.find { |m| m.is_a?(TypeGuessr::Core::IR::ClassModuleNode) }
+        expect(middle).not_to be_nil
+        expect(middle.name).to eq("Middle")
+      end
+
+      it "handles module with class inside" do
+        source = <<~RUBY
+          module MyModule
+            class MyClass
+              def bar
+                42
+              end
+            end
+          end
+        RUBY
+        parsed = Prism.parse(source)
+        context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+        node = converter.convert(parsed.value.statements.body.first, context)
+
+        expect(node).to be_a(TypeGuessr::Core::IR::ClassModuleNode)
+        nested_class = node.methods.find { |m| m.is_a?(TypeGuessr::Core::IR::ClassModuleNode) }
+        expect(nested_class).not_to be_nil
+        expect(nested_class.name).to eq("MyClass")
+      end
+    end
+
+    describe "singleton class" do
+      it "handles singleton class with methods" do
+        source = <<~RUBY
+          class Foo
+            class << self
+              def bar
+                "class method"
+              end
+
+              def baz
+                "another class method"
+              end
+            end
+          end
+        RUBY
+        parsed = Prism.parse(source)
+        context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+        node = converter.convert(parsed.value.statements.body.first, context)
+
+        singleton = node.methods.find { |m| m.is_a?(TypeGuessr::Core::IR::ClassModuleNode) && m.name.start_with?("<Class:") }
+        expect(singleton).not_to be_nil
+        expect(singleton.methods.size).to eq(2)
+      end
+    end
+
+    describe "complex hash and array operations" do
+      it "handles nested hash mutation" do
+        source = <<~RUBY
+          h = { outer: {} }
+          h[:outer][:inner] = "value"
+        RUBY
+        parsed = Prism.parse(source)
+        context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+
+        converter.convert(parsed.value.statements.body[0], context)
+        node = converter.convert(parsed.value.statements.body[1], context)
+
+        # Should be a call node for []=
+        expect(node).to be_a(TypeGuessr::Core::IR::CallNode)
+        expect(node.method).to eq(:[]=)
+      end
+
+      it "handles array with mixed literal and variable elements" do
+        source = <<~RUBY
+          x = "hello"
+          y = 42
+          [x, y, true, nil, :symbol]
+        RUBY
+        parsed = Prism.parse(source)
+        context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+
+        converter.convert(parsed.value.statements.body[0], context)
+        converter.convert(parsed.value.statements.body[1], context)
+        node = converter.convert(parsed.value.statements.body[2], context)
+
+        expect(node).to be_a(TypeGuessr::Core::IR::LiteralNode)
+        expect(node.values.size).to eq(5)
+        expect(node.values[0]).to be_a(TypeGuessr::Core::IR::LocalReadNode)
+        expect(node.values[1]).to be_a(TypeGuessr::Core::IR::LocalReadNode)
+        expect(node.values[2]).to be_a(TypeGuessr::Core::IR::LiteralNode)
+      end
+    end
+
+    describe "method parameters edge cases" do
+      it "handles all parameter types in one method" do
+        source = <<~RUBY
+          def complex(a, b = 1, *args, c:, d: 2, **kwargs, &block)
+            [a, b, args, c, d, kwargs, block]
+          end
+        RUBY
+        parsed = Prism.parse(source)
+        context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+        node = converter.convert(parsed.value.statements.body.first, context)
+
+        expect(node).to be_a(TypeGuessr::Core::IR::DefNode)
+        param_kinds = node.params.map(&:kind)
+
+        expect(param_kinds).to include(:required)
+        expect(param_kinds).to include(:optional)
+        expect(param_kinds).to include(:rest)
+        expect(param_kinds).to include(:keyword_required)
+        expect(param_kinds).to include(:keyword_optional)
+        expect(param_kinds).to include(:keyword_rest)
+        expect(param_kinds).to include(:block)
+      end
+
+      it "handles forwarding parameter (...)" do
+        source = <<~RUBY
+          def forward(...)
+            other_method(...)
+          end
+        RUBY
+        parsed = Prism.parse(source)
+        context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+        node = converter.convert(parsed.value.statements.body.first, context)
+
+        expect(node).to be_a(TypeGuessr::Core::IR::DefNode)
+        forwarding_param = node.params.find { |p| p.kind == :forwarding }
+        expect(forwarding_param).not_to be_nil
+      end
+    end
+
+    describe "edge cases in literals" do
+      it "handles heredoc strings" do
+        source = <<~RUBY
+          <<~TEXT
+            This is a
+            multiline string
+          TEXT
+        RUBY
+        parsed = Prism.parse(source)
+        context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+        node = converter.convert(parsed.value.statements.body.first, context)
+
+        expect(node).to be_a(TypeGuessr::Core::IR::LiteralNode)
+        expect(node.type.name).to eq("String")
+      end
+
+      it "handles complex regex" do
+        source = '/^(?<name>\w+)@(?<domain>\w+\.\w+)$/'
+        parsed = Prism.parse(source)
+        node = converter.convert(parsed.value.statements.body.first)
+
+        expect(node).to be_a(TypeGuessr::Core::IR::LiteralNode)
+        expect(node.type.name).to eq("Regexp")
+      end
+
+      it "handles endless range" do
+        source = "1.."
+        parsed = Prism.parse(source)
+        node = converter.convert(parsed.value.statements.body.first)
+
+        expect(node).to be_a(TypeGuessr::Core::IR::LiteralNode)
+        expect(node.type).to be_a(TypeGuessr::Core::Types::RangeType)
+      end
+
+      it "handles beginless range" do
+        source = "..10"
+        parsed = Prism.parse(source)
+        node = converter.convert(parsed.value.statements.body.first)
+
+        expect(node).to be_a(TypeGuessr::Core::IR::LiteralNode)
+        expect(node.type).to be_a(TypeGuessr::Core::Types::RangeType)
+      end
+    end
+  end
 end
