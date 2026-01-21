@@ -85,35 +85,6 @@ module TypeGuessr
         end
       end
 
-      # Base class for all IR nodes
-      # IR represents a reverse dependency graph where each node points to nodes it depends on
-      class Node
-        attr_reader :loc
-
-        def initialize(loc:)
-          @loc = loc
-        end
-
-        # Returns all nodes that this node directly depends on
-        # @return [Array<Node>]
-        def dependencies
-          []
-        end
-
-        # Generate a unique hash for this node (type + identifier + line)
-        # @return [String]
-        def node_hash
-          raise NotImplementedError, "#{self.class} must implement node_hash"
-        end
-
-        # Generate a unique key for this node (scope_id + node_hash)
-        # @param scope_id [String] The scope identifier (e.g., "User#save")
-        # @return [String]
-        def node_key(scope_id)
-          "#{scope_id}:#{node_hash}"
-        end
-      end
-
       # Literal value node
       # @param type [TypeGuessr::Core::Types::Type] The type of the literal
       # @param literal_value [Object, nil] The actual literal value (for Symbol, Integer, String)
