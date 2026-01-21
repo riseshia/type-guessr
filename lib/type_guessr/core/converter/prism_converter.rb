@@ -243,7 +243,7 @@ module TypeGuessr
         private
 
         def convert_literal(prism_node)
-          type = infer_literal_type(prism_node)
+          type = literal_type_for(prism_node)
           literal_value = extract_literal_value(prism_node)
           IR::LiteralNode.new(
             type: type,
@@ -266,7 +266,7 @@ module TypeGuessr
         end
 
         def convert_array_literal(prism_node, context)
-          type = infer_array_element_type(prism_node)
+          type = array_element_type_for(prism_node)
 
           # Convert each element to an IR node
           value_nodes = prism_node.elements.filter_map do |elem|
@@ -299,7 +299,7 @@ module TypeGuessr
         end
 
         def convert_hash_literal(prism_node, context)
-          type = infer_hash_element_types(prism_node)
+          type = hash_element_types_for(prism_node)
           build_hash_literal_node(prism_node, type, context)
         end
 
@@ -335,12 +335,12 @@ module TypeGuessr
           fields = keyword_hash_node.elements.each_with_object({}) do |elem, hash|
             next unless elem.is_a?(Prism::AssocNode) && elem.key.is_a?(Prism::SymbolNode)
 
-            hash[elem.key.value.to_sym] = infer_literal_type(elem.value)
+            hash[elem.key.value.to_sym] = literal_type_for(elem.value)
           end
           Types::HashShape.new(fields)
         end
 
-        def infer_literal_type(prism_node)
+        def literal_type_for(prism_node)
           case prism_node
           when Prism::IntegerNode
             Types::ClassInstance.new("Integer")
@@ -358,11 +358,11 @@ module TypeGuessr
             Types::ClassInstance.new("NilClass")
           when Prism::ArrayNode
             # Infer element type from array contents
-            infer_array_element_type(prism_node)
+            array_element_type_for(prism_node)
           when Prism::HashNode
-            infer_hash_element_types(prism_node)
+            hash_element_types_for(prism_node)
           when Prism::RangeNode
-            infer_range_element_type(prism_node)
+            range_element_type_for(prism_node)
           when Prism::RegularExpressionNode, Prism::InterpolatedRegularExpressionNode
             Types::ClassInstance.new("Regexp")
           when Prism::ImaginaryNode
@@ -376,9 +376,9 @@ module TypeGuessr
           end
         end
 
-        def infer_range_element_type(range_node)
-          left_type = range_node.left ? infer_literal_type(range_node.left) : nil
-          right_type = range_node.right ? infer_literal_type(range_node.right) : nil
+        def range_element_type_for(range_node)
+          left_type = range_node.left ? literal_type_for(range_node.left) : nil
+          right_type = range_node.right ? literal_type_for(range_node.right) : nil
 
           types = [left_type, right_type].compact
 
@@ -1603,11 +1603,11 @@ module TypeGuessr
           )
         end
 
-        def infer_array_element_type(array_node)
+        def array_element_type_for(array_node)
           return Types::ArrayType.new if array_node.elements.empty?
 
           element_types = array_node.elements.filter_map do |elem|
-            infer_literal_type(elem) unless elem.nil?
+            literal_type_for(elem) unless elem.nil?
           end
 
           return Types::ArrayType.new if element_types.empty?
@@ -1624,7 +1624,7 @@ module TypeGuessr
           Types::ArrayType.new(element_type)
         end
 
-        def infer_hash_element_types(hash_node)
+        def hash_element_types_for(hash_node)
           return Types::HashType.new if hash_node.elements.empty?
 
           # Check if all keys are symbols for HashShape
@@ -1639,7 +1639,7 @@ module TypeGuessr
               next unless elem.is_a?(Prism::AssocNode) && elem.key.is_a?(Prism::SymbolNode)
 
               field_name = elem.key.value.to_sym
-              field_type = infer_literal_type(elem.value)
+              field_type = literal_type_for(elem.value)
               fields[field_name] = field_type
             end
             Types::HashShape.new(fields)
@@ -1651,8 +1651,8 @@ module TypeGuessr
             hash_node.elements.each do |elem|
               case elem
               when Prism::AssocNode
-                key_types << infer_literal_type(elem.key) if elem.key
-                value_types << infer_literal_type(elem.value) if elem.value
+                key_types << literal_type_for(elem.key) if elem.key
+                value_types << literal_type_for(elem.value) if elem.value
               end
             end
 
