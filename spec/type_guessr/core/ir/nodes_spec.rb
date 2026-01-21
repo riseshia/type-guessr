@@ -468,6 +468,51 @@ RSpec.describe TypeGuessr::Core::IR do
     end
   end
 
+  describe "CalledMethod" do
+    it "stores method name and signature information" do
+      cm = described_class::CalledMethod.new(name: :foo, positional_count: 2, keywords: %i[bar baz])
+      expect(cm.name).to eq(:foo)
+      expect(cm.positional_count).to eq(2)
+      expect(cm.keywords).to eq(%i[bar baz])
+    end
+
+    it "converts to string via to_s" do
+      cm = described_class::CalledMethod.new(name: :foo, positional_count: 1, keywords: [])
+      expect(cm.to_s).to eq("foo")
+    end
+
+    it "handles nil positional_count for splat arguments" do
+      cm = described_class::CalledMethod.new(name: :foo, positional_count: nil, keywords: [])
+      expect(cm.positional_count).to be_nil
+    end
+
+    describe "equality" do
+      it "equals CalledMethod with same name and signature" do
+        cm1 = described_class::CalledMethod.new(name: :foo, positional_count: 1, keywords: [:a])
+        cm2 = described_class::CalledMethod.new(name: :foo, positional_count: 1, keywords: [:a])
+        expect(cm1).to eq(cm2)
+      end
+
+      it "differs when name differs" do
+        cm1 = described_class::CalledMethod.new(name: :foo, positional_count: 1, keywords: [])
+        cm2 = described_class::CalledMethod.new(name: :bar, positional_count: 1, keywords: [])
+        expect(cm1).not_to eq(cm2)
+      end
+
+      it "differs when positional_count differs" do
+        cm1 = described_class::CalledMethod.new(name: :foo, positional_count: 1, keywords: [])
+        cm2 = described_class::CalledMethod.new(name: :foo, positional_count: 2, keywords: [])
+        expect(cm1).not_to eq(cm2)
+      end
+
+      it "differs when keywords differ" do
+        cm1 = described_class::CalledMethod.new(name: :foo, positional_count: 1, keywords: [:a])
+        cm2 = described_class::CalledMethod.new(name: :foo, positional_count: 1, keywords: [:b])
+        expect(cm1).not_to eq(cm2)
+      end
+    end
+  end
+
   describe "DefNode" do
     it "stores method definition information" do
       param = described_class::ParamNode.new(

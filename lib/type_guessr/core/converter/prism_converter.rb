@@ -682,7 +682,9 @@ module TypeGuessr
           has_block = !prism_node.block.nil?
 
           # Track method call on receiver for method-based type inference
-          receiver_node.called_methods << prism_node.name if variable_node?(receiver_node) && !receiver_node.called_methods.include?(prism_node.name)
+          if variable_node?(receiver_node) && receiver_node.called_methods.none? { |cm| cm.name == prism_node.name }
+            receiver_node.called_methods << build_called_method(prism_node)
+          end
 
           # Handle container mutating methods (Hash#[]=, Array#[]=, Array#<<)
           receiver_node = handle_container_mutation(prism_node, receiver_node, args, context) if container_mutating_method?(prism_node.name, receiver_node)
@@ -724,6 +726,49 @@ module TypeGuessr
             node.is_a?(IR::ClassVariableWriteNode) ||
             node.is_a?(IR::ClassVariableReadNode) ||
             node.is_a?(IR::ParamNode)
+        end
+
+        # Build CalledMethod with signature information from Prism CallNode
+        def build_called_method(prism_node)
+          positional_count, has_splat, keywords = extract_call_signature(prism_node)
+
+          IR::CalledMethod.new(
+            name: prism_node.name,
+            positional_count: has_splat ? nil : positional_count,
+            keywords: keywords
+          )
+        end
+
+        # Extract positional count, splat presence, and keywords from call arguments
+        # @return [Array(Integer, Boolean, Array<Symbol>)] [positional_count, has_splat, keywords]
+        def extract_call_signature(prism_node)
+          arguments = prism_node.arguments&.arguments || []
+          positional_count = 0
+          has_splat = false
+          keywords = []
+
+          arguments.each do |arg|
+            case arg
+            when Prism::SplatNode
+              has_splat = true
+            when Prism::KeywordHashNode
+              extract_keywords_from_hash(arg, keywords)
+            else
+              positional_count += 1
+            end
+          end
+
+          [positional_count, has_splat, keywords]
+        end
+
+        # Extract keyword argument names from KeywordHashNode
+        def extract_keywords_from_hash(hash_node, keywords)
+          hash_node.elements.each do |element|
+            next unless element.is_a?(Prism::AssocNode)
+
+            key = element.key
+            keywords << key.value.to_sym if key.is_a?(Prism::SymbolNode)
+          end
         end
 
         # Check if node is a local variable node (for indexed assignment)

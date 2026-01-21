@@ -271,7 +271,7 @@ RSpec.describe TypeGuessr::Core::Converter::PrismConverter do
 
       # The InstanceVariableWriteNode should share called_methods with the ParamNode
       # When @adapter.call_method is called, :call_method should be in param's called_methods
-      expect(param_node.called_methods).to include(:call_method)
+      expect(param_node.called_methods.map(&:name)).to include(:call_method)
     end
   end
 
@@ -294,7 +294,196 @@ RSpec.describe TypeGuessr::Core::Converter::PrismConverter do
       param_node = setup_method.params.first
 
       # The ClassVariableWriteNode should share called_methods with the ParamNode
-      expect(param_node.called_methods).to include(:call_method)
+      expect(param_node.called_methods.map(&:name)).to include(:call_method)
+    end
+  end
+
+  describe "CalledMethod signature extraction" do
+    let(:called_method_class) { TypeGuessr::Core::IR::CalledMethod }
+
+    # Helper to extract CalledMethod from a method definition
+    def extract_called_method(source, param_index: 0, method_index: 0)
+      parsed = Prism.parse(source)
+      context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+      node = converter.convert(parsed.value.statements.body.first, context)
+      param = node.params[param_index]
+      param.called_methods[method_index]
+    end
+
+    describe "no arguments" do
+      it "extracts name, positional_count=0, keywords=[]" do
+        source = <<~RUBY
+          def process(obj)
+            obj.no_args_method
+          end
+        RUBY
+        cm = extract_called_method(source)
+
+        expect(cm).to be_a(called_method_class)
+        expect(cm.name).to eq(:no_args_method)
+        expect(cm.positional_count).to eq(0)
+        expect(cm.keywords).to eq([])
+      end
+    end
+
+    describe "positional arguments only" do
+      it "extracts name, positional_count=3, keywords=[]" do
+        source = <<~RUBY
+          def process(obj)
+            obj.method_with_args("a", "b", "c")
+          end
+        RUBY
+        cm = extract_called_method(source)
+
+        expect(cm).to be_a(called_method_class)
+        expect(cm.name).to eq(:method_with_args)
+        expect(cm.positional_count).to eq(3)
+        expect(cm.keywords).to eq([])
+      end
+    end
+
+    describe "keyword arguments only" do
+      it "extracts name, positional_count=0, keywords=[:foo, :bar]" do
+        source = <<~RUBY
+          def process(obj)
+            obj.method_with_kwargs(foo: 1, bar: 2)
+          end
+        RUBY
+        cm = extract_called_method(source)
+
+        expect(cm).to be_a(called_method_class)
+        expect(cm.name).to eq(:method_with_kwargs)
+        expect(cm.positional_count).to eq(0)
+        expect(cm.keywords).to contain_exactly(:foo, :bar)
+      end
+    end
+
+    describe "mixed positional and keyword arguments" do
+      it "extracts name, positional_count=2, keywords=[:key1, :key2]" do
+        source = <<~RUBY
+          def process(obj)
+            obj.mixed_method("a", "b", key1: 1, key2: 2)
+          end
+        RUBY
+        cm = extract_called_method(source)
+
+        expect(cm).to be_a(called_method_class)
+        expect(cm.name).to eq(:mixed_method)
+        expect(cm.positional_count).to eq(2)
+        expect(cm.keywords).to contain_exactly(:key1, :key2)
+      end
+    end
+
+    describe "splat argument (*args)" do
+      it "sets positional_count=nil when only splat" do
+        source = <<~RUBY
+          def process(obj, args)
+            obj.splatted_method(*args)
+          end
+        RUBY
+        cm = extract_called_method(source)
+
+        expect(cm).to be_a(called_method_class)
+        expect(cm.name).to eq(:splatted_method)
+        expect(cm.positional_count).to be_nil
+        expect(cm.keywords).to eq([])
+      end
+
+      it "sets positional_count=nil when positional + splat" do
+        source = <<~RUBY
+          def process(obj, args)
+            obj.method_with_splat("prefix", *args)
+          end
+        RUBY
+        cm = extract_called_method(source)
+
+        expect(cm).to be_a(called_method_class)
+        expect(cm.name).to eq(:method_with_splat)
+        expect(cm.positional_count).to be_nil
+        expect(cm.keywords).to eq([])
+      end
+
+      it "sets positional_count=nil when splat + keywords" do
+        source = <<~RUBY
+          def process(obj, args)
+            obj.splat_with_kwargs(*args, key: "value")
+          end
+        RUBY
+        cm = extract_called_method(source)
+
+        expect(cm).to be_a(called_method_class)
+        expect(cm.name).to eq(:splat_with_kwargs)
+        expect(cm.positional_count).to be_nil
+        expect(cm.keywords).to eq([:key])
+      end
+
+      it "sets positional_count=nil when positional + splat + keywords" do
+        source = <<~RUBY
+          def process(obj, args)
+            obj.complex("a", *args, key: 1, other: 2)
+          end
+        RUBY
+        cm = extract_called_method(source)
+
+        expect(cm).to be_a(called_method_class)
+        expect(cm.name).to eq(:complex)
+        expect(cm.positional_count).to be_nil
+        expect(cm.keywords).to contain_exactly(:key, :other)
+      end
+    end
+
+    describe "double splat (**kwargs)" do
+      it "extracts positional_count=0, keywords=[] when only double splat" do
+        source = <<~RUBY
+          def process(obj, opts)
+            obj.double_splatted(**opts)
+          end
+        RUBY
+        cm = extract_called_method(source)
+
+        expect(cm).to be_a(called_method_class)
+        expect(cm.name).to eq(:double_splatted)
+        expect(cm.positional_count).to eq(0)
+        expect(cm.keywords).to eq([])
+      end
+
+      it "extracts positional_count=2, keywords=[:explicit] when positional + explicit keyword + double splat" do
+        source = <<~RUBY
+          def process(obj, opts)
+            obj.mixed("a", "b", explicit: 1, **opts)
+          end
+        RUBY
+        cm = extract_called_method(source)
+
+        expect(cm).to be_a(called_method_class)
+        expect(cm.name).to eq(:mixed)
+        expect(cm.positional_count).to eq(2)
+        expect(cm.keywords).to eq([:explicit])
+      end
+    end
+
+    describe "duplicate method calls" do
+      it "keeps first occurrence signature (positional_count=1)" do
+        source = <<~RUBY
+          def process(obj)
+            obj.same_method(1)
+            obj.same_method(2, 3)
+          end
+        RUBY
+        parsed = Prism.parse(source)
+        context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+        node = converter.convert(parsed.value.statements.body.first, context)
+        param = node.params.first
+
+        same_method_entries = param.called_methods.select { |cm| cm.name == :same_method }
+        expect(same_method_entries.size).to eq(1)
+
+        cm = same_method_entries.first
+        expect(cm).to be_a(called_method_class)
+        expect(cm.name).to eq(:same_method)
+        expect(cm.positional_count).to eq(1)
+        expect(cm.keywords).to eq([])
+      end
     end
   end
 
@@ -344,7 +533,7 @@ RSpec.describe TypeGuessr::Core::Converter::PrismConverter do
 
       # Check that user variable has called_methods tracked
       user_var = context.lookup_variable(:user)
-      expect(user_var.called_methods).to contain_exactly(:profile, :name)
+      expect(user_var.called_methods.map(&:name)).to contain_exactly(:profile, :name)
     end
 
     it "converts method call with arguments" do
@@ -464,7 +653,7 @@ RSpec.describe TypeGuessr::Core::Converter::PrismConverter do
 
       expect(node).to be_a(TypeGuessr::Core::IR::DefNode)
       param = node.params.first
-      expect(param.called_methods).to contain_exactly(:comments, :title)
+      expect(param.called_methods.map(&:name)).to contain_exactly(:comments, :title)
     end
 
     describe "destructuring parameters" do

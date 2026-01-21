@@ -390,7 +390,9 @@ module TypeGuessr
                                   (receiver_type.is_a?(Types::Union) &&
                                    receiver_type.types.all? { |t| t.is_a?(Types::Unknown) })
             if receiver_is_unknown
-              inferred_receiver = resolve_called_methods([node.method])
+              # Create CalledMethod with nil positional_count to skip signature matching
+              cm = IR::CalledMethod.new(name: node.method, positional_count: nil, keywords: [])
+              inferred_receiver = resolve_called_methods([cm])
               if inferred_receiver.is_a?(Types::ClassInstance)
                 # Try project methods with inferred receiver type
                 def_node = @method_registry.lookup(inferred_receiver.name, node.method.to_s)
@@ -593,36 +595,33 @@ module TypeGuessr
 
         # Resolve called methods to a type
         # First tries external resolver (RubyIndexer), then project methods
-        # @param called_methods [Array<Symbol>] Methods called on the parameter
-        # @return [Type, nil] Resolved type or nil
         def resolve_called_methods(called_methods)
           return nil if called_methods.empty?
 
-          # First try external resolver (RubyIndexer)
           if @method_list_resolver
             resolved = @method_list_resolver.call(called_methods)
             return resolved if resolved && !resolved.is_a?(Types::Unknown)
           end
 
-          # Then try project methods
-          resolve_called_methods_from_project(called_methods.map(&:to_s))
+          resolve_called_methods_from_project(called_methods)
         end
 
         # Resolve called methods from project method registry
         # Returns ClassInstance if exactly one class matches, Union if 2-3 match, nil otherwise
-        # @param methods [Array<String>] Method names
-        # @return [Type, nil] Resolved type or nil
-        def resolve_called_methods_from_project(methods)
-          return nil if methods.empty?
+        def resolve_called_methods_from_project(called_methods)
+          return nil if called_methods.empty?
 
-          # Find classes that define all the methods (including inherited ones)
+          method_names = called_methods.to_set { |cm| cm.name.to_s }
+
           matching_classes = @method_registry.registered_classes.select do |class_name|
-            @method_registry.all_methods_for_class(class_name).superset?(methods.to_set)
+            @method_registry.all_methods_for_class(class_name).superset?(method_names)
           end
 
-          # Filter out subclasses when parent is also matched (prefer most general type)
-          matching_classes = filter_to_most_general_types(matching_classes)
+          matching_classes = matching_classes.select do |class_name|
+            called_methods.all? { |cm| signature_matches?(class_name, cm) }
+          end
 
+          matching_classes = filter_to_most_general_types(matching_classes)
           classes_to_type(matching_classes)
         end
 
@@ -657,6 +656,27 @@ module TypeGuessr
           substitutions = receiver_type.type_variable_substitutions.dup
           substitutions[:self] = receiver_type
           substitutions
+        end
+
+        # Check if a method call signature matches the RBS definition for a class
+        # Returns true (conservative) when: splat used, no signature provider, or no RBS definition
+        def signature_matches?(class_name, called_method)
+          return true if called_method.positional_count.nil?
+          return true unless @signature_provider.respond_to?(:get_method_signatures)
+
+          signatures = @signature_provider.get_method_signatures(class_name, called_method.name.to_s)
+          return true if signatures.empty?
+
+          signatures.any? { |sig| overload_accepts?(sig.method_type, called_method.positional_count) }
+        end
+
+        # Check if an RBS overload can accept the given positional argument count
+        def overload_accepts?(method_type, positional_count)
+          func = method_type.type
+          min = func.required_positionals.size
+          max = func.rest_positionals ? Float::INFINITY : min + func.optional_positionals.size
+
+          positional_count.between?(min, max)
         end
       end
     end

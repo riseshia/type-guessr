@@ -8,6 +8,17 @@ module TypeGuessr
       # @param col_range [Range] Column range
       Loc = Data.define(:line, :col_range)
 
+      # Method call signature for duck typing inference
+      # @param name [Symbol] Method name
+      # @param positional_count [Integer, nil] Number of positional arguments (nil if splat used)
+      # @param keywords [Array<Symbol>] Keyword argument names
+      CalledMethod = Data.define(:name, :positional_count, :keywords) do
+        # String representation returns method name for logging/display
+        def to_s
+          name.to_s
+        end
+      end
+
       # Pretty print helper for IR nodes (Prism-style tree output)
       module TreeInspect
         BRANCH = "├── "
