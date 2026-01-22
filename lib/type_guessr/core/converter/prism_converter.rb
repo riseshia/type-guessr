@@ -237,6 +237,12 @@ module TypeGuessr
           when Prism::RescueNode
             # Rescue clause - convert body statements
             convert_statements_body(prism_node.statements&.body, context)
+
+          when Prism::OrNode
+            convert_or_node(prism_node, context)
+
+          when Prism::AndNode
+            convert_and_node(prism_node, context)
           end
         end
 
@@ -1140,6 +1146,38 @@ module TypeGuessr
           body_nodes = extract_begin_body_nodes(prism_node, context)
           # Return the last node (represents the value of the begin block)
           body_nodes.last
+        end
+
+        # Convert || (or) operator to MergeNode
+        # a || b → result is either a or b (short-circuit evaluation)
+        def convert_or_node(prism_node, context)
+          left_node = convert(prism_node.left, context)
+          right_node = convert(prism_node.right, context)
+
+          branches = [left_node, right_node].compact
+          return nil if branches.empty?
+          return branches.first if branches.size == 1
+
+          IR::MergeNode.new(
+            branches: branches,
+            loc: convert_loc(prism_node.location)
+          )
+        end
+
+        # Convert && (and) operator to MergeNode
+        # a && b → result is either a or b (short-circuit evaluation)
+        def convert_and_node(prism_node, context)
+          left_node = convert(prism_node.left, context)
+          right_node = convert(prism_node.right, context)
+
+          branches = [left_node, right_node].compact
+          return nil if branches.empty?
+          return branches.first if branches.size == 1
+
+          IR::MergeNode.new(
+            branches: branches,
+            loc: convert_loc(prism_node.location)
+          )
         end
 
         # Extract all body nodes from a BeginNode (for DefNode bodies with rescue/ensure)

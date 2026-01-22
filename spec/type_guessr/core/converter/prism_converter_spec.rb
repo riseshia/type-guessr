@@ -1922,80 +1922,80 @@ RSpec.describe TypeGuessr::Core::Converter::PrismConverter do
     end
   end
 
+  describe "OrNode (|| operator)" do
+    it "converts || to MergeNode with both branches" do
+      source = "a || b"
+      parsed = Prism.parse(source)
+      context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+      node = converter.convert(parsed.value.statements.body.first, context)
+
+      expect(node).to be_a(TypeGuessr::Core::IR::MergeNode)
+      expect(node.branches.size).to eq(2)
+    end
+
+    it "converts method with || chain to have proper return_node" do
+      source = <<~RUBY
+        class Foo
+          def lookup(name)
+            @cache[name] || @fallback[name]
+          end
+        end
+      RUBY
+      parsed = Prism.parse(source)
+      context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+      class_node = converter.convert(parsed.value.statements.body.first, context)
+
+      lookup_method = class_node.methods.first
+      expect(lookup_method.return_node).to be_a(TypeGuessr::Core::IR::MergeNode)
+    end
+
+    it "converts predicate method with || chain" do
+      source = <<~RUBY
+        class Foo
+          def valid?(node)
+            node.is_a?(String) || node.is_a?(Symbol)
+          end
+        end
+      RUBY
+      parsed = Prism.parse(source)
+      context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+      class_node = converter.convert(parsed.value.statements.body.first, context)
+
+      valid_method = class_node.methods.first
+      expect(valid_method.return_node).to be_a(TypeGuessr::Core::IR::MergeNode)
+    end
+  end
+
+  describe "AndNode (&& operator)" do
+    it "converts && to MergeNode with both branches" do
+      source = "a && b"
+      parsed = Prism.parse(source)
+      context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+      node = converter.convert(parsed.value.statements.body.first, context)
+
+      expect(node).to be_a(TypeGuessr::Core::IR::MergeNode)
+      expect(node.branches.size).to eq(2)
+    end
+
+    it "converts method with && chain to have proper return_node" do
+      source = <<~RUBY
+        class Foo
+          def eql?(other)
+            self.class == other.class && @value == other.value
+          end
+        end
+      RUBY
+      parsed = Prism.parse(source)
+      context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+      class_node = converter.convert(parsed.value.statements.body.first, context)
+
+      eql_method = class_node.methods.first
+      expect(eql_method.return_node).to be_a(TypeGuessr::Core::IR::MergeNode)
+    end
+  end
+
   describe "unhandled node types" do
     before { pending "Not yet implemented - these node types need PrismConverter support" }
-
-    describe "OrNode (|| operator)" do
-      it "converts || to MergeNode with both branches" do
-        source = "a || b"
-        parsed = Prism.parse(source)
-        context = TypeGuessr::Core::Converter::PrismConverter::Context.new
-        node = converter.convert(parsed.value.statements.body.first, context)
-
-        expect(node).to be_a(TypeGuessr::Core::IR::MergeNode)
-        expect(node.branches.size).to eq(2)
-      end
-
-      it "converts method with || chain to have proper return_node" do
-        source = <<~RUBY
-          class Foo
-            def lookup(name)
-              @cache[name] || @fallback[name]
-            end
-          end
-        RUBY
-        parsed = Prism.parse(source)
-        context = TypeGuessr::Core::Converter::PrismConverter::Context.new
-        class_node = converter.convert(parsed.value.statements.body.first, context)
-
-        lookup_method = class_node.methods.first
-        expect(lookup_method.return_node).to be_a(TypeGuessr::Core::IR::MergeNode)
-      end
-
-      it "converts predicate method with || chain" do
-        source = <<~RUBY
-          class Foo
-            def valid?(node)
-              node.is_a?(String) || node.is_a?(Symbol)
-            end
-          end
-        RUBY
-        parsed = Prism.parse(source)
-        context = TypeGuessr::Core::Converter::PrismConverter::Context.new
-        class_node = converter.convert(parsed.value.statements.body.first, context)
-
-        valid_method = class_node.methods.first
-        expect(valid_method.return_node).to be_a(TypeGuessr::Core::IR::MergeNode)
-      end
-    end
-
-    describe "AndNode (&& operator)" do
-      it "converts && to MergeNode with both branches" do
-        source = "a && b"
-        parsed = Prism.parse(source)
-        context = TypeGuessr::Core::Converter::PrismConverter::Context.new
-        node = converter.convert(parsed.value.statements.body.first, context)
-
-        expect(node).to be_a(TypeGuessr::Core::IR::MergeNode)
-        expect(node.branches.size).to eq(2)
-      end
-
-      it "converts method with && chain to have proper return_node" do
-        source = <<~RUBY
-          class Foo
-            def eql?(other)
-              self.class == other.class && @value == other.value
-            end
-          end
-        RUBY
-        parsed = Prism.parse(source)
-        context = TypeGuessr::Core::Converter::PrismConverter::Context.new
-        class_node = converter.convert(parsed.value.statements.body.first, context)
-
-        eql_method = class_node.methods.first
-        expect(eql_method.return_node).to be_a(TypeGuessr::Core::IR::MergeNode)
-      end
-    end
 
     describe "SuperNode and ForwardingSuperNode" do
       it "converts super with arguments to CallNode" do
