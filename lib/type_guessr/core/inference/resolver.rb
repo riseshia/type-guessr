@@ -13,18 +13,6 @@ module TypeGuessr
       # Resolves types by traversing the IR dependency graph
       # Each node points to nodes it depends on (reverse dependency graph)
       class Resolver
-        # Callback for resolving method lists to class instances
-        # @return [Proc, nil] A proc that takes Array<Symbol> and returns resolved type or nil
-        attr_accessor :method_list_resolver
-
-        # Callback for checking if a constant is a class or module
-        # @return [Proc, nil] A proc that takes constant_name and returns :class, :module, or nil
-        attr_accessor :constant_kind_provider
-
-        # Callback for looking up class methods via RubyIndexer
-        # @return [Proc, nil] A proc that takes (class_name, method_name) and returns owner_name or nil
-        attr_accessor :class_method_lookup_provider
-
         # Type simplifier for normalizing union types
         # @return [TypeSimplifier, nil]
         attr_accessor :type_simplifier
@@ -48,9 +36,6 @@ module TypeGuessr
           @method_registry = method_registry || Registry::MethodRegistry.new
           @variable_registry = variable_registry || Registry::VariableRegistry.new
           @cache = {}.compare_by_identity
-          @method_list_resolver = nil
-          @constant_kind_provider = nil
-          @class_method_lookup_provider = nil
           @type_simplifier = nil
         end
 
@@ -255,12 +240,8 @@ module TypeGuessr
             return Result.new(dep_result.type, "constant #{node.name}: #{dep_result.reason}", dep_result.source)
           end
 
-          # Check if constant is a class or module using code_index adapter or callback
-          kind = if @code_index
-                   @code_index.constant_kind(node.name)
-                 elsif @constant_kind_provider
-                   @constant_kind_provider.call(node.name)
-                 end
+          # Check if constant is a class or module using code_index adapter
+          kind = @code_index&.constant_kind(node.name)
 
           if %i[class module].include?(kind)
             return Result.new(
@@ -539,12 +520,8 @@ module TypeGuessr
           end
 
           # Try project class methods first (includes extended module methods)
-          # Use code_index adapter or callback to find method owner
-          owner_name = if @code_index
-                         @code_index.class_method_owner(class_name, node.method.to_s)
-                       elsif @class_method_lookup_provider
-                         @class_method_lookup_provider.call(class_name, node.method.to_s)
-                       end
+          # Use code_index adapter to find method owner
+          owner_name = @code_index&.class_method_owner(class_name, node.method.to_s)
 
           if owner_name
             def_node = @method_registry.lookup(owner_name, node.method.to_s)
@@ -598,22 +575,14 @@ module TypeGuessr
           end
         end
 
-        # Resolve called methods to a type via code_index adapter or callback (RubyIndexer)
+        # Resolve called methods to a type via code_index adapter
         def resolve_called_methods(called_methods)
           return nil if called_methods.empty?
+          return nil unless @code_index
 
-          # Prefer code_index adapter over callback
-          if @code_index
-            method_names = called_methods.map(&:name)
-            classes = @code_index.find_classes_defining_methods(method_names)
-            return classes_to_type(classes)
-          end
-
-          # Fallback to callback for backward compatibility
-          return nil unless @method_list_resolver
-
-          resolved = @method_list_resolver.call(called_methods)
-          resolved unless resolved.is_a?(Types::Unknown)
+          method_names = called_methods.map(&:name)
+          classes = @code_index.find_classes_defining_methods(method_names)
+          classes_to_type(classes)
         end
 
         # Filter out classes whose ancestor is also in the list

@@ -191,7 +191,9 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
       end
 
       it "infers singleton type for class constant" do
-        resolver.constant_kind_provider = ->(name) { name == "User" ? :class : nil }
+        code_index = double
+        allow(code_index).to receive(:constant_kind).with("User").and_return(:class)
+        resolver_with_index = described_class.new(rbs_provider, code_index: code_index)
 
         const = TypeGuessr::Core::IR::ConstantNode.new(
           name: "User",
@@ -199,7 +201,7 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
           loc: loc
         )
 
-        result = resolver.infer(const)
+        result = resolver_with_index.infer(const)
         expect(result.type).to be_a(TypeGuessr::Core::Types::SingletonType)
         expect(result.type.name).to eq("User")
         expect(result.reason).to eq("class constant User")
@@ -207,7 +209,9 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
       end
 
       it "infers singleton type for module constant" do
-        resolver.constant_kind_provider = ->(name) { name == "MyModule" ? :module : nil }
+        code_index = double
+        allow(code_index).to receive(:constant_kind).with("MyModule").and_return(:module)
+        resolver_with_index = described_class.new(rbs_provider, code_index: code_index)
 
         const = TypeGuessr::Core::IR::ConstantNode.new(
           name: "MyModule",
@@ -215,15 +219,17 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
           loc: loc
         )
 
-        result = resolver.infer(const)
+        result = resolver_with_index.infer(const)
         expect(result.type).to be_a(TypeGuessr::Core::Types::SingletonType)
         expect(result.type.name).to eq("MyModule")
         expect(result.reason).to eq("class constant MyModule")
         expect(result.source).to eq(:inference)
       end
 
-      it "returns Unknown for non-class constant when provider returns nil" do
-        resolver.constant_kind_provider = ->(_name) {}
+      it "returns Unknown for non-class constant when code_index returns nil" do
+        code_index = double
+        allow(code_index).to receive(:constant_kind).with("MAX_SIZE").and_return(nil)
+        resolver_with_index = described_class.new(rbs_provider, code_index: code_index)
 
         const = TypeGuessr::Core::IR::ConstantNode.new(
           name: "MAX_SIZE",
@@ -231,20 +237,7 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
           loc: loc
         )
 
-        result = resolver.infer(const)
-        expect(result.type).to be(TypeGuessr::Core::Types::Unknown.instance)
-        expect(result.reason).to eq("undefined constant")
-        expect(result.source).to eq(:unknown)
-      end
-
-      it "returns Unknown when constant_kind_provider is not set" do
-        const = TypeGuessr::Core::IR::ConstantNode.new(
-          name: "SomeConstant",
-          dependency: nil,
-          loc: loc
-        )
-
-        result = resolver.infer(const)
+        result = resolver_with_index.infer(const)
         expect(result.type).to be(TypeGuessr::Core::Types::Unknown.instance)
         expect(result.reason).to eq("undefined constant")
         expect(result.source).to eq(:unknown)
@@ -468,11 +461,10 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
       end
 
       it "infers receiver type from method uniqueness when receiver is Unknown" do
-        # Set up method_list_resolver to simulate RubyIndexer resolving :depot to Store
-        resolver.method_list_resolver = lambda do |called_methods|
-          method_names = called_methods.map(&:name)
-          TypeGuessr::Core::Types::ClassInstance.new("Store") if method_names.include?(:depot)
-        end
+        # Set up code_index to simulate RubyIndexer resolving :depot to Store
+        code_index = double
+        allow(code_index).to receive(:find_classes_defining_methods).with([:depot]).and_return(["Store"])
+        resolver_with_index = described_class.new(rbs_provider, code_index: code_index)
 
         # Register Store#depot that returns an Integer
         depot_return = TypeGuessr::Core::IR::LiteralNode.new(
@@ -487,7 +479,7 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
           return_node: depot_return,
           body_nodes: [depot_return]
         )
-        resolver.method_registry.register("Store", "depot", depot_def)
+        resolver_with_index.method_registry.register("Store", "depot", depot_def)
 
         # Create Unknown type receiver
         unknown_receiver = TypeGuessr::Core::IR::LiteralNode.new(
@@ -508,7 +500,7 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
           loc: loc
         )
 
-        result = resolver.infer(call)
+        result = resolver_with_index.infer(call)
         expect(result.type).to be_a(TypeGuessr::Core::Types::ClassInstance)
         expect(result.type.name).to eq("Integer")
         expect(result.reason).to include("inferred receiver")

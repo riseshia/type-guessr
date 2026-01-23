@@ -73,17 +73,13 @@ RSpec.describe TypeGuessr::Core::TypeSimplifier do
     context "with code_index" do
       # Mock code_index: Dog < Animal, Cat < Animal
       let(:code_index) do
-        Class.new do
-          def ancestors_of(class_name)
-            case class_name
-            when "Dog" then %w[Dog Animal Object]
-            when "Cat" then %w[Cat Animal Object]
-            when "Animal" then %w[Animal Object]
-            when "Object" then ["Object"]
-            else []
-            end
-          end
-        end.new
+        double.tap do |idx|
+          allow(idx).to receive(:ancestors_of).and_return([])
+          allow(idx).to receive(:ancestors_of).with("Dog").and_return(%w[Dog Animal Object])
+          allow(idx).to receive(:ancestors_of).with("Cat").and_return(%w[Cat Animal Object])
+          allow(idx).to receive(:ancestors_of).with("Animal").and_return(%w[Animal Object])
+          allow(idx).to receive(:ancestors_of).with("Object").and_return(["Object"])
+        end
       end
 
       let(:simplifier) { described_class.new(code_index: code_index) }

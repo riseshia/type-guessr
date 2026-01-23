@@ -51,16 +51,12 @@ RSpec.describe TypeGuessr::Core::Registry::MethodRegistry do
 
     context "with code_index" do
       let(:code_index) do
-        Class.new do
-          def ancestors_of(class_name)
-            case class_name
-            when "Child" then %w[Child Parent GrandParent]
-            when "Parent" then %w[Parent GrandParent]
-            when "GrandParent" then ["GrandParent"]
-            else []
-            end
-          end
-        end.new
+        double.tap do |idx|
+          allow(idx).to receive(:ancestors_of).and_return([])
+          allow(idx).to receive(:ancestors_of).with("Child").and_return(%w[Child Parent GrandParent])
+          allow(idx).to receive(:ancestors_of).with("Parent").and_return(%w[Parent GrandParent])
+          allow(idx).to receive(:ancestors_of).with("GrandParent").and_return(["GrandParent"])
+        end
       end
 
       let(:registry) { described_class.new(code_index: code_index) }
@@ -170,11 +166,10 @@ RSpec.describe TypeGuessr::Core::Registry::MethodRegistry do
       expect(registry.lookup("Child", "parent_method")).to be_nil
 
       # Set code_index
-      registry.code_index = Class.new do
-        def ancestors_of(name)
-          name == "Child" ? %w[Child Parent] : [name]
-        end
-      end.new
+      code_index = double
+      allow(code_index).to receive(:ancestors_of).and_return([])
+      allow(code_index).to receive(:ancestors_of).with("Child").and_return(%w[Child Parent])
+      registry.code_index = code_index
 
       # Now can find via inheritance
       expect(registry.lookup("Child", "parent_method")).to eq(parent_method)
