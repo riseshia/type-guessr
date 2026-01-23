@@ -9,6 +9,7 @@ require_relative "../../type_guessr/core/inference/resolver"
 require_relative "../../type_guessr/core/signature_provider"
 require_relative "../../type_guessr/core/rbs_provider"
 require_relative "../../type_guessr/core/type_simplifier"
+require_relative "code_index_adapter"
 require_relative "type_inferrer"
 
 module RubyLsp
@@ -28,8 +29,11 @@ module RubyLsp
         @mutex = Mutex.new
         @original_type_inferrer = nil
 
-        # Create shared ancestry provider
-        ancestry_provider = ->(class_name) { get_class_ancestors(class_name) }
+        # Create CodeIndexAdapter wrapping RubyIndexer
+        @code_index = CodeIndexAdapter.new(global_state&.index)
+
+        # Create shared ancestry provider (for registries and type simplifier)
+        ancestry_provider = ->(class_name) { @code_index.ancestors_of(class_name) }
 
         # Create method registry with ancestry provider
         @method_registry = ::TypeGuessr::Core::Registry::MethodRegistry.new(
@@ -41,26 +45,13 @@ module RubyLsp
           ancestry_provider: ancestry_provider
         )
 
-        # Create resolver with injected registries
+        # Create resolver with code_index adapter and registries
         @resolver = ::TypeGuessr::Core::Inference::Resolver.new(
           @signature_provider,
+          code_index: @code_index,
           method_registry: @method_registry,
           variable_registry: @variable_registry
         )
-
-        # Set up method list resolver callback
-        @resolver.method_list_resolver = ->(methods) { resolve_methods_to_class(methods) }
-
-        # Set up ancestry provider callback
-        @resolver.ancestry_provider = ancestry_provider
-
-        # Set up constant kind provider callback
-        @resolver.constant_kind_provider = ->(name) { get_constant_kind(name) }
-
-        # Set up class method lookup provider callback
-        @resolver.class_method_lookup_provider = lambda do |class_name, method_name|
-          lookup_class_method_owner(class_name, method_name)
-        end
 
         # Set up type simplifier with ancestry provider
         @resolver.type_simplifier = ::TypeGuessr::Core::TypeSimplifier.new(
@@ -183,37 +174,6 @@ module RubyLsp
         @mutex.synchronize do
           @method_registry.lookup(class_name, method_name)
         end
-      end
-
-      # Resolve method list to a type (for use during inference)
-      # @param methods [Array<Symbol>] Method names called on the parameter
-      # @return [Type, nil] Resolved type or nil if not resolvable
-      def resolve_methods_to_class(methods)
-        matching_classes = find_classes_defining_methods(methods)
-        @resolver.classes_to_type(matching_classes)
-      end
-
-      # Find classes that define all given methods
-      def find_classes_defining_methods(methods)
-        return [] if methods.empty?
-
-        index = @global_state.index
-        return [] unless index
-
-        # For each method, find classes that define it using fuzzy_search
-        method_sets = methods.map do |method_name|
-          entries = index.fuzzy_search(method_name.to_s) do |entry|
-            entry.is_a?(RubyIndexer::Entry::Method) && entry.name == method_name.to_s
-          end
-          entries.filter_map do |entry|
-            entry.owner.name if entry.respond_to?(:owner) && entry.owner
-          end.uniq
-        end
-
-        return [] if method_sets.empty? || method_sets.any?(&:empty?)
-
-        # Find intersection - classes that define ALL methods
-        method_sets.reduce(:&) || []
       end
 
       # Start background indexing of all project files
@@ -437,53 +397,6 @@ module RubyLsp
 
         parent_name = scope.split("::").last || "Object"
         scope.empty? ? "<Class:Object>" : "#{scope}::<Class:#{parent_name}>"
-      end
-
-      # Get class ancestors from RubyIndexer
-      # @param class_name [String] Class name
-      # @return [Array<String>] Array of ancestor names
-      def get_class_ancestors(class_name)
-        return [] unless @global_state.index
-
-        @global_state.index.linearized_ancestors_of(class_name)
-      rescue RubyIndexer::Index::NonExistingNamespaceError
-        []
-      end
-
-      # Get constant kind from RubyIndexer
-      # @param constant_name [String] Constant name
-      # @return [Symbol, nil] :class, :module, or nil
-      def get_constant_kind(constant_name)
-        return nil unless @global_state.index
-
-        entries = @global_state.index[constant_name]
-        return nil if entries.nil? || entries.empty?
-
-        entry = entries.first
-        case entry
-        when RubyIndexer::Entry::Class then :class
-        when RubyIndexer::Entry::Module then :module
-        end
-      end
-
-      # Look up class method owner via RubyIndexer singleton class ancestry
-      # @param class_name [String] Class name (e.g., "C")
-      # @param method_name [String] Method name (e.g., "foo")
-      # @return [String, nil] Owner name (module or singleton class name) or nil
-      def lookup_class_method_owner(class_name, method_name)
-        return nil unless @global_state.index
-
-        # Query singleton class (e.g., "C::<Class:C>") for the method
-        # Ruby LSP uses unqualified name for singleton class (e.g., "RBS::Environment::<Class:Environment>")
-        unqualified_name = class_name.split("::").last
-        singleton_name = "#{class_name}::<Class:#{unqualified_name}>"
-        entries = @global_state.index.resolve_method(method_name, singleton_name)
-        return nil if entries.nil? || entries.empty?
-
-        entry = entries.first
-        entry.owner&.name
-      rescue RubyIndexer::Index::NonExistingNamespaceError
-        nil
       end
 
       def log_message(message)

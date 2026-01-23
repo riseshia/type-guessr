@@ -42,10 +42,13 @@ module TypeGuessr
         attr_reader :variable_registry
 
         # @param signature_provider [SignatureProvider] Provider for RBS method signatures
+        # @param code_index [#find_classes_defining_methods, #ancestors_of, #constant_kind, #class_method_owner, nil]
+        #   Adapter wrapping RubyIndexer (preferred over callbacks)
         # @param method_registry [Registry::MethodRegistry, nil] Registry for project methods
         # @param variable_registry [Registry::VariableRegistry, nil] Registry for variables
-        def initialize(signature_provider, method_registry: nil, variable_registry: nil)
+        def initialize(signature_provider, code_index: nil, method_registry: nil, variable_registry: nil)
           @signature_provider = signature_provider
+          @code_index = code_index
           @method_registry = method_registry || Registry::MethodRegistry.new
           @variable_registry = variable_registry || Registry::VariableRegistry.new
           @cache = {}.compare_by_identity
@@ -257,16 +260,19 @@ module TypeGuessr
             return Result.new(dep_result.type, "constant #{node.name}: #{dep_result.reason}", dep_result.source)
           end
 
-          # Check if constant is a class or module using RubyIndexer
-          if @constant_kind_provider
-            kind = @constant_kind_provider.call(node.name)
-            if %i[class module].include?(kind)
-              return Result.new(
-                Types::SingletonType.new(node.name),
-                "class constant #{node.name}",
-                :inference
-              )
-            end
+          # Check if constant is a class or module using code_index adapter or callback
+          kind = if @code_index
+                   @code_index.constant_kind(node.name)
+                 elsif @constant_kind_provider
+                   @constant_kind_provider.call(node.name)
+                 end
+
+          if %i[class module].include?(kind)
+            return Result.new(
+              Types::SingletonType.new(node.name),
+              "class constant #{node.name}",
+              :inference
+            )
           end
 
           Result.new(Types::Unknown.instance, "undefined constant", :unknown)
@@ -538,18 +544,22 @@ module TypeGuessr
           end
 
           # Try project class methods first (includes extended module methods)
-          if @class_method_lookup_provider
-            owner_name = @class_method_lookup_provider.call(class_name, node.method.to_s)
-            if owner_name
-              def_node = @method_registry.lookup(owner_name, node.method.to_s)
-              if def_node
-                return_result = infer(def_node)
-                return Result.new(
-                  return_result.type,
-                  "#{class_name}.#{node.method} (project)",
-                  :project
-                )
-              end
+          # Use code_index adapter or callback to find method owner
+          owner_name = if @code_index
+                         @code_index.class_method_owner(class_name, node.method.to_s)
+                       elsif @class_method_lookup_provider
+                         @class_method_lookup_provider.call(class_name, node.method.to_s)
+                       end
+
+          if owner_name
+            def_node = @method_registry.lookup(owner_name, node.method.to_s)
+            if def_node
+              return_result = infer(def_node)
+              return Result.new(
+                return_result.type,
+                "#{class_name}.#{node.method} (project)",
+                :project
+              )
             end
           end
 
@@ -593,9 +603,18 @@ module TypeGuessr
           end
         end
 
-        # Resolve called methods to a type via external resolver (RubyIndexer)
+        # Resolve called methods to a type via code_index adapter or callback (RubyIndexer)
         def resolve_called_methods(called_methods)
           return nil if called_methods.empty?
+
+          # Prefer code_index adapter over callback
+          if @code_index
+            method_names = called_methods.map(&:name)
+            classes = @code_index.find_classes_defining_methods(method_names)
+            return classes_to_type(classes)
+          end
+
+          # Fallback to callback for backward compatibility
           return nil unless @method_list_resolver
 
           resolved = @method_list_resolver.call(called_methods)
@@ -607,10 +626,15 @@ module TypeGuessr
         # @param classes [Array<String>] List of class names
         # @return [Array<String>] Filtered list with only the most general types
         def filter_to_most_general_types(classes)
-          return classes unless @ancestry_provider
+          # Use code_index adapter or callback to get ancestors
+          return classes unless @code_index || @ancestry_provider
 
           classes.reject do |class_name|
-            ancestors = @ancestry_provider.call(class_name)
+            ancestors = if @code_index
+                          @code_index.ancestors_of(class_name)
+                        else
+                          @ancestry_provider.call(class_name)
+                        end
             # Check if any ancestor (excluding self) is also in the matching list
             ancestors.any? { |ancestor| ancestor != class_name && classes.include?(ancestor) }
           end
