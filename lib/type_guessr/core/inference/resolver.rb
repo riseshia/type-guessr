@@ -593,36 +593,13 @@ module TypeGuessr
           end
         end
 
-        # Resolve called methods to a type
-        # First tries external resolver (RubyIndexer), then project methods
+        # Resolve called methods to a type via external resolver (RubyIndexer)
         def resolve_called_methods(called_methods)
           return nil if called_methods.empty?
+          return nil unless @method_list_resolver
 
-          if @method_list_resolver
-            resolved = @method_list_resolver.call(called_methods)
-            return resolved if resolved && !resolved.is_a?(Types::Unknown)
-          end
-
-          resolve_called_methods_from_project(called_methods)
-        end
-
-        # Resolve called methods from project method registry
-        # Returns ClassInstance if exactly one class matches, Union if 2-3 match, nil otherwise
-        def resolve_called_methods_from_project(called_methods)
-          return nil if called_methods.empty?
-
-          method_names = called_methods.to_set { |cm| cm.name.to_s }
-
-          matching_classes = @method_registry.registered_classes.select do |class_name|
-            @method_registry.all_methods_for_class(class_name).superset?(method_names)
-          end
-
-          matching_classes = matching_classes.select do |class_name|
-            called_methods.all? { |cm| signature_matches?(class_name, cm) }
-          end
-
-          matching_classes = filter_to_most_general_types(matching_classes)
-          classes_to_type(matching_classes)
+          resolved = @method_list_resolver.call(called_methods)
+          resolved unless resolved.is_a?(Types::Unknown)
         end
 
         # Filter out classes whose ancestor is also in the list

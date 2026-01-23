@@ -48,12 +48,6 @@ module TypeGuessr
           nil
         end
 
-        # Get all registered class names
-        # @return [Array<String>] List of class names (frozen)
-        def registered_classes
-          @methods.keys.freeze
-        end
-
         # Get all methods for a specific class (direct methods only)
         # @param class_name [String] Class name
         # @return [Hash<String, IR::DefNode>] Methods hash (frozen)
@@ -73,27 +67,6 @@ module TypeGuessr
             end
           end
           results
-        end
-
-        # Get all methods available on a class (including inherited)
-        # @param class_name [String]
-        # @return [Set<String>] Method names
-        def all_methods_for_class(class_name)
-          # Start with directly defined methods
-          class_methods = (@methods[class_name]&.keys || []).to_set
-
-          # Add inherited methods if ancestry_provider is available
-          return class_methods unless @ancestry_provider
-
-          ancestors = @ancestry_provider.call(class_name)
-          ancestors.each do |ancestor_name|
-            next if ancestor_name == class_name # Skip self
-
-            ancestor_methods = @methods[ancestor_name]&.keys || []
-            class_methods.merge(ancestor_methods)
-          end
-
-          class_methods
         end
 
         # Clear all registered methods

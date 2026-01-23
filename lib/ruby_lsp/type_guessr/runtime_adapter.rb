@@ -269,12 +269,6 @@ module RubyLsp
         @location_index.stats
       end
 
-      # Get all registered class names (thread-safe)
-      # @return [Array<String>] List of class names
-      def registered_classes
-        @mutex.synchronize { @method_registry.registered_classes }
-      end
-
       # Get all methods for a specific class (thread-safe)
       # @param class_name [String] Class name
       # @return [Hash<String, DefNode>] Methods hash

@@ -91,25 +91,6 @@ RSpec.describe TypeGuessr::Core::Registry::MethodRegistry do
     end
   end
 
-  describe "#registered_classes" do
-    it "returns empty array when no methods registered" do
-      expect(registry.registered_classes).to eq([])
-    end
-
-    it "returns registered class names" do
-      registry.register("ClassA", "method1", create_def_node("method1"))
-      registry.register("ClassB", "method2", create_def_node("method2"))
-
-      expect(registry.registered_classes).to contain_exactly("ClassA", "ClassB")
-    end
-
-    it "returns frozen array" do
-      registry.register("ClassA", "method1", create_def_node("method1"))
-
-      expect(registry.registered_classes).to be_frozen
-    end
-  end
-
   describe "#methods_for_class" do
     it "returns empty hash for unknown class" do
       expect(registry.methods_for_class("UnknownClass")).to eq({})
@@ -168,44 +149,12 @@ RSpec.describe TypeGuessr::Core::Registry::MethodRegistry do
     end
   end
 
-  describe "#all_methods_for_class" do
-    it "returns methods for class without ancestry" do
-      registry.register("MyClass", "method1", create_def_node("method1"))
-      registry.register("MyClass", "method2", create_def_node("method2"))
-
-      result = registry.all_methods_for_class("MyClass")
-      expect(result).to contain_exactly("method1", "method2")
-    end
-
-    context "with ancestry_provider" do
-      let(:ancestry_provider) do
-        lambda do |class_name|
-          case class_name
-          when "Child" then %w[Child Parent]
-          when "Parent" then ["Parent"]
-          else []
-          end
-        end
-      end
-
-      let(:registry) { described_class.new(ancestry_provider: ancestry_provider) }
-
-      it "includes inherited methods" do
-        registry.register("Parent", "parent_method", create_def_node("parent_method"))
-        registry.register("Child", "child_method", create_def_node("child_method"))
-
-        result = registry.all_methods_for_class("Child")
-        expect(result).to contain_exactly("parent_method", "child_method")
-      end
-    end
-  end
-
   describe "#clear" do
     it "removes all registered methods" do
       registry.register("MyClass", "method1", create_def_node("method1"))
       registry.clear
 
-      expect(registry.registered_classes).to eq([])
+      expect(registry.methods_for_class("MyClass")).to eq({})
       expect(registry.lookup("MyClass", "method1")).to be_nil
     end
   end

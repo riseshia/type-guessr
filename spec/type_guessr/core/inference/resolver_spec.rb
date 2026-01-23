@@ -468,6 +468,12 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
       end
 
       it "infers receiver type from method uniqueness when receiver is Unknown" do
+        # Set up method_list_resolver to simulate RubyIndexer resolving :depot to Store
+        resolver.method_list_resolver = lambda do |called_methods|
+          method_names = called_methods.map(&:name)
+          TypeGuessr::Core::Types::ClassInstance.new("Store") if method_names.include?(:depot)
+        end
+
         # Register Store#depot that returns an Integer
         depot_return = TypeGuessr::Core::IR::LiteralNode.new(
           type: TypeGuessr::Core::Types::ClassInstance.new("Integer"),
@@ -601,151 +607,80 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
     end
   end
 
-  describe "called methods resolution with inheritance" do
-    let(:recipe_ingredients) { create_def_node(name: :ingredients, class_name: "Recipe") }
-    let(:recipe_steps) { create_def_node(name: :steps, class_name: "Recipe") }
-    let(:recipe2_notes) { create_def_node(name: :notes, class_name: "Recipe2") }
-
-    # Helper to create CalledMethod array from symbols
-    def called_methods(*names)
-      names.map { |name| TypeGuessr::Core::IR::CalledMethod.new(name: name, positional_count: 0, keywords: []) }
+  describe "#classes_to_type" do
+    it "returns nil for empty list" do
+      result = resolver.classes_to_type([])
+      expect(result).to be_nil
     end
 
-    before do
-      # Register methods: Recipe has ingredients, steps; Recipe2 has only notes (directly)
-      resolver.method_registry.register("Recipe", "ingredients", recipe_ingredients)
-      resolver.method_registry.register("Recipe", "steps", recipe_steps)
-      resolver.method_registry.register("Recipe2", "notes", recipe2_notes)
-
-      # Set up ancestry: Recipe2 inherits from Recipe
-      ancestry_provider = lambda do |class_name|
-        case class_name
-        when "Recipe2" then %w[Recipe2 Recipe Object BasicObject]
-        when "Recipe" then %w[Recipe Object BasicObject]
-        else []
-        end
-      end
-      resolver.ancestry_provider = ancestry_provider
-      resolver.method_registry.ancestry_provider = ancestry_provider
+    it "returns ClassInstance for single class" do
+      result = resolver.classes_to_type(["Recipe"])
+      expect(result).to be_a(TypeGuessr::Core::Types::ClassInstance)
+      expect(result.name).to eq("Recipe")
     end
 
-    context "when only parent methods are called" do
-      it "returns parent type (most general) instead of union" do
-        result = resolver.send(:resolve_called_methods_from_project, called_methods(:ingredients, :steps))
-
-        # Should return Recipe only, not Recipe | Recipe2
-        expect(result).to be_a(TypeGuessr::Core::Types::ClassInstance)
-        expect(result.name).to eq("Recipe")
-      end
+    it "returns Union for two classes" do
+      result = resolver.classes_to_type(%w[Parser Compiler])
+      expect(result).to be_a(TypeGuessr::Core::Types::Union)
+      expect(result.types.map(&:name)).to contain_exactly("Parser", "Compiler")
     end
 
-    context "when child-only method is called" do
-      it "returns child type" do
-        result = resolver.send(:resolve_called_methods_from_project, called_methods(:ingredients, :steps, :notes))
-
-        # Only Recipe2 has all three methods
-        expect(result).to be_a(TypeGuessr::Core::Types::ClassInstance)
-        expect(result.name).to eq("Recipe2")
-      end
+    it "returns Union for three classes" do
+      result = resolver.classes_to_type(%w[Parser Compiler Optimizer])
+      expect(result).to be_a(TypeGuessr::Core::Types::Union)
+      expect(result.types.map(&:name)).to contain_exactly("Parser", "Compiler", "Optimizer")
     end
 
-    context "without ancestry_provider" do
-      before do
-        resolver.ancestry_provider = nil
-        resolver.method_registry.ancestry_provider = nil
-      end
+    it "returns nil for four or more classes (too ambiguous)" do
+      result = resolver.classes_to_type(%w[A B C D])
+      expect(result).to be_nil
+    end
+  end
 
-      it "returns only directly matching class" do
-        result = resolver.send(:resolve_called_methods_from_project, called_methods(:ingredients, :steps))
+  describe "#signature_matches?" do
+    let(:called_method_class) { TypeGuessr::Core::IR::CalledMethod }
 
-        # Without ancestry_provider, only Recipe directly has both methods
-        expect(result).to be_a(TypeGuessr::Core::Types::ClassInstance)
-        expect(result.name).to eq("Recipe")
-      end
+    # Using RBS stdlib types for testing signature matching
+    # String#gsub has multiple overloads, one takes 2 positional args
+    # String#split takes 0-2 positional args
 
-      it "returns nil when no class has all methods directly" do
-        result = resolver.send(:resolve_called_methods_from_project, called_methods(:ingredients, :steps, :notes))
-
-        # Without ancestry, Recipe2 doesn't have ingredients/steps, Recipe doesn't have notes
-        expect(result).to be_nil
-      end
+    it "returns true when positional count matches method signature" do
+      cm = called_method_class.new(name: :gsub, positional_count: 2, keywords: [])
+      expect(resolver.send(:signature_matches?, "String", cm)).to be(true)
     end
 
-    describe "#classes_to_type" do
-      it "returns nil for empty list" do
-        result = resolver.classes_to_type([])
-        expect(result).to be_nil
-      end
-
-      it "returns ClassInstance for single class" do
-        result = resolver.classes_to_type(["Recipe"])
-        expect(result).to be_a(TypeGuessr::Core::Types::ClassInstance)
-        expect(result.name).to eq("Recipe")
-      end
-
-      it "returns Union for two classes" do
-        result = resolver.classes_to_type(%w[Parser Compiler])
-        expect(result).to be_a(TypeGuessr::Core::Types::Union)
-        expect(result.types.map(&:name)).to contain_exactly("Parser", "Compiler")
-      end
-
-      it "returns Union for three classes" do
-        result = resolver.classes_to_type(%w[Parser Compiler Optimizer])
-        expect(result).to be_a(TypeGuessr::Core::Types::Union)
-        expect(result.types.map(&:name)).to contain_exactly("Parser", "Compiler", "Optimizer")
-      end
-
-      it "returns nil for four or more classes (too ambiguous)" do
-        result = resolver.classes_to_type(%w[A B C D])
-        expect(result).to be_nil
-      end
+    it "returns false when positional count does not match" do
+      # String#gsub requires at least 1 argument (the pattern)
+      # but 5 positional args is way too many
+      cm = called_method_class.new(name: :gsub, positional_count: 5, keywords: [])
+      expect(resolver.send(:signature_matches?, "String", cm)).to be(false)
     end
 
-    describe "#signature_matches?" do
-      let(:called_method_class) { TypeGuessr::Core::IR::CalledMethod }
+    it "returns true when positional_count is nil (splat - can match anything)" do
+      cm = called_method_class.new(name: :gsub, positional_count: nil, keywords: [])
+      expect(resolver.send(:signature_matches?, "String", cm)).to be(true)
+    end
 
-      # Using RBS stdlib types for testing signature matching
-      # String#gsub has multiple overloads, one takes 2 positional args
-      # String#split takes 0-2 positional args
+    it "returns true when method has keyword arguments that match" do
+      # File.open accepts keyword arguments like mode:, encoding:
+      cm = called_method_class.new(name: :open, positional_count: 1, keywords: [:mode])
+      expect(resolver.send(:signature_matches?, "File", cm)).to be(true)
+    end
 
-      it "returns true when positional count matches method signature" do
-        cm = called_method_class.new(name: :gsub, positional_count: 2, keywords: [])
-        expect(resolver.send(:signature_matches?, "String", cm)).to be(true)
-      end
+    it "returns true when no RBS definition exists (conservative fallback)" do
+      # Unknown class without RBS - should not reject
+      cm = called_method_class.new(name: :some_method, positional_count: 2, keywords: [])
+      expect(resolver.send(:signature_matches?, "SomeUnknownClass", cm)).to be(true)
+    end
 
-      it "returns false when positional count does not match" do
-        # String#gsub requires at least 1 argument (the pattern)
-        # but 5 positional args is way too many
-        cm = called_method_class.new(name: :gsub, positional_count: 5, keywords: [])
-        expect(resolver.send(:signature_matches?, "String", cm)).to be(false)
-      end
-
-      it "returns true when positional_count is nil (splat - can match anything)" do
-        cm = called_method_class.new(name: :gsub, positional_count: nil, keywords: [])
-        expect(resolver.send(:signature_matches?, "String", cm)).to be(true)
-      end
-
-      it "returns true when method has keyword arguments that match" do
-        # File.open accepts keyword arguments like mode:, encoding:
-        cm = called_method_class.new(name: :open, positional_count: 1, keywords: [:mode])
-        expect(resolver.send(:signature_matches?, "File", cm)).to be(true)
-      end
-
-      it "returns true when no RBS definition exists (conservative fallback)" do
-        # Unknown class without RBS - should not reject
-        cm = called_method_class.new(name: :some_method, positional_count: 2, keywords: [])
-        expect(resolver.send(:signature_matches?, "SomeUnknownClass", cm)).to be(true)
-      end
-
-      it "returns false when required keyword is not provided" do
-        # This test verifies keyword argument checking
-        # If a method requires certain keywords, calling without them should fail
-        # Note: Most Ruby methods don't have required kwargs, so this may need adjustment
-        cm = called_method_class.new(name: :gsub, positional_count: 2, keywords: [:nonexistent_kwarg])
-        # Even with extra keyword, should still match (Ruby allows extra kwargs in some cases)
-        # The key is that required args must be present
-        expect(resolver.send(:signature_matches?, "String", cm)).to be(true)
-      end
+    it "returns false when required keyword is not provided" do
+      # This test verifies keyword argument checking
+      # If a method requires certain keywords, calling without them should fail
+      # Note: Most Ruby methods don't have required kwargs, so this may need adjustment
+      cm = called_method_class.new(name: :gsub, positional_count: 2, keywords: [:nonexistent_kwarg])
+      # Even with extra keyword, should still match (Ruby allows extra kwargs in some cases)
+      # The key is that required args must be present
+      expect(resolver.send(:signature_matches?, "String", cm)).to be(true)
     end
   end
 end

@@ -129,13 +129,13 @@ Resolves nodes to types by traversing the dependency graph.
 
 ### MethodRegistry (`lib/type_guessr/core/registry/method_registry.rb`)
 
-Stores and retrieves method definitions.
+Stores and retrieves project method definitions (DefNode).
 
 **Key features:**
 - `register(class_name, method_name, def_node)` - Store method definition
 - `lookup(class_name, method_name)` - Find method (supports inheritance via ancestry_provider)
-- `all_methods_for_class(class_name)` - Get all methods including inherited
-- `search(pattern)` - Search methods by pattern
+- `methods_for_class(class_name)` - Get direct methods for a class (debug server)
+- `search(pattern)` - Search methods by pattern (debug server)
 
 ### VariableRegistry (`lib/type_guessr/core/registry/variable_registry.rb`)
 
