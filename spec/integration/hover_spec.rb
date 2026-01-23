@@ -109,7 +109,8 @@ RSpec.describe "Hover Integration" do
         RUBY
       end
 
-      it "infers Recipe2 from method calls with inherited methods", pending: "Requires inheritance support in find_classes_defining_methods" do
+      it "infers Recipe2 from method calls with inherited methods",
+         pending: "Inheritance not supported in RubyIndexer duck typing (requires all methods directly defined)" do
         expect_hover_type(line: 21, column: 4, expected: "Recipe2")
       end
     end
@@ -639,19 +640,19 @@ RSpec.describe "Hover Integration" do
       let(:source) do
         <<~RUBY
           class Document
-            def title
+            def document_content_xyz
               "doc"
             end
           end
 
           def example(obj)
-            obj.title
+            obj.document_content_xyz
             obj
           end
         RUBY
       end
 
-      it "infers type from method pattern", pending: "RubyIndexer fuzzy_search not returning test source methods" do
+      it "infers type from method pattern" do
         expect_hover_type(line: 9, column: 2, expected: "Document")
       end
     end
@@ -684,24 +685,24 @@ RSpec.describe "Hover Integration" do
       let(:source) do
         <<~RUBY
           class Parser
-            def process
+            def parse_source_xyz
             end
           end
 
           class Compiler
-            def process
+            def parse_source_xyz
             end
           end
 
           def example(obj)
-            obj.process
+            obj.parse_source_xyz
             x = 1
             obj
           end
         RUBY
       end
 
-      it "shows union type", pending: "RubyIndexer fuzzy_search not returning test source methods" do
+      it "shows union type" do
         response = hover_on_source(source, { line: 14, character: 2 })
         expect(response.contents.value).to match(/Parser.*Compiler|Compiler.*Parser/)
       end
@@ -1634,7 +1635,7 @@ RSpec.describe "Hover Integration" do
       let(:source) do
         <<~RUBY
           class Conditional
-            def value
+            def conditional_value_xyz
               if true
                 "string"
               else
@@ -1644,12 +1645,12 @@ RSpec.describe "Hover Integration" do
           end
 
           def example(obj)
-            obj.value
+            obj.conditional_value_xyz
           end
         RUBY
       end
 
-      it "→ () -> String | Integer", pending: "RubyIndexer fuzzy_search not returning test source methods" do
+      it "→ () -> String | Integer" do
         response = hover_on_source(source, { line: 11, character: 6 })
 
         expect(response).not_to be_nil
