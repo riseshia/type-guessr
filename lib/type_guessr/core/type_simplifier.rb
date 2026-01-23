@@ -7,9 +7,9 @@ module TypeGuessr
     # Simplifies types by unwrapping single-element unions and
     # unifying parent/child class relationships
     class TypeSimplifier
-      # @param ancestry_provider [Proc, nil] A proc that takes class_name and returns array of ancestor names
-      def initialize(ancestry_provider: nil)
-        @ancestry_provider = ancestry_provider
+      # @param code_index [#ancestors_of, nil] Adapter for inheritance lookup
+      def initialize(code_index: nil)
+        @code_index = code_index
       end
 
       # Simplify a type
@@ -33,7 +33,7 @@ module TypeGuessr
         return types.first if types.size == 1
 
         # 2. Filter to most general types (remove children when parent is present)
-        types = filter_to_most_general_types(types) if @ancestry_provider
+        types = filter_to_most_general_types(types) if @code_index
 
         # 3. Check again after filtering
         return types.first if types.size == 1
@@ -54,7 +54,7 @@ module TypeGuessr
         types.reject do |type|
           next false unless type.is_a?(Types::ClassInstance)
 
-          ancestors = @ancestry_provider.call(type.name)
+          ancestors = @code_index.ancestors_of(type.name)
           # Check if any ancestor (excluding self) is also in the list
           ancestors.any? { |ancestor| ancestor != type.name && class_names.include?(ancestor) }
         end

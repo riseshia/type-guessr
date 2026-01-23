@@ -64,19 +64,21 @@ RSpec.describe TypeGuessr::Core::Registry::VariableRegistry do
       expect(result).to eq(old_node)
     end
 
-    context "with ancestry_provider" do
-      let(:ancestry_provider) do
-        lambda do |class_name|
-          case class_name
-          when "Child" then %w[Child Parent GrandParent]
-          when "Parent" then %w[Parent GrandParent]
-          when "GrandParent" then ["GrandParent"]
-          else []
+    context "with code_index" do
+      let(:code_index) do
+        Class.new do
+          def ancestors_of(class_name)
+            case class_name
+            when "Child" then %w[Child Parent GrandParent]
+            when "Parent" then %w[Parent GrandParent]
+            when "GrandParent" then ["GrandParent"]
+            else []
+            end
           end
-        end
+        end.new
       end
 
-      let(:registry) { described_class.new(ancestry_provider: ancestry_provider) }
+      let(:registry) { described_class.new(code_index: code_index) }
 
       it "finds instance variable in parent class" do
         parent_ivar = create_ivar_write_node(:@name, "Parent")
@@ -154,16 +156,20 @@ RSpec.describe TypeGuessr::Core::Registry::VariableRegistry do
     end
   end
 
-  describe "#ancestry_provider=" do
-    it "allows setting ancestry_provider after initialization" do
+  describe "#code_index=" do
+    it "allows setting code_index after initialization" do
       parent_ivar = create_ivar_write_node(:@name, "Parent")
       registry.register_instance_variable("Parent", :@name, parent_ivar)
 
       # Initially, cannot find via inheritance
       expect(registry.lookup_instance_variable("Child", :@name)).to be_nil
 
-      # Set ancestry provider
-      registry.ancestry_provider = ->(name) { name == "Child" ? %w[Child Parent] : [name] }
+      # Set code_index
+      registry.code_index = Class.new do
+        def ancestors_of(name)
+          name == "Child" ? %w[Child Parent] : [name]
+        end
+      end.new
 
       # Now can find via inheritance
       expect(registry.lookup_instance_variable("Child", :@name)).to eq(parent_ivar)

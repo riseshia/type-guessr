@@ -70,21 +70,23 @@ RSpec.describe TypeGuessr::Core::TypeSimplifier do
       end
     end
 
-    context "with ancestry_provider" do
-      # Mock ancestry_provider: Dog < Animal, Cat < Animal
-      let(:ancestry_provider) do
-        lambda do |class_name|
-          case class_name
-          when "Dog" then %w[Dog Animal Object]
-          when "Cat" then %w[Cat Animal Object]
-          when "Animal" then %w[Animal Object]
-          when "Object" then ["Object"]
-          else []
+    context "with code_index" do
+      # Mock code_index: Dog < Animal, Cat < Animal
+      let(:code_index) do
+        Class.new do
+          def ancestors_of(class_name)
+            case class_name
+            when "Dog" then %w[Dog Animal Object]
+            when "Cat" then %w[Cat Animal Object]
+            when "Animal" then %w[Animal Object]
+            when "Object" then ["Object"]
+            else []
+            end
           end
-        end
+        end.new
       end
 
-      let(:simplifier) { described_class.new(ancestry_provider: ancestry_provider) }
+      let(:simplifier) { described_class.new(code_index: code_index) }
 
       it "unifies child to parent when parent is also in union" do
         animal = TypeGuessr::Core::Types::ClassInstance.new("Animal")

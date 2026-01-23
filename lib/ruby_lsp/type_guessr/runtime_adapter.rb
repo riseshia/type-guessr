@@ -32,17 +32,14 @@ module RubyLsp
         # Create CodeIndexAdapter wrapping RubyIndexer
         @code_index = CodeIndexAdapter.new(global_state&.index)
 
-        # Create shared ancestry provider (for registries and type simplifier)
-        ancestry_provider = ->(class_name) { @code_index.ancestors_of(class_name) }
-
-        # Create method registry with ancestry provider
+        # Create method registry with code_index for inheritance lookup
         @method_registry = ::TypeGuessr::Core::Registry::MethodRegistry.new(
-          ancestry_provider: ancestry_provider
+          code_index: @code_index
         )
 
-        # Create variable registry with ancestry provider
+        # Create variable registry with code_index for inheritance lookup
         @variable_registry = ::TypeGuessr::Core::Registry::VariableRegistry.new(
-          ancestry_provider: ancestry_provider
+          code_index: @code_index
         )
 
         # Create resolver with code_index adapter and registries
@@ -53,9 +50,9 @@ module RubyLsp
           variable_registry: @variable_registry
         )
 
-        # Set up type simplifier with ancestry provider
+        # Set up type simplifier with code_index for inheritance lookup
         @resolver.type_simplifier = ::TypeGuessr::Core::TypeSimplifier.new(
-          ancestry_provider: ancestry_provider
+          code_index: @code_index
         )
       end
 

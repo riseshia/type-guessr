@@ -4,17 +4,17 @@ module TypeGuessr
   module Core
     module Registry
       # Stores and retrieves instance/class variable write nodes
-      # Supports inheritance chain traversal for instance variables when ancestry_provider is set
+      # Supports inheritance chain traversal for instance variables when code_index is set
       class VariableRegistry
-        # Callback for getting class ancestors
-        # @return [Proc, nil] A proc that takes class_name and returns array of ancestor names
-        attr_accessor :ancestry_provider
+        # Adapter for getting class ancestors (must respond to #ancestors_of)
+        # @return [#ancestors_of, nil] Adapter that returns array of ancestor names
+        attr_accessor :code_index
 
-        # @param ancestry_provider [Proc, nil] Returns ancestors for inheritance lookup
-        def initialize(ancestry_provider: nil)
+        # @param code_index [#ancestors_of, nil] Adapter for inheritance lookup
+        def initialize(code_index: nil)
           @instance_variables = {} # { "ClassName" => { :@name => WriteNode } }
           @class_variables = {}    # { "ClassName" => { :@@name => WriteNode } }
-          @ancestry_provider = ancestry_provider
+          @code_index = code_index
         end
 
         # Register an instance variable write
@@ -40,10 +40,10 @@ module TypeGuessr
           result = @instance_variables.dig(class_name, name)
           return result if result
 
-          # Traverse ancestor chain if provider available
-          return nil unless @ancestry_provider
+          # Traverse ancestor chain if code_index available
+          return nil unless @code_index
 
-          ancestors = @ancestry_provider.call(class_name)
+          ancestors = @code_index.ancestors_of(class_name)
           ancestors.each do |ancestor_name|
             next if ancestor_name == class_name # Skip self
 

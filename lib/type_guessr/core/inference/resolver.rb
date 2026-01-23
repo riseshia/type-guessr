@@ -17,10 +17,6 @@ module TypeGuessr
         # @return [Proc, nil] A proc that takes Array<Symbol> and returns resolved type or nil
         attr_accessor :method_list_resolver
 
-        # Callback for getting class ancestors
-        # @return [Proc, nil] A proc that takes class_name and returns array of ancestor names
-        attr_accessor :ancestry_provider
-
         # Callback for checking if a constant is a class or module
         # @return [Proc, nil] A proc that takes constant_name and returns :class, :module, or nil
         attr_accessor :constant_kind_provider
@@ -53,7 +49,6 @@ module TypeGuessr
           @variable_registry = variable_registry || Registry::VariableRegistry.new
           @cache = {}.compare_by_identity
           @method_list_resolver = nil
-          @ancestry_provider = nil
           @constant_kind_provider = nil
           @class_method_lookup_provider = nil
           @type_simplifier = nil
@@ -626,15 +621,11 @@ module TypeGuessr
         # @param classes [Array<String>] List of class names
         # @return [Array<String>] Filtered list with only the most general types
         def filter_to_most_general_types(classes)
-          # Use code_index adapter or callback to get ancestors
-          return classes unless @code_index || @ancestry_provider
+          # Use code_index adapter to get ancestors
+          return classes unless @code_index
 
           classes.reject do |class_name|
-            ancestors = if @code_index
-                          @code_index.ancestors_of(class_name)
-                        else
-                          @ancestry_provider.call(class_name)
-                        end
+            ancestors = @code_index.ancestors_of(class_name)
             # Check if any ancestor (excluding self) is also in the matching list
             ancestors.any? { |ancestor| ancestor != class_name && classes.include?(ancestor) }
           end

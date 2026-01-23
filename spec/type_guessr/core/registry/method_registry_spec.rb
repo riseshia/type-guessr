@@ -49,19 +49,21 @@ RSpec.describe TypeGuessr::Core::Registry::MethodRegistry do
       expect(result).to eq(new_node)
     end
 
-    context "with ancestry_provider" do
-      let(:ancestry_provider) do
-        lambda do |class_name|
-          case class_name
-          when "Child" then %w[Child Parent GrandParent]
-          when "Parent" then %w[Parent GrandParent]
-          when "GrandParent" then ["GrandParent"]
-          else []
+    context "with code_index" do
+      let(:code_index) do
+        Class.new do
+          def ancestors_of(class_name)
+            case class_name
+            when "Child" then %w[Child Parent GrandParent]
+            when "Parent" then %w[Parent GrandParent]
+            when "GrandParent" then ["GrandParent"]
+            else []
+            end
           end
-        end
+        end.new
       end
 
-      let(:registry) { described_class.new(ancestry_provider: ancestry_provider) }
+      let(:registry) { described_class.new(code_index: code_index) }
 
       it "finds method in parent class" do
         parent_method = create_def_node("parent_method")
@@ -159,16 +161,20 @@ RSpec.describe TypeGuessr::Core::Registry::MethodRegistry do
     end
   end
 
-  describe "#ancestry_provider=" do
-    it "allows setting ancestry_provider after initialization" do
+  describe "#code_index=" do
+    it "allows setting code_index after initialization" do
       parent_method = create_def_node("parent_method")
       registry.register("Parent", "parent_method", parent_method)
 
       # Initially, cannot find via inheritance
       expect(registry.lookup("Child", "parent_method")).to be_nil
 
-      # Set ancestry provider
-      registry.ancestry_provider = ->(name) { name == "Child" ? %w[Child Parent] : [name] }
+      # Set code_index
+      registry.code_index = Class.new do
+        def ancestors_of(name)
+          name == "Child" ? %w[Child Parent] : [name]
+        end
+      end.new
 
       # Now can find via inheritance
       expect(registry.lookup("Child", "parent_method")).to eq(parent_method)
