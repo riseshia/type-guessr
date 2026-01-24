@@ -39,7 +39,7 @@ module TypeGuessr
         breakdown = build_breakdown(nodes)
         total = nodes.size
         typed = count_typed_nodes(nodes)
-        percentage = total.positive? ? (typed.to_f / total * 100).round(1) : 0.0
+        percentage = calculate_percentage(typed, total)
 
         {
           total: total,
@@ -69,11 +69,7 @@ module TypeGuessr
       # Collect all nodes from the index
       # @return [Array<IR::Node>]
       def collect_all_nodes
-        nodes = []
-        @location_index.all_files.each do |file_path|
-          nodes.concat(@location_index.nodes_for_file(file_path))
-        end
-        nodes
+        @location_index.all_files.flat_map { |file_path| @location_index.nodes_for_file(file_path) }
       end
 
       # Collect project methods from the method registry
@@ -95,7 +91,7 @@ module TypeGuessr
           {
             total: group_nodes.size,
             typed: typed_count,
-            percentage: group_nodes.empty? ? 0.0 : (typed_count.to_f / group_nodes.size * 100).round(1)
+            percentage: calculate_percentage(typed_count, group_nodes.size)
           }
         end
       end
@@ -125,28 +121,20 @@ module TypeGuessr
       def method_slot_score(def_node)
         params = def_node.params || []
         total_slots = params.size + 1 # params + return
-        typed_slots = 0
-
-        # Check each parameter
-        params.each do |param|
-          typed_slots += 1 if typed?(param)
-        end
-
-        # Check return type
-        typed_slots += 1 if return_typed?(def_node)
+        typed_slots = params.count { |param| typed?(param) }
+        typed_slots += 1 if typed?(def_node)
 
         total_slots.positive? ? typed_slots.to_f / total_slots : 0.0
       end
 
-      # Check if method return is typed
-      # Returns false if inference fails (e.g., circular dependencies)
-      # @param def_node [IR::DefNode]
-      # @return [Boolean]
-      def return_typed?(def_node)
-        result = @resolver.infer(def_node)
-        !result.type.is_a?(Types::Unknown)
-      rescue SystemStackError, StandardError
-        false
+      # Calculate percentage with zero-division protection
+      # @param numerator [Integer]
+      # @param denominator [Integer]
+      # @return [Float]
+      def calculate_percentage(numerator, denominator)
+        return 0.0 unless denominator.positive?
+
+        (numerator.to_f / denominator * 100).round(1)
       end
     end
   end

@@ -48,21 +48,19 @@ module CoverageRunner
     end
 
     def run
-      puts "=== TypeGuessr Self-Coverage Report ===" unless @json
-      puts unless @json
-      puts "Project path: #{@path || Dir.pwd}" unless @json
+      log "=== TypeGuessr Self-Coverage Report ==="
+      log
+      log "Project path: #{@path || Dir.pwd}"
 
       files = collect_indexable_files
-      puts "Found #{files.size} indexable files" unless @json
-      puts unless @json
+      log "Found #{files.size} indexable files"
+      log
 
-      # Build index
-      puts "Indexing files..." unless @json
+      log "Indexing files..."
       location_index, method_registry, resolver = build_index(files)
-      puts "Indexing complete." unless @json
-      puts unless @json
+      log "Indexing complete."
+      log
 
-      # Generate report
       report = TypeGuessr::Core::CoverageReport.new(location_index, resolver, method_registry)
       result = report.generate
 
@@ -76,6 +74,11 @@ module CoverageRunner
     end
 
     private
+
+    # Print message unless in JSON mode
+    def log(message = "")
+      puts message unless @json
+    end
 
     def collect_indexable_files
       if @path
@@ -137,7 +140,7 @@ module CoverageRunner
         location_index.remove_file(file_path)
         nodes&.each { |node| index_node_recursively(location_index, method_registry, file_path, node, "") }
       rescue StandardError => e
-        warn "Error indexing #{file_path}: #{e.message}" unless @json
+        log "Error indexing #{file_path}: #{e.message}"
       end
 
       location_index.finalize!
@@ -257,12 +260,12 @@ module CoverageRunner
     end
 
     def generate_markdown_report(result, files)
-      puts "\n=== Generating Coverage Report ===" unless @json
+      log "\n=== Generating Coverage Report ==="
 
       FileUtils.mkdir_p("docs")
       report_path = "docs/coverage-report.md"
       File.write(report_path, build_markdown_content(result, files))
-      puts "Report saved to: #{report_path}" unless @json
+      log "Report saved to: #{report_path}"
     end
 
     def build_markdown_content(result, files)
