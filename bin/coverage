@@ -1,0 +1,361 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# TypeGuessr Self-Coverage Report
+#
+# Measures type inference success rate on the project's own codebase
+#
+# Usage:
+#   bin/coverage [options]
+#
+# Options:
+#   --path=PATH        Project directory to analyze (default: current)
+#   --report           Generate markdown report to docs/coverage-report.md
+#   --json             Output in JSON format
+#
+# Examples:
+#   bin/coverage                       # Analyze current project
+#   bin/coverage --path=/path/to/proj  # Analyze another project
+#   bin/coverage --report              # Generate markdown report
+#   bin/coverage --json                # Output JSON for scripts
+
+require "bundler/setup"
+require "English"
+require "prism"
+require "optparse"
+require "fileutils"
+require "json"
+require "ruby_indexer/ruby_indexer"
+
+# Load TypeGuessr core components
+require_relative "../lib/type_guessr/core/ir/nodes"
+require_relative "../lib/type_guessr/core/types"
+require_relative "../lib/type_guessr/core/converter/prism_converter"
+require_relative "../lib/type_guessr/core/index/location_index"
+require_relative "../lib/type_guessr/core/inference/resolver"
+require_relative "../lib/type_guessr/core/registry/method_registry"
+require_relative "../lib/type_guessr/core/rbs_provider"
+require_relative "../lib/type_guessr/core/signature_provider"
+require_relative "../lib/type_guessr/core/coverage_report"
+
+module CoverageRunner
+  # Runs coverage analysis on a codebase
+  class Runner
+    def initialize(path:, report:, json:)
+      @path = path
+      @report = report
+      @json = json
+    end
+
+    def run
+      puts "=== TypeGuessr Self-Coverage Report ===" unless @json
+      puts unless @json
+      puts "Project path: #{@path || Dir.pwd}" unless @json
+
+      files = collect_indexable_files
+      puts "Found #{files.size} indexable files" unless @json
+      puts unless @json
+
+      # Build index
+      puts "Indexing files..." unless @json
+      location_index, method_registry, resolver = build_index(files)
+      puts "Indexing complete." unless @json
+      puts unless @json
+
+      # Generate report
+      report = TypeGuessr::Core::CoverageReport.new(location_index, resolver, method_registry)
+      result = report.generate
+
+      if @json
+        output_json(result, files.size)
+      else
+        output_text(result, files.size)
+      end
+
+      generate_markdown_report(result, files) if @report
+    end
+
+    private
+
+    def collect_indexable_files
+      if @path
+        collect_files_from_project(@path)
+      else
+        config = RubyIndexer::Configuration.new
+        config.indexable_uris.map { |uri| uri.full_path.to_s }
+      end
+    end
+
+    def collect_files_from_project(project_path)
+      script = <<~RUBY
+        require 'bundler/setup'
+        require 'ruby_indexer/ruby_indexer'
+        config = RubyIndexer::Configuration.new
+        config.indexable_uris.each { |uri| puts uri.full_path }
+      RUBY
+
+      clean_env = ENV.to_h.reject { |k, _| k.start_with?("BUNDLE_", "RUBYGEMS_", "GEM_") }
+      clean_env["BUNDLE_GEMFILE"] = File.join(project_path, "Gemfile")
+
+      output = IO.popen(clean_env, ["ruby"], "r+", chdir: project_path, err: %i[child out]) do |io|
+        io.write(script)
+        io.close_write
+        io.read
+      end
+
+      unless $CHILD_STATUS.success?
+        warn "Warning: Failed to collect files from #{project_path}"
+        warn "Falling back to current directory scan"
+        Dir.chdir(project_path) do
+          config = RubyIndexer::Configuration.new
+          return config.indexable_uris.map { |uri| uri.full_path.to_s }
+        end
+      end
+
+      output.lines.map(&:chomp)
+    end
+
+    def build_index(files)
+      converter = TypeGuessr::Core::Converter::PrismConverter.new
+      location_index = TypeGuessr::Core::Index::LocationIndex.new
+      method_registry = TypeGuessr::Core::Registry::MethodRegistry.new
+
+      provider = TypeGuessr::Core::SignatureProvider.new
+      provider.add_provider(TypeGuessr::Core::RBSProvider.instance)
+      resolver = TypeGuessr::Core::Inference::Resolver.new(provider, method_registry: method_registry)
+
+      files.each do |file_path|
+        source = File.read(file_path)
+        parsed = Prism.parse(source)
+        next unless parsed.value
+
+        context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+        nodes = parsed.value.statements&.body&.filter_map do |stmt|
+          converter.convert(stmt, context)
+        end
+
+        location_index.remove_file(file_path)
+        nodes&.each { |node| index_node_recursively(location_index, method_registry, file_path, node, "") }
+      rescue StandardError => e
+        warn "Error indexing #{file_path}: #{e.message}" unless @json
+      end
+
+      location_index.finalize!
+      [location_index, method_registry, resolver]
+    end
+
+    def index_node_recursively(location_index, method_registry, file_path, node, scope_id)
+      return unless node
+
+      case node
+      when TypeGuessr::Core::IR::ClassModuleNode
+        location_index.add(file_path, node, scope_id)
+        new_scope = scope_id.empty? ? node.name : "#{scope_id}::#{node.name}"
+        node.methods&.each do |method|
+          if method.is_a?(TypeGuessr::Core::IR::ClassModuleNode)
+            index_node_recursively(location_index, method_registry, file_path, method, new_scope)
+          else
+            index_node_recursively(location_index, method_registry, file_path, method, new_scope)
+            method_scope = singleton_scope_for(new_scope, singleton: method.singleton)
+            method_registry.register(method_scope, method.name.to_s, method)
+          end
+        end
+
+      when TypeGuessr::Core::IR::DefNode
+        method_scope = singleton_scope_for(scope_id, singleton: node.singleton)
+        location_index.add(file_path, node, method_scope)
+
+        new_scope = method_scope.empty? ? "##{node.name}" : "#{method_scope}##{node.name}"
+        method_registry.register("", node.name.to_s, node) if scope_id.empty?
+
+        node.params&.each { |param| index_node_recursively(location_index, method_registry, file_path, param, new_scope) }
+        node.body_nodes&.each { |body_node| index_node_recursively(location_index, method_registry, file_path, body_node, new_scope) }
+
+      when TypeGuessr::Core::IR::LocalWriteNode
+        location_index.add(file_path, node, scope_id)
+        index_node_recursively(location_index, method_registry, file_path, node.value, scope_id) if node.value
+
+      when TypeGuessr::Core::IR::InstanceVariableWriteNode
+        location_index.add(file_path, node, scope_id)
+        index_node_recursively(location_index, method_registry, file_path, node.value, scope_id) if node.value
+
+      when TypeGuessr::Core::IR::ClassVariableWriteNode
+        location_index.add(file_path, node, scope_id)
+        index_node_recursively(location_index, method_registry, file_path, node.value, scope_id) if node.value
+
+      when TypeGuessr::Core::IR::CallNode
+        location_index.add(file_path, node, scope_id)
+        index_node_recursively(location_index, method_registry, file_path, node.receiver, scope_id) if node.receiver
+        node.args&.each { |arg| index_node_recursively(location_index, method_registry, file_path, arg, scope_id) }
+        node.block_params&.each { |param| index_node_recursively(location_index, method_registry, file_path, param, scope_id) }
+        index_node_recursively(location_index, method_registry, file_path, node.block_body, scope_id) if node.block_body
+
+      when TypeGuessr::Core::IR::ParamNode
+        location_index.add(file_path, node, scope_id)
+        index_node_recursively(location_index, method_registry, file_path, node.default_value, scope_id) if node.default_value
+
+      when TypeGuessr::Core::IR::MergeNode
+        location_index.add(file_path, node, scope_id)
+        node.branches&.each { |branch| index_node_recursively(location_index, method_registry, file_path, branch, scope_id) }
+
+      when TypeGuessr::Core::IR::ReturnNode
+        location_index.add(file_path, node, scope_id)
+        index_node_recursively(location_index, method_registry, file_path, node.value, scope_id) if node.value
+
+      when TypeGuessr::Core::IR::ConstantNode
+        location_index.add(file_path, node, scope_id)
+        index_node_recursively(location_index, method_registry, file_path, node.dependency, scope_id) if node.dependency
+
+      when TypeGuessr::Core::IR::LiteralNode
+        location_index.add(file_path, node, scope_id)
+        node.values&.each { |value| index_node_recursively(location_index, method_registry, file_path, value, scope_id) }
+
+      else
+        location_index.add(file_path, node, scope_id)
+      end
+    end
+
+    def singleton_scope_for(scope, singleton:)
+      return scope unless singleton
+
+      parent_name = scope.split("::").last || "Object"
+      scope.empty? ? "<Class:Object>" : "#{scope}::<Class:#{parent_name}>"
+    end
+
+    def output_text(result, file_count)
+      nc = result[:node_coverage]
+      ss = result[:signature_score]
+
+      puts "Node Coverage: #{nc[:percentage]}% (#{nc[:typed]}/#{nc[:total]} nodes typed)"
+      puts
+
+      # Sort breakdown by total count descending
+      sorted_breakdown = nc[:breakdown].sort_by { |_, v| -v[:total] }
+      sorted_breakdown.each do |node_type, stats|
+        puts format(
+          "  - %<type>-25s %<pct>6.1f%% (%<typed>d/%<total>d)",
+          type: "#{node_type}:",
+          pct: stats[:percentage],
+          typed: stats[:typed],
+          total: stats[:total]
+        )
+      end
+
+      puts
+      puts "Signature Score: #{format("%.2f", ss[:average_score])} (#{ss[:method_count]} project methods)"
+      puts
+      puts "Files analyzed: #{file_count}"
+    end
+
+    def output_json(result, file_count)
+      output = {
+        node_coverage: result[:node_coverage],
+        signature_score: result[:signature_score],
+        files_analyzed: file_count
+      }
+      puts JSON.pretty_generate(output)
+    end
+
+    def generate_markdown_report(result, files)
+      puts "\n=== Generating Coverage Report ===" unless @json
+
+      FileUtils.mkdir_p("docs")
+      report_path = "docs/coverage-report.md"
+      File.write(report_path, build_markdown_content(result, files))
+      puts "Report saved to: #{report_path}" unless @json
+    end
+
+    def build_markdown_content(result, files)
+      nc = result[:node_coverage]
+      ss = result[:signature_score]
+
+      sorted_breakdown = nc[:breakdown].sort_by { |_, v| -v[:total] }
+      breakdown_rows = sorted_breakdown.map do |node_type, stats|
+        "| #{node_type} | #{stats[:percentage]}% | #{stats[:typed]}/#{stats[:total]} |"
+      end.join("\n")
+
+      <<~MARKDOWN
+        # TypeGuessr Coverage Report
+
+        Generated: #{Time.now.strftime("%Y-%m-%d %H:%M:%S")}
+
+        ## Summary
+
+        | Metric | Value |
+        |--------|-------|
+        | Files Analyzed | #{files.size} |
+        | Node Coverage | #{nc[:percentage]}% (#{nc[:typed]}/#{nc[:total]}) |
+        | Signature Score | #{format("%.2f", ss[:average_score])} |
+        | Project Methods | #{ss[:method_count]} |
+
+        ## Node Coverage Breakdown
+
+        | Node Type | Coverage | Typed/Total |
+        |-----------|----------|-------------|
+        #{breakdown_rows}
+
+        ## Metrics Explanation
+
+        ### Node Coverage
+        Percentage of IR nodes with successfully inferred types. DefNode is excluded to avoid double-counting (its params and return are counted separately).
+
+        ### Signature Score
+        Average of (typed_slots / total_slots) for each project method. Slots include all parameters plus the return type. A score of 1.0 means all method signatures are fully typed.
+
+        ---
+
+        ## How to Use
+
+        ```bash
+        # Run coverage report
+        bin/coverage
+
+        # Generate markdown report
+        bin/coverage --report
+
+        # Output as JSON
+        bin/coverage --json
+
+        # Analyze a different project
+        bin/coverage --path=/path/to/project
+        ```
+      MARKDOWN
+    end
+  end
+end
+
+# Parse command line options
+options = {
+  path: nil,
+  report: false,
+  json: false
+}
+
+OptionParser.new do |opts|
+  opts.banner = "Usage: #{$PROGRAM_NAME} [options]"
+
+  opts.on("--path=PATH", "Project directory to analyze") do |v|
+    options[:path] = File.expand_path(v)
+  end
+
+  opts.on("--report", "Generate markdown report") do
+    options[:report] = true
+  end
+
+  opts.on("--json", "Output in JSON format") do
+    options[:json] = true
+  end
+
+  opts.on("-h", "--help", "Show this help") do
+    puts opts
+    exit
+  end
+end.parse!
+
+runner = CoverageRunner::Runner.new(
+  path: options[:path],
+  report: options[:report],
+  json: options[:json]
+)
+
+runner.run

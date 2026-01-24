@@ -180,4 +180,30 @@ RSpec.describe TypeGuessr::Core::Index::LocationIndex do
       expect(stats[:total_nodes]).to eq(3)
     end
   end
+
+  describe "#all_files" do
+    it "returns all indexed file paths" do
+      node1 = TypeGuessr::Core::IR::LocalWriteNode.new(
+        name: :x,
+        value: nil,
+        called_methods: [],
+        loc: TypeGuessr::Core::IR::Loc.new(line: 1, col_range: 0...5)
+      )
+      node2 = TypeGuessr::Core::IR::LocalWriteNode.new(
+        name: :y,
+        value: nil,
+        called_methods: [],
+        loc: TypeGuessr::Core::IR::Loc.new(line: 1, col_range: 0...5)
+      )
+
+      index.add("/path/to/a.rb", node1, "")
+      index.add("/path/to/b.rb", node2, "")
+
+      expect(index.all_files).to contain_exactly("/path/to/a.rb", "/path/to/b.rb")
+    end
+
+    it "returns empty array when no files indexed" do
+      expect(index.all_files).to eq([])
+    end
+  end
 end

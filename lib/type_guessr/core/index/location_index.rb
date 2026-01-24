@@ -66,6 +66,12 @@ module TypeGuessr
             total_nodes: @key_index.size
           }
         end
+
+        # Get all indexed file paths
+        # @return [Array<String>] List of file paths
+        def all_files
+          @file_keys.keys
+        end
       end
     end
   end
