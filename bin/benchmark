@@ -271,7 +271,7 @@ module BenchmarkRunner
         location_index.remove_file(file_path)
         nodes&.each do |node|
           index_node_recursively(location_index, file_path, node, "")
-          indexed_nodes << node if should_sample_node?(node)
+          indexed_nodes << [node, file_path] if should_sample_node?(node)
         end
       rescue StandardError
         # Ignore errors during pre-indexing
@@ -281,87 +281,79 @@ module BenchmarkRunner
 
       # Sample nodes for inference
       step = [indexed_nodes.size / @samples, 1].max
-      sample_nodes = indexed_nodes.each_slice(step).map(&:first).first(@samples)
+      sample_entries = indexed_nodes.each_slice(step).map(&:first).first(@samples)
 
       puts "Indexed #{files.size} files, #{indexed_nodes.size} inferrable nodes"
-      puts "Sampling #{sample_nodes.size} nodes for inference benchmark"
+      puts "Sampling #{sample_entries.size} nodes for inference benchmark"
 
       # Build resolver
       provider = TypeGuessr::Core::SignatureProvider.new
       provider.add_provider(TypeGuessr::Core::RBSProvider.instance)
 
-      # Cold start measurement (fresh resolver, RBS not loaded)
-      puts "\n### Cold Start Metrics ###\n\n"
+      # File open measurement (first inference per file simulates "file open" scenario)
+      puts "\n### File Open Metrics (first inference per file) ###\n\n"
 
-      cold_latencies = []
-      cold_sample = sample_nodes.sample([50, sample_nodes.size].min)
+      # Group sample entries by file path
+      entries_by_file = sample_entries.group_by { |_node, file_path| file_path }
 
-      cold_sample.each do |node|
-        # Create fresh resolver for each cold measurement
-        fresh_resolver = TypeGuessr::Core::Inference::Resolver.new(provider)
+      file_open_latencies = []
+      warm_latencies = []
 
-        GC.start
-        start_time = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-        fresh_resolver.infer(node)
-        end_time = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-
-        cold_latencies << ((end_time - start_time) * 1000) # ms
-      rescue StandardError
-        # Ignore inference errors
-      end
-
-      cold_latencies.sort!
-      cold_stats = calculate_latency_stats(cold_latencies)
-
-      puts format("Samples:           %d", cold_latencies.size)
-      puts format("Min:               %.3f ms", cold_stats[:min])
-      puts format("Max:               %.3f ms", cold_stats[:max])
-      puts format("Avg:               %.3f ms", cold_stats[:avg])
-      puts format("Median (p50):      %.3f ms", cold_stats[:p50])
-      puts format("p95:               %.3f ms", cold_stats[:p95])
-      puts format("p99:               %.3f ms", cold_stats[:p99])
-
-      # Warm measurement (cached resolver)
-      puts "\n### Warm Metrics (cached) ###\n\n"
-
+      # Create single resolver for realistic simulation
       resolver = TypeGuessr::Core::Inference::Resolver.new(provider)
 
-      # Warm up the resolver cache
-      sample_nodes.first(100).each do |node|
-        resolver.infer(node)
-      rescue StandardError
-        # Ignore
+      entries_by_file.each do |_file_path, entries|
+        entries.each_with_index do |(node, _path), idx|
+          start_time = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+          resolver.infer(node)
+          end_time = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+
+          latency_ms = (end_time - start_time) * 1000
+
+          if idx.zero?
+            # First node in file -> file open latency
+            file_open_latencies << latency_ms
+          else
+            # Subsequent nodes -> warm latency
+            warm_latencies << latency_ms
+          end
+        rescue StandardError
+          # Ignore inference errors
+        end
       end
 
-      warm_latencies = []
-      sample_nodes.each do |node|
-        start_time = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-        resolver.infer(node)
-        end_time = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      file_open_latencies.sort!
+      file_open_stats = calculate_latency_stats(file_open_latencies)
 
-        warm_latencies << ((end_time - start_time) * 1000) # ms
-      rescue StandardError
-        # Ignore inference errors
-      end
+      puts format("Samples:           %d (files)", file_open_latencies.size)
+      puts format("Min:               %.3f ms", file_open_stats[:min])
+      puts format("Max:               %.3f ms", file_open_stats[:max])
+      puts format("Avg:               %.3f ms", file_open_stats[:avg])
+      puts format("Median (p50):      %.3f ms", file_open_stats[:p50])
+      puts format("p95:               %.3f ms", file_open_stats[:p95])
+      puts format("p99:               %.3f ms", file_open_stats[:p99])
+
+      # Warm measurement (subsequent inferences within files)
+      puts "\n### Warm Metrics (subsequent inferences) ###\n\n"
 
       warm_latencies.sort!
       warm_stats = calculate_latency_stats(warm_latencies)
 
-      total_time = warm_latencies.sum / 1000.0 # convert back to seconds
-      inferences_per_sec = warm_latencies.size / total_time
+      total_time = (file_open_latencies.sum + warm_latencies.sum) / 1000.0 # convert back to seconds
+      total_inferences = file_open_latencies.size + warm_latencies.size
+      inferences_per_sec = total_inferences / total_time
 
       @results[:inference] = {
-        nodes_sampled: sample_nodes.size,
-        inferred: warm_latencies.size,
+        nodes_sampled: sample_entries.size,
+        files_measured: file_open_latencies.size,
+        inferred: total_inferences,
         time: total_time,
         inferences_per_sec: inferences_per_sec,
-        cold: cold_stats,
+        file_open: file_open_stats,
         warm: warm_stats
       }
 
       puts format("Nodes inferred:    %d", warm_latencies.size)
-      puts format("Total time:        %.3f seconds", total_time)
-      puts format("Throughput:        %.0f inferences/sec", inferences_per_sec)
       puts format("Min:               %.3f ms", warm_stats[:min])
       puts format("Max:               %.3f ms", warm_stats[:max])
       puts format("Avg:               %.3f ms", warm_stats[:avg])
@@ -369,10 +361,16 @@ module BenchmarkRunner
       puts format("p95:               %.3f ms", warm_stats[:p95])
       puts format("p99:               %.3f ms", warm_stats[:p99])
 
+      puts "\n### Overall Throughput ###\n\n"
+      puts format("Total inferences:  %d", total_inferences)
+      puts format("Total time:        %.3f seconds", total_time)
+      puts format("Throughput:        %.0f inferences/sec", inferences_per_sec)
+
       # IPS benchmark
       puts "\n### IPS Benchmark (single node inference) ###\n\n"
 
-      # Group nodes by type for type-specific benchmarks
+      # Extract nodes from sample_entries for type-specific benchmarks
+      sample_nodes = sample_entries.map(&:first)
       nodes_by_type = sample_nodes.group_by { |n| n.class.name.split("::").last }
 
       Benchmark.ips do |x|
@@ -563,29 +561,30 @@ module BenchmarkRunner
       return "" unless @results[:inference]
 
       r = @results[:inference]
-      cold = r[:cold] || {}
+      file_open = r[:file_open] || {}
       warm = r[:warm] || {}
 
       <<~SECTION
         ## Inference Results
 
-        ### Cold Start (fresh resolver)
+        ### File Open (first inference per file)
 
         | Metric | Value |
         |--------|-------|
-        | Min | #{format("%.3f", cold[:min] || 0)} ms |
-        | Max | #{format("%.3f", cold[:max] || 0)} ms |
-        | Avg | #{format("%.3f", cold[:avg] || 0)} ms |
-        | Median (p50) | #{format("%.3f", cold[:p50] || 0)} ms |
-        | p95 | #{format("%.3f", cold[:p95] || 0)} ms |
-        | p99 | #{format("%.3f", cold[:p99] || 0)} ms |
+        | Files measured | #{r[:files_measured] || 0} |
+        | Min | #{format("%.3f", file_open[:min] || 0)} ms |
+        | Max | #{format("%.3f", file_open[:max] || 0)} ms |
+        | Avg | #{format("%.3f", file_open[:avg] || 0)} ms |
+        | Median (p50) | #{format("%.3f", file_open[:p50] || 0)} ms |
+        | p95 | #{format("%.3f", file_open[:p95] || 0)} ms |
+        | p99 | #{format("%.3f", file_open[:p99] || 0)} ms |
 
-        ### Warm (cached resolver)
+        ### Warm (subsequent inferences)
 
         | Metric | Value |
         |--------|-------|
         | Nodes sampled | #{r[:nodes_sampled]} |
-        | Nodes inferred | #{r[:inferred]} |
+        | Total inferred | #{r[:inferred]} |
         | Total time | #{format("%.3f", r[:time])} sec |
         | Throughput | #{format("%.0f", r[:inferences_per_sec])} inferences/sec |
         | Min | #{format("%.3f", warm[:min] || 0)} ms |
