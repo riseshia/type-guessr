@@ -9,15 +9,21 @@
 #   bin/coverage [options]
 #
 # Options:
-#   --path=PATH        Project directory to analyze (default: current)
-#   --report           Generate markdown report to docs/coverage-report.md
-#   --json             Output in JSON format
+#   --path=PATH                 Project directory to analyze (default: current)
+#   --report                    Generate markdown report to docs/coverage-report.md
+#   --json                      Output in JSON format
+#   --dump-untyped[=TYPES]      Dump untyped nodes to tmp/untyped_nodes.json
+#                               Optionally filter by node types (comma-separated)
+#   --limit=N                   Limit number of dumped untyped nodes
 #
 # Examples:
-#   bin/coverage                       # Analyze current project
-#   bin/coverage --path=/path/to/proj  # Analyze another project
-#   bin/coverage --report              # Generate markdown report
-#   bin/coverage --json                # Output JSON for scripts
+#   bin/coverage                              # Analyze current project
+#   bin/coverage --path=/path/to/proj         # Analyze another project
+#   bin/coverage --report                     # Generate markdown report
+#   bin/coverage --json                       # Output JSON for scripts
+#   bin/coverage --dump-untyped               # Dump all untyped nodes
+#   bin/coverage --dump-untyped=ParamNode     # Dump only ParamNode
+#   bin/coverage --dump-untyped --limit=100   # Limit to 100 nodes
 
 require "bundler/setup"
 require "English"
@@ -36,15 +42,17 @@ require_relative "../lib/type_guessr/core/inference/resolver"
 require_relative "../lib/type_guessr/core/registry/method_registry"
 require_relative "../lib/type_guessr/core/rbs_provider"
 require_relative "../lib/type_guessr/core/signature_provider"
-require_relative "../lib/type_guessr/core/coverage_report"
+require_relative "lib/coverage_report"
 
 module CoverageRunner
   # Runs coverage analysis on a codebase
   class Runner
-    def initialize(path:, report:, json:)
+    def initialize(path:, report:, json:, dump_untyped:, limit:)
       @path = path
       @report = report
       @json = json
+      @dump_untyped = dump_untyped
+      @limit = limit
     end
 
     def run
@@ -61,7 +69,7 @@ module CoverageRunner
       log "Indexing complete."
       log
 
-      report = TypeGuessr::Core::CoverageReport.new(location_index, resolver, method_registry)
+      report = CoverageRunner::CoverageReport.new(location_index, resolver, method_registry)
       result = report.generate
 
       if @json
@@ -71,6 +79,7 @@ module CoverageRunner
       end
 
       generate_markdown_report(result, files) if @report
+      dump_untyped_nodes(report) if @dump_untyped
     end
 
     private
@@ -324,6 +333,31 @@ module CoverageRunner
         ```
       MARKDOWN
     end
+
+    def dump_untyped_nodes(report)
+      log "\n=== Dumping Untyped Nodes ==="
+
+      FileUtils.mkdir_p("tmp")
+
+      # Extract filter from dump_untyped option (it can be true or a string)
+      filter = @dump_untyped.is_a?(String) ? @dump_untyped : nil
+
+      nodes = report.collect_untyped_nodes(filter: filter, limit: @limit)
+      total_untyped = report.total_untyped_count
+
+      output = {
+        generated_at: Time.now.iso8601,
+        total_untyped: total_untyped,
+        dumped: nodes.size,
+        filter: filter,
+        nodes: nodes
+      }
+
+      output_path = "tmp/untyped_nodes.json"
+      File.write(output_path, JSON.pretty_generate(output))
+      log "Dumped #{nodes.size} untyped nodes to #{output_path}"
+      log "Total untyped nodes: #{total_untyped}"
+    end
   end
 end
 
@@ -331,7 +365,9 @@ end
 options = {
   path: nil,
   report: false,
-  json: false
+  json: false,
+  dump_untyped: false,
+  limit: nil
 }
 
 OptionParser.new do |opts|
@@ -349,6 +385,14 @@ OptionParser.new do |opts|
     options[:json] = true
   end
 
+  opts.on("--dump-untyped[=TYPES]", "Dump untyped nodes to tmp/untyped_nodes.json") do |v|
+    options[:dump_untyped] = v || true
+  end
+
+  opts.on("--limit=N", Integer, "Limit number of dumped nodes") do |v|
+    options[:limit] = v
+  end
+
   opts.on("-h", "--help", "Show this help") do
     puts opts
     exit
@@ -358,7 +402,9 @@ end.parse!
 runner = CoverageRunner::Runner.new(
   path: options[:path],
   report: options[:report],
-  json: options[:json]
+  json: options[:json],
+  dump_untyped: options[:dump_untyped],
+  limit: options[:limit]
 )
 
 runner.run

@@ -72,6 +72,20 @@ module TypeGuessr
         def all_files
           @file_keys.keys
         end
+
+        # Find the scope ID for a node within a file
+        # @param file_path [String] Absolute file path
+        # @param node [TypeGuessr::Core::IR::Node] IR node to find
+        # @return [String, nil] Scope ID or nil if not found
+        def scope_for_node(file_path, node)
+          keys = @file_keys[file_path] || []
+          node_hash = node.node_hash
+          matching_key = keys.find { |k| k.end_with?(":#{node_hash}") }
+          return nil unless matching_key
+
+          # Extract scope_id from "scope_id:node_hash" format
+          matching_key.sub(/:#{Regexp.escape(node_hash)}$/, "")
+        end
       end
     end
   end

@@ -1,15 +1,18 @@
 # frozen_string_literal: true
 
-require "spec_helper"
-require "type_guessr/core/coverage_report"
-require "type_guessr/core/index/location_index"
-require "type_guessr/core/inference/resolver"
-require "type_guessr/core/registry/method_registry"
-require "type_guessr/core/signature_provider"
-require "type_guessr/core/ir/nodes"
-require "type_guessr/core/types"
+require "bundler/setup"
+require "rspec"
 
-RSpec.describe TypeGuessr::Core::CoverageReport do
+# Load TypeGuessr core components
+require_relative "../../lib/type_guessr/core/index/location_index"
+require_relative "../../lib/type_guessr/core/inference/resolver"
+require_relative "../../lib/type_guessr/core/registry/method_registry"
+require_relative "../../lib/type_guessr/core/signature_provider"
+require_relative "../../lib/type_guessr/core/ir/nodes"
+require_relative "../../lib/type_guessr/core/types"
+require_relative "../lib/coverage_report"
+
+RSpec.describe CoverageRunner::CoverageReport do
   let(:location_index) { TypeGuessr::Core::Index::LocationIndex.new }
   let(:provider) { TypeGuessr::Core::SignatureProvider.new }
   let(:method_registry) { TypeGuessr::Core::Registry::MethodRegistry.new }
