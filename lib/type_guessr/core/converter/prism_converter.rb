@@ -12,10 +12,11 @@ module TypeGuessr
       class PrismConverter
         # Context for tracking variable bindings during conversion
         class Context
-          attr_reader :variables
+          attr_reader :variables, :file_path, :location_index, :method_registry, :variable_registry
           attr_accessor :current_class, :current_method, :in_singleton_method
 
-          def initialize(parent = nil)
+          def initialize(parent = nil, file_path: nil, location_index: nil,
+                         method_registry: nil, variable_registry: nil)
             @parent = parent
             @variables = {} # name => node
             @instance_variables = {} # @name => node (only for class-level context)
@@ -24,6 +25,12 @@ module TypeGuessr
             @current_class = nil
             @current_method = nil
             @in_singleton_method = false
+
+            # Index/registry references (inherited from parent or set directly)
+            @file_path = file_path || parent&.file_path
+            @location_index = location_index || parent&.location_index
+            @method_registry = method_registry || parent&.method_registry
+            @variable_registry = variable_registry || parent&.variable_registry
           end
 
           def register_variable(name, node)
@@ -92,8 +99,16 @@ module TypeGuessr
           end
 
           # Generate scope_id for node lookup (e.g., "User#save" or "User" or "")
+          # For singleton methods, uses "<Class:ClassName>" format to match RubyIndexer convention
           def scope_id
-            class_path = current_class_name || ""
+            base_class_path = current_class_name || ""
+            class_path = if @in_singleton_method
+                           # Singleton methods use "<Class:ClassName>" suffix
+                           parent_name = base_class_path.split("::").last || "Object"
+                           base_class_path.empty? ? "<Class:Object>" : "#{base_class_path}::<Class:#{parent_name}>"
+                         else
+                           base_class_path
+                         end
             method_name = current_method_name
             if method_name
               "#{class_path}##{method_name}"
@@ -117,133 +132,136 @@ module TypeGuessr
         # @param context [Context] Conversion context
         # @return [IR::Node, nil] IR node
         def convert(prism_node, context = Context.new)
-          case prism_node
-          when Prism::IntegerNode, Prism::FloatNode, Prism::StringNode,
-               Prism::SymbolNode, Prism::TrueNode, Prism::FalseNode,
-               Prism::NilNode, Prism::InterpolatedStringNode, Prism::RangeNode,
-               Prism::RegularExpressionNode, Prism::InterpolatedRegularExpressionNode,
-               Prism::ImaginaryNode, Prism::RationalNode,
-               Prism::XStringNode, Prism::InterpolatedXStringNode
-            convert_literal(prism_node)
+          node = case prism_node
+                 when Prism::IntegerNode, Prism::FloatNode, Prism::StringNode,
+                      Prism::SymbolNode, Prism::TrueNode, Prism::FalseNode,
+                      Prism::NilNode, Prism::InterpolatedStringNode, Prism::RangeNode,
+                      Prism::RegularExpressionNode, Prism::InterpolatedRegularExpressionNode,
+                      Prism::ImaginaryNode, Prism::RationalNode,
+                      Prism::XStringNode, Prism::InterpolatedXStringNode
+                   convert_literal(prism_node)
 
-          when Prism::ArrayNode
-            convert_array_literal(prism_node, context)
+                 when Prism::ArrayNode
+                   convert_array_literal(prism_node, context)
 
-          when Prism::HashNode
-            convert_hash_literal(prism_node, context)
+                 when Prism::HashNode
+                   convert_hash_literal(prism_node, context)
 
-          when Prism::KeywordHashNode
-            convert_keyword_hash(prism_node, context)
+                 when Prism::KeywordHashNode
+                   convert_keyword_hash(prism_node, context)
 
-          when Prism::LocalVariableWriteNode
-            convert_local_variable_write(prism_node, context)
+                 when Prism::LocalVariableWriteNode
+                   convert_local_variable_write(prism_node, context)
 
-          when Prism::LocalVariableReadNode
-            convert_local_variable_read(prism_node, context)
+                 when Prism::LocalVariableReadNode
+                   convert_local_variable_read(prism_node, context)
 
-          when Prism::InstanceVariableWriteNode
-            convert_instance_variable_write(prism_node, context)
+                 when Prism::InstanceVariableWriteNode
+                   convert_instance_variable_write(prism_node, context)
 
-          when Prism::InstanceVariableReadNode
-            convert_instance_variable_read(prism_node, context)
+                 when Prism::InstanceVariableReadNode
+                   convert_instance_variable_read(prism_node, context)
 
-          when Prism::ClassVariableWriteNode
-            convert_class_variable_write(prism_node, context)
+                 when Prism::ClassVariableWriteNode
+                   convert_class_variable_write(prism_node, context)
 
-          when Prism::ClassVariableReadNode
-            convert_class_variable_read(prism_node, context)
+                 when Prism::ClassVariableReadNode
+                   convert_class_variable_read(prism_node, context)
 
-          # Compound assignments (||=, &&=, +=, etc.)
-          when Prism::LocalVariableOrWriteNode
-            convert_local_variable_or_write(prism_node, context)
+                 # Compound assignments (||=, &&=, +=, etc.)
+                 when Prism::LocalVariableOrWriteNode
+                   convert_local_variable_or_write(prism_node, context)
 
-          when Prism::LocalVariableAndWriteNode
-            convert_local_variable_and_write(prism_node, context)
+                 when Prism::LocalVariableAndWriteNode
+                   convert_local_variable_and_write(prism_node, context)
 
-          when Prism::LocalVariableOperatorWriteNode
-            convert_local_variable_operator_write(prism_node, context)
+                 when Prism::LocalVariableOperatorWriteNode
+                   convert_local_variable_operator_write(prism_node, context)
 
-          when Prism::InstanceVariableOrWriteNode
-            convert_instance_variable_or_write(prism_node, context)
+                 when Prism::InstanceVariableOrWriteNode
+                   convert_instance_variable_or_write(prism_node, context)
 
-          when Prism::InstanceVariableAndWriteNode
-            convert_instance_variable_and_write(prism_node, context)
+                 when Prism::InstanceVariableAndWriteNode
+                   convert_instance_variable_and_write(prism_node, context)
 
-          when Prism::InstanceVariableOperatorWriteNode
-            convert_instance_variable_operator_write(prism_node, context)
+                 when Prism::InstanceVariableOperatorWriteNode
+                   convert_instance_variable_operator_write(prism_node, context)
 
-          when Prism::CallNode
-            convert_call(prism_node, context)
+                 when Prism::CallNode
+                   convert_call(prism_node, context)
 
-          when Prism::IfNode
-            convert_if(prism_node, context)
+                 when Prism::IfNode
+                   convert_if(prism_node, context)
 
-          when Prism::UnlessNode
-            convert_unless(prism_node, context)
+                 when Prism::UnlessNode
+                   convert_unless(prism_node, context)
 
-          when Prism::CaseNode
-            convert_case(prism_node, context)
+                 when Prism::CaseNode
+                   convert_case(prism_node, context)
 
-          when Prism::CaseMatchNode
-            convert_case_match(prism_node, context)
+                 when Prism::CaseMatchNode
+                   convert_case_match(prism_node, context)
 
-          when Prism::StatementsNode
-            convert_statements(prism_node, context)
+                 when Prism::StatementsNode
+                   convert_statements(prism_node, context)
 
-          when Prism::DefNode
-            convert_def(prism_node, context)
+                 when Prism::DefNode
+                   convert_def(prism_node, context)
 
-          when Prism::ConstantReadNode, Prism::ConstantPathNode
-            convert_constant_read(prism_node, context)
+                 when Prism::ConstantReadNode, Prism::ConstantPathNode
+                   convert_constant_read(prism_node, context)
 
-          when Prism::ConstantWriteNode
-            convert_constant_write(prism_node, context)
+                 when Prism::ConstantWriteNode
+                   convert_constant_write(prism_node, context)
 
-          when Prism::ClassNode, Prism::ModuleNode
-            convert_class_or_module(prism_node, context)
+                 when Prism::ClassNode, Prism::ModuleNode
+                   convert_class_or_module(prism_node, context)
 
-          when Prism::SingletonClassNode
-            convert_singleton_class(prism_node, context)
+                 when Prism::SingletonClassNode
+                   convert_singleton_class(prism_node, context)
 
-          when Prism::ReturnNode
-            # Return statement - wrap in ReturnNode to track explicit returns
-            value_node = if prism_node.arguments&.arguments&.first
-                           convert(prism_node.arguments.arguments.first, context)
-                         else
-                           # return with no value returns nil
-                           IR::LiteralNode.new(
-                             type: Types::ClassInstance.new("NilClass"),
-                             literal_value: nil,
-                             values: nil,
-                             loc: convert_loc(prism_node.location)
-                           )
-                         end
-            IR::ReturnNode.new(
-              value: value_node,
-              loc: convert_loc(prism_node.location)
-            )
+                 when Prism::ReturnNode
+                   # Return statement - wrap in ReturnNode to track explicit returns
+                   value_node = if prism_node.arguments&.arguments&.first
+                                  convert(prism_node.arguments.arguments.first, context)
+                                else
+                                  # return with no value returns nil
+                                  IR::LiteralNode.new(
+                                    type: Types::ClassInstance.new("NilClass"),
+                                    literal_value: nil,
+                                    values: nil,
+                                    loc: convert_loc(prism_node.location)
+                                  )
+                                end
+                   IR::ReturnNode.new(
+                     value: value_node,
+                     loc: convert_loc(prism_node.location)
+                   )
 
-          when Prism::SelfNode
-            # self keyword - returns the current class instance or singleton
-            IR::SelfNode.new(
-              class_name: context.current_class_name || "Object",
-              singleton: context.in_singleton_method,
-              loc: convert_loc(prism_node.location)
-            )
+                 when Prism::SelfNode
+                   # self keyword - returns the current class instance or singleton
+                   IR::SelfNode.new(
+                     class_name: context.current_class_name || "Object",
+                     singleton: context.in_singleton_method,
+                     loc: convert_loc(prism_node.location)
+                   )
 
-          when Prism::BeginNode
-            convert_begin(prism_node, context)
+                 when Prism::BeginNode
+                   convert_begin(prism_node, context)
 
-          when Prism::RescueNode
-            # Rescue clause - convert body statements
-            convert_statements_body(prism_node.statements&.body, context)
+                 when Prism::RescueNode
+                   # Rescue clause - convert body statements
+                   convert_statements_body(prism_node.statements&.body, context)
 
-          when Prism::OrNode
-            convert_or_node(prism_node, context)
+                 when Prism::OrNode
+                   convert_or_node(prism_node, context)
 
-          when Prism::AndNode
-            convert_and_node(prism_node, context)
-          end
+                 when Prism::AndNode
+                   convert_and_node(prism_node, context)
+                 end
+
+          register_node(node, context) if node
+          node
         end
 
         private
@@ -883,10 +901,13 @@ module TypeGuessr
           merged_type = compute_merged_type(receiver_node, prism_node.name, args, prism_node)
           return receiver_node unless merged_type
 
+          # Create new LiteralNode with merged type
+          value_node = IR::LiteralNode.new(type: merged_type, literal_value: nil, values: nil, loc: receiver_node.loc)
+
           # Create new LocalWriteNode with merged type
           new_write = IR::LocalWriteNode.new(
             name: receiver_node.name,
-            value: IR::LiteralNode.new(type: merged_type, literal_value: nil, values: nil, loc: receiver_node.loc),
+            value: value_node,
             called_methods: receiver_node.called_methods,
             loc: convert_loc(prism_node.location)
           )
@@ -894,13 +915,22 @@ module TypeGuessr
           # Register for next line references
           context.register_variable(receiver_node.name, new_write)
 
-          # Return new LocalReadNode pointing to new write_node
-          IR::LocalReadNode.new(
+          # Create new LocalReadNode pointing to new write_node
+          new_read = IR::LocalReadNode.new(
             name: receiver_node.name,
             write_node: new_write,
             called_methods: receiver_node.called_methods,
             loc: receiver_node.loc
           )
+
+          # Register the newly created nodes in location_index
+          if context.location_index
+            context.location_index.add(context.file_path, value_node, context.scope_id)
+            context.location_index.add(context.file_path, new_write, context.scope_id)
+            context.location_index.add(context.file_path, new_read, context.scope_id)
+          end
+
+          new_read
         end
 
         # Compute merged type for container mutation
@@ -1620,9 +1650,12 @@ module TypeGuessr
           # Create a new context for singleton class scope
           singleton_context = context.fork(:class)
 
-          # Generate singleton class name in format: <Class:ParentName>
-          parent_name = context.current_class_name || "Object"
-          singleton_name = "<Class:#{parent_name}>"
+          # Generate singleton class name in format: Parent::<Class:ParentName>
+          # This matches the scope convention used by RuntimeAdapter and RubyIndexer
+          parent_path = context.current_class_name || ""
+          parent_name = parent_path.split("::").last || "Object"
+          singleton_suffix = "<Class:#{parent_name}>"
+          singleton_name = parent_path.empty? ? singleton_suffix : "#{parent_path}::#{singleton_suffix}"
           singleton_context.current_class = singleton_name
 
           # Collect all method definitions from the body
@@ -1725,6 +1758,86 @@ module TypeGuessr
             line: prism_location.start_line,
             col_range: (prism_location.start_column...prism_location.end_column)
           )
+        end
+
+        # Register node in location_index and registries during conversion
+        # This eliminates the need for a separate tree traversal after conversion
+        def register_node(node, context)
+          return unless context.location_index
+
+          case node
+          when IR::DefNode
+            # DefNode uses singleton-adjusted method_scope for registration
+            method_scope = singleton_scope_for(context.current_class_name || "", singleton: node.singleton)
+            context.location_index.add(context.file_path, node, method_scope)
+            register_method(node, context)
+
+            # Register params (created directly, not via convert)
+            # Use method scope with method name for params
+            param_scope = method_scope.empty? ? "##{node.name}" : "#{method_scope}##{node.name}"
+            node.params&.each do |param|
+              context.location_index.add(context.file_path, param, param_scope)
+            end
+          when IR::ClassModuleNode
+            # ClassModuleNode uses parent scope for registration
+            context.location_index.add(context.file_path, node, context.scope_id)
+            register_class_module(node, context)
+          when IR::CallNode
+            context.location_index.add(context.file_path, node, context.scope_id)
+            # Register block params (created directly, not via convert)
+            node.block_params&.each do |param|
+              context.location_index.add(context.file_path, param, context.scope_id)
+            end
+          when IR::InstanceVariableWriteNode
+            context.location_index.add(context.file_path, node, context.scope_id)
+            context.variable_registry&.register_instance_variable(node.class_name, node.name, node)
+          when IR::ClassVariableWriteNode
+            context.location_index.add(context.file_path, node, context.scope_id)
+            context.variable_registry&.register_class_variable(node.class_name, node.name, node)
+          else
+            # All other nodes (MergeNode, LiteralNode, etc.)
+            context.location_index.add(context.file_path, node, context.scope_id)
+          end
+        end
+
+        # Register method in method_registry
+        # Only registers top-level methods; class methods are handled by register_class_module
+        def register_method(node, context)
+          return unless context.method_registry
+
+          # Only register top-level methods (no class context)
+          return unless (context.current_class_name || "").empty?
+
+          context.method_registry.register("", node.name.to_s, node)
+        end
+
+        # Register methods from a class/module in method_registry
+        def register_class_module(node, context)
+          return unless context.method_registry
+
+          # Build the full class path from parent context + node name
+          parent_path = context.current_class_name || ""
+          class_path = parent_path.empty? ? node.name : "#{parent_path}::#{node.name}"
+
+          # Register each method in the class (nested classes are handled recursively via convert)
+          node.methods&.each do |method|
+            next if method.is_a?(IR::ClassModuleNode)
+
+            method_scope = singleton_scope_for(class_path, singleton: method.singleton)
+            context.method_registry.register(method_scope, method.name.to_s, method)
+          end
+        end
+
+        # Build singleton class scope for method registration/lookup
+        # Singleton methods use "<Class:ClassName>" suffix to match RubyIndexer convention
+        # @param scope [String] Base scope (e.g., "RBS::Environment")
+        # @param singleton [Boolean] Whether the method is a singleton method
+        # @return [String] Scope with singleton class suffix if applicable
+        def singleton_scope_for(scope, singleton:)
+          return scope unless singleton
+
+          parent_name = scope.split("::").last || "Object"
+          scope.empty? ? "<Class:Object>" : "#{scope}::<Class:#{parent_name}>"
         end
       end
     end

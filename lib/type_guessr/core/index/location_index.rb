@@ -73,6 +73,18 @@ module TypeGuessr
           @file_keys.keys
         end
 
+        # Iterate over all indexed nodes with their scope IDs
+        # @yield [node, scope_id] Block to execute for each node
+        def each_node(&block)
+          return enum_for(:each_node) unless block
+
+          @key_index.each do |key, node|
+            # Extract scope_id from "scope_id:node_hash" format
+            scope_id = key.sub(/:#{Regexp.escape(node.node_hash)}$/, "")
+            block.call(node, scope_id)
+          end
+        end
+
         # Find the scope ID for a node within a file
         # @param file_path [String] Absolute file path
         # @param node [TypeGuessr::Core::IR::Node] IR node to find

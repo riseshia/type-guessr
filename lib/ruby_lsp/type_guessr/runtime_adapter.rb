@@ -87,23 +87,25 @@ module RubyLsp
         file_path = uri.to_standardized_path
         return unless file_path
 
-        # Parse and convert to IR outside mutex
         parsed = document.parse_result
         return unless parsed.value
-
-        # Create a shared context for all statements
-        context = ::TypeGuessr::Core::Converter::PrismConverter::Context.new
-        nodes = parsed.value.statements&.body&.filter_map do |stmt|
-          @converter.convert(stmt, context)
-        end
 
         @mutex.synchronize do
           # Clear existing index for this file
           @location_index.remove_file(file_path)
           @resolver.clear_cache
 
-          # Index all nodes recursively with scope tracking
-          nodes&.each { |node| index_node_recursively(file_path, node, "") }
+          # Create context with index/registry injection - nodes are registered during conversion
+          context = ::TypeGuessr::Core::Converter::PrismConverter::Context.new(
+            file_path: file_path,
+            location_index: @location_index,
+            method_registry: @method_registry,
+            variable_registry: @variable_registry
+          )
+
+          parsed.value.statements&.body&.each do |stmt|
+            @converter.convert(stmt, context)
+          end
 
           # Finalize the index for efficient lookups
           @location_index.finalize!
@@ -131,13 +133,16 @@ module RubyLsp
           parsed = Prism.parse(source)
           return unless parsed.value
 
-          # Create a shared context for all statements
-          context = ::TypeGuessr::Core::Converter::PrismConverter::Context.new
+          # Create context with index/registry injection - nodes are registered during conversion
+          context = ::TypeGuessr::Core::Converter::PrismConverter::Context.new(
+            file_path: file_path,
+            location_index: @location_index,
+            method_registry: @method_registry,
+            variable_registry: @variable_registry
+          )
 
-          # Convert statements to IR nodes and index with scope tracking
           parsed.value.statements&.body&.each do |stmt|
-            node = @converter.convert(stmt, context)
-            index_node_recursively(file_path, node, "") if node
+            @converter.convert(stmt, context)
           end
 
           # Finalize the index for efficient lookups
@@ -262,111 +267,26 @@ module RubyLsp
         parsed = Prism.parse(source)
         return unless parsed.value
 
-        # Create context and convert nodes outside mutex
-        context = ::TypeGuessr::Core::Converter::PrismConverter::Context.new
-        nodes = parsed.value.statements&.body&.filter_map do |stmt|
-          @converter.convert(stmt, context)
-        end
-
         # Only hold mutex while modifying shared state
         @mutex.synchronize do
           @location_index.remove_file(file_path)
-          nodes&.each { |node| index_node_recursively(file_path, node, "") }
+
+          # Create context with index/registry injection - nodes are registered during conversion
+          context = ::TypeGuessr::Core::Converter::PrismConverter::Context.new(
+            file_path: file_path,
+            location_index: @location_index,
+            method_registry: @method_registry,
+            variable_registry: @variable_registry
+          )
+
+          parsed.value.statements&.body&.each do |stmt|
+            @converter.convert(stmt, context)
+          end
         end
         # NOTE: finalize! is called once after ALL files are indexed in start_indexing
       rescue StandardError => e
         bt = e.backtrace&.first(5)&.join("\n") || "(no backtrace)"
         log_message("Error indexing #{uri}: #{e.class}: #{e.message}\n#{bt}")
-      end
-
-      # Recursively index a node and all its children with scope tracking
-      # @param file_path [String] Absolute file path
-      # @param node [TypeGuessr::Core::IR::Node] IR node to index
-      # @param scope_id [String] Current scope identifier (e.g., "User#save")
-      def index_node_recursively(file_path, node, scope_id)
-        return unless node
-
-        case node
-        when ::TypeGuessr::Core::IR::DefNode
-          index_def_node(file_path, node, scope_id)
-
-        when ::TypeGuessr::Core::IR::ClassModuleNode
-          index_class_module_node(file_path, node, scope_id)
-
-        when ::TypeGuessr::Core::IR::CallNode
-          @location_index.add(file_path, node, scope_id)
-          index_node_recursively(file_path, node.receiver, scope_id) if node.receiver
-          node.args&.each { |arg| index_node_recursively(file_path, arg, scope_id) }
-          node.block_params&.each { |param| index_node_recursively(file_path, param, scope_id) }
-          index_node_recursively(file_path, node.block_body, scope_id) if node.block_body
-
-        when ::TypeGuessr::Core::IR::MergeNode
-          @location_index.add(file_path, node, scope_id)
-          node.branches&.each { |branch| index_node_recursively(file_path, branch, scope_id) }
-
-        when ::TypeGuessr::Core::IR::InstanceVariableWriteNode
-          @location_index.add(file_path, node, scope_id)
-          @variable_registry.register_instance_variable(node.class_name, node.name, node) if node.class_name
-          index_node_recursively(file_path, node.value, scope_id) if node.value
-
-        when ::TypeGuessr::Core::IR::ClassVariableWriteNode
-          @location_index.add(file_path, node, scope_id)
-          @variable_registry.register_class_variable(node.class_name, node.name, node) if node.class_name
-          index_node_recursively(file_path, node.value, scope_id) if node.value
-
-        when ::TypeGuessr::Core::IR::LocalWriteNode
-          @location_index.add(file_path, node, scope_id)
-          index_node_recursively(file_path, node.value, scope_id) if node.value
-
-        when ::TypeGuessr::Core::IR::ParamNode
-          @location_index.add(file_path, node, scope_id)
-          index_node_recursively(file_path, node.default_value, scope_id) if node.default_value
-
-        when ::TypeGuessr::Core::IR::ReturnNode
-          @location_index.add(file_path, node, scope_id)
-          index_node_recursively(file_path, node.value, scope_id) if node.value
-
-        when ::TypeGuessr::Core::IR::ConstantNode
-          @location_index.add(file_path, node, scope_id)
-          index_node_recursively(file_path, node.dependency, scope_id) if node.dependency
-
-        when ::TypeGuessr::Core::IR::LiteralNode
-          @location_index.add(file_path, node, scope_id)
-          # Index value nodes (e.g., variable references in arrays/hashes/keyword args)
-          node.values&.each { |value| index_node_recursively(file_path, value, scope_id) }
-
-        else
-          # LocalReadNode, InstanceVariableReadNode, ClassVariableReadNode, etc.
-          @location_index.add(file_path, node, scope_id)
-        end
-      end
-
-      def index_def_node(file_path, node, scope_id)
-        method_scope = singleton_scope_for(scope_id, singleton: node.singleton)
-        @location_index.add(file_path, node, method_scope)
-
-        new_scope = method_scope.empty? ? "##{node.name}" : "#{method_scope}##{node.name}"
-        @method_registry.register("", node.name.to_s, node) if scope_id.empty?
-
-        node.params&.each { |param| index_node_recursively(file_path, param, new_scope) }
-        node.body_nodes&.each { |body_node| index_node_recursively(file_path, body_node, new_scope) }
-      end
-
-      def index_class_module_node(file_path, node, scope_id)
-        @location_index.add(file_path, node, scope_id)
-
-        new_scope = scope_id.empty? ? node.name : "#{scope_id}::#{node.name}"
-
-        node.methods&.each do |method|
-          if method.is_a?(::TypeGuessr::Core::IR::ClassModuleNode)
-            index_node_recursively(file_path, method, new_scope)
-          else
-            index_node_recursively(file_path, method, new_scope)
-
-            method_scope = singleton_scope_for(new_scope, singleton: method.singleton)
-            @method_registry.register(method_scope, method.name.to_s, method)
-          end
-        end
       end
 
       # Build SignatureProvider with configured type sources
@@ -382,18 +302,6 @@ module RubyLsp
         # provider.add_provider(ProjectRBSProvider.new, priority: :high)
 
         provider
-      end
-
-      # Build singleton class scope for method registration/lookup
-      # Singleton methods use "<Class:ClassName>" suffix to match RubyIndexer convention
-      # @param scope [String] Base scope (e.g., "RBS::Environment2")
-      # @param singleton [Boolean] Whether the method is a singleton method
-      # @return [String] Scope with singleton class suffix if applicable
-      def singleton_scope_for(scope, singleton:)
-        return scope unless singleton
-
-        parent_name = scope.split("::").last || "Object"
-        scope.empty? ? "<Class:Object>" : "#{scope}::<Class:#{parent_name}>"
       end
 
       def log_message(message)

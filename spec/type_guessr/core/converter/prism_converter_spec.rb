@@ -1794,7 +1794,7 @@ RSpec.describe TypeGuessr::Core::Converter::PrismConverter do
         context = TypeGuessr::Core::Converter::PrismConverter::Context.new
         node = converter.convert(parsed.value.statements.body.first, context)
 
-        singleton = node.methods.find { |m| m.is_a?(TypeGuessr::Core::IR::ClassModuleNode) && m.name.start_with?("<Class:") }
+        singleton = node.methods.find { |m| m.is_a?(TypeGuessr::Core::IR::ClassModuleNode) && m.name.include?("<Class:") }
         expect(singleton).not_to be_nil
         expect(singleton.methods.size).to eq(2)
       end

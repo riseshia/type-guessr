@@ -61,7 +61,6 @@ module ProfileIndexing
       @converter = TypeGuessr::Core::Converter::PrismConverter.new
       @location_index = TypeGuessr::Core::Index::LocationIndex.new
       @resolver = build_resolver
-      @indexed_nodes = []
       @results = {}
     end
 
@@ -124,10 +123,10 @@ module ProfileIndexing
       RUBY
 
       # Clean bundler environment variables for subprocess
-      clean_env = ENV.to_h.reject { |k, _| k.start_with?('BUNDLE_', 'RUBYGEMS_', 'GEM_') }
-      clean_env['BUNDLE_GEMFILE'] = File.join(project_path, 'Gemfile')
+      clean_env = ENV.to_h.reject { |k, _| k.start_with?("BUNDLE_", "RUBYGEMS_", "GEM_") }
+      clean_env["BUNDLE_GEMFILE"] = File.join(project_path, "Gemfile")
 
-      output = IO.popen(clean_env, ['ruby'], 'r+', chdir: project_path, err: [:child, :out]) do |io|
+      output = IO.popen(clean_env, ["ruby"], "r+", chdir: project_path, err: %i[child out]) do |io|
         io.write(script)
         io.close_write
         io.read
@@ -261,7 +260,6 @@ module ProfileIndexing
     def reset_state
       @converter = TypeGuessr::Core::Converter::PrismConverter.new
       @location_index = TypeGuessr::Core::Index::LocationIndex.new
-      @indexed_nodes = []
     end
 
     def index_files(files)
@@ -287,65 +285,16 @@ module ProfileIndexing
       parsed = Prism.parse(source)
       return unless parsed.value
 
-      context = TypeGuessr::Core::Converter::PrismConverter::Context.new
-      nodes = parsed.value.statements&.body&.filter_map do |stmt|
-        @converter.convert(stmt, context)
-      end
-
       @location_index.remove_file(file_path)
-      nodes&.each { |node| index_node_recursively(file_path, node, "") }
-    end
 
-    def index_node_recursively(file_path, node, scope_id)
-      return unless node
+      # Create context with location_index injection - nodes are registered during conversion
+      context = TypeGuessr::Core::Converter::PrismConverter::Context.new(
+        file_path: file_path,
+        location_index: @location_index
+      )
 
-      @location_index.add(file_path, node, scope_id)
-
-      # Track nodes for inference sampling
-      @indexed_nodes << [node, scope_id] if should_sample_node?(node)
-
-      case node
-      when TypeGuessr::Core::IR::ClassModuleNode
-        new_scope = scope_id.empty? ? node.name : "#{scope_id}::#{node.name}"
-        node.methods&.each do |method|
-          if method.is_a?(TypeGuessr::Core::IR::ClassModuleNode)
-            index_node_recursively(file_path, method, scope_id.empty? ? node.name : "#{scope_id}::#{node.name}")
-          else
-            index_node_recursively(file_path, method, new_scope)
-          end
-        end
-
-      when TypeGuessr::Core::IR::DefNode
-        new_scope = scope_id.empty? ? "##{node.name}" : "#{scope_id}##{node.name}"
-        node.params&.each { |param| index_node_recursively(file_path, param, new_scope) }
-        node.body_nodes&.each { |body_node| index_node_recursively(file_path, body_node, new_scope) }
-
-      when TypeGuessr::Core::IR::LocalWriteNode
-        index_node_recursively(file_path, node.value, scope_id) if node.value
-
-      when TypeGuessr::Core::IR::InstanceVariableWriteNode
-        index_node_recursively(file_path, node.value, scope_id) if node.value
-
-      when TypeGuessr::Core::IR::ClassVariableWriteNode
-        index_node_recursively(file_path, node.value, scope_id) if node.value
-
-      when TypeGuessr::Core::IR::CallNode
-        index_node_recursively(file_path, node.receiver, scope_id) if node.receiver
-        node.args&.each { |arg| index_node_recursively(file_path, arg, scope_id) }
-        node.block_params&.each { |param| index_node_recursively(file_path, param, scope_id) }
-        index_node_recursively(file_path, node.block_body, scope_id) if node.block_body
-
-      when TypeGuessr::Core::IR::ParamNode
-        index_node_recursively(file_path, node.default_value, scope_id) if node.default_value
-
-      when TypeGuessr::Core::IR::MergeNode
-        node.branches&.each { |branch| index_node_recursively(file_path, branch, scope_id) }
-
-      when TypeGuessr::Core::IR::ReturnNode
-        index_node_recursively(file_path, node.value, scope_id) if node.value
-
-      when TypeGuessr::Core::IR::ConstantNode
-        index_node_recursively(file_path, node.dependency, scope_id) if node.dependency
+      parsed.value.statements&.body&.each do |stmt|
+        @converter.convert(stmt, context)
       end
     end
 
@@ -364,11 +313,17 @@ module ProfileIndexing
     end
 
     def collect_inference_samples
-      return [] if @indexed_nodes.empty?
+      # Collect all nodes from location_index that are interesting for inference
+      all_nodes = []
+      @location_index.each_node do |node, scope_id|
+        all_nodes << [node, scope_id] if should_sample_node?(node)
+      end
+
+      return [] if all_nodes.empty?
 
       # Sample evenly from the indexed nodes
-      step = [@indexed_nodes.size / @samples, 1].max
-      @indexed_nodes.each_slice(step).map(&:first).first(@samples)
+      step = [all_nodes.size / @samples, 1].max
+      all_nodes.each_slice(step).map(&:first).first(@samples)
     end
 
     def run_inference(sample_nodes)
@@ -398,7 +353,6 @@ module ProfileIndexing
       puts "\nIndexing Statistics:"
       puts "  Files indexed: #{stats[:files_count]}"
       puts "  Total nodes: #{stats[:total_nodes]}"
-      puts "  Nodes sampled for inference: #{@indexed_nodes.size}"
     end
 
     def print_inference_stats(sample_nodes)
@@ -839,7 +793,6 @@ module ProfileIndexing
       TEXT
     end
 
-    # rubocop:disable Metrics/MethodLength
     def optimization_recommendations(_indexing_frames, _inference_frames)
       <<~TEXT
         ### Indexing Optimizations
@@ -940,7 +893,6 @@ module ProfileIndexing
         | 5 | LocationIndex Set replacement | Low | Low | ⭐⭐ |
       TEXT
     end
-    # rubocop:enable Metrics/MethodLength
 
     def dump_files_section
       dumps = Dir.glob("tmp/stackprof-*.dump")
