@@ -297,6 +297,7 @@ module BenchmarkRunner
       puts "Sampling #{sample_entries.size} nodes for inference benchmark"
 
       # Build resolver
+      TypeGuessr::Core::RBSProvider.instance.preload
       provider = TypeGuessr::Core::SignatureProvider.new
       provider.add_provider(TypeGuessr::Core::RBSProvider.instance)
 

@@ -98,6 +98,7 @@ module ProfileIndexing
     end
 
     def build_resolver
+      TypeGuessr::Core::RBSProvider.instance.preload
       provider = TypeGuessr::Core::SignatureProvider.new
       provider.add_provider(TypeGuessr::Core::RBSProvider.instance)
       TypeGuessr::Core::Inference::Resolver.new(provider)

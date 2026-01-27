@@ -132,6 +132,7 @@ module CoverageRunner
       location_index = TypeGuessr::Core::Index::LocationIndex.new
       method_registry = TypeGuessr::Core::Registry::MethodRegistry.new
 
+      TypeGuessr::Core::RBSProvider.instance.preload
       provider = TypeGuessr::Core::SignatureProvider.new
       provider.add_provider(TypeGuessr::Core::RBSProvider.instance)
       resolver = TypeGuessr::Core::Inference::Resolver.new(provider, method_registry: method_registry)
