@@ -1611,6 +1611,72 @@ RSpec.describe "Hover Integration" do
       end
     end
 
+    context "method call shows same signature as method definition" do
+      let(:source) do
+        <<~RUBY
+          class Greeter
+            def greet(name = "World")
+              "Hello, \#{name}!"
+            end
+          end
+
+          greeter = Greeter.new
+          greeter.greet("Alice")
+        RUBY
+      end
+
+      it "shows parameter info from DefNode" do
+        # Method definition hover should show: (?String name) -> String
+        def_response = hover_on_source(source, { line: 1, character: 6 })
+        # Method call hover should show the same signature
+        call_response = hover_on_source(source, { line: 7, character: 10 })
+
+        expect(def_response).not_to be_nil
+        expect(call_response).not_to be_nil
+
+        # Both should show the same parameter signature with default value type
+        expect(def_response.contents.value).to include("?String name")
+        expect(call_response.contents.value).to include("?String name")
+      end
+    end
+
+    context "method call reuses DefNode inference for complex parameters" do
+      let(:source) do
+        <<~RUBY
+          class Calculator
+            def add(a, b = 10, *rest, key:, opt_key: "default", **kwargs, &block)
+              a + b
+            end
+          end
+
+          calc = Calculator.new
+          calc.add(1, 2, 3, key: "x")
+        RUBY
+      end
+
+      it "shows full parameter signature from DefNode" do
+        # Method definition hover
+        def_response = hover_on_source(source, { line: 1, character: 6 })
+        # Method call hover
+        call_response = hover_on_source(source, { line: 7, character: 7 })
+
+        expect(def_response).not_to be_nil
+        expect(call_response).not_to be_nil
+
+        # DefNode should show complex parameter signature
+        def_content = def_response.contents.value
+        call_content = call_response.contents.value
+
+        # Both should have "Guessed Signature"
+        expect(def_content).to include("Guessed Signature")
+        expect(call_content).to include("Guessed Signature")
+
+        # Both should have the same return type (Integer from a + b)
+        expect(def_content).to include("Integer")
+        expect(call_content).to include("Integer")
+      end
+    end
+
     context "Integer return type" do
       let(:source) do
         <<~RUBY

@@ -142,7 +142,17 @@ module RubyLsp
           class_name = extract_class_name(receiver_type)
 
           if class_name
-            # Look up signature via SignatureProvider
+            # Try to find DefNode first (for project methods)
+            # Use the same inference logic as DefNode hover
+            unless receiver_type.is_a?(Types::SingletonType)
+              def_node = @runtime_adapter.lookup_method(class_name, call_node.method.to_s)
+              if def_node
+                add_def_node_hover(def_node)
+                return
+              end
+            end
+
+            # Fall back to RBS signature lookup (for stdlib/gems)
             # Use class method lookup for SingletonType (e.g., RBS::Environment.from_loader)
             signatures = if receiver_type.is_a?(Types::SingletonType)
                            @runtime_adapter.signature_provider.get_class_method_signatures(
