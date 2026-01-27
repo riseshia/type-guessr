@@ -1640,6 +1640,45 @@ RSpec.describe "Hover Integration" do
       end
     end
 
+    context "implicit self method call with optional parameter" do
+      let(:source) do
+        <<~RUBY
+          def greet(name = "World")
+            "Hello, \#{name}!"
+          end
+
+          greet("Alice")
+        RUBY
+      end
+
+      it "shows parameter info from DefNode" do
+        # Hover on "greet" in greet("Alice") call (line 5, col 0)
+        expect_hover_method_signature(line: 5, column: 0, expected_signature: "(?String name) -> String")
+      end
+    end
+
+    context "implicit self method call inside class" do
+      let(:source) do
+        <<~RUBY
+          class Calculator
+            def add(a, b = 10)
+              a + b
+            end
+
+            def compute
+              add(5, 20)
+            end
+          end
+        RUBY
+      end
+
+      it "shows parameter info from DefNode" do
+        # Hover on "add" in add(5, 20) call (line 7, col 4)
+        # Return type is untyped because `a` parameter has no type info
+        expect_hover_method_signature(line: 7, column: 4, expected_signature: "(untyped a, ?Integer b) -> untyped")
+      end
+    end
+
     context "method call reuses DefNode inference for complex parameters" do
       let(:source) do
         <<~RUBY

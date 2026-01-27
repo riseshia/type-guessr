@@ -128,6 +128,15 @@ module RubyLsp
           return
         end
 
+        # Handle implicit self calls (receiver is nil)
+        unless call_node.receiver
+          def_node = lookup_def_node_for_implicit_self(call_node)
+          if def_node
+            add_def_node_hover(def_node)
+            return
+          end
+        end
+
         # Get receiver type to look up method signature
         if call_node.receiver
           # For ConstantNode receiver (e.g., File.exist?, RBS::Environment.from_loader),
@@ -297,6 +306,22 @@ module RubyLsp
         entries.first
       rescue RubyIndexer::Index::NonExistingNamespaceError
         nil
+      end
+
+      # Look up DefNode for implicit self calls (receiver is nil)
+      # Searches in current class scope and falls back to top-level
+      def lookup_def_node_for_implicit_self(call_node)
+        method_name = call_node.method.to_s
+
+        # Get current class scope from node_context
+        class_name = @node_context.nesting.map { |n| n.is_a?(String) ? n : n.name.to_s }.join("::")
+
+        # Try current class scope first
+        def_node = @runtime_adapter.lookup_method(class_name, method_name) if class_name && !class_name.empty?
+        return def_node if def_node
+
+        # Fall back to top-level (empty class name)
+        @runtime_adapter.lookup_method("", method_name)
       end
 
       def extract_class_name(type)
