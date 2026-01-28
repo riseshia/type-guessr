@@ -7,6 +7,7 @@ require_relative "../../type_guessr/core/registry/method_registry"
 require_relative "../../type_guessr/core/registry/variable_registry"
 require_relative "../../type_guessr/core/inference/resolver"
 require_relative "../../type_guessr/core/signature_provider"
+require_relative "../../type_guessr/core/signature_builder"
 require_relative "../../type_guessr/core/rbs_provider"
 require_relative "../../type_guessr/core/type_simplifier"
 require_relative "code_index_adapter"
@@ -54,6 +55,9 @@ module RubyLsp
         @resolver.type_simplifier = ::TypeGuessr::Core::TypeSimplifier.new(
           code_index: @code_index
         )
+
+        # Build method signatures from DefNodes using resolver
+        @signature_builder = ::TypeGuessr::Core::SignatureBuilder.new(@resolver)
       end
 
       # Swap ruby-lsp's TypeInferrer with TypeGuessr's custom implementation
@@ -165,6 +169,15 @@ module RubyLsp
       def infer_type(node)
         @mutex.synchronize do
           @resolver.infer(node)
+        end
+      end
+
+      # Build a MethodSignature from a DefNode
+      # @param def_node [TypeGuessr::Core::IR::DefNode] Method definition node
+      # @return [TypeGuessr::Core::Types::MethodSignature] Structured method signature
+      def build_method_signature(def_node)
+        @mutex.synchronize do
+          @signature_builder.build_from_def_node(def_node)
         end
       end
 

@@ -106,15 +106,13 @@ module RubyLsp
       end
 
       def add_def_node_hover(def_node)
-        # Build method signature: (params) -> return_type
-        params_str = format_params(def_node.params)
-        return_result = @runtime_adapter.infer_type(def_node)
-        return_type_str = return_result.type.to_s
+        method_sig = @runtime_adapter.build_method_signature(def_node)
+        content = "**Guessed Signature:** `#{method_sig}`"
 
-        signature = "(#{params_str}) -> #{return_type_str}"
-        content = "**Guessed Signature:** `#{signature}`"
-
-        content += build_debug_info(return_result) if debug_enabled?
+        if debug_enabled?
+          return_result = @runtime_adapter.infer_type(def_node)
+          content += build_debug_info(return_result)
+        end
 
         @response_builder.push(content, category: :documentation)
       end
@@ -352,7 +350,8 @@ module RubyLsp
         content = if init_info
                     case init_info[:source]
                     when :project
-                      params_str = format_params(init_info[:params])
+                      method_sig = @runtime_adapter.build_method_signature(init_info[:def_node])
+                      params_str = method_sig.params.map(&:to_s).join(", ")
                       "**Guessed Signature:** `(#{params_str}) -> #{class_name}`"
                     when :rbs
                       sig_str = init_info[:signature].method_type.to_s
@@ -372,7 +371,7 @@ module RubyLsp
       def lookup_initialize_signature(class_name)
         # 1. Try project methods first
         def_node = @runtime_adapter.lookup_method(class_name, "initialize")
-        return { params: def_node.params, source: :project } if def_node
+        return { def_node: def_node, source: :project } if def_node
 
         # 2. Fall back to RBS signatures
         signatures = @runtime_adapter.signature_provider.get_method_signatures(
@@ -389,41 +388,6 @@ module RubyLsp
         info += "\n\n**Class:** `#{class_name}`"
         info += "\n\n**Source:** #{init_info&.[](:source) || :inferred}"
         info
-      end
-
-      def format_params(params)
-        return "" if params.nil? || params.empty?
-
-        params.map do |param|
-          param_type = infer_param_type(param)
-          type_str = param_type.to_s
-
-          case param.kind
-          when :required
-            "#{type_str} #{param.name}"
-          when :optional
-            "?#{type_str} #{param.name}"
-          when :rest
-            "*#{type_str} #{param.name}"
-          when :keyword_required
-            "#{param.name}: #{type_str}"
-          when :keyword_optional
-            "#{param.name}: ?#{type_str}"
-          when :keyword_rest
-            "**#{type_str} #{param.name}"
-          when :block
-            "&#{type_str} #{param.name}"
-          when :forwarding
-            "..."
-          else
-            "#{type_str} #{param.name}"
-          end
-        end.join(", ")
-      end
-
-      def infer_param_type(param)
-        result = @runtime_adapter.infer_type(param)
-        result.type
       end
 
       def debug_enabled?

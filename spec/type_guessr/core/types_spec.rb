@@ -642,6 +642,91 @@ RSpec.describe TypeGuessr::Core::Types do
     end
   end
 
+  describe "ParamSignature" do
+    let(:string_type) { described_class::ClassInstance.new("String") }
+    let(:integer_type) { described_class::ClassInstance.new("Integer") }
+    let(:proc_type) { described_class::ClassInstance.new("Proc") }
+
+    it "formats required param" do
+      param = described_class::ParamSignature.new(name: :name, kind: :required, type: string_type)
+      expect(param.to_s).to eq("String name")
+    end
+
+    it "formats optional param" do
+      param = described_class::ParamSignature.new(name: :count, kind: :optional, type: integer_type)
+      expect(param.to_s).to eq("?Integer count")
+    end
+
+    it "formats rest param" do
+      param = described_class::ParamSignature.new(name: :args, kind: :rest, type: string_type)
+      expect(param.to_s).to eq("*String args")
+    end
+
+    it "formats keyword_required param" do
+      param = described_class::ParamSignature.new(name: :name, kind: :keyword_required, type: string_type)
+      expect(param.to_s).to eq("name: String")
+    end
+
+    it "formats keyword_optional param" do
+      param = described_class::ParamSignature.new(name: :name, kind: :keyword_optional, type: string_type)
+      expect(param.to_s).to eq("name: ?String")
+    end
+
+    it "formats keyword_rest param" do
+      param = described_class::ParamSignature.new(name: :opts, kind: :keyword_rest, type: string_type)
+      expect(param.to_s).to eq("**String opts")
+    end
+
+    it "formats block param" do
+      param = described_class::ParamSignature.new(name: :handler, kind: :block, type: proc_type)
+      expect(param.to_s).to eq("&Proc handler")
+    end
+
+    it "formats forwarding param" do
+      param = described_class::ParamSignature.new(name: :*, kind: :forwarding, type: described_class::Unknown.instance)
+      expect(param.to_s).to eq("...")
+    end
+  end
+
+  describe "MethodSignature" do
+    let(:string_type) { described_class::ClassInstance.new("String") }
+    let(:integer_type) { described_class::ClassInstance.new("Integer") }
+    let(:array_type) { described_class::ArrayType.new(described_class::ClassInstance.new("User")) }
+
+    it "formats signature with params" do
+      params = [
+        described_class::ParamSignature.new(name: :name, kind: :required, type: string_type),
+        described_class::ParamSignature.new(name: :count, kind: :optional, type: integer_type)
+      ]
+      sig = described_class::MethodSignature.new(params, array_type)
+      expect(sig.to_s).to eq("(String name, ?Integer count) -> Array[User]")
+    end
+
+    it "formats signature with no params" do
+      sig = described_class::MethodSignature.new([], described_class::Unknown.instance)
+      expect(sig.to_s).to eq("() -> untyped")
+    end
+
+    it "equals another MethodSignature with same params and return_type" do
+      params = [described_class::ParamSignature.new(name: :x, kind: :required, type: string_type)]
+      sig1 = described_class::MethodSignature.new(params, integer_type)
+      sig2 = described_class::MethodSignature.new(params, integer_type)
+      expect(sig1).to eq(sig2)
+    end
+
+    it "does not equal MethodSignature with different return_type" do
+      params = [described_class::ParamSignature.new(name: :x, kind: :required, type: string_type)]
+      sig1 = described_class::MethodSignature.new(params, integer_type)
+      sig2 = described_class::MethodSignature.new(params, string_type)
+      expect(sig1).not_to eq(sig2)
+    end
+
+    it "returns Proc as rbs_class_name" do
+      sig = described_class::MethodSignature.new([], integer_type)
+      expect(sig.rbs_class_name).to eq("Proc")
+    end
+  end
+
   describe "#substitute" do
     let(:integer_type) { described_class::ClassInstance.new("Integer") }
     let(:string_type) { described_class::ClassInstance.new("String") }
@@ -807,6 +892,29 @@ RSpec.describe TypeGuessr::Core::Types do
         result = hash_shape.substitute({ Elem: symbol_type })
 
         expect(result).to be(hash_shape)
+      end
+    end
+
+    describe "MethodSignature" do
+      it "substitutes type variables in params and return_type" do
+        type_var = described_class::TypeVariable.new(:T)
+        params = [described_class::ParamSignature.new(name: :x, kind: :required, type: type_var)]
+        sig = described_class::MethodSignature.new(params, type_var)
+
+        result = sig.substitute({ T: string_type })
+
+        expect(result).to be_a(described_class::MethodSignature)
+        expect(result.params.first.type).to eq(string_type)
+        expect(result.return_type).to eq(string_type)
+      end
+
+      it "returns self when no types changed" do
+        params = [described_class::ParamSignature.new(name: :x, kind: :required, type: string_type)]
+        sig = described_class::MethodSignature.new(params, integer_type)
+
+        result = sig.substitute({ Elem: symbol_type })
+
+        expect(result).to be(sig)
       end
     end
   end

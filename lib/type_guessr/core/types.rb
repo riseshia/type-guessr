@@ -420,6 +420,63 @@ module TypeGuessr
           "..."
         end
       end
+
+      # ParamSignature - structural component of MethodSignature (not a Type)
+      # Represents a single parameter with its name, kind, and inferred type
+      ParamSignature = Data.define(:name, :kind, :type) do
+        def to_s
+          type_str = type.to_s
+          case kind
+          when :required         then "#{type_str} #{name}"
+          when :optional         then "?#{type_str} #{name}"
+          when :rest             then "*#{type_str} #{name}"
+          when :keyword_required then "#{name}: #{type_str}"
+          when :keyword_optional then "#{name}: ?#{type_str}"
+          when :keyword_rest     then "**#{type_str} #{name}"
+          when :block            then "&#{type_str} #{name}"
+          when :forwarding       then "..."
+          end
+        end
+      end
+
+      # MethodSignature - first-class type for Proc/Lambda/Method signatures
+      # Follows the same pattern as ArrayType: holds inner types and delegates substitute
+      class MethodSignature < Type
+        attr_reader :params, :return_type
+
+        def initialize(params, return_type)
+          super()
+          @params = params
+          @return_type = return_type
+        end
+
+        def eql?(other)
+          super && @params == other.params && @return_type == other.return_type
+        end
+
+        def hash
+          [self.class, @params, @return_type].hash
+        end
+
+        def to_s
+          params_str = @params.map(&:to_s).join(", ")
+          "(#{params_str}) -> #{@return_type}"
+        end
+
+        def substitute(substitutions)
+          new_params = @params.map do |p|
+            ParamSignature.new(name: p.name, kind: p.kind, type: p.type.substitute(substitutions))
+          end
+          new_return_type = @return_type.substitute(substitutions)
+          return self if new_params == @params && new_return_type.equal?(@return_type)
+
+          MethodSignature.new(new_params, new_return_type)
+        end
+
+        def rbs_class_name
+          "Proc"
+        end
+      end
     end
   end
 end
