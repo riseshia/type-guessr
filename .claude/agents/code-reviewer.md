@@ -48,25 +48,22 @@ Include specific examples of how to fix issues.
 - Large files (>800 lines)
 - Deep nesting (>4 levels)
 - Missing error handling (try/catch)
-- console.log statements
-- Mutation patterns
+- puts/p debug statements left in code
 - Missing tests for new code
 
 ## Performance (MEDIUM)
 
 - Inefficient algorithms (O(n²) when O(n log n) possible)
-- Unnecessary re-renders in React
-- Missing memoization
-- Large bundle sizes
-- Unoptimized images
 - Missing caching
 - N+1 queries
+- Unnecessary object allocations
+- Missing lazy evaluation where beneficial
 
 ## Best Practices (MEDIUM)
 
 - Emoji usage in code/comments
 - TODO/FIXME without tickets
-- Missing JSDoc for public APIs
+- Missing YARD documentation for public APIs
 - Accessibility issues (missing ARIA labels, poor contrast)
 - Poor variable naming (x, tmp, data)
 - Magic numbers without explanation
@@ -77,12 +74,12 @@ Include specific examples of how to fix issues.
 For each issue:
 ```
 [CRITICAL] Hardcoded API key
-File: src/api/client.ts:42
+File: lib/api/client.rb:42
 Issue: API key exposed in source code
 Fix: Move to environment variable
 
-const apiKey = "sk-abc123";  // ❌ Bad
-const apiKey = process.env.API_KEY;  // ✓ Good
+api_key = "sk-abc123"  # ❌ Bad
+api_key = ENV['API_KEY']  # ✓ Good
 ```
 
 ## Approval Criteria
@@ -91,14 +88,11 @@ const apiKey = process.env.API_KEY;  // ✓ Good
 - ⚠️ Warning: MEDIUM issues only (can merge with caution)
 - ❌ Block: CRITICAL or HIGH issues found
 
-## Project-Specific Guidelines (Example)
+## Project-Specific Guidelines
 
-Add your project-specific checks here. Examples:
-- Follow MANY SMALL FILES principle (200-400 lines typical)
-- No emojis in codebase
-- Use immutability patterns (spread operator)
-- Verify database RLS policies
-- Check AI integration error handling
-- Validate cache fallback behavior
-
-Customize based on your project's `CLAUDE.md` or skill files.
+- Follow frozen_string_literal convention
+- Run RuboCop before committing: `bundle exec rubocop -a`
+- Ensure RSpec tests pass: `bundle exec rspec`
+- Follow existing code patterns in the codebase
+- Keep files focused and small (200-400 lines typical)
+- No emojis in codebase unless explicitly requested

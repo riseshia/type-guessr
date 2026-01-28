@@ -82,26 +82,24 @@ For each design decision, document:
 
 ## Common Patterns
 
-### Frontend Patterns
-- **Component Composition**: Build complex UI from simple components
-- **Container/Presenter**: Separate data logic from presentation
-- **Custom Hooks**: Reusable stateful logic
-- **Context for Global State**: Avoid prop drilling
-- **Code Splitting**: Lazy load routes and heavy components
+### Ruby Design Patterns
+- **Module Mixin**: Shared behavior across classes via `include`/`extend`
+- **Service Objects**: Encapsulate business logic in dedicated classes
+- **Value Objects**: Immutable data containers (e.g., Struct, Data)
+- **Dependency Injection**: Constructor-based DI for testability
+- **Duck Typing**: Interface by convention, not declaration
 
-### Backend Patterns
+### Structural Patterns
 - **Repository Pattern**: Abstract data access
-- **Service Layer**: Business logic separation
-- **Middleware Pattern**: Request/response processing
-- **Event-Driven Architecture**: Async operations
-- **CQRS**: Separate read and write operations
+- **Adapter Pattern**: Wrap external dependencies (e.g., LSP integration)
+- **Visitor Pattern**: AST traversal and transformation
+- **Strategy Pattern**: Swappable algorithms (e.g., type inference strategies)
 
-### Data Patterns
-- **Normalized Database**: Reduce redundancy
-- **Denormalized for Read Performance**: Optimize queries
-- **Event Sourcing**: Audit trail and replayability
-- **Caching Layers**: Redis, CDN
-- **Eventual Consistency**: For distributed systems
+### Ruby-Specific Patterns
+- **Frozen String Literals**: Immutability by default
+- **Lazy Enumeration**: Use `Enumerator::Lazy` for large collections
+- **Method Chaining**: Fluent interfaces with `tap` and returning `self`
+- **Block/Proc/Lambda**: First-class functions for callbacks
 
 ## Architecture Decision Records (ADRs)
 
@@ -183,29 +181,32 @@ Watch for these architectural anti-patterns:
 - **Tight Coupling**: Components too dependent
 - **God Object**: One class/component does everything
 
-## Project-Specific Architecture (Example)
+## Project-Specific Architecture
 
-Example architecture for an AI-powered SaaS platform:
+### TypeGuessr Architecture
 
-### Current Architecture
-- **Frontend**: Next.js 15 (Vercel/Cloud Run)
-- **Backend**: FastAPI or Express (Cloud Run/Railway)
-- **Database**: PostgreSQL (Supabase)
-- **Cache**: Redis (Upstash/Railway)
-- **AI**: Claude API with structured output
-- **Real-time**: Supabase subscriptions
+**Two-Layer Design:**
+- **Core Layer** (`lib/type_guessr/core/`): Framework-agnostic type inference logic
+- **Integration Layer** (`lib/ruby_lsp/type_guessr/`): Ruby LSP-specific adapter
 
-### Key Design Decisions
-1. **Hybrid Deployment**: Vercel (frontend) + Cloud Run (backend) for optimal performance
-2. **AI Integration**: Structured output with Pydantic/Zod for type safety
-3. **Real-time Updates**: Supabase subscriptions for live data
-4. **Immutable Patterns**: Spread operators for predictable state
-5. **Many Small Files**: High cohesion, low coupling
+### Key Components
+- **PrismConverter**: Prism AST → IR Node graph
+- **LocationIndex**: O(1) node lookup by location
+- **Resolver**: Graph traversal for type inference
+- **RBSProvider**: RBS method signature lookup
+- **RuntimeAdapter**: Thread-safe access to inference results
 
-### Scalability Plan
-- **10K users**: Current architecture sufficient
-- **100K users**: Add Redis clustering, CDN for static assets
-- **1M users**: Microservices architecture, separate read/write databases
-- **10M users**: Event-driven architecture, distributed caching, multi-region
+### Data Flow
+1. Ruby LSP indexes files → triggers TypeGuessr indexing
+2. PrismConverter builds node dependency graph
+3. On hover/definition request → LocationIndex finds node
+4. Resolver traverses graph → returns inferred type
+5. RBSProvider fills gaps with RBS definitions
+
+### Design Decisions
+1. **Lazy Inference**: Types resolved on-demand, not at index time
+2. **Node-based IR**: Decouples from Prism AST for flexibility
+3. **RBS Integration**: Leverage existing type definitions
+4. **Duck Typing Heuristics**: Infer from method call patterns
 
 **Remember**: Good architecture enables rapid development, easy maintenance, and confident scaling. The best architecture is simple, clear, and follows established patterns.

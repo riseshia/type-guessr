@@ -62,13 +62,13 @@ Create detailed steps with:
 ## Implementation Steps
 
 ### Phase 1: [Phase Name]
-1. **[Step Name]** (File: path/to/file.ts)
+1. **[Step Name]** (File: path/to/file.rb)
    - Action: Specific action to take
    - Why: Reason for this step
    - Dependencies: None / Requires step X
    - Risk: Low/Medium/High
 
-2. **[Step Name]** (File: path/to/file.ts)
+2. **[Step Name]** (File: path/to/file.rb)
    ...
 
 ### Phase 2: [Phase Name]
