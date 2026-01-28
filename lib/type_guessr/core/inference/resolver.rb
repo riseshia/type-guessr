@@ -13,6 +13,9 @@ module TypeGuessr
       # Resolves types by traversing the IR dependency graph
       # Each node points to nodes it depends on (reverse dependency graph)
       class Resolver
+        # Sentinel value to detect circular references during inference
+        INFERRING = Object.new.freeze
+
         # Type simplifier for normalizing union types
         # @return [TypeSimplifier, nil]
         attr_accessor :type_simplifier
@@ -47,7 +50,14 @@ module TypeGuessr
 
           # Use cache to avoid redundant inference
           cached = @cache[node]
+
+          # Detect circular reference: INFERRING sentinel means we're already processing this node
+          return Result.new(Types::Unknown.instance, "circular reference", :unknown) if cached.equal?(INFERRING)
+
           return cached if cached
+
+          # Mark as in-progress to detect cycles
+          @cache[node] = INFERRING
 
           result = infer_node(node)
 

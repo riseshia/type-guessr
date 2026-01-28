@@ -572,6 +572,37 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
       end
     end
 
+    context "with circular references" do
+      it "returns Unknown instead of stack overflow when MergeNode contains self-referential branch" do
+        # Create a circular reference: MergeNode -> LocalReadNode -> write_node -> MergeNode
+        # This simulates patterns like `x ||= x` or complex control flow
+        merge_node = TypeGuessr::Core::IR::MergeNode.new(
+          branches: [],
+          loc: loc
+        )
+
+        write_node = TypeGuessr::Core::IR::LocalWriteNode.new(
+          name: :x,
+          value: merge_node,
+          called_methods: [],
+          loc: loc
+        )
+
+        read_node = TypeGuessr::Core::IR::LocalReadNode.new(
+          name: :x,
+          write_node: write_node,
+          called_methods: [],
+          loc: loc
+        )
+
+        # Create circular reference: MergeNode.branches -> read_node -> write_node.value -> MergeNode
+        merge_node.branches << read_node
+
+        # This should NOT raise SystemStackError
+        expect { resolver.infer(merge_node) }.not_to raise_error
+      end
+    end
+
     context "caching" do
       it "caches inference results" do
         node = TypeGuessr::Core::IR::LiteralNode.new(
