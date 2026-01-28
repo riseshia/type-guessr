@@ -337,56 +337,37 @@ module RubyLsp
 
       # Handle .new calls to show constructor signature
       def add_new_call_hover(call_node)
-        # Resolve constant to get class name (handles aliases)
-        receiver_result = @runtime_adapter.infer_type(call_node.receiver)
-        class_name = case receiver_result.type
-                     when Types::SingletonType then receiver_result.type.name
-                     else call_node.receiver.name
-                     end
+        class_name = resolve_receiver_class_name(call_node.receiver)
+        result = @runtime_adapter.build_constructor_signature(class_name)
 
-        # Look up initialize method signature
-        init_info = lookup_initialize_signature(class_name)
-
-        content = if init_info
-                    case init_info[:source]
-                    when :project
-                      method_sig = @runtime_adapter.build_method_signature(init_info[:def_node])
-                      params_str = method_sig.params.map(&:to_s).join(", ")
-                      "**Guessed Signature:** `(#{params_str}) -> #{class_name}`"
-                    when :rbs
-                      sig_str = init_info[:signature].method_type.to_s
-                      sig_str = sig_str.sub(/-> .+$/, "-> #{class_name}")
-                      "**Guessed Signature:** `#{sig_str}`"
-                    end
-                  else
-                    "**Guessed Signature:** `() -> #{class_name}`"
+        content = case result[:source]
+                  when :project, :default
+                    "**Guessed Signature:** `#{result[:signature]}`"
+                  when :rbs
+                    sig_str = result[:rbs_signature].method_type.to_s
+                    sig_str = sig_str.sub(/-> .+$/, "-> #{class_name}")
+                    "**Guessed Signature:** `#{sig_str}`"
                   end
 
-        content += build_debug_info_for_new(init_info, class_name) if debug_enabled?
+        content += build_debug_info_for_new(result[:source], class_name) if debug_enabled?
 
         @response_builder.push(content, category: :documentation)
       end
 
-      # Look up initialize method signature for a class
-      def lookup_initialize_signature(class_name)
-        # 1. Try project methods first
-        def_node = @runtime_adapter.lookup_method(class_name, "initialize")
-        return { def_node: def_node, source: :project } if def_node
-
-        # 2. Fall back to RBS signatures
-        signatures = @runtime_adapter.signature_provider.get_method_signatures(
-          class_name, "initialize"
-        )
-        return { signature: signatures.first, source: :rbs } if signatures.any?
-
-        nil
+      # Resolve receiver to class name (handles aliases via type inference)
+      def resolve_receiver_class_name(receiver)
+        receiver_result = @runtime_adapter.infer_type(receiver)
+        case receiver_result.type
+        when Types::SingletonType then receiver_result.type.name
+        else receiver.name
+        end
       end
 
       # Build debug info for .new calls
-      def build_debug_info_for_new(init_info, class_name)
+      def build_debug_info_for_new(source, class_name)
         info = "\n\n**[TypeGuessr Debug]**"
         info += "\n\n**Class:** `#{class_name}`"
-        info += "\n\n**Source:** #{init_info&.[](:source) || :inferred}"
+        info += "\n\n**Source:** #{source}"
         info
       end
 

@@ -181,6 +181,42 @@ module RubyLsp
         end
       end
 
+      # Build a constructor signature for Class.new calls
+      # Maps .new to #initialize and returns ClassName instance
+      # Checks project methods first, then falls back to RBS
+      # @param class_name [String] Class name (e.g., "User")
+      # @return [Hash] { signature: MethodSignature, source: :project | :rbs | :default }
+      def build_constructor_signature(class_name)
+        @mutex.synchronize do
+          instance_type = ::TypeGuessr::Core::Types::ClassInstance.new(class_name)
+
+          # 1. Try project methods first
+          init_def = @method_registry.lookup(class_name, "initialize")
+          if init_def
+            sig = @signature_builder.build_from_def_node(init_def)
+            return {
+              signature: ::TypeGuessr::Core::Types::MethodSignature.new(sig.params, instance_type),
+              source: :project
+            }
+          end
+
+          # 2. Fall back to RBS
+          rbs_sigs = @signature_provider.get_method_signatures(class_name, "initialize")
+          if rbs_sigs.any?
+            return {
+              rbs_signature: rbs_sigs.first,
+              source: :rbs
+            }
+          end
+
+          # 3. Default: no initialize found
+          {
+            signature: ::TypeGuessr::Core::Types::MethodSignature.new([], instance_type),
+            source: :default
+          }
+        end
+      end
+
       # Look up a method definition by class name and method name
       # @param class_name [String] Class name (e.g., "User", "Admin::User")
       # @param method_name [String] Method name (e.g., "initialize", "save")
