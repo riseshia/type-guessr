@@ -713,6 +713,8 @@ module TypeGuessr
           # Handle container mutating methods (Hash#[]=, Array#[]=, Array#<<)
           receiver_node = handle_container_mutation(prism_node, receiver_node, args, context) if container_mutating_method?(prism_node.name, receiver_node)
 
+          # Use message_loc for method name position to match hover lookup
+          call_loc = convert_loc(prism_node.message_loc || prism_node.location)
           call_node = IR::CallNode.new(
             method: prism_node.name,
             receiver: receiver_node,
@@ -720,7 +722,7 @@ module TypeGuessr
             block_params: [],
             block_body: nil,
             has_block: has_block,
-            loc: convert_loc(prism_node.location)
+            loc: call_loc
           )
 
           # Handle block if present (but not block arguments like &block)
@@ -734,7 +736,7 @@ module TypeGuessr
               block_params: call_node.block_params,
               block_body: block_body,
               has_block: true,
-              loc: convert_loc(prism_node.location)
+              loc: call_loc
             )
           end
 
@@ -1754,10 +1756,7 @@ module TypeGuessr
         end
 
         def convert_loc(prism_location)
-          IR::Loc.new(
-            line: prism_location.start_line,
-            col_range: (prism_location.start_column...prism_location.end_column)
-          )
+          IR::Loc.new(offset: prism_location.start_offset)
         end
 
         # Register node in location_index and registries during conversion

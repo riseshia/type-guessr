@@ -23,42 +23,42 @@ RSpec.describe CoverageRunner::CoverageReport do
   let(:integer_type) { TypeGuessr::Core::Types::ClassInstance.new("Integer") }
   let(:unknown_type) { TypeGuessr::Core::Types::Unknown.instance }
 
-  def make_literal_node(type, line:)
+  def make_literal_node(type, offset:)
     TypeGuessr::Core::IR::LiteralNode.new(
       type: type,
       literal_value: nil,
       values: nil,
-      loc: TypeGuessr::Core::IR::Loc.new(line: line, col_range: 0...5)
+      loc: TypeGuessr::Core::IR::Loc.new(offset: offset)
     )
   end
 
-  def make_param_node(name, line:, called_methods: [])
+  def make_param_node(name, offset:, called_methods: [])
     TypeGuessr::Core::IR::ParamNode.new(
       name: name,
       kind: :required,
       default_value: nil,
       called_methods: called_methods,
-      loc: TypeGuessr::Core::IR::Loc.new(line: line, col_range: 0...5)
+      loc: TypeGuessr::Core::IR::Loc.new(offset: offset)
     )
   end
 
-  def make_local_write_node(name, value, line:)
+  def make_local_write_node(name, value, offset:)
     TypeGuessr::Core::IR::LocalWriteNode.new(
       name: name,
       value: value,
       called_methods: [],
-      loc: TypeGuessr::Core::IR::Loc.new(line: line, col_range: 0...5)
+      loc: TypeGuessr::Core::IR::Loc.new(offset: offset)
     )
   end
 
-  def make_def_node(name, params, return_node, line:)
+  def make_def_node(name, params, return_node, offset:)
     TypeGuessr::Core::IR::DefNode.new(
       name: name,
       class_name: "TestClass",
       params: params,
       return_node: return_node,
       body_nodes: [],
-      loc: TypeGuessr::Core::IR::Loc.new(line: line, col_range: 0...5),
+      loc: TypeGuessr::Core::IR::Loc.new(offset: offset),
       singleton: false
     )
   end
@@ -74,15 +74,15 @@ RSpec.describe CoverageRunner::CoverageReport do
   describe "node coverage" do
     it "calculates coverage excluding DefNode" do
       # LiteralNode - typed (String)
-      literal_node = make_literal_node(string_type, line: 1)
+      literal_node = make_literal_node(string_type, offset: 1)
       location_index.add("/test.rb", literal_node, "")
 
       # ParamNode - untyped (no default, no called_methods)
-      param_node = make_param_node(:x, line: 2)
+      param_node = make_param_node(:x, offset: 2)
       location_index.add("/test.rb", param_node, "")
 
       # DefNode - should be excluded from count
-      def_node = make_def_node(:foo, [param_node], literal_node, line: 3)
+      def_node = make_def_node(:foo, [param_node], literal_node, offset: 3)
       location_index.add("/test.rb", def_node, "TestClass")
 
       result = report.generate
@@ -95,9 +95,9 @@ RSpec.describe CoverageRunner::CoverageReport do
     end
 
     it "provides breakdown by node type" do
-      literal1 = make_literal_node(string_type, line: 1)
-      literal2 = make_literal_node(integer_type, line: 2)
-      param1 = make_param_node(:x, line: 3)
+      literal1 = make_literal_node(string_type, offset: 1)
+      literal2 = make_literal_node(integer_type, offset: 2)
+      param1 = make_param_node(:x, offset: 3)
 
       location_index.add("/test.rb", literal1, "")
       location_index.add("/test.rb", literal2, "")
@@ -131,9 +131,9 @@ RSpec.describe CoverageRunner::CoverageReport do
       # Slots: 1 param + 1 return = 2 slots
       # Typed: 0 param + 1 return = 1 typed
       # Score: 1/2 = 0.5
-      param = make_param_node(:x, line: 1)
-      return_value = make_literal_node(string_type, line: 2)
-      def_node = make_def_node(:method1, [param], return_value, line: 3)
+      param = make_param_node(:x, offset: 1)
+      return_value = make_literal_node(string_type, offset: 2)
+      def_node = make_def_node(:method1, [param], return_value, offset: 3)
 
       method_registry.register("TestClass", "method1", def_node)
       location_index.add("/test.rb", def_node, "TestClass")
@@ -150,16 +150,16 @@ RSpec.describe CoverageRunner::CoverageReport do
     it "calculates correct score with all typed slots" do
       # Method with typed param (has default) and typed return
       # Slots: 1 param + 1 return = 2 slots, all typed
-      default_value = make_literal_node(integer_type, line: 1)
+      default_value = make_literal_node(integer_type, offset: 1)
       param = TypeGuessr::Core::IR::ParamNode.new(
         name: :x,
         kind: :optional,
         default_value: default_value,
         called_methods: [],
-        loc: TypeGuessr::Core::IR::Loc.new(line: 2, col_range: 0...5)
+        loc: TypeGuessr::Core::IR::Loc.new(offset: 2, col_range: 0...5)
       )
-      return_value = make_literal_node(string_type, line: 3)
-      def_node = make_def_node(:method2, [param], return_value, line: 4)
+      return_value = make_literal_node(string_type, offset: 3)
+      def_node = make_def_node(:method2, [param], return_value, offset: 4)
 
       method_registry.register("TestClass", "method2", def_node)
       location_index.add("/test.rb", def_node, "TestClass")
@@ -183,14 +183,14 @@ RSpec.describe CoverageRunner::CoverageReport do
 
     it "handles methods without return value (returns nil)" do
       # Method with no return value (empty body) - treated as NilClass return
-      param = make_param_node(:x, line: 1)
+      param = make_param_node(:x, offset: 1)
       def_node = TypeGuessr::Core::IR::DefNode.new(
         name: :method3,
         class_name: "TestClass",
         params: [param],
         return_node: nil,
         body_nodes: [],
-        loc: TypeGuessr::Core::IR::Loc.new(line: 2, col_range: 0...5),
+        loc: TypeGuessr::Core::IR::Loc.new(offset: 2, col_range: 0...5),
         singleton: false
       )
 

@@ -4,7 +4,7 @@ require "spec_helper"
 require "ruby_lsp/type_guessr/graph_builder"
 
 RSpec.describe RubyLsp::TypeGuessr::GraphBuilder do
-  let(:loc) { TypeGuessr::Core::IR::Loc.new(line: 10, col_range: 0...10) }
+  let(:loc) { TypeGuessr::Core::IR::Loc.new(offset: 100) }
   let(:nodes) { {} }
 
   # Create a minimal mock runtime adapter
@@ -43,25 +43,25 @@ RSpec.describe RubyLsp::TypeGuessr::GraphBuilder do
       end
 
       before do
-        nodes["Test:lit:ClassInstance:10"] = literal
+        nodes["Test:lit:ClassInstance:100"] = literal
       end
 
       it "returns graph with single node" do
-        result = graph_builder.build("Test:lit:ClassInstance:10")
+        result = graph_builder.build("Test:lit:ClassInstance:100")
 
         expect(result).to be_a(Hash)
         expect(result[:nodes].size).to eq(1)
         expect(result[:edges]).to eq([])
-        expect(result[:root_key]).to eq("Test:lit:ClassInstance:10")
+        expect(result[:root_key]).to eq("Test:lit:ClassInstance:100")
       end
 
       it "serializes node correctly" do
-        result = graph_builder.build("Test:lit:ClassInstance:10")
+        result = graph_builder.build("Test:lit:ClassInstance:100")
         node = result[:nodes].first
 
-        expect(node[:key]).to eq("Test:lit:ClassInstance:10")
+        expect(node[:key]).to eq("Test:lit:ClassInstance:100")
         expect(node[:type]).to eq("LiteralNode")
-        expect(node[:line]).to eq(10)
+        expect(node[:offset]).to eq(100)
         expect(node[:inferred_type]).to eq("String")
         expect(node[:details]).to have_key(:literal_type)
       end
@@ -82,22 +82,22 @@ RSpec.describe RubyLsp::TypeGuessr::GraphBuilder do
           name: :name,
           value: literal,
           called_methods: [],
-          loc: TypeGuessr::Core::IR::Loc.new(line: 5, col_range: 0...10)
+          loc: TypeGuessr::Core::IR::Loc.new(offset: 50)
         )
       end
 
       before do
-        nodes["Test:local_write:name:5"] = variable
-        nodes["Test:lit:ClassInstance:10"] = literal
+        nodes["Test:local_write:name:50"] = variable
+        nodes["Test:lit:ClassInstance:100"] = literal
       end
 
       it "traverses dependencies and creates edges" do
-        result = graph_builder.build("Test:local_write:name:5")
+        result = graph_builder.build("Test:local_write:name:50")
 
         expect(result[:nodes].size).to eq(2)
         expect(result[:edges].size).to eq(1)
-        expect(result[:edges].first[:from]).to eq("Test:local_write:name:5")
-        expect(result[:edges].first[:to]).to eq("Test:lit:ClassInstance:10")
+        expect(result[:edges].first[:from]).to eq("Test:local_write:name:50")
+        expect(result[:edges].first[:to]).to eq("Test:lit:ClassInstance:100")
       end
     end
 
@@ -116,7 +116,7 @@ RSpec.describe RubyLsp::TypeGuessr::GraphBuilder do
           name: :a,
           value: literal,
           called_methods: [],
-          loc: TypeGuessr::Core::IR::Loc.new(line: 5, col_range: 0...10)
+          loc: TypeGuessr::Core::IR::Loc.new(offset: 50)
         )
       end
 
@@ -125,26 +125,26 @@ RSpec.describe RubyLsp::TypeGuessr::GraphBuilder do
           name: :b,
           value: literal,
           called_methods: [],
-          loc: TypeGuessr::Core::IR::Loc.new(line: 6, col_range: 0...10)
+          loc: TypeGuessr::Core::IR::Loc.new(offset: 60)
         )
       end
 
       let(:merge) do
         TypeGuessr::Core::IR::MergeNode.new(
           branches: [branch_a, branch_b],
-          loc: TypeGuessr::Core::IR::Loc.new(line: 7, col_range: 0...10)
+          loc: TypeGuessr::Core::IR::Loc.new(offset: 70)
         )
       end
 
       before do
-        nodes["Test:merge:7"] = merge
-        nodes["Test:local_write:a:5"] = branch_a
-        nodes["Test:local_write:b:6"] = branch_b
-        nodes["Test:lit:ClassInstance:10"] = literal
+        nodes["Test:merge:70"] = merge
+        nodes["Test:local_write:a:50"] = branch_a
+        nodes["Test:local_write:b:60"] = branch_b
+        nodes["Test:lit:ClassInstance:100"] = literal
       end
 
       it "includes shared node only once" do
-        result = graph_builder.build("Test:merge:7")
+        result = graph_builder.build("Test:merge:70")
 
         # merge -> var1, merge -> var2, var1 -> literal, var2 -> literal
         # but literal should only appear once in nodes
@@ -168,7 +168,7 @@ RSpec.describe RubyLsp::TypeGuessr::GraphBuilder do
           name: :x,
           write_node: nil,
           called_methods: [],
-          loc: TypeGuessr::Core::IR::Loc.new(line: 5, col_range: 0...10)
+          loc: TypeGuessr::Core::IR::Loc.new(offset: 50)
         )
       end
 
@@ -184,19 +184,19 @@ RSpec.describe RubyLsp::TypeGuessr::GraphBuilder do
       end
 
       before do
-        nodes["Test:lit:ArrayType:10"] = array_literal
-        nodes["Test:local_read:x:5"] = read_node
-        nodes["Test:lit:ClassInstance:10"] = inner_literal
+        nodes["Test:lit:ArrayType:100"] = array_literal
+        nodes["Test:local_read:x:50"] = read_node
+        nodes["Test:lit:ClassInstance:100"] = inner_literal
       end
 
       it "traverses values and creates edges" do
-        result = graph_builder.build("Test:lit:ArrayType:10")
+        result = graph_builder.build("Test:lit:ArrayType:100")
 
         expect(result[:nodes].size).to eq(3)
         expect(result[:edges].size).to eq(2)
 
         # Check edges from array literal to its values (dependency direction)
-        array_key = "Test:lit:ArrayType:10"
+        array_key = "Test:lit:ArrayType:100"
         edges_from_array = result[:edges].select { |e| e[:from] == array_key }
         expect(edges_from_array.size).to eq(2)
       end
@@ -223,9 +223,9 @@ RSpec.describe RubyLsp::TypeGuessr::GraphBuilder do
         values: nil,
         loc: loc
       )
-      nodes["Test:lit:ArrayType:10"] = literal
+      nodes["Test:lit:ArrayType:100"] = literal
 
-      result = graph_builder.build("Test:lit:ArrayType:10")
+      result = graph_builder.build("Test:lit:ArrayType:100")
       expect(result[:nodes].first[:inferred_type]).to eq("Array[Integer]")
     end
 
@@ -247,9 +247,9 @@ RSpec.describe RubyLsp::TypeGuessr::GraphBuilder do
         values: nil,
         loc: loc
       )
-      nodes["Test:lit:ClassInstance:10"] = literal
+      nodes["Test:lit:ClassInstance:100"] = literal
 
-      result = graph_builder.build("Test:lit:ClassInstance:10")
+      result = graph_builder.build("Test:lit:ClassInstance:100")
       expect(result[:nodes].first[:inferred_type]).to eq("Integer | String")
     end
   end
@@ -269,9 +269,9 @@ RSpec.describe RubyLsp::TypeGuessr::GraphBuilder do
         loc: loc,
         singleton: false
       )
-      nodes["Test:def:save:10"] = def_node
+      nodes["Test:def:save:100"] = def_node
 
-      result = graph_builder.build("Test:def:save:10")
+      result = graph_builder.build("Test:def:save:100")
       details = result[:nodes].first[:details]
 
       expect(details[:name]).to eq("save")
@@ -288,9 +288,9 @@ RSpec.describe RubyLsp::TypeGuessr::GraphBuilder do
         has_block: true,
         loc: loc
       )
-      nodes["Test:call:upcase:10"] = call_node
+      nodes["Test:call:upcase:100"] = call_node
 
-      result = graph_builder.build("Test:call:upcase:10")
+      result = graph_builder.build("Test:call:upcase:100")
       details = result[:nodes].first[:details]
 
       expect(details[:method]).to eq("upcase")
@@ -305,9 +305,9 @@ RSpec.describe RubyLsp::TypeGuessr::GraphBuilder do
         called_methods: %i[name email],
         loc: loc
       )
-      nodes["Test:ivar_write:@user:10"] = write_node
+      nodes["Test:ivar_write:@user:100"] = write_node
 
-      result = graph_builder.build("Test:ivar_write:@user:10")
+      result = graph_builder.build("Test:ivar_write:@user:100")
       details = result[:nodes].first[:details]
 
       expect(details[:name]).to eq("@user")
@@ -321,7 +321,7 @@ RSpec.describe RubyLsp::TypeGuessr::GraphBuilder do
         name: :user,
         value: nil,
         called_methods: [],
-        loc: TypeGuessr::Core::IR::Loc.new(line: 5, col_range: 0...10)
+        loc: TypeGuessr::Core::IR::Loc.new(offset: 50)
       )
       read_node = TypeGuessr::Core::IR::LocalReadNode.new(
         name: :user,
@@ -329,12 +329,12 @@ RSpec.describe RubyLsp::TypeGuessr::GraphBuilder do
         called_methods: [],
         loc: loc
       )
-      nodes["Test:local_read:user:10"] = read_node
-      nodes["Test:local_write:user:5"] = write_node
+      nodes["Test:local_read:user:100"] = read_node
+      nodes["Test:local_write:user:50"] = write_node
 
-      result = graph_builder.build("Test:local_read:user:10")
-      read_details = result[:nodes].find { |n| n[:line] == 10 }[:details]
-      write_details = result[:nodes].find { |n| n[:line] == 5 }[:details]
+      result = graph_builder.build("Test:local_read:user:100")
+      read_details = result[:nodes].find { |n| n[:offset] == 100 }[:details]
+      write_details = result[:nodes].find { |n| n[:offset] == 50 }[:details]
 
       expect(read_details[:is_read]).to be true
       expect(write_details[:is_read]).to be false

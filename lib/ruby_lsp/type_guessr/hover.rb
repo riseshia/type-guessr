@@ -420,49 +420,49 @@ module RubyLsp
 
       # Generate node_hash from Prism node to match IR node_hash format
       def generate_node_hash(node)
-        line = node.location.start_line
+        offset = node.location.start_offset
         case node
         when Prism::LocalVariableWriteNode, Prism::LocalVariableTargetNode
-          "local_write:#{node.name}:#{line}"
+          "local_write:#{node.name}:#{offset}"
         when Prism::LocalVariableReadNode
-          "local_read:#{node.name}:#{line}"
+          "local_read:#{node.name}:#{offset}"
         when Prism::InstanceVariableWriteNode, Prism::InstanceVariableTargetNode
-          "ivar_write:#{node.name}:#{line}"
+          "ivar_write:#{node.name}:#{offset}"
         when Prism::InstanceVariableReadNode
-          "ivar_read:#{node.name}:#{line}"
+          "ivar_read:#{node.name}:#{offset}"
         when Prism::ClassVariableWriteNode, Prism::ClassVariableTargetNode
-          "cvar_write:#{node.name}:#{line}"
+          "cvar_write:#{node.name}:#{offset}"
         when Prism::ClassVariableReadNode
-          "cvar_read:#{node.name}:#{line}"
+          "cvar_read:#{node.name}:#{offset}"
         when Prism::GlobalVariableWriteNode, Prism::GlobalVariableTargetNode
-          "global_write:#{node.name}:#{line}"
+          "global_write:#{node.name}:#{offset}"
         when Prism::GlobalVariableReadNode
-          "global_read:#{node.name}:#{line}"
+          "global_read:#{node.name}:#{offset}"
         when Prism::RequiredParameterNode, Prism::OptionalParameterNode, Prism::RestParameterNode,
              Prism::RequiredKeywordParameterNode, Prism::OptionalKeywordParameterNode,
              Prism::KeywordRestParameterNode, Prism::BlockParameterNode
           # Check if this is a block parameter (parent is BlockParametersNode)
           if block_parameter?(node)
             index = block_parameter_index(node)
-            "bparam:#{index}:#{line}"
+            "bparam:#{index}:#{offset}"
           else
-            "param:#{node.name}:#{line}"
+            "param:#{node.name}:#{offset}"
           end
         when Prism::ForwardingParameterNode
-          "param:...:#{line}"
+          "param:...:#{offset}"
         when Prism::CallNode
-          # Use message_loc for accurate line number
-          call_line = node.message_loc&.start_line || line
-          "call:#{node.name}:#{call_line}"
+          # Use message_loc for accurate offset
+          call_offset = node.message_loc&.start_offset || offset
+          "call:#{node.name}:#{call_offset}"
         when Prism::DefNode
-          # Use name_loc for accurate line number
-          def_line = node.name_loc&.start_line || line
-          "def:#{node.name}:#{def_line}"
+          # Use name_loc for accurate offset
+          def_offset = node.name_loc&.start_offset || offset
+          "def:#{node.name}:#{def_offset}"
         when Prism::SelfNode
           class_path = @node_context.nesting.map do |n|
             n.is_a?(String) ? n : n.name.to_s
           end.join("::")
-          "self:#{class_path}:#{line}"
+          "self:#{class_path}:#{offset}"
         end
       end
 

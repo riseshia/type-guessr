@@ -13,7 +13,7 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
     r.type_simplifier = type_simplifier
     r
   end
-  let(:loc) { TypeGuessr::Core::IR::Loc.new(line: 1, col_range: 0...10) }
+  let(:loc) { TypeGuessr::Core::IR::Loc.new(offset: 0) }
 
   # Helper to create DefNode with common defaults
   def create_def_node(name:, class_name: nil, params: [], return_node: nil, body_nodes: [], singleton: false)

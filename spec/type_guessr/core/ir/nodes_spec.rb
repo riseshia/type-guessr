@@ -5,7 +5,7 @@ require "type_guessr/core/ir/nodes"
 require "type_guessr/core/types"
 
 RSpec.describe TypeGuessr::Core::IR do
-  let(:loc) { described_class::Loc.new(line: 1, col_range: 0...10) }
+  let(:loc) { described_class::Loc.new(offset: 0) }
   let(:string_type) { TypeGuessr::Core::Types::ClassInstance.new("String") }
 
   describe ".extract_last_name" do
@@ -35,10 +35,9 @@ RSpec.describe TypeGuessr::Core::IR do
   end
 
   describe "Loc" do
-    it "stores line and column range" do
-      loc = described_class::Loc.new(line: 5, col_range: 10...20)
-      expect(loc.line).to eq(5)
-      expect(loc.col_range).to eq(10...20)
+    it "stores offset" do
+      loc = described_class::Loc.new(offset: 42)
+      expect(loc.offset).to eq(42)
     end
   end
 
@@ -128,7 +127,7 @@ RSpec.describe TypeGuessr::Core::IR do
         loc: loc
       )
 
-      expect(node.node_hash).to eq("local_write:user:1")
+      expect(node.node_hash).to eq("local_write:user:0")
     end
   end
 
@@ -157,7 +156,7 @@ RSpec.describe TypeGuessr::Core::IR do
         loc: loc
       )
 
-      expect(node.node_hash).to eq("ivar_write:@user:1")
+      expect(node.node_hash).to eq("ivar_write:@user:0")
     end
   end
 
@@ -186,7 +185,7 @@ RSpec.describe TypeGuessr::Core::IR do
         loc: loc
       )
 
-      expect(node.node_hash).to eq("cvar_write:@@count:1")
+      expect(node.node_hash).to eq("cvar_write:@@count:0")
     end
   end
 
@@ -260,7 +259,7 @@ RSpec.describe TypeGuessr::Core::IR do
         loc: loc
       )
 
-      expect(node.node_hash).to eq("local_read:user:1")
+      expect(node.node_hash).to eq("local_read:user:0")
     end
   end
 
@@ -295,7 +294,7 @@ RSpec.describe TypeGuessr::Core::IR do
         loc: loc
       )
 
-      expect(node.node_hash).to eq("ivar_read:@user:1")
+      expect(node.node_hash).to eq("ivar_read:@user:0")
     end
   end
 
@@ -330,7 +329,7 @@ RSpec.describe TypeGuessr::Core::IR do
         loc: loc
       )
 
-      expect(node.node_hash).to eq("cvar_read:@@count:1")
+      expect(node.node_hash).to eq("cvar_read:@@count:0")
     end
   end
 
@@ -463,7 +462,7 @@ RSpec.describe TypeGuessr::Core::IR do
         has_block: true,
         loc: loc
       )
-      slot_loc = described_class::Loc.new(line: 1, col_range: 10...15)
+      slot_loc = described_class::Loc.new(offset: 10)
       slot = described_class::BlockParamSlot.new(index: 0, call_node: call, loc: slot_loc)
 
       expect(slot.loc).to eq(slot_loc)

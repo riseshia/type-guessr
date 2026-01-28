@@ -15,9 +15,8 @@ module TypeGuessr
       end
 
       # Location information for IR nodes
-      # @param line [Integer] Line number (1-indexed)
-      # @param col_range [Range] Column range
-      Loc = Data.define(:line, :col_range)
+      # @param offset [Integer] Byte offset from start of file (0-indexed)
+      Loc = Data.define(:offset)
 
       # Method call signature for duck typing inference
       # @param name [Symbol] Method name
@@ -52,7 +51,7 @@ module TypeGuessr
         private
 
         def format_loc
-          loc ? "(#{loc.line},#{loc.col_range.begin})-(#{loc.line},#{loc.col_range.end})" : "∅"
+          loc ? "@#{loc.offset}" : "∅"
         end
 
         def tree_field(name, value, indent, last: false)
@@ -114,7 +113,7 @@ module TypeGuessr
 
         def node_hash
           type_name = type.is_a?(Class) ? IR.extract_last_name(type.name) : IR.extract_last_name(type.class.name)
-          "lit:#{type_name}:#{loc&.line}"
+          "lit:#{type_name}:#{loc&.offset}"
         end
 
         def node_key(scope_id)
@@ -146,7 +145,7 @@ module TypeGuessr
         end
 
         def node_hash
-          "local_write:#{name}:#{loc&.line}"
+          "local_write:#{name}:#{loc&.offset}"
         end
 
         def node_key(scope_id)
@@ -177,7 +176,7 @@ module TypeGuessr
         end
 
         def node_hash
-          "local_read:#{name}:#{loc&.line}"
+          "local_read:#{name}:#{loc&.offset}"
         end
 
         def node_key(scope_id)
@@ -207,7 +206,7 @@ module TypeGuessr
         end
 
         def node_hash
-          "ivar_write:#{name}:#{loc&.line}"
+          "ivar_write:#{name}:#{loc&.offset}"
         end
 
         def node_key(scope_id)
@@ -241,7 +240,7 @@ module TypeGuessr
         end
 
         def node_hash
-          "ivar_read:#{name}:#{loc&.line}"
+          "ivar_read:#{name}:#{loc&.offset}"
         end
 
         def node_key(scope_id)
@@ -272,7 +271,7 @@ module TypeGuessr
         end
 
         def node_hash
-          "cvar_write:#{name}:#{loc&.line}"
+          "cvar_write:#{name}:#{loc&.offset}"
         end
 
         def node_key(scope_id)
@@ -303,7 +302,7 @@ module TypeGuessr
         end
 
         def node_hash
-          "cvar_read:#{name}:#{loc&.line}"
+          "cvar_read:#{name}:#{loc&.offset}"
         end
 
         def node_key(scope_id)
@@ -337,7 +336,7 @@ module TypeGuessr
         end
 
         def node_hash
-          "param:#{name}:#{loc&.line}"
+          "param:#{name}:#{loc&.offset}"
         end
 
         def node_key(scope_id)
@@ -366,7 +365,7 @@ module TypeGuessr
         end
 
         def node_hash
-          "const:#{name}:#{loc&.line}"
+          "const:#{name}:#{loc&.offset}"
         end
 
         def node_key(scope_id)
@@ -401,7 +400,7 @@ module TypeGuessr
         end
 
         def node_hash
-          "call:#{method}:#{loc&.line}"
+          "call:#{method}:#{loc&.offset}"
         end
 
         def node_key(scope_id)
@@ -433,7 +432,7 @@ module TypeGuessr
         end
 
         def node_hash
-          "bparam:#{index}:#{loc&.line}"
+          "bparam:#{index}:#{loc&.offset}"
         end
 
         def node_key(scope_id)
@@ -461,7 +460,7 @@ module TypeGuessr
         end
 
         def node_hash
-          "merge:#{loc&.line}"
+          "merge:#{loc&.offset}"
         end
 
         def node_key(scope_id)
@@ -492,7 +491,7 @@ module TypeGuessr
         end
 
         def node_hash
-          "def:#{name}:#{loc&.line}"
+          "def:#{name}:#{loc&.offset}"
         end
 
         def node_key(scope_id)
@@ -523,7 +522,7 @@ module TypeGuessr
         end
 
         def node_hash
-          "class:#{name}:#{loc&.line}"
+          "class:#{name}:#{loc&.offset}"
         end
 
         def node_key(scope_id)
@@ -550,7 +549,7 @@ module TypeGuessr
         end
 
         def node_hash
-          "self:#{class_name}:#{loc&.line}"
+          "self:#{class_name}:#{loc&.offset}"
         end
 
         def node_key(scope_id)
@@ -576,7 +575,7 @@ module TypeGuessr
         end
 
         def node_hash
-          "return:#{loc&.line}"
+          "return:#{loc&.offset}"
         end
 
         def node_key(scope_id)

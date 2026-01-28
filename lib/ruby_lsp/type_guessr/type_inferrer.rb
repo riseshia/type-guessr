@@ -128,25 +128,25 @@ module RubyLsp
       # @param node_context [RubyLsp::NodeContext] The context (for block param detection)
       # @return [String, nil] The node hash or nil
       def generate_node_hash(node, node_context)
-        line = node.location.start_line
+        offset = node.location.start_offset
         case node
         when Prism::LocalVariableWriteNode, Prism::LocalVariableTargetNode
-          "local_write:#{node.name}:#{line}"
+          "local_write:#{node.name}:#{offset}"
         when Prism::LocalVariableReadNode
-          "local_read:#{node.name}:#{line}"
+          "local_read:#{node.name}:#{offset}"
         when Prism::InstanceVariableWriteNode, Prism::InstanceVariableTargetNode
-          "ivar_write:#{node.name}:#{line}"
+          "ivar_write:#{node.name}:#{offset}"
         when Prism::InstanceVariableReadNode
-          "ivar_read:#{node.name}:#{line}"
+          "ivar_read:#{node.name}:#{offset}"
         when Prism::RequiredParameterNode, Prism::OptionalParameterNode, Prism::RestParameterNode,
              Prism::RequiredKeywordParameterNode, Prism::OptionalKeywordParameterNode,
              Prism::KeywordRestParameterNode, Prism::BlockParameterNode
           # Check if this is a block parameter
           if block_parameter?(node, node_context)
             index = block_parameter_index(node, node_context)
-            "bparam:#{index}:#{line}"
+            "bparam:#{index}:#{offset}"
           else
-            "param:#{node.name}:#{line}"
+            "param:#{node.name}:#{offset}"
           end
         end
       end

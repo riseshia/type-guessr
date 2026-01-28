@@ -809,8 +809,7 @@ RSpec.describe TypeGuessr::Core::Converter::PrismConverter do
       node = converter.convert(parsed.value.statements.body.first)
 
       expect(node.loc).to be_a(TypeGuessr::Core::IR::Loc)
-      expect(node.loc.line).to eq(1)
-      expect(node.loc.col_range).to be_a(Range)
+      expect(node.loc.offset).to eq(0)
     end
   end
 

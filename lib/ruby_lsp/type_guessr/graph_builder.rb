@@ -72,7 +72,7 @@ module RubyLsp
         @nodes[return_key] = {
           key: return_key,
           type: "Return",
-          line: def_node.loc&.line,
+          offset: def_node.loc&.offset,
           inferred_type: infer_type_str(def_node),
           details: { virtual: true }
         }
@@ -234,7 +234,7 @@ module RubyLsp
         {
           key: node_key,
           type: node_type_name(node),
-          line: node.loc&.line,
+          offset: node.loc&.offset,
           inferred_type: result.type.to_s,
           details: extract_details(node, node_key)
         }

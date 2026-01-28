@@ -16,14 +16,14 @@ RSpec.describe TypeGuessr::Core::Index::LocationIndex do
         name: :name,
         value: nil,
         called_methods: [],
-        loc: TypeGuessr::Core::IR::Loc.new(line: 5, col_range: 10...20)
+        loc: TypeGuessr::Core::IR::Loc.new(offset: 50)
       )
 
       index.add(file_path, node, "User#save")
       index.finalize!
 
-      # node_key = "User#save:local_write:name:5"
-      found = index.find_by_key("User#save:local_write:name:5")
+      # node_key = "User#save:local_write:name:50"
+      found = index.find_by_key("User#save:local_write:name:50")
       expect(found).to eq(node)
     end
 
@@ -32,20 +32,20 @@ RSpec.describe TypeGuessr::Core::Index::LocationIndex do
         name: :name,
         value: nil,
         called_methods: [],
-        loc: TypeGuessr::Core::IR::Loc.new(line: 5, col_range: 10...20)
+        loc: TypeGuessr::Core::IR::Loc.new(offset: 50)
       )
 
       index.add(file_path, node, "User#save")
       index.finalize!
 
       # Different scope
-      expect(index.find_by_key("Admin#update:local_write:name:5")).to be_nil
+      expect(index.find_by_key("Admin#update:local_write:name:50")).to be_nil
 
       # Different variable
-      expect(index.find_by_key("User#save:local_write:title:5")).to be_nil
+      expect(index.find_by_key("User#save:local_write:title:50")).to be_nil
 
-      # Different line
-      expect(index.find_by_key("User#save:local_write:name:10")).to be_nil
+      # Different offset
+      expect(index.find_by_key("User#save:local_write:name:100")).to be_nil
     end
 
     it "works with empty scope_id" do
@@ -53,13 +53,13 @@ RSpec.describe TypeGuessr::Core::Index::LocationIndex do
         name: :x,
         value: nil,
         called_methods: [],
-        loc: TypeGuessr::Core::IR::Loc.new(line: 1, col_range: 0...5)
+        loc: TypeGuessr::Core::IR::Loc.new(offset: 0)
       )
 
       index.add(file_path, node, "")
 
-      # node_key = ":local_write:x:1"
-      found = index.find_by_key(":local_write:x:1")
+      # node_key = ":local_write:x:0"
+      found = index.find_by_key(":local_write:x:0")
       expect(found).to eq(node)
     end
 
@@ -84,13 +84,13 @@ RSpec.describe TypeGuessr::Core::Index::LocationIndex do
         name: :x,
         value: nil,
         called_methods: [],
-        loc: TypeGuessr::Core::IR::Loc.new(line: 1, col_range: 0...5)
+        loc: TypeGuessr::Core::IR::Loc.new(offset: 0)
       )
       node2 = TypeGuessr::Core::IR::LocalWriteNode.new(
         name: :y,
         value: nil,
         called_methods: [],
-        loc: TypeGuessr::Core::IR::Loc.new(line: 2, col_range: 0...5)
+        loc: TypeGuessr::Core::IR::Loc.new(offset: 10)
       )
 
       index.add(file_path, node1, "")
@@ -111,16 +111,16 @@ RSpec.describe TypeGuessr::Core::Index::LocationIndex do
         name: :name,
         value: nil,
         called_methods: [],
-        loc: TypeGuessr::Core::IR::Loc.new(line: 1, col_range: 0...5)
+        loc: TypeGuessr::Core::IR::Loc.new(offset: 0)
       )
 
       index.add(file_path, node, "User#save")
       index.finalize!
 
-      expect(index.find_by_key("User#save:local_write:name:1")).to eq(node)
+      expect(index.find_by_key("User#save:local_write:name:0")).to eq(node)
 
       index.remove_file(file_path)
-      expect(index.find_by_key("User#save:local_write:name:1")).to be_nil
+      expect(index.find_by_key("User#save:local_write:name:0")).to be_nil
     end
   end
 
@@ -130,13 +130,13 @@ RSpec.describe TypeGuessr::Core::Index::LocationIndex do
         name: :x,
         value: nil,
         called_methods: [],
-        loc: TypeGuessr::Core::IR::Loc.new(line: 1, col_range: 0...5)
+        loc: TypeGuessr::Core::IR::Loc.new(offset: 0)
       )
       node2 = TypeGuessr::Core::IR::LocalWriteNode.new(
         name: :y,
         value: nil,
         called_methods: [],
-        loc: TypeGuessr::Core::IR::Loc.new(line: 1, col_range: 0...5)
+        loc: TypeGuessr::Core::IR::Loc.new(offset: 0)
       )
 
       index.add(file_path, node1, "A#m")
@@ -145,8 +145,8 @@ RSpec.describe TypeGuessr::Core::Index::LocationIndex do
 
       index.clear
 
-      expect(index.find_by_key("A#m:local_write:x:1")).to be_nil
-      expect(index.find_by_key("B#n:local_write:y:1")).to be_nil
+      expect(index.find_by_key("A#m:local_write:x:0")).to be_nil
+      expect(index.find_by_key("B#n:local_write:y:0")).to be_nil
     end
   end
 
@@ -156,19 +156,19 @@ RSpec.describe TypeGuessr::Core::Index::LocationIndex do
         name: :x,
         value: nil,
         called_methods: [],
-        loc: TypeGuessr::Core::IR::Loc.new(line: 1, col_range: 0...5)
+        loc: TypeGuessr::Core::IR::Loc.new(offset: 0)
       )
       node2 = TypeGuessr::Core::IR::LocalWriteNode.new(
         name: :y,
         value: nil,
         called_methods: [],
-        loc: TypeGuessr::Core::IR::Loc.new(line: 2, col_range: 0...5)
+        loc: TypeGuessr::Core::IR::Loc.new(offset: 10)
       )
       node3 = TypeGuessr::Core::IR::LocalWriteNode.new(
         name: :z,
         value: nil,
         called_methods: [],
-        loc: TypeGuessr::Core::IR::Loc.new(line: 1, col_range: 0...5)
+        loc: TypeGuessr::Core::IR::Loc.new(offset: 0)
       )
 
       index.add(file_path, node1, "")
@@ -187,13 +187,13 @@ RSpec.describe TypeGuessr::Core::Index::LocationIndex do
         name: :x,
         value: nil,
         called_methods: [],
-        loc: TypeGuessr::Core::IR::Loc.new(line: 1, col_range: 0...5)
+        loc: TypeGuessr::Core::IR::Loc.new(offset: 0)
       )
       node2 = TypeGuessr::Core::IR::LocalWriteNode.new(
         name: :y,
         value: nil,
         called_methods: [],
-        loc: TypeGuessr::Core::IR::Loc.new(line: 1, col_range: 0...5)
+        loc: TypeGuessr::Core::IR::Loc.new(offset: 0)
       )
 
       index.add("/path/to/a.rb", node1, "")
