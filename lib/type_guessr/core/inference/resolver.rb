@@ -71,9 +71,9 @@ module TypeGuessr
           when 0
             nil
           when 1
-            Types::ClassInstance.new(classes.first)
+            Types::ClassInstance.for(classes.first)
           when 2, 3
-            types = classes.map { |c| Types::ClassInstance.new(c) }
+            types = classes.map { |c| Types::ClassInstance.for(c) }
             Types::Union.new(types)
           end
           # 4+ matches → nil (too ambiguous)
@@ -193,10 +193,10 @@ module TypeGuessr
             return Result.new(Types::ArrayType.new, "rest parameter", :inference)
           when :keyword_rest
             # Keyword rest parameter (**kwargs) is always Hash
-            return Result.new(Types::ClassInstance.new("Hash"), "keyword rest parameter", :inference)
+            return Result.new(Types::ClassInstance.for("Hash"), "keyword rest parameter", :inference)
           when :block
             # Block parameter (&block) is always Proc
-            return Result.new(Types::ClassInstance.new("Proc"), "block parameter", :inference)
+            return Result.new(Types::ClassInstance.for("Proc"), "block parameter", :inference)
           when :forwarding
             # Forwarding parameter (...) forwards all arguments
             return Result.new(Types::ForwardingArgs.instance, "forwarding parameter", :inference)
@@ -322,7 +322,7 @@ module TypeGuessr
                   substitutions[:U] = block_result.type unless block_result.type.is_a?(Types::Unknown)
                 else
                   # Empty block returns nil
-                  substitutions[:U] = Types::ClassInstance.new("NilClass")
+                  substitutions[:U] = Types::ClassInstance.for("NilClass")
                 end
               end
 
@@ -465,7 +465,7 @@ module TypeGuessr
           # Empty method body returns nil
           unless node.return_node
             return Result.new(
-              Types::ClassInstance.new("NilClass"),
+              Types::ClassInstance.for("NilClass"),
               "def #{node.name} returns nil (empty body)",
               :project
             )
@@ -483,7 +483,7 @@ module TypeGuessr
           type = if node.singleton
                    Types::SingletonType.new(node.class_name)
                  else
-                   Types::ClassInstance.new(node.class_name)
+                   Types::ClassInstance.for(node.class_name)
                  end
           Result.new(type, "self in #{node.class_name}", :inference)
         end
@@ -493,7 +493,7 @@ module TypeGuessr
             value_result = infer(node.value)
             Result.new(value_result.type, "explicit return: #{value_result.reason}", value_result.source)
           else
-            Result.new(Types::ClassInstance.new("NilClass"), "explicit return nil", :inference)
+            Result.new(Types::ClassInstance.for("NilClass"), "explicit return nil", :inference)
           end
         end
 
@@ -505,7 +505,7 @@ module TypeGuessr
           # ClassName.new returns instance of that class
           if node.method == :new
             return Result.new(
-              Types::ClassInstance.new(class_name),
+              Types::ClassInstance.for(class_name),
               "#{class_name}.new",
               :inference
             )
@@ -563,7 +563,7 @@ module TypeGuessr
             Result.new(field_type, "HashShape[:#{key}]", :inference)
           else
             # Key not found in shape - return nil type (like Hash#[] for missing keys)
-            Result.new(Types::ClassInstance.new("NilClass"), "HashShape[:#{key}] (missing)", :inference)
+            Result.new(Types::ClassInstance.for("NilClass"), "HashShape[:#{key}] (missing)", :inference)
           end
         end
 

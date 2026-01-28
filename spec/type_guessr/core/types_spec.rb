@@ -66,6 +66,26 @@ RSpec.describe TypeGuessr::Core::Types do
       type = TypeGuessr::Core::Types::ClassInstance.new("FalseClass")
       expect(type.to_s).to eq("false")
     end
+
+    describe ".for" do
+      it "returns a ClassInstance with the given name" do
+        type = TypeGuessr::Core::Types::ClassInstance.for("String")
+        expect(type).to be_a(TypeGuessr::Core::Types::ClassInstance)
+        expect(type.name).to eq("String")
+      end
+
+      it "returns the same instance for the same name" do
+        type1 = TypeGuessr::Core::Types::ClassInstance.for("String")
+        type2 = TypeGuessr::Core::Types::ClassInstance.for("String")
+        expect(type1).to be(type2)
+      end
+
+      it "returns different instances for different names" do
+        type1 = TypeGuessr::Core::Types::ClassInstance.for("String")
+        type2 = TypeGuessr::Core::Types::ClassInstance.for("Integer")
+        expect(type1).not_to be(type2)
+      end
+    end
   end
 
   describe "SingletonType" do
@@ -696,7 +716,7 @@ RSpec.describe TypeGuessr::Core::Types do
     it "formats signature with params" do
       params = [
         described_class::ParamSignature.new(name: :name, kind: :required, type: string_type),
-        described_class::ParamSignature.new(name: :count, kind: :optional, type: integer_type)
+        described_class::ParamSignature.new(name: :count, kind: :optional, type: integer_type),
       ]
       sig = described_class::MethodSignature.new(params, array_type)
       expect(sig.to_s).to eq("(String name, ?Integer count) -> Array[User]")

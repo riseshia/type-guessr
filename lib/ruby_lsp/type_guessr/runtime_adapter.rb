@@ -188,7 +188,7 @@ module RubyLsp
       # @return [Hash] { signature: MethodSignature, source: :project | :rbs | :default }
       def build_constructor_signature(class_name)
         @mutex.synchronize do
-          instance_type = ::TypeGuessr::Core::Types::ClassInstance.new(class_name)
+          instance_type = ::TypeGuessr::Core::Types::ClassInstance.for(class_name)
 
           # 1. Try project methods first
           init_def = @method_registry.lookup(class_name, "initialize")

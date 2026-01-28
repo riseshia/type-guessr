@@ -52,6 +52,15 @@ module TypeGuessr
 
       # ClassInstance - instance of a class
       class ClassInstance < Type
+        CACHE = {} # rubocop:disable Style/MutableConstant
+
+        # Factory method that caches instances for reuse
+        # @param name [String] The class name
+        # @return [ClassInstance] Cached or new instance
+        def self.for(name)
+          CACHE[name] ||= new(name).freeze
+        end
+
         attr_reader :name
 
         def initialize(name)
@@ -317,7 +326,7 @@ module TypeGuessr
 
         def self.new(fields, max_fields: RubyLsp::TypeGuessr::Config.hash_shape_max_fields)
           # Widen to generic Hash when too many fields
-          return ClassInstance.new("Hash") if fields.size > max_fields
+          return ClassInstance.for("Hash") if fields.size > max_fields
 
           super(fields)
         end
@@ -359,7 +368,7 @@ module TypeGuessr
         end
 
         def type_variable_substitutions
-          key_type = ClassInstance.new("Symbol")
+          key_type = ClassInstance.for("Symbol")
           value_types = @fields.values.uniq
           value_type = if value_types.empty?
                          Unknown.instance

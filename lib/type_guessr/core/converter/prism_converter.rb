@@ -227,7 +227,7 @@ module TypeGuessr
                                 else
                                   # return with no value returns nil
                                   IR::LiteralNode.new(
-                                    type: Types::ClassInstance.new("NilClass"),
+                                    type: Types::ClassInstance.for("NilClass"),
                                     literal_value: nil,
                                     values: nil,
                                     loc: convert_loc(prism_node.location)
@@ -367,19 +367,19 @@ module TypeGuessr
         def literal_type_for(prism_node)
           case prism_node
           when Prism::IntegerNode
-            Types::ClassInstance.new("Integer")
+            Types::ClassInstance.for("Integer")
           when Prism::FloatNode
-            Types::ClassInstance.new("Float")
+            Types::ClassInstance.for("Float")
           when Prism::StringNode, Prism::InterpolatedStringNode
-            Types::ClassInstance.new("String")
+            Types::ClassInstance.for("String")
           when Prism::SymbolNode
-            Types::ClassInstance.new("Symbol")
+            Types::ClassInstance.for("Symbol")
           when Prism::TrueNode
-            Types::ClassInstance.new("TrueClass")
+            Types::ClassInstance.for("TrueClass")
           when Prism::FalseNode
-            Types::ClassInstance.new("FalseClass")
+            Types::ClassInstance.for("FalseClass")
           when Prism::NilNode
-            Types::ClassInstance.new("NilClass")
+            Types::ClassInstance.for("NilClass")
           when Prism::ArrayNode
             # Infer element type from array contents
             array_element_type_for(prism_node)
@@ -388,13 +388,13 @@ module TypeGuessr
           when Prism::RangeNode
             range_element_type_for(prism_node)
           when Prism::RegularExpressionNode, Prism::InterpolatedRegularExpressionNode
-            Types::ClassInstance.new("Regexp")
+            Types::ClassInstance.for("Regexp")
           when Prism::ImaginaryNode
-            Types::ClassInstance.new("Complex")
+            Types::ClassInstance.for("Complex")
           when Prism::RationalNode
-            Types::ClassInstance.new("Rational")
+            Types::ClassInstance.for("Rational")
           when Prism::XStringNode, Prism::InterpolatedXStringNode
-            Types::ClassInstance.new("String")
+            Types::ClassInstance.for("String")
           else
             Types::Unknown.instance
           end
@@ -816,7 +816,7 @@ module TypeGuessr
           case original_type
           when Types::HashShape
             # HashShape with symbol keys + non-symbol key -> widen to Hash[Symbol | NewKeyType, ValueUnion]
-            original_key_type = Types::ClassInstance.new("Symbol")
+            original_key_type = Types::ClassInstance.for("Symbol")
             original_value_types = original_type.fields.values.uniq
             all_value_types = (original_value_types + [value_type]).uniq
 
@@ -848,11 +848,11 @@ module TypeGuessr
         def infer_key_type(key_arg)
           case key_arg
           when Prism::SymbolNode
-            Types::ClassInstance.new("Symbol")
+            Types::ClassInstance.for("Symbol")
           when Prism::StringNode
-            Types::ClassInstance.new("String")
+            Types::ClassInstance.for("String")
           when Prism::IntegerNode
-            Types::ClassInstance.new("Integer")
+            Types::ClassInstance.for("Integer")
           else
             Types::Unknown.instance
           end
@@ -1505,7 +1505,7 @@ module TypeGuessr
               # Inline if/unless: no else branch and no original value
               # Add nil to represent "variable may not be assigned"
               nil_node = IR::LiteralNode.new(
-                type: Types::ClassInstance.new("NilClass"),
+                type: Types::ClassInstance.for("NilClass"),
                 literal_value: nil,
                 values: nil,
                 loc: convert_loc(location)
@@ -1536,7 +1536,7 @@ module TypeGuessr
             # Modifier form: one branch only → value or nil
             branch_node = then_node || else_node
             nil_node = IR::LiteralNode.new(
-              type: Types::ClassInstance.new("NilClass"),
+              type: Types::ClassInstance.for("NilClass"),
               literal_value: nil,
               values: nil,
               loc: convert_loc(location)
@@ -1590,7 +1590,7 @@ module TypeGuessr
 
         def create_nil_literal(location)
           IR::LiteralNode.new(
-            type: Types::ClassInstance.new("NilClass"),
+            type: Types::ClassInstance.for("NilClass"),
             literal_value: nil,
             values: nil,
             loc: convert_loc(location)

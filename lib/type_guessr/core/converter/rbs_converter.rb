@@ -31,11 +31,11 @@ module TypeGuessr
             convert_tuple(rbs_type)
           when RBS::Types::Bases::Bool
             # bool is a type alias for TrueClass | FalseClass
-            Types::ClassInstance.new("bool")
+            Types::ClassInstance.for("bool")
           when RBS::Types::Bases::Void
-            Types::ClassInstance.new("void")
+            Types::ClassInstance.for("void")
           when RBS::Types::Bases::Nil
-            Types::ClassInstance.new("NilClass")
+            Types::ClassInstance.for("NilClass")
           when RBS::Types::Bases::Self
             Types::SelfType.instance
           when RBS::Types::Bases::Instance
@@ -63,7 +63,7 @@ module TypeGuessr
 
           # For other generic types, return ClassInstance (ignore type args for now)
           # TODO: Add HashType with key/value types in the future
-          Types::ClassInstance.new(class_name)
+          Types::ClassInstance.for(class_name)
         end
 
         # Convert RBS Union to internal Union type
