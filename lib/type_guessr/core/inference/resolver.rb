@@ -134,12 +134,8 @@ module TypeGuessr
 
           write_result = infer(node.write_node)
 
-          # If type is Unknown (or Union of only Unknown), try to resolve from called_methods
-          type_is_unknown = write_result.type.is_a?(Types::Unknown) ||
-                            (write_result.type.is_a?(Types::Union) &&
-                             write_result.type.types.all? { |t| t.is_a?(Types::Unknown) })
-
-          if type_is_unknown && node.called_methods.any?
+          # If type is Unknown, try to resolve from called_methods
+          if write_result.type.is_a?(Types::Unknown) && node.called_methods.any?
             resolved_type = resolve_called_methods(node.called_methods)
             if resolved_type
               return Result.new(
@@ -367,11 +363,7 @@ module TypeGuessr
             end
 
             # Try to infer Unknown receiver type from method uniqueness
-            # Also handle Union types that are effectively Unknown (only contain Unknown)
-            receiver_is_unknown = receiver_type.is_a?(Types::Unknown) ||
-                                  (receiver_type.is_a?(Types::Union) &&
-                                   receiver_type.types.all? { |t| t.is_a?(Types::Unknown) })
-            if receiver_is_unknown
+            if receiver_type.is_a?(Types::Unknown)
               # Create CalledMethod with nil positional_count to skip signature matching
               cm = IR::CalledMethod.new(name: node.method, positional_count: nil, keywords: [])
               inferred_receiver = resolve_called_methods([cm])

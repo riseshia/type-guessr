@@ -3,10 +3,16 @@
 require "spec_helper"
 require "type_guessr/core/inference/resolver"
 require "type_guessr/core/rbs_provider"
+require "type_guessr/core/type_simplifier"
 
 RSpec.describe TypeGuessr::Core::Inference::Resolver do
   let(:rbs_provider) { TypeGuessr::Core::RBSProvider.instance }
-  let(:resolver) { described_class.new(rbs_provider) }
+  let(:type_simplifier) { TypeGuessr::Core::TypeSimplifier.new }
+  let(:resolver) do
+    r = described_class.new(rbs_provider)
+    r.type_simplifier = type_simplifier
+    r
+  end
   let(:loc) { TypeGuessr::Core::IR::Loc.new(line: 1, col_range: 0...10) }
 
   # Helper to create DefNode with common defaults
