@@ -104,7 +104,7 @@ module TypeGuessr
             base_class_path = current_class_name || ""
             class_path = if @in_singleton_method
                            # Singleton methods use "<Class:ClassName>" suffix
-                           parent_name = base_class_path.split("::").last || "Object"
+                           parent_name = IR.extract_last_name(base_class_path) || "Object"
                            base_class_path.empty? ? "<Class:Object>" : "#{base_class_path}::<Class:#{parent_name}>"
                          else
                            base_class_path
@@ -1653,7 +1653,7 @@ module TypeGuessr
           # Generate singleton class name in format: Parent::<Class:ParentName>
           # This matches the scope convention used by RuntimeAdapter and RubyIndexer
           parent_path = context.current_class_name || ""
-          parent_name = parent_path.split("::").last || "Object"
+          parent_name = IR.extract_last_name(parent_path) || "Object"
           singleton_suffix = "<Class:#{parent_name}>"
           singleton_name = parent_path.empty? ? singleton_suffix : "#{parent_path}::#{singleton_suffix}"
           singleton_context.current_class = singleton_name
@@ -1836,7 +1836,7 @@ module TypeGuessr
         def singleton_scope_for(scope, singleton:)
           return scope unless singleton
 
-          parent_name = scope.split("::").last || "Object"
+          parent_name = IR.extract_last_name(scope) || "Object"
           scope.empty? ? "<Class:Object>" : "#{scope}::<Class:#{parent_name}>"
         end
       end

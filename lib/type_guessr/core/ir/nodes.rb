@@ -3,6 +3,17 @@
 module TypeGuessr
   module Core
     module IR
+      # Extract the last segment of a class/module path without array allocation.
+      # Uses String#rindex instead of String#split to avoid creating intermediate arrays.
+      # @param path [String] Class path (e.g., "Admin::User", "TypeGuessr::Core::IR::LiteralNode")
+      # @return [String, nil] Last segment (e.g., "User", "LiteralNode"), the path itself if no "::", or nil if empty
+      def self.extract_last_name(path)
+        return nil if path.nil? || path.empty?
+
+        last_sep = path.rindex("::")
+        last_sep ? path[(last_sep + 2)..] : path
+      end
+
       # Location information for IR nodes
       # @param line [Integer] Line number (1-indexed)
       # @param col_range [Range] Column range
@@ -28,11 +39,11 @@ module TypeGuessr
 
         def tree_inspect(indent: "", last: true, root: false)
           lines = if root
-                    ["@ #{self.class.name.split("::").last} (location: #{format_loc})"]
+                    ["@ #{IR.extract_last_name(self.class.name)} (location: #{format_loc})"]
                   else
                     prefix = last ? LAST_BRANCH : BRANCH
                     indent += (last ? SPACE : PIPE)
-                    ["#{indent.delete_suffix(last ? SPACE : PIPE)}#{prefix}@ #{self.class.name.split("::").last} (location: #{format_loc})"]
+                    ["#{indent.delete_suffix(last ? SPACE : PIPE)}#{prefix}@ #{IR.extract_last_name(self.class.name)} (location: #{format_loc})"]
                   end
           lines.concat(tree_inspect_fields(indent))
           lines.join("\n")
@@ -102,7 +113,7 @@ module TypeGuessr
         end
 
         def node_hash
-          type_name = type.is_a?(Class) ? type.name.split("::").last : type.class.name.split("::").last
+          type_name = type.is_a?(Class) ? IR.extract_last_name(type.name) : IR.extract_last_name(type.class.name)
           "lit:#{type_name}:#{loc&.line}"
         end
 
@@ -111,7 +122,7 @@ module TypeGuessr
         end
 
         def tree_inspect_fields(indent)
-          type_str = type.respond_to?(:name) ? type.name : type.class.name.split("::").last
+          type_str = type.respond_to?(:name) ? type.name : IR.extract_last_name(type.class.name)
           [
             tree_field(:type, type_str, indent),
             tree_field(:literal_value, literal_value, indent),

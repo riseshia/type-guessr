@@ -63,7 +63,7 @@ module RubyLsp
       def class_method_owner(class_name, method_name)
         return nil unless @index
 
-        unqualified_name = class_name.split("::").last
+        unqualified_name = ::TypeGuessr::Core::IR.extract_last_name(class_name)
         singleton_name = "#{class_name}::<Class:#{unqualified_name}>"
         entries = @index.resolve_method(method_name, singleton_name)
         return nil if entries.nil? || entries.empty?

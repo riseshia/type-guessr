@@ -8,6 +8,32 @@ RSpec.describe TypeGuessr::Core::IR do
   let(:loc) { described_class::Loc.new(line: 1, col_range: 0...10) }
   let(:string_type) { TypeGuessr::Core::Types::ClassInstance.new("String") }
 
+  describe ".extract_last_name" do
+    it "returns nil for nil input" do
+      expect(described_class.extract_last_name(nil)).to be_nil
+    end
+
+    it "returns nil for empty string" do
+      expect(described_class.extract_last_name("")).to be_nil
+    end
+
+    it "returns the name itself for single class name" do
+      expect(described_class.extract_last_name("Foo")).to eq("Foo")
+    end
+
+    it "returns the last segment for nested class path" do
+      expect(described_class.extract_last_name("Foo::Bar")).to eq("Bar")
+    end
+
+    it "returns the last segment for deeply nested class path" do
+      expect(described_class.extract_last_name("A::B::C::D")).to eq("D")
+    end
+
+    it "handles real class names like TypeGuessr::Core::IR::LiteralNode" do
+      expect(described_class.extract_last_name("TypeGuessr::Core::IR::LiteralNode")).to eq("LiteralNode")
+    end
+  end
+
   describe "Loc" do
     it "stores line and column range" do
       loc = described_class::Loc.new(line: 5, col_range: 10...20)

@@ -284,7 +284,7 @@ module RubyLsp
 
         # Query singleton class for the method
         # Ruby LSP uses unqualified name for singleton class (e.g., "RBS::Environment::<Class:Environment>")
-        unqualified_name = class_name.split("::").last
+        unqualified_name = ::TypeGuessr::Core::IR.extract_last_name(class_name)
         singleton_name = "#{class_name}::<Class:#{unqualified_name}>"
         entries = @global_state.index.resolve_method(method_name, singleton_name)
         return nil if entries.nil? || entries.empty?

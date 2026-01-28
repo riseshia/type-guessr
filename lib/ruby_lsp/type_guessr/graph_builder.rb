@@ -242,7 +242,7 @@ module RubyLsp
 
       # Get the short type name for a node
       def node_type_name(node)
-        node.class.name.split("::").last
+        ::TypeGuessr::Core::IR.extract_last_name(node.class.name)
       end
 
       # Extract details based on node type
