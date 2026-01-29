@@ -7,16 +7,16 @@ require "rspec"
 require_relative "../../lib/type_guessr/core/index/location_index"
 require_relative "../../lib/type_guessr/core/inference/resolver"
 require_relative "../../lib/type_guessr/core/registry/method_registry"
-require_relative "../../lib/type_guessr/core/signature_provider"
+require_relative "../../lib/type_guessr/core/registry/signature_registry"
 require_relative "../../lib/type_guessr/core/ir/nodes"
 require_relative "../../lib/type_guessr/core/types"
 require_relative "../lib/coverage_report"
 
 RSpec.describe CoverageRunner::CoverageReport do
   let(:location_index) { TypeGuessr::Core::Index::LocationIndex.new }
-  let(:provider) { TypeGuessr::Core::SignatureProvider.new }
+  let(:signature_registry) { TypeGuessr::Core::Registry::SignatureRegistry.instance.preload }
   let(:method_registry) { TypeGuessr::Core::Registry::MethodRegistry.new }
-  let(:resolver) { TypeGuessr::Core::Inference::Resolver.new(provider, method_registry: method_registry) }
+  let(:resolver) { TypeGuessr::Core::Inference::Resolver.new(signature_registry, method_registry: method_registry) }
   let(:report) { described_class.new(location_index, resolver, method_registry) }
 
   let(:string_type) { TypeGuessr::Core::Types::ClassInstance.new("String") }

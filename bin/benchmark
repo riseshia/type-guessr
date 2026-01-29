@@ -35,8 +35,7 @@ require_relative "../lib/type_guessr/core/types"
 require_relative "../lib/type_guessr/core/converter/prism_converter"
 require_relative "../lib/type_guessr/core/index/location_index"
 require_relative "../lib/type_guessr/core/inference/resolver"
-require_relative "../lib/type_guessr/core/rbs_provider"
-require_relative "../lib/type_guessr/core/signature_provider"
+require_relative "../lib/type_guessr/core/registry/signature_registry"
 
 module BenchmarkRunner
   # Memory measurement helper
@@ -297,9 +296,7 @@ module BenchmarkRunner
       puts "Sampling #{sample_entries.size} nodes for inference benchmark"
 
       # Build resolver
-      TypeGuessr::Core::RBSProvider.instance.preload
-      provider = TypeGuessr::Core::SignatureProvider.new
-      provider.add_provider(TypeGuessr::Core::RBSProvider.instance)
+      signature_registry = TypeGuessr::Core::Registry::SignatureRegistry.instance.preload
 
       # File open measurement (first inference per file simulates "file open" scenario)
       puts "\n### File Open Metrics (first inference per file) ###\n\n"
@@ -311,7 +308,7 @@ module BenchmarkRunner
       warm_latencies = []
 
       # Create single resolver for realistic simulation
-      resolver = TypeGuessr::Core::Inference::Resolver.new(provider)
+      resolver = TypeGuessr::Core::Inference::Resolver.new(signature_registry)
 
       entries_by_file.each do |_file_path, entries|
         entries.each_with_index do |(node, _path), idx|
