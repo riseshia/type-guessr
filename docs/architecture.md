@@ -34,19 +34,19 @@ TypeGuessr is a Ruby LSP addon that provides heuristic type inference without re
 │  │               │  │               │  │  → IR Node    │  │               │   │
 │  └───────────────┘  └───────────────┘  └───────────────┘  └───────────────┘   │
 │                                                                                │
-│  ┌───────────────┐  ┌───────────────┐  ┌───────────────┐  ┌───────────────┐   │
-│  │   IR Nodes    │  │    Types      │  │  RBSProvider  │  │SignatureProvdr│   │
-│  │               │  │               │  │               │  │               │   │
-│  │ - LiteralNode │  │ - ClassInst   │  │ - method sigs │  │ - sig format  │   │
-│  │ - Local*Node  │  │ - ArrayType   │  │ - return types│  │ - param types │   │
-│  │ - IVar*Node   │  │ - HashType    │  │               │  │               │   │
-│  │ - CVar*Node   │  │ - HashShape   │  │               │  │               │   │
-│  │ - CallNode    │  │ - RangeType   │  │               │  │               │   │
-│  │ - ParamNode   │  │ - Union       │  │               │  │               │   │
-│  │ - DefNode     │  │ - Singleton   │  │               │  │               │   │
-│  │ - SelfNode    │  │ - TypeVar     │  │               │  │               │   │
-│  │ - ReturnNode  │  │               │  │               │  │               │   │
-│  └───────────────┘  └───────────────┘  └───────────────┘  └───────────────┘   │
+│  ┌───────────────┐  ┌───────────────┐  ┌───────────────────────────────────┐   │
+│  │   IR Nodes    │  │    Types      │  │      SignatureRegistry            │   │
+│  │               │  │               │  │                                   │   │
+│  │ - LiteralNode │  │ - ClassInst   │  │ - preload stdlib RBS              │   │
+│  │ - Local*Node  │  │ - ArrayType   │  │ - O(1) method lookup              │   │
+│  │ - IVar*Node   │  │ - HashType    │  │ - overload resolution             │   │
+│  │ - CVar*Node   │  │ - HashShape   │  │ - block param types               │   │
+│  │ - CallNode    │  │ - RangeType   │  │                                   │   │
+│  │ - ParamNode   │  │ - Union       │  │                                   │   │
+│  │ - DefNode     │  │ - Singleton   │  │                                   │   │
+│  │ - SelfNode    │  │ - TypeVar     │  │                                   │   │
+│  │ - ReturnNode  │  │               │  │                                   │   │
+│  └───────────────┘  └───────────────┘  └───────────────────────────────────┘   │
 │                                                                                │
 │  ┌───────────────┐  ┌───────────────┐  ┌───────────────┐  ┌───────────────┐   │
 │  │TypeSimplifier │  │    Logger     │  │MethodRegistry │  │VariableRegstry│   │
@@ -165,22 +165,26 @@ Type representations:
 | `SelfType` | `self` | RBS self type (substituted at resolution) |
 | `ForwardingArgs` | `...` | Forwarding parameter type |
 
-### RBSProvider (`lib/type_guessr/core/rbs_provider.rb`)
+### SignatureRegistry (`lib/type_guessr/core/registry/signature_registry.rb`)
 
-Provides RBS method signatures and return types.
-
-**Key features:**
-- Method signature lookup from RBS definitions
-- Return type resolution
-- Type variable substitution for generics
-
-### SignatureProvider (`lib/type_guessr/core/signature_provider.rb`)
-
-Generates method signatures from inferred types.
+Preloads stdlib RBS signatures and provides O(1) hash lookup for method return types.
 
 **Key features:**
-- Format parameter types for display
-- Format return types for hover UI
+- Preloads all stdlib RBS method signatures at startup (~250ms, ~10MB memory)
+- O(1) hash lookup instead of lazy DefinitionBuilder calls
+- `lookup(class_name, method_name)` - Find instance method entry
+- `lookup_class_method(class_name, method_name)` - Find class method entry
+- `get_method_return_type(class_name, method_name, arg_types)` - Get return type with overload resolution
+- `get_block_param_types(class_name, method_name)` - Get block parameter types
+
+**MethodEntry:**
+- Wraps RBS method types for a single method
+- Handles overload resolution based on argument types
+- Caches block parameter type computation
+
+**Lookup order (in Resolver):**
+1. MethodRegistry (project methods)
+2. SignatureRegistry (stdlib RBS)
 
 ### TypeSimplifier (`lib/type_guessr/core/type_simplifier.rb`)
 
@@ -196,6 +200,8 @@ Simplifies complex union types.
 
 ```
 start_indexing (background thread)
+    │
+    ├── signature_registry.preload()  ← Load all stdlib RBS signatures
     │
     ▼
 traverse_file(uri)

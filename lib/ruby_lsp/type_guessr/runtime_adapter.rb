@@ -5,10 +5,9 @@ require_relative "../../type_guessr/core/converter/prism_converter"
 require_relative "../../type_guessr/core/index/location_index"
 require_relative "../../type_guessr/core/registry/method_registry"
 require_relative "../../type_guessr/core/registry/variable_registry"
+require_relative "../../type_guessr/core/registry/signature_registry"
 require_relative "../../type_guessr/core/inference/resolver"
-require_relative "../../type_guessr/core/signature_provider"
 require_relative "../../type_guessr/core/signature_builder"
-require_relative "../../type_guessr/core/rbs_provider"
 require_relative "../../type_guessr/core/type_simplifier"
 require_relative "code_index_adapter"
 require_relative "type_inferrer"
@@ -18,14 +17,14 @@ module RubyLsp
     # RuntimeAdapter manages the IR graph and inference for TypeGuessr
     # Converts files to IR graphs and provides type inference
     class RuntimeAdapter
-      attr_reader :signature_provider, :location_index, :resolver, :method_registry
+      attr_reader :signature_registry, :location_index, :resolver, :method_registry
 
       def initialize(global_state, message_queue = nil)
         @global_state = global_state
         @message_queue = message_queue
         @converter = ::TypeGuessr::Core::Converter::PrismConverter.new
         @location_index = ::TypeGuessr::Core::Index::LocationIndex.new
-        @signature_provider = build_signature_provider
+        @signature_registry = ::TypeGuessr::Core::Registry::SignatureRegistry.instance.preload
         @indexing_completed = false
         @mutex = Mutex.new
         @original_type_inferrer = nil
@@ -43,9 +42,9 @@ module RubyLsp
           code_index: @code_index
         )
 
-        # Create resolver with code_index adapter and registries
+        # Create resolver with signature_registry and registries
         @resolver = ::TypeGuessr::Core::Inference::Resolver.new(
-          @signature_provider,
+          @signature_registry,
           code_index: @code_index,
           method_registry: @method_registry,
           variable_registry: @variable_registry
@@ -201,7 +200,7 @@ module RubyLsp
           end
 
           # 2. Fall back to RBS
-          rbs_sigs = @signature_provider.get_method_signatures(class_name, "initialize")
+          rbs_sigs = @signature_registry.get_method_signatures(class_name, "initialize")
           if rbs_sigs.any?
             return {
               rbs_signature: rbs_sigs.first,
@@ -336,21 +335,6 @@ module RubyLsp
       rescue StandardError => e
         bt = e.backtrace&.first(5)&.join("\n") || "(no backtrace)"
         log_message("Error indexing #{uri}: #{e.class}: #{e.message}\n#{bt}")
-      end
-
-      # Build SignatureProvider with configured type sources
-      # Currently uses RBSProvider for stdlib types
-      # Can be extended to add project RBS, Sorbet, etc.
-      def build_signature_provider
-        provider = ::TypeGuessr::Core::SignatureProvider.new
-
-        # Add stdlib RBS provider (lowest priority)
-        provider.add_provider(::TypeGuessr::Core::RBSProvider.instance)
-
-        # Future: Add project RBS provider (high priority)
-        # provider.add_provider(ProjectRBSProvider.new, priority: :high)
-
-        provider
       end
 
       def log_message(message)

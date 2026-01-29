@@ -5,7 +5,6 @@ require_relative "config"
 require_relative "runtime_adapter"
 require_relative "hover"
 require_relative "debug_server"
-require_relative "../../type_guessr/core/rbs_provider"
 
 module RubyLsp
   module TypeGuessr
@@ -54,10 +53,7 @@ module RubyLsp
         # Extend Ruby LSP's hover targets to include variables and parameters
         extend_hover_targets
 
-        # Preload RBS environment
-        ::TypeGuessr::Core::RBSProvider.instance.preload
-
-        # Start background indexing
+        # Start background indexing (includes RBS preload)
         @runtime_adapter.start_indexing
 
         # Swap TypeInferrer for enhanced Go to Definition

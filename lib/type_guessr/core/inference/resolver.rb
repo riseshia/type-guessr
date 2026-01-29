@@ -5,6 +5,7 @@ require_relative "../types"
 require_relative "../type_simplifier"
 require_relative "../registry/method_registry"
 require_relative "../registry/variable_registry"
+require_relative "../registry/signature_registry"
 require_relative "result"
 
 module TypeGuessr
@@ -28,13 +29,13 @@ module TypeGuessr
         # @return [Registry::VariableRegistry]
         attr_reader :variable_registry
 
-        # @param signature_provider [SignatureProvider] Provider for RBS method signatures
+        # @param signature_registry [Registry::SignatureRegistry] Registry for stdlib RBS signatures
         # @param code_index [#find_classes_defining_methods, #ancestors_of, #constant_kind, #class_method_owner, nil]
         #   Adapter wrapping RubyIndexer (preferred over callbacks)
         # @param method_registry [Registry::MethodRegistry, nil] Registry for project methods
         # @param variable_registry [Registry::VariableRegistry, nil] Registry for variables
-        def initialize(signature_provider, code_index: nil, method_registry: nil, variable_registry: nil)
-          @signature_provider = signature_provider
+        def initialize(signature_registry, code_index: nil, method_registry: nil, variable_registry: nil)
+          @signature_registry = signature_registry
           @code_index = code_index
           @method_registry = method_registry || Registry::MethodRegistry.new
           @variable_registry = variable_registry || Registry::VariableRegistry.new
@@ -298,7 +299,7 @@ module TypeGuessr
 
               # 2. Fall back to RBS signature provider
               arg_types = node.args.map { |arg| infer(arg).type }
-              return_type = @signature_provider.get_method_return_type(
+              return_type = @signature_registry.get_method_return_type(
                 receiver_type.name,
                 node.method.to_s,
                 arg_types
@@ -306,7 +307,7 @@ module TypeGuessr
 
               # Fall back to Object if class-specific lookup returns Unknown
               if return_type.is_a?(Types::Unknown) && receiver_type.name != "Object"
-                return_type = @signature_provider.get_method_return_type(
+                return_type = @signature_registry.get_method_return_type(
                   "Object",
                   node.method.to_s,
                   arg_types
@@ -337,7 +338,7 @@ module TypeGuessr
               end
 
               # Get raw return type, then substitute type variables
-              raw_return_type = @signature_provider.get_method_return_type("Array", node.method.to_s)
+              raw_return_type = @signature_registry.get_method_return_type("Array", node.method.to_s)
               return_type = raw_return_type.substitute(substitutions)
               return Result.new(
                 return_type,
@@ -353,7 +354,7 @@ module TypeGuessr
 
               # Fall back to Hash RBS for other methods
               substitutions = build_substitutions(receiver_type)
-              raw_return_type = @signature_provider.get_method_return_type("Hash", node.method.to_s)
+              raw_return_type = @signature_registry.get_method_return_type("Hash", node.method.to_s)
               return_type = raw_return_type.substitute(substitutions)
               return Result.new(
                 return_type,
@@ -363,7 +364,7 @@ module TypeGuessr
             when Types::HashType
               # Handle generic HashType
               substitutions = build_substitutions(receiver_type)
-              raw_return_type = @signature_provider.get_method_return_type("Hash", node.method.to_s)
+              raw_return_type = @signature_registry.get_method_return_type("Hash", node.method.to_s)
               return_type = raw_return_type.substitute(substitutions)
               return Result.new(
                 return_type,
@@ -391,7 +392,7 @@ module TypeGuessr
 
                 # Fall back to RBS
                 arg_types = node.args.map { |arg| infer(arg).type }
-                return_type = @signature_provider.get_method_return_type(
+                return_type = @signature_registry.get_method_return_type(
                   inferred_receiver.name,
                   node.method.to_s,
                   arg_types
@@ -415,7 +416,7 @@ module TypeGuessr
 
           # Fallback to Object to query RBS for common methods (==, to_s, etc.)
           arg_types = node.args.map { |arg| infer(arg).type }
-          return_type = @signature_provider.get_method_return_type("Object", node.method.to_s, arg_types)
+          return_type = @signature_registry.get_method_return_type("Object", node.method.to_s, arg_types)
           # Substitute self with receiver type if available (e.g., Object#dup returns self)
           return_type = return_type.substitute({ self: receiver_type }) if receiver_type
           return Result.new(return_type, "Object##{node.method}", :stdlib) unless return_type.is_a?(Types::Unknown)
@@ -431,11 +432,11 @@ module TypeGuessr
           return Result.new(Types::Unknown.instance, "block param without type info", :unknown) unless class_name
 
           # Get block parameter types (returns internal types with TypeVariables)
-          raw_block_param_types = @signature_provider.get_block_param_types(class_name, node.call_node.method.to_s)
+          raw_block_param_types = @signature_registry.get_block_param_types(class_name, node.call_node.method.to_s)
 
           # Fall back to Object if class-specific lookup returns empty
           if raw_block_param_types.empty? && class_name != "Object"
-            raw_block_param_types = @signature_provider.get_block_param_types("Object", node.call_node.method.to_s)
+            raw_block_param_types = @signature_registry.get_block_param_types("Object", node.call_node.method.to_s)
           end
 
           return Result.new(Types::Unknown.instance, "block param without type info", :unknown) unless raw_block_param_types.size > node.index
@@ -539,7 +540,7 @@ module TypeGuessr
 
           # Fall back to RBS signature provider
           arg_types = node.args.map { |arg| infer(arg).type }
-          return_type = @signature_provider.get_class_method_return_type(
+          return_type = @signature_registry.get_class_method_return_type(
             class_name,
             node.method.to_s,
             arg_types
@@ -622,12 +623,11 @@ module TypeGuessr
         end
 
         # Check if a method call signature matches the RBS definition for a class
-        # Returns true (conservative) when: splat used, no signature provider, or no RBS definition
+        # Returns true (conservative) when: splat used or no RBS definition
         def signature_matches?(class_name, called_method)
           return true if called_method.positional_count.nil?
-          return true unless @signature_provider.respond_to?(:get_method_signatures)
 
-          signatures = @signature_provider.get_method_signatures(class_name, called_method.name.to_s)
+          signatures = @signature_registry.get_method_signatures(class_name, called_method.name.to_s)
           return true if signatures.empty?
 
           signatures.any? { |sig| overload_accepts?(sig.method_type, called_method.positional_count) }

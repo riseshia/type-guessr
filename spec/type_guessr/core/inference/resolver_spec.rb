@@ -2,14 +2,14 @@
 
 require "spec_helper"
 require "type_guessr/core/inference/resolver"
-require "type_guessr/core/rbs_provider"
+require "type_guessr/core/registry/signature_registry"
 require "type_guessr/core/type_simplifier"
 
 RSpec.describe TypeGuessr::Core::Inference::Resolver do
-  let(:rbs_provider) { TypeGuessr::Core::RBSProvider.instance }
+  let(:signature_registry) { TypeGuessr::Core::Registry::SignatureRegistry.instance.preload }
   let(:type_simplifier) { TypeGuessr::Core::TypeSimplifier.new }
   let(:resolver) do
-    r = described_class.new(rbs_provider)
+    r = described_class.new(signature_registry)
     r.type_simplifier = type_simplifier
     r
   end
@@ -199,7 +199,7 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
       it "infers singleton type for class constant" do
         code_index = double
         allow(code_index).to receive(:constant_kind).with("User").and_return(:class)
-        resolver_with_index = described_class.new(rbs_provider, code_index: code_index)
+        resolver_with_index = described_class.new(signature_registry, code_index: code_index)
 
         const = TypeGuessr::Core::IR::ConstantNode.new(
           name: "User",
@@ -217,7 +217,7 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
       it "infers singleton type for module constant" do
         code_index = double
         allow(code_index).to receive(:constant_kind).with("MyModule").and_return(:module)
-        resolver_with_index = described_class.new(rbs_provider, code_index: code_index)
+        resolver_with_index = described_class.new(signature_registry, code_index: code_index)
 
         const = TypeGuessr::Core::IR::ConstantNode.new(
           name: "MyModule",
@@ -235,7 +235,7 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
       it "returns Unknown for non-class constant when code_index returns nil" do
         code_index = double
         allow(code_index).to receive(:constant_kind).with("MAX_SIZE").and_return(nil)
-        resolver_with_index = described_class.new(rbs_provider, code_index: code_index)
+        resolver_with_index = described_class.new(signature_registry, code_index: code_index)
 
         const = TypeGuessr::Core::IR::ConstantNode.new(
           name: "MAX_SIZE",
@@ -470,7 +470,7 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
         # Set up code_index to simulate RubyIndexer resolving :depot to Store
         code_index = double
         allow(code_index).to receive(:find_classes_defining_methods).with([:depot]).and_return(["Store"])
-        resolver_with_index = described_class.new(rbs_provider, code_index: code_index)
+        resolver_with_index = described_class.new(signature_registry, code_index: code_index)
 
         # Register Store#depot that returns an Integer
         depot_return = TypeGuessr::Core::IR::LiteralNode.new(

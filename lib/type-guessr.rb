@@ -16,7 +16,7 @@ require_relative "type_guessr/core/converter/prism_converter"
 require_relative "type_guessr/core/converter/rbs_converter"
 require_relative "type_guessr/core/inference/result"
 require_relative "type_guessr/core/inference/resolver"
-require_relative "type_guessr/core/rbs_provider"
+require_relative "type_guessr/core/registry/signature_registry"
 require_relative "type_guessr/core/logger"
 
 # Load Ruby LSP integration
