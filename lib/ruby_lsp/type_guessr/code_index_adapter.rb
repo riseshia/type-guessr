@@ -72,6 +72,21 @@ module RubyLsp
       rescue RubyIndexer::Index::NonExistingNamespaceError
         nil
       end
+
+      # Look up owner of an instance method
+      # @param class_name [String] Class name
+      # @param method_name [String] Method name
+      # @return [String, nil] Owner name or nil
+      def instance_method_owner(class_name, method_name)
+        return nil unless @index
+
+        entries = @index.resolve_method(method_name, class_name)
+        return nil if entries.nil? || entries.empty?
+
+        entries.first.owner&.name
+      rescue RubyIndexer::Index::NonExistingNamespaceError
+        nil
+      end
     end
   end
 end

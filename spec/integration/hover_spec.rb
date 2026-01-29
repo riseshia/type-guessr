@@ -1878,6 +1878,27 @@ RSpec.describe "Hover Integration" do
         expect_hover_type(line: 2, column: 14, expected: "Array[Integer]")
       end
     end
+
+    context "tap method signature on custom class" do
+      let(:source) do
+        <<~RUBY
+          class Recipe
+            def name; end
+          end
+          recipe = Recipe.new
+          recipe.tap { |x| x }
+        RUBY
+      end
+
+      it "shows Object#tap RBS signature" do
+        # Hover on "tap" method call should show RBS Object#tap signature
+        # not `(&<anonymous block>) -> Recipe`
+        response = hover_on_source(source, { line: 4, character: 7 })
+        expect(response).not_to be_nil
+        # Should show Object#tap's RBS signature: () { (self) -> void } -> self
+        expect(response.contents.value).to include("{ (self) -> void } -> self")
+      end
+    end
   end
 
   describe "initialize method", :doc do

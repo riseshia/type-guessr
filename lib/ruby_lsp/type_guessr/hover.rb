@@ -161,12 +161,13 @@ module RubyLsp
 
             # Fall back to RBS signature lookup (for stdlib/gems)
             # Use class method lookup for SingletonType (e.g., RBS::Environment.from_loader)
+            # RuntimeAdapter resolves the actual method owner (e.g., Object for #tap)
             signatures = if receiver_type.is_a?(Types::SingletonType)
-                           @runtime_adapter.signature_registry.get_class_method_signatures(
+                           @runtime_adapter.get_rbs_class_method_signatures(
                              class_name, call_node.method.to_s
                            )
                          else
-                           @runtime_adapter.signature_registry.get_method_signatures(
+                           @runtime_adapter.get_rbs_method_signatures(
                              class_name, call_node.method.to_s
                            )
                          end

@@ -303,7 +303,52 @@ module RubyLsp
         end
       end
 
+      # Look up RBS method signatures with owner resolution
+      # Finds the actual class that defines the method (e.g., Object for #tap)
+      # @param class_name [String] Receiver class name
+      # @param method_name [String] Method name
+      # @return [Array<SignatureRegistry::Signature>] RBS signatures (empty array if not found)
+      def get_rbs_method_signatures(class_name, method_name)
+        @mutex.synchronize do
+          # Find actual owner class (e.g., Object for tap on MyClass)
+          owner_class = @code_index&.instance_method_owner(class_name, method_name) || class_name
+
+          @signature_registry.get_method_signatures(owner_class, method_name)
+        end
+      end
+
+      # Look up RBS class method signatures with owner resolution
+      # @param class_name [String] Class name
+      # @param method_name [String] Method name
+      # @return [Array<SignatureRegistry::Signature>] RBS signatures (empty array if not found)
+      def get_rbs_class_method_signatures(class_name, method_name)
+        @mutex.synchronize do
+          # Find actual owner class for class methods
+          owner_class = @code_index&.class_method_owner(class_name, method_name) || class_name
+
+          # Convert singleton format (e.g., "File::<Class:File>") to simple class name ("File")
+          # SignatureRegistry expects simple class names for RBS lookup
+          owner_class = extract_class_from_singleton(owner_class)
+
+          @signature_registry.get_class_method_signatures(owner_class, method_name)
+        end
+      end
+
       private
+
+      # Extract simple class name from singleton format
+      # "File::<Class:File>" -> "File"
+      # "Namespace::MyClass::<Class:MyClass>" -> "Namespace::MyClass"
+      # @param owner_class [String] Owner class name (may be singleton format)
+      # @return [String] Simple class name
+      def extract_class_from_singleton(owner_class)
+        # Match singleton pattern: "ClassName::<Class:ClassName>"
+        if owner_class.match?(/::<Class:[^>]+>\z/)
+          owner_class.sub(/::<Class:[^>]+>\z/, "")
+        else
+          owner_class
+        end
+      end
 
       # Traverse and index a single file
       def traverse_file(uri)
