@@ -62,9 +62,12 @@ type-guessr/
 │           │   └── result.rb                    # Inference result
 │           ├── ir/
 │           │   └── nodes.rb                     # Node definitions
+│           ├── registry/
+│           │   ├── method_registry.rb           # Project method storage
+│           │   ├── signature_registry.rb        # Stdlib RBS signatures
+│           │   └── variable_registry.rb         # Instance/class variable storage
 │           ├── logger.rb                        # Logger utility
-│           ├── rbs_provider.rb                  # RBS method signatures
-│           ├── signature_provider.rb            # Method signature generation
+│           ├── signature_builder.rb             # Method signature generation
 │           ├── type_simplifier.rb               # Type simplification
 │           └── types.rb                         # Type system
 ├── spec/
@@ -98,9 +101,12 @@ type-guessr/
 │           │   └── result_spec.rb
 │           ├── ir/
 │           │   └── nodes_spec.rb
+│           ├── registry/
+│           │   ├── method_registry_spec.rb
+│           │   ├── signature_registry_spec.rb
+│           │   └── variable_registry_spec.rb
 │           ├── logger_spec.rb
-│           ├── rbs_provider_spec.rb
-│           ├── signature_provider_spec.rb
+│           ├── signature_builder_spec.rb
 │           ├── type_simplifier_spec.rb
 │           └── types_spec.rb
 ├── docs/
@@ -113,7 +119,6 @@ type-guessr/
 │   └── variable.md                              # Variable inference rules (generated)
 ├── .rspec                                       # RSpec configuration
 ├── .rubocop.yml                                 # RuboCop configuration
-├── AGENTS.md                                    # Project context for AI agents
 ├── Gemfile
 ├── README.md
 └── type-guessr.gemspec                          # Gem specification
@@ -150,20 +155,30 @@ The project is organized into two main layers:
 #### 5. Resolver (`inference/resolver.rb`)
 - Resolves nodes to types by traversing the dependency graph
 - Caches inference results per node
-- Handles RBS method signature lookup
+- Uses injected MethodRegistry and VariableRegistry for storage
 
 #### 6. Types (`types.rb`)
 - Type representations: `ClassInstance`, `ArrayType`, `HashType`, `HashShape`, `Union`, `Unknown`, etc.
 
-#### 7. RBSProvider (`rbs_provider.rb`)
-- Provides RBS method signatures and return types
-- Handles type variable substitution for generics
+#### 7. SignatureRegistry (`registry/signature_registry.rb`)
+- Preloads stdlib RBS signatures at startup (~250ms, ~10MB)
+- O(1) hash lookup for method return types
+- Handles overload resolution and block parameter types
 
-#### 8. SignatureProvider (`signature_provider.rb`)
+#### 8. MethodRegistry (`registry/method_registry.rb`)
+- Stores project method definitions (DefNode)
+- Supports inheritance via ancestry_provider
+- Provides method lookup and search
+
+#### 9. VariableRegistry (`registry/variable_registry.rb`)
+- Stores instance/class variable definitions
+- Supports inheritance for instance variable lookup
+
+#### 10. SignatureBuilder (`signature_builder.rb`)
 - Generates method signatures from inferred types
 - Formats parameter types and return types for display
 
-#### 9. TypeSimplifier (`type_simplifier.rb`)
+#### 11. TypeSimplifier (`type_simplifier.rb`)
 - Simplifies complex union types
 - Normalizes type representations for cleaner display
 
