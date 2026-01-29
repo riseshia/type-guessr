@@ -1,6 +1,6 @@
 # TypeGuessr Benchmark Report
 
-Generated: 2026-01-28 22:52:00
+Generated: 2026-01-29 20:51:31
 
 ## Configuration
 
@@ -17,15 +17,15 @@ Generated: 2026-01-28 22:52:00
 | Metric | Value |
 |--------|-------|
 | Files indexed | 3331 |
-| Total nodes | 1968587 |
+| Total nodes | 1969019 |
 | Iterations | 3 |
-| Avg time | 13.023 sec |
-| Min/Max time | 12.139 / 14.542 sec |
-| Throughput (nodes) | 151161 nodes/sec |
-| Throughput (files) | 255.8 files/sec |
-| Avg memory delta | +530728 KB |
-| Avg time per file | 3.91 ms |
-| Avg nodes per file | 590 |
+| Avg time | 12.146 sec |
+| Min/Max time | 11.245 / 13.458 sec |
+| Throughput (nodes) | 162115 nodes/sec |
+| Throughput (files) | 274.3 files/sec |
+| Avg memory delta | +569137 KB |
+| Avg time per file | 3.65 ms |
+| Avg nodes per file | 591 |
 
 
 ## Inference Results
@@ -35,33 +35,33 @@ Generated: 2026-01-28 22:52:00
 | Metric | Value |
 |--------|-------|
 | Files measured | 1 |
-| Min | 0.052 ms |
-| Max | 0.052 ms |
-| Avg | 0.052 ms |
-| Median (p50) | 0.052 ms |
-| p95 | 0.052 ms |
-| p99 | 0.052 ms |
+| Min | 0.049 ms |
+| Max | 0.049 ms |
+| Avg | 0.049 ms |
+| Median (p50) | 0.049 ms |
+| p95 | 0.049 ms |
+| p99 | 0.049 ms |
 
 ### Warm (subsequent inferences)
 
 | Metric | Value |
 |--------|-------|
 | Nodes sampled | 2000 |
-| Total inferred | 1998 |
-| Total time | 0.067 sec |
-| Throughput | 30027 inferences/sec |
-| Min | 0.000 ms |
-| Max | 6.986 ms |
-| Avg | 0.033 ms |
-| Median (p50) | 0.009 ms |
-| p95 | 0.040 ms |
-| p99 | 0.173 ms |
+| Total inferred | 1997 |
+| Total time | 0.013 sec |
+| Throughput | 151234 inferences/sec |
+| Min | 0.001 ms |
+| Max | 0.102 ms |
+| Avg | 0.007 ms |
+| Median (p50) | 0.004 ms |
+| p95 | 0.020 ms |
+| p99 | 0.043 ms |
 
 
 ## Performance Summary
 
-- **Indexing**: 151161 nodes/sec (255.8 files/sec)
-- **Inference**: 30027 inferences/sec (0.033 ms/inference)
+- **Indexing**: 162115 nodes/sec (274.3 files/sec)
+- **Inference**: 151234 inferences/sec (0.007 ms/inference)
 
 ---
 
