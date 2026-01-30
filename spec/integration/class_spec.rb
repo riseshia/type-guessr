@@ -185,6 +185,56 @@ RSpec.describe "Class Instance Type Inference", :doc do
         expect_hover_method_signature(line: 6, column: 9, expected_signature: "(untyped name, untyped age) -> User")
       end
     end
+
+    context "when calling .new with short constant name in nested module" do
+      let(:source) do
+        <<~RUBY
+          module Outer
+            class Inner
+              def initialize(arg1, arg2 = nil)
+              end
+            end
+
+            class User
+              def create
+                Inner.new("test")
+              end
+            end
+          end
+        RUBY
+      end
+
+      it "resolves full class name for constructor signature lookup → (untyped arg1, ?nil arg2) -> Outer::Inner" do
+        # Hover on "new" at line 9, column 12 (0-indexed: line 8, column 12 = "n" in "new")
+        expect_hover_method_signature(line: 9, column: 12, expected_signature: "(untyped arg1, ?nil arg2) -> Outer::Inner")
+      end
+    end
+
+    context "when calling .new with deeply nested short constant name" do
+      let(:source) do
+        <<~RUBY
+          module A
+            module B
+              class Target
+                def initialize(x, y, z = 0)
+                end
+              end
+
+              class Consumer
+                def build
+                  Target.new(1, 2)
+                end
+              end
+            end
+          end
+        RUBY
+      end
+
+      it "resolves deeply nested class name → (untyped x, untyped y, ?Integer z) -> A::B::Target" do
+        # Hover on "new" at line 10, column 15 (0-indexed: line 9, column 15 = "n" in "new")
+        expect_hover_method_signature(line: 10, column: 15, expected_signature: "(untyped x, untyped y, ?Integer z) -> A::B::Target")
+      end
+    end
   end
 
   describe "Class instantiation (misc)" do

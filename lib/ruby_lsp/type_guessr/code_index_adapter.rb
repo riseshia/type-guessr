@@ -73,6 +73,19 @@ module RubyLsp
         nil
       end
 
+      # Resolve a short constant name to its fully qualified name using nesting context
+      # @param short_name [String] Short constant name (e.g., "RuntimeAdapter")
+      # @param nesting [Array<String>] Nesting context (e.g., ["RubyLsp", "TypeGuessr"])
+      # @return [String, nil] Fully qualified name or nil if not found
+      def resolve_constant_name(short_name, nesting)
+        return nil unless @index
+
+        entries = @index.resolve(short_name, nesting)
+        entries&.first&.name
+      rescue StandardError
+        nil
+      end
+
       # Look up owner of an instance method
       # @param class_name [String] Class name
       # @param method_name [String] Method name

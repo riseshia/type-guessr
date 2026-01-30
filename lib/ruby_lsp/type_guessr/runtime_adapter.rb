@@ -303,6 +303,14 @@ module RubyLsp
         end
       end
 
+      # Resolve a short constant name to fully qualified name
+      # @param short_name [String] Short constant name
+      # @param nesting [Array<String>] Nesting context
+      # @return [String, nil] Fully qualified name or nil
+      def resolve_constant_name(short_name, nesting)
+        @code_index&.resolve_constant_name(short_name, nesting)
+      end
+
       # Look up RBS method signatures with owner resolution
       # Finds the actual class that defines the method (e.g., Object for #tap)
       # @param class_name [String] Receiver class name

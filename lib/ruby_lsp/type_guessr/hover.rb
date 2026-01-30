@@ -334,12 +334,17 @@ module RubyLsp
       end
 
       # Resolve receiver to class name (handles aliases via type inference)
+      # Uses CodeIndexAdapter to resolve short constant names to fully qualified names
       def resolve_receiver_class_name(receiver)
         receiver_result = @runtime_adapter.infer_type(receiver)
-        case receiver_result.type
-        when Types::SingletonType then receiver_result.type.name
-        else receiver.name
-        end
+        short_name = case receiver_result.type
+                     when Types::SingletonType then receiver_result.type.name
+                     else receiver.name
+                     end
+
+        # Use CodeIndexAdapter to resolve full qualified name with nesting context
+        nesting = @node_context.nesting.map { |n| n.is_a?(String) ? n : n.name.to_s }
+        @runtime_adapter.resolve_constant_name(short_name, nesting) || short_name
       end
 
       # Build debug info for .new calls
