@@ -373,6 +373,25 @@ RSpec.describe "Hover Integration" do
         expect(response.contents.value).to match(/Method calls:/)
       end
     end
+
+    context "RBS method owner display" do
+      let(:source) do
+        <<~RUBY
+          class Recipe
+            def name; end
+          end
+          recipe = Recipe.new
+          recipe.tap { |x| x }
+        RUBY
+      end
+
+      it "shows method owner in debug info" do
+        # Hover on "tap" method call - should show Kernel as the owner
+        response = hover_on_source(source, { line: 4, character: 7 })
+        expect(response.contents.value).to match(/\*\*\[TypeGuessr Debug\]/)
+        expect(response.contents.value).to match(/Defined in:.*Kernel/i)
+      end
+    end
   end
 
   describe "Edge Cases" do

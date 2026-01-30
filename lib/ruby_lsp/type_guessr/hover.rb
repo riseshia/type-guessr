@@ -135,7 +135,7 @@ module RubyLsp
             # Fall back to RBS signature lookup (for stdlib/gems)
             # Use class method lookup for SingletonType (e.g., RBS::Environment.from_loader)
             # RuntimeAdapter resolves the actual method owner (e.g., Object for #tap)
-            signatures = if receiver_type.is_a?(Types::SingletonType)
+            rbs_result = if receiver_type.is_a?(Types::SingletonType)
                            @runtime_adapter.get_rbs_class_method_signatures(
                              class_name, call_node.method.to_s
                            )
@@ -145,6 +145,9 @@ module RubyLsp
                            )
                          end
 
+            signatures = rbs_result[:signatures]
+            owner = rbs_result[:owner]
+
             if signatures.any?
               # Format the signature(s)
               sig_strs = signatures.map { |sig| sig.method_type.to_s }
@@ -153,6 +156,7 @@ module RubyLsp
               if debug_enabled?
                 content += "\n\n**[TypeGuessr Debug]**"
                 content += "\n\n**Receiver:** `#{receiver_type}`"
+                content += "\n\n**Defined in:** `#{owner}`" if owner != class_name
                 if sig_strs.size > 1
                   content += "\n\n**Overloads:**\n"
                   sig_strs.each { |s| content += "- `#{s}`\n" }

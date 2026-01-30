@@ -307,20 +307,21 @@ module RubyLsp
       # Finds the actual class that defines the method (e.g., Object for #tap)
       # @param class_name [String] Receiver class name
       # @param method_name [String] Method name
-      # @return [Array<SignatureRegistry::Signature>] RBS signatures (empty array if not found)
+      # @return [Hash] { signatures: Array<Signature>, owner: String }
       def get_rbs_method_signatures(class_name, method_name)
         @mutex.synchronize do
           # Find actual owner class (e.g., Object for tap on MyClass)
           owner_class = @code_index&.instance_method_owner(class_name, method_name) || class_name
 
-          @signature_registry.get_method_signatures(owner_class, method_name)
+          signatures = @signature_registry.get_method_signatures(owner_class, method_name)
+          { signatures: signatures, owner: owner_class }
         end
       end
 
       # Look up RBS class method signatures with owner resolution
       # @param class_name [String] Class name
       # @param method_name [String] Method name
-      # @return [Array<SignatureRegistry::Signature>] RBS signatures (empty array if not found)
+      # @return [Hash] { signatures: Array<Signature>, owner: String }
       def get_rbs_class_method_signatures(class_name, method_name)
         @mutex.synchronize do
           # Find actual owner class for class methods
@@ -330,7 +331,8 @@ module RubyLsp
           # SignatureRegistry expects simple class names for RBS lookup
           owner_class = extract_class_from_singleton(owner_class)
 
-          @signature_registry.get_class_method_signatures(owner_class, method_name)
+          signatures = @signature_registry.get_class_method_signatures(owner_class, method_name)
+          { signatures: signatures, owner: owner_class }
         end
       end
 
