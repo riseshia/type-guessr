@@ -2,6 +2,7 @@
 
 require "ruby_lsp/addon"
 require_relative "config"
+require_relative "constants"
 require_relative "runtime_adapter"
 require_relative "hover"
 require_relative "debug_server"
@@ -11,33 +12,6 @@ module RubyLsp
     # TypeGuessr addon for Ruby LSP
     # Provides heuristic type inference without requiring type annotations
     class Addon < ::RubyLsp::Addon
-      # Node types to add to Ruby LSP's ALLOWED_TARGETS for hover support
-      HOVER_TARGET_NODES = [
-        Prism::LocalVariableReadNode,
-        Prism::LocalVariableWriteNode,
-        Prism::LocalVariableTargetNode,
-        Prism::InstanceVariableReadNode,
-        Prism::InstanceVariableWriteNode,
-        Prism::InstanceVariableTargetNode,
-        Prism::ClassVariableReadNode,
-        Prism::ClassVariableWriteNode,
-        Prism::ClassVariableTargetNode,
-        Prism::GlobalVariableReadNode,
-        Prism::GlobalVariableWriteNode,
-        Prism::GlobalVariableTargetNode,
-        Prism::SelfNode,
-        Prism::RequiredParameterNode,
-        Prism::OptionalParameterNode,
-        Prism::RestParameterNode,
-        Prism::RequiredKeywordParameterNode,
-        Prism::OptionalKeywordParameterNode,
-        Prism::KeywordRestParameterNode,
-        Prism::BlockParameterNode,
-        Prism::ForwardingParameterNode,
-        Prism::CallNode,
-        Prism::DefNode,
-      ].freeze
-
       attr_reader :runtime_adapter
 
       def name
@@ -104,7 +78,7 @@ module RubyLsp
       def extend_hover_targets
         targets = RubyLsp::Listeners::Hover::ALLOWED_TARGETS
 
-        HOVER_TARGET_NODES.each do |target|
+        Constants::HOVER_NODE_MAPPING.each_value do |target|
           targets << target unless targets.include?(target)
         end
       end

@@ -8,33 +8,6 @@ module RubyLsp
       Types = ::TypeGuessr::Core::Types
       private_constant :Types
 
-      # Define all node types that should trigger hover content
-      HOVER_NODE_TYPES = %i[
-        local_variable_read
-        local_variable_write
-        local_variable_target
-        instance_variable_read
-        instance_variable_write
-        instance_variable_target
-        class_variable_read
-        class_variable_write
-        class_variable_target
-        global_variable_read
-        global_variable_write
-        global_variable_target
-        required_parameter
-        optional_parameter
-        rest_parameter
-        required_keyword_parameter
-        optional_keyword_parameter
-        keyword_rest_parameter
-        block_parameter
-        forwarding_parameter
-        call
-        def
-        self
-      ].freeze
-
       def initialize(runtime_adapter, response_builder, node_context, dispatcher, global_state)
         @runtime_adapter = runtime_adapter
         @response_builder = response_builder
@@ -45,7 +18,7 @@ module RubyLsp
       end
 
       # Dynamically define handler methods for each node type
-      HOVER_NODE_TYPES.each do |node_type|
+      Constants::HOVER_NODE_MAPPING.each_key do |node_type|
         define_method(:"on_#{node_type}_node_enter") do |node|
           add_hover_content(node)
         end
@@ -56,7 +29,7 @@ module RubyLsp
       def register_listeners(dispatcher)
         dispatcher.register(
           self,
-          *HOVER_NODE_TYPES.map { |type| :"on_#{type}_node_enter" }
+          *Constants::HOVER_NODE_MAPPING.keys.map { |type| :"on_#{type}_node_enter" }
         )
       end
 
