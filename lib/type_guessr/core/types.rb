@@ -120,7 +120,7 @@ module TypeGuessr
       class Union < Type
         attr_reader :types
 
-        def initialize(types, cutoff: RubyLsp::TypeGuessr::Config.union_cutoff)
+        def initialize(types, cutoff: 10)
           super()
           @types = normalize(types, cutoff)
         end
@@ -324,7 +324,7 @@ module TypeGuessr
       class HashShape < Type
         attr_reader :fields
 
-        def self.new(fields, max_fields: RubyLsp::TypeGuessr::Config.hash_shape_max_fields)
+        def self.new(fields, max_fields: 15)
           # Widen to generic Hash when too many fields
           return ClassInstance.for("Hash") if fields.size > max_fields
 
@@ -351,7 +351,7 @@ module TypeGuessr
           "{ #{fields_str} }"
         end
 
-        def merge_field(key, value_type, max_fields: RubyLsp::TypeGuessr::Config.hash_shape_max_fields)
+        def merge_field(key, value_type, max_fields: 15)
           new_fields = @fields.merge(key => value_type)
           HashShape.new(new_fields, max_fields: max_fields)
         end

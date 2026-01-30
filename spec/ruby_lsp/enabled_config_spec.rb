@@ -66,42 +66,6 @@ RSpec.describe RubyLsp::TypeGuessr::Config do
     end
   end
 
-  describe ".union_cutoff" do
-    it "defaults to 10 when not specified" do
-      expect(described_class.union_cutoff).to eq(10)
-    end
-
-    it "uses union_cutoff from config when set" do
-      File.write(".type-guessr.yml", "union_cutoff: 20\n")
-      described_class.reset!
-      expect(described_class.union_cutoff).to eq(20)
-    end
-  end
-
-  describe ".hash_shape_max_fields" do
-    it "defaults to 15 when not specified" do
-      expect(described_class.hash_shape_max_fields).to eq(15)
-    end
-
-    it "uses hash_shape_max_fields from config when set" do
-      File.write(".type-guessr.yml", "hash_shape_max_fields: 25\n")
-      described_class.reset!
-      expect(described_class.hash_shape_max_fields).to eq(25)
-    end
-  end
-
-  describe ".max_chain_depth" do
-    it "defaults to 5 when not specified" do
-      expect(described_class.max_chain_depth).to eq(5)
-    end
-
-    it "uses max_chain_depth from config when set" do
-      File.write(".type-guessr.yml", "max_chain_depth: 10\n")
-      described_class.reset!
-      expect(described_class.max_chain_depth).to eq(10)
-    end
-  end
-
   it "disables addon features when enabled is false" do
     File.write(".type-guessr.yml", "enabled: false\n")
     described_class.reset!
