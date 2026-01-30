@@ -10,7 +10,8 @@ module RubyLsp
       # Core layer shortcuts
       Types = ::TypeGuessr::Core::Types
       IR = ::TypeGuessr::Core::IR
-      private_constant :Types, :IR
+      NodeKeyGenerator = ::TypeGuessr::Core::NodeKeyGenerator
+      private_constant :Types, :IR, :NodeKeyGenerator
 
       def initialize(index, runtime_adapter)
         super(index)
@@ -131,22 +132,22 @@ module RubyLsp
         offset = node.location.start_offset
         case node
         when Prism::LocalVariableWriteNode, Prism::LocalVariableTargetNode
-          "local_write:#{node.name}:#{offset}"
+          NodeKeyGenerator.local_write(node.name, offset)
         when Prism::LocalVariableReadNode
-          "local_read:#{node.name}:#{offset}"
+          NodeKeyGenerator.local_read(node.name, offset)
         when Prism::InstanceVariableWriteNode, Prism::InstanceVariableTargetNode
-          "ivar_write:#{node.name}:#{offset}"
+          NodeKeyGenerator.ivar_write(node.name, offset)
         when Prism::InstanceVariableReadNode
-          "ivar_read:#{node.name}:#{offset}"
+          NodeKeyGenerator.ivar_read(node.name, offset)
         when Prism::RequiredParameterNode, Prism::OptionalParameterNode, Prism::RestParameterNode,
              Prism::RequiredKeywordParameterNode, Prism::OptionalKeywordParameterNode,
              Prism::KeywordRestParameterNode, Prism::BlockParameterNode
           # Check if this is a block parameter
           if block_parameter?(node, node_context)
             index = block_parameter_index(node, node_context)
-            "bparam:#{index}:#{offset}"
+            NodeKeyGenerator.bparam(index, offset)
           else
-            "param:#{node.name}:#{offset}"
+            NodeKeyGenerator.param(node.name, offset)
           end
         end
       end

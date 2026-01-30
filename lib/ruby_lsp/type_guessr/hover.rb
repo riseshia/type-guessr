@@ -6,7 +6,8 @@ module RubyLsp
     class Hover
       # Core layer shortcuts
       Types = ::TypeGuessr::Core::Types
-      private_constant :Types
+      NodeKeyGenerator = ::TypeGuessr::Core::NodeKeyGenerator
+      private_constant :Types, :NodeKeyGenerator
 
       def initialize(runtime_adapter, response_builder, node_context, dispatcher, global_state)
         @runtime_adapter = runtime_adapter
@@ -401,46 +402,46 @@ module RubyLsp
         offset = node.location.start_offset
         case node
         when Prism::LocalVariableWriteNode, Prism::LocalVariableTargetNode
-          "local_write:#{node.name}:#{offset}"
+          NodeKeyGenerator.local_write(node.name, offset)
         when Prism::LocalVariableReadNode
-          "local_read:#{node.name}:#{offset}"
+          NodeKeyGenerator.local_read(node.name, offset)
         when Prism::InstanceVariableWriteNode, Prism::InstanceVariableTargetNode
-          "ivar_write:#{node.name}:#{offset}"
+          NodeKeyGenerator.ivar_write(node.name, offset)
         when Prism::InstanceVariableReadNode
-          "ivar_read:#{node.name}:#{offset}"
+          NodeKeyGenerator.ivar_read(node.name, offset)
         when Prism::ClassVariableWriteNode, Prism::ClassVariableTargetNode
-          "cvar_write:#{node.name}:#{offset}"
+          NodeKeyGenerator.cvar_write(node.name, offset)
         when Prism::ClassVariableReadNode
-          "cvar_read:#{node.name}:#{offset}"
+          NodeKeyGenerator.cvar_read(node.name, offset)
         when Prism::GlobalVariableWriteNode, Prism::GlobalVariableTargetNode
-          "global_write:#{node.name}:#{offset}"
+          NodeKeyGenerator.global_write(node.name, offset)
         when Prism::GlobalVariableReadNode
-          "global_read:#{node.name}:#{offset}"
+          NodeKeyGenerator.global_read(node.name, offset)
         when Prism::RequiredParameterNode, Prism::OptionalParameterNode, Prism::RestParameterNode,
              Prism::RequiredKeywordParameterNode, Prism::OptionalKeywordParameterNode,
              Prism::KeywordRestParameterNode, Prism::BlockParameterNode
           # Check if this is a block parameter (parent is BlockParametersNode)
           if block_parameter?(node)
             index = block_parameter_index(node)
-            "bparam:#{index}:#{offset}"
+            NodeKeyGenerator.bparam(index, offset)
           else
-            "param:#{node.name}:#{offset}"
+            NodeKeyGenerator.param(node.name, offset)
           end
         when Prism::ForwardingParameterNode
-          "param:...:#{offset}"
+          NodeKeyGenerator.param(:"...", offset)
         when Prism::CallNode
           # Use message_loc for accurate offset
           call_offset = node.message_loc&.start_offset || offset
-          "call:#{node.name}:#{call_offset}"
+          NodeKeyGenerator.call(node.name, call_offset)
         when Prism::DefNode
           # Use name_loc for accurate offset
           def_offset = node.name_loc&.start_offset || offset
-          "def:#{node.name}:#{def_offset}"
+          NodeKeyGenerator.def_node(node.name, def_offset)
         when Prism::SelfNode
           class_path = @node_context.nesting.map do |n|
             n.is_a?(String) ? n : n.name.to_s
           end.join("::")
-          "self:#{class_path}:#{offset}"
+          NodeKeyGenerator.self_node(class_path, offset)
         end
       end
 

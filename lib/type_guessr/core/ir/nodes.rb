@@ -3,6 +3,9 @@
 module TypeGuessr
   module Core
     module IR
+      # Shortcut to NodeKeyGenerator for generating node hash keys
+      NodeKeyGenerator = Core::NodeKeyGenerator
+
       # Extract the last segment of a class/module path without array allocation.
       # Uses String#rindex instead of String#split to avoid creating intermediate arrays.
       # @param path [String] Class path (e.g., "Admin::User", "TypeGuessr::Core::IR::LiteralNode")
@@ -113,7 +116,7 @@ module TypeGuessr
 
         def node_hash
           type_name = type.is_a?(Class) ? IR.extract_last_name(type.name) : IR.extract_last_name(type.class.name)
-          "lit:#{type_name}:#{loc&.offset}"
+          NodeKeyGenerator.literal(type_name, loc&.offset)
         end
 
         def node_key(scope_id)
@@ -145,7 +148,7 @@ module TypeGuessr
         end
 
         def node_hash
-          "local_write:#{name}:#{loc&.offset}"
+          NodeKeyGenerator.local_write(name, loc&.offset)
         end
 
         def node_key(scope_id)
@@ -176,7 +179,7 @@ module TypeGuessr
         end
 
         def node_hash
-          "local_read:#{name}:#{loc&.offset}"
+          NodeKeyGenerator.local_read(name, loc&.offset)
         end
 
         def node_key(scope_id)
@@ -206,7 +209,7 @@ module TypeGuessr
         end
 
         def node_hash
-          "ivar_write:#{name}:#{loc&.offset}"
+          NodeKeyGenerator.ivar_write(name, loc&.offset)
         end
 
         def node_key(scope_id)
@@ -240,7 +243,7 @@ module TypeGuessr
         end
 
         def node_hash
-          "ivar_read:#{name}:#{loc&.offset}"
+          NodeKeyGenerator.ivar_read(name, loc&.offset)
         end
 
         def node_key(scope_id)
@@ -271,7 +274,7 @@ module TypeGuessr
         end
 
         def node_hash
-          "cvar_write:#{name}:#{loc&.offset}"
+          NodeKeyGenerator.cvar_write(name, loc&.offset)
         end
 
         def node_key(scope_id)
@@ -302,7 +305,7 @@ module TypeGuessr
         end
 
         def node_hash
-          "cvar_read:#{name}:#{loc&.offset}"
+          NodeKeyGenerator.cvar_read(name, loc&.offset)
         end
 
         def node_key(scope_id)
@@ -336,7 +339,7 @@ module TypeGuessr
         end
 
         def node_hash
-          "param:#{name}:#{loc&.offset}"
+          NodeKeyGenerator.param(name, loc&.offset)
         end
 
         def node_key(scope_id)
@@ -365,7 +368,7 @@ module TypeGuessr
         end
 
         def node_hash
-          "const:#{name}:#{loc&.offset}"
+          NodeKeyGenerator.constant(name, loc&.offset)
         end
 
         def node_key(scope_id)
@@ -400,7 +403,7 @@ module TypeGuessr
         end
 
         def node_hash
-          "call:#{method}:#{loc&.offset}"
+          NodeKeyGenerator.call(method, loc&.offset)
         end
 
         def node_key(scope_id)
@@ -432,7 +435,7 @@ module TypeGuessr
         end
 
         def node_hash
-          "bparam:#{index}:#{loc&.offset}"
+          NodeKeyGenerator.bparam(index, loc&.offset)
         end
 
         def node_key(scope_id)
@@ -460,7 +463,7 @@ module TypeGuessr
         end
 
         def node_hash
-          "merge:#{loc&.offset}"
+          NodeKeyGenerator.merge(loc&.offset)
         end
 
         def node_key(scope_id)
@@ -491,7 +494,7 @@ module TypeGuessr
         end
 
         def node_hash
-          "def:#{name}:#{loc&.offset}"
+          NodeKeyGenerator.def_node(name, loc&.offset)
         end
 
         def node_key(scope_id)
@@ -522,7 +525,7 @@ module TypeGuessr
         end
 
         def node_hash
-          "class:#{name}:#{loc&.offset}"
+          NodeKeyGenerator.class_module(name, loc&.offset)
         end
 
         def node_key(scope_id)
@@ -549,7 +552,7 @@ module TypeGuessr
         end
 
         def node_hash
-          "self:#{class_name}:#{loc&.offset}"
+          NodeKeyGenerator.self_node(class_name, loc&.offset)
         end
 
         def node_key(scope_id)
@@ -575,7 +578,7 @@ module TypeGuessr
         end
 
         def node_hash
-          "return:#{loc&.offset}"
+          NodeKeyGenerator.return_node(loc&.offset)
         end
 
         def node_key(scope_id)
