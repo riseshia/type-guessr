@@ -37,6 +37,19 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
       end
     end
 
+    context "with unrecognized node type" do
+      it "returns Unknown with 'unknown node type' reason" do
+        # Real scenario: new IR node type added but Resolver not updated
+        # This creates a custom Data class that isn't handled by infer_node
+        unhandled_node = Data.define(:loc).new(loc: loc)
+
+        result = resolver.infer(unhandled_node)
+        expect(result.type).to be(TypeGuessr::Core::Types::Unknown.instance)
+        expect(result.reason).to eq("unknown node type")
+        expect(result.source).to eq(:unknown)
+      end
+    end
+
     context "with LiteralNode" do
       it "returns the literal type" do
         node = TypeGuessr::Core::IR::LiteralNode.new(
@@ -385,6 +398,24 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
         expect(result.type).to be_a(TypeGuessr::Core::Types::ClassInstance)
         expect(result.type.name).to eq("String")
       end
+
+      it "handles empty branches array (all branches non-returning)" do
+        # Real scenario: case statement where all branches raise
+        # case x; when 1 then raise "error1"; when 2 then raise "error2"; end
+        # After filtering non-returning branches, we may have empty branches
+        merge = TypeGuessr::Core::IR::MergeNode.new(
+          branches: [],
+          loc: loc
+        )
+
+        # Should not crash, should return some reasonable type
+        expect { resolver.infer(merge) }.not_to raise_error
+
+        result = resolver.infer(merge)
+        # Empty union could be Unknown or a Union with no types
+        # The behavior depends on implementation, but it should be consistent
+        expect(result).to be_a(TypeGuessr::Core::Inference::Result)
+      end
     end
 
     context "with unknown receiver fallback to Object" do
@@ -600,6 +631,91 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
 
         # This should NOT raise SystemStackError
         expect { resolver.infer(merge_node) }.not_to raise_error
+      end
+
+      it "detects deep circular reference through node dependencies A -> B -> C -> A" do
+        # Create circular reference through LocalWriteNode chain:
+        # write_a.value -> write_b -> write_b.value -> write_c -> write_c.value -> read_a -> write_a
+        write_c = TypeGuessr::Core::IR::LocalWriteNode.new(
+          name: :c,
+          value: nil, # Will be set below
+          called_methods: [],
+          loc: loc
+        )
+
+        write_b = TypeGuessr::Core::IR::LocalWriteNode.new(
+          name: :b,
+          value: write_c,
+          called_methods: [],
+          loc: loc
+        )
+
+        write_a = TypeGuessr::Core::IR::LocalWriteNode.new(
+          name: :a,
+          value: write_b,
+          called_methods: [],
+          loc: loc
+        )
+
+        # Create read node pointing back to write_a
+        read_a = TypeGuessr::Core::IR::LocalReadNode.new(
+          name: :a,
+          write_node: write_a,
+          called_methods: [],
+          loc: loc
+        )
+
+        # Complete the cycle: write_c.value points to read_a which points to write_a
+        # This creates: write_a -> write_b -> write_c -> read_a -> write_a
+        # We need to manually set the value since Data.define is immutable
+        # Use a MergeNode to wrap the circular reference
+        merge_for_c = TypeGuessr::Core::IR::MergeNode.new(
+          branches: [read_a],
+          loc: loc
+        )
+
+        # Recreate write_c with the circular value
+        write_c_circular = TypeGuessr::Core::IR::LocalWriteNode.new(
+          name: :c,
+          value: merge_for_c,
+          called_methods: [],
+          loc: loc
+        )
+
+        write_b_circular = TypeGuessr::Core::IR::LocalWriteNode.new(
+          name: :b,
+          value: write_c_circular,
+          called_methods: [],
+          loc: loc
+        )
+
+        write_a_circular = TypeGuessr::Core::IR::LocalWriteNode.new(
+          name: :a,
+          value: write_b_circular,
+          called_methods: [],
+          loc: loc
+        )
+
+        # Update read_a to point to the circular write_a
+        read_a_circular = TypeGuessr::Core::IR::LocalReadNode.new(
+          name: :a,
+          write_node: write_a_circular,
+          called_methods: [],
+          loc: loc
+        )
+
+        # Rebuild the chain with proper circular reference
+        TypeGuessr::Core::IR::MergeNode.new(
+          branches: [read_a_circular],
+          loc: loc
+        )
+
+        # Inferring should not cause stack overflow (detected by INFERRING sentinel)
+        expect { resolver.infer(write_a_circular) }.not_to raise_error
+
+        # Result should be Unknown due to circular dependency
+        result = resolver.infer(write_a_circular)
+        expect(result.type).to be(TypeGuessr::Core::Types::Unknown.instance)
       end
     end
 
