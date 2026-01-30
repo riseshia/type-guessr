@@ -10,6 +10,7 @@ AllCops:
     - "vendor/**/*"
     - "bin/benchmark"
     - "bin/profile"
+    - "tmp/**/*"
 
 Style/StringLiterals:
   EnforcedStyle: double_quotes

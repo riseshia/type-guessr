@@ -4,6 +4,9 @@ require_relative "../node_key_generator"
 
 module TypeGuessr
   module Core
+    # Intermediate Representation (IR) nodes for type inference.
+    # Each node represents a construct in the source code and forms a
+    # reverse dependency graph where nodes point to their dependencies.
     module IR
       # Shortcut to NodeKeyGenerator for generating node hash keys
       NodeKeyGenerator = Core::NodeKeyGenerator
