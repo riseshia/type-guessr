@@ -362,5 +362,112 @@ RSpec.describe "Container Type Inference", :doc do
       end
     end
   end
+
+  describe "Control flow container mutation" do
+    context "Hash field added in if branch" do
+      let(:source) do
+        <<~RUBY
+          def foo(flag)
+            h = { a: 1 }
+            if flag
+              h[:b] = "str"
+            end
+            h
+          end
+        RUBY
+      end
+
+      it "→ union of branch types (if may not execute)" do
+        # Union of both branches: original hash OR hash with added field
+        expect_hover_type(line: 6, column: 2, expected: "{ a: Integer } | { a: Integer, b: String }")
+      end
+    end
+
+    context "Array element added in case branch" do
+      let(:source) do
+        <<~RUBY
+          def foo(n)
+            arr = [1]
+            case n
+            when 1 then arr << "a"
+            when 2 then arr << :sym
+            end
+            arr
+          end
+        RUBY
+      end
+
+      it "→ union of branch array types" do
+        # Each case branch produces different array type
+        expect_hover_type(line: 7, column: 2, expected: "Array[Integer | String] | Array[Integer | Symbol]")
+      end
+    end
+  end
+
+  describe "Sequential container expansion" do
+    context "multiple Hash field additions" do
+      let(:source) do
+        <<~RUBY
+          h = {}
+          h[:a] = 1
+          h[:b] = "str"
+          h[:c] = :sym
+          h
+        RUBY
+      end
+
+      it "→ { a: Integer, b: String, c: Symbol }" do
+        expect_hover_type(line: 5, column: 0, expected: "{ a: Integer, b: String, c: Symbol }")
+      end
+    end
+
+    context "multiple Array element additions" do
+      let(:source) do
+        <<~RUBY
+          arr = []
+          arr << 1
+          arr << "str"
+          arr << :sym
+          arr
+        RUBY
+      end
+
+      it "→ Array[Integer | String | Symbol]" do
+        expect_hover_type(line: 5, column: 0, expected: "Array[Integer | String | Symbol]")
+      end
+    end
+
+    context "mixed Array operations" do
+      let(:source) do
+        <<~RUBY
+          arr = [1]
+          arr[0] = "replaced"
+          arr << :added
+          arr
+        RUBY
+      end
+
+      it "→ Array[Integer | String | Symbol]" do
+        expect_hover_type(line: 4, column: 0, expected: "Array[Integer | String | Symbol]")
+      end
+    end
+  end
+
+  describe "Container mutation edge cases" do
+    context "container mutation followed by reassignment" do
+      let(:source) do
+        <<~RUBY
+          a = [1, 2]
+          a << "str"
+          a = { x: 1 }
+          a
+        RUBY
+      end
+
+      it "→ { x: Integer } (not Array)" do
+        expect_hover_type(line: 4, column: 0, expected: "{ x: Integer }")
+      end
+    end
+  end
 end
 # rubocop:enable RSpec/DescribeClass

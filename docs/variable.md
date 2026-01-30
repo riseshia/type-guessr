@@ -190,3 +190,31 @@ class Foo
 end
 ```
 
+## Block parameter references
+
+### tap block parameter referenced in keyword argument
+
+```ruby
+module RBS
+  class Environment2
+    def self.from_loader(loader)
+      self.new.tap do |env|
+        loader.load(env: [e]nv)  # Guessed Type: RBS::Environment2
+      end
+    end
+  end
+end
+```
+
+### block parameter referenced in regular method argument
+
+```ruby
+class User
+  def self.build
+    self.new.tap do |user|
+      validate([u]ser)  # Guessed Type: User
+    end
+  end
+end
+```
+

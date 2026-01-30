@@ -221,3 +221,72 @@ a = [1]
 [a] << "x"  # Guessed Type: Array[Integer | String]
 ```
 
+## Control flow container mutation
+
+### Hash field added in if branch
+
+```ruby
+def foo(flag)
+  h = { a: 1 }
+  if flag
+    h[:b] = "str"
+  end
+  [h]  # Guessed Type: { a: Integer } | { a: Integer, b: String }
+end
+```
+
+### Array element added in case branch
+
+```ruby
+def foo(n)
+  arr = [1]
+  case n
+  when 1 then arr << "a"
+  when 2 then arr << :sym
+  end
+  [a]rr  # Guessed Type: Array[Integer | String] | Array[Integer | Symbol]
+end
+```
+
+## Sequential container expansion
+
+### multiple Hash field additions
+
+```ruby
+h = {}
+h[:a] = 1
+h[:b] = "str"
+h[:c] = :sym
+[h]  # Guessed Type: { a: Integer, b: String, c: Symbol }
+```
+
+### multiple Array element additions
+
+```ruby
+arr = []
+arr << 1
+arr << "str"
+arr << :sym
+[a]rr  # Guessed Type: Array[Integer | String | Symbol]
+```
+
+### mixed Array operations
+
+```ruby
+arr = [1]
+arr[0] = "replaced"
+arr << :added
+[a]rr  # Guessed Type: Array[Integer | String | Symbol]
+```
+
+## Container mutation edge cases
+
+### container mutation followed by reassignment
+
+```ruby
+a = [1, 2]
+a << "str"
+a = { x: 1 }
+[a]  # Guessed Type: { x: Integer }
+```
+
