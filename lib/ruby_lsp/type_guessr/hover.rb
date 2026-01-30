@@ -6,8 +6,8 @@ module RubyLsp
     class Hover
       # Core layer shortcuts
       Types = ::TypeGuessr::Core::Types
-      NodeKeyGenerator = ::TypeGuessr::Core::NodeKeyGenerator
-      private_constant :Types, :NodeKeyGenerator
+      NodeContextHelper = ::TypeGuessr::Core::NodeContextHelper
+      private_constant :Types, :NodeContextHelper
 
       def initialize(runtime_adapter, response_builder, node_context, dispatcher, global_state)
         @runtime_adapter = runtime_adapter
@@ -42,8 +42,8 @@ module RubyLsp
         # Generate node_key from scope and Prism node
         # DefNode is indexed with parent scope (not including the method itself)
         exclude_method = node.is_a?(Prism::DefNode)
-        scope_id = generate_scope_id(exclude_method: exclude_method)
-        node_hash = generate_node_hash(node)
+        scope_id = NodeContextHelper.generate_scope_id(@node_context, exclude_method: exclude_method)
+        node_hash = NodeContextHelper.generate_node_hash(node, @node_context)
         return unless node_hash
 
         node_key = "#{scope_id}:#{node_hash}"
@@ -383,106 +383,6 @@ module RubyLsp
         else
           []
         end
-      end
-
-      # Generate scope_id from node_context
-      # Format: "ClassName#method_name" or "ClassName" or "#method_name" or ""
-      # @param exclude_method [Boolean] Whether to exclude method from scope (for DefNode)
-      def generate_scope_id(exclude_method: false)
-        class_path = @node_context.nesting.map do |n|
-          n.is_a?(String) ? n : n.name.to_s
-        end.join("::")
-
-        method_name = exclude_method ? nil : @node_context.surrounding_method
-
-        if method_name
-          "#{class_path}##{method_name}"
-        else
-          class_path
-        end
-      end
-
-      # Generate node_hash from Prism node to match IR node_hash format
-      def generate_node_hash(node)
-        offset = node.location.start_offset
-        case node
-        when Prism::LocalVariableWriteNode, Prism::LocalVariableTargetNode
-          NodeKeyGenerator.local_write(node.name, offset)
-        when Prism::LocalVariableReadNode
-          NodeKeyGenerator.local_read(node.name, offset)
-        when Prism::InstanceVariableWriteNode, Prism::InstanceVariableTargetNode
-          NodeKeyGenerator.ivar_write(node.name, offset)
-        when Prism::InstanceVariableReadNode
-          NodeKeyGenerator.ivar_read(node.name, offset)
-        when Prism::ClassVariableWriteNode, Prism::ClassVariableTargetNode
-          NodeKeyGenerator.cvar_write(node.name, offset)
-        when Prism::ClassVariableReadNode
-          NodeKeyGenerator.cvar_read(node.name, offset)
-        when Prism::GlobalVariableWriteNode, Prism::GlobalVariableTargetNode
-          NodeKeyGenerator.global_write(node.name, offset)
-        when Prism::GlobalVariableReadNode
-          NodeKeyGenerator.global_read(node.name, offset)
-        when Prism::RequiredParameterNode, Prism::OptionalParameterNode, Prism::RestParameterNode,
-             Prism::RequiredKeywordParameterNode, Prism::OptionalKeywordParameterNode,
-             Prism::KeywordRestParameterNode, Prism::BlockParameterNode
-          # Check if this is a block parameter (parent is BlockParametersNode)
-          if block_parameter?(node)
-            index = block_parameter_index(node)
-            NodeKeyGenerator.bparam(index, offset)
-          else
-            NodeKeyGenerator.param(node.name, offset)
-          end
-        when Prism::ForwardingParameterNode
-          NodeKeyGenerator.param(:"...", offset)
-        when Prism::CallNode
-          # Use message_loc for accurate offset
-          call_offset = node.message_loc&.start_offset || offset
-          NodeKeyGenerator.call(node.name, call_offset)
-        when Prism::DefNode
-          # Use name_loc for accurate offset
-          def_offset = node.name_loc&.start_offset || offset
-          NodeKeyGenerator.def_node(node.name, def_offset)
-        when Prism::SelfNode
-          class_path = @node_context.nesting.map do |n|
-            n.is_a?(String) ? n : n.name.to_s
-          end.join("::")
-          NodeKeyGenerator.self_node(class_path, offset)
-        end
-      end
-
-      # Check if a parameter node is inside a block (not a method definition)
-      def block_parameter?(node)
-        call_node = @node_context.call_node
-        return false unless call_node&.block
-
-        # Check if this parameter is in the block's parameters
-        block_params = call_node.block.parameters&.parameters
-        return false unless block_params
-
-        all_params = collect_block_params(block_params)
-        all_params.include?(node)
-      end
-
-      # Get the index of a block parameter
-      def block_parameter_index(node)
-        call_node = @node_context.call_node
-        return 0 unless call_node&.block
-
-        block_params = call_node.block.parameters&.parameters
-        return 0 unless block_params
-
-        all_params = collect_block_params(block_params)
-        all_params.index(node) || 0
-      end
-
-      # Collect all positional parameters from a ParametersNode
-      def collect_block_params(params_node)
-        all_params = []
-        all_params.concat(params_node.requireds || [])
-        all_params.concat(params_node.optionals || [])
-        all_params << params_node.rest if params_node.rest
-        all_params.concat(params_node.posts || [])
-        all_params
       end
 
       # Format type with definition link if available

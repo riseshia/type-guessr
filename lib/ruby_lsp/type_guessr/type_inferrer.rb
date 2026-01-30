@@ -10,8 +10,8 @@ module RubyLsp
       # Core layer shortcuts
       Types = ::TypeGuessr::Core::Types
       IR = ::TypeGuessr::Core::IR
-      NodeKeyGenerator = ::TypeGuessr::Core::NodeKeyGenerator
-      private_constant :Types, :IR, :NodeKeyGenerator
+      NodeContextHelper = ::TypeGuessr::Core::NodeContextHelper
+      private_constant :Types, :IR, :NodeContextHelper
 
       def initialize(index, runtime_adapter)
         super(index)
@@ -66,8 +66,8 @@ module RubyLsp
       # @param node_context [RubyLsp::NodeContext] The context of the node
       # @return [TypeGuessr::Core::IR::Node, nil] The IR node or nil
       def find_ir_node(node, node_context)
-        scope_id = generate_scope_id(node_context)
-        node_hash = generate_node_hash(node, node_context)
+        scope_id = NodeContextHelper.generate_scope_id(node_context)
+        node_hash = NodeContextHelper.generate_node_hash(node, node_context)
         return nil unless node_hash
 
         node_key = "#{scope_id}:#{node_hash}"
@@ -104,97 +104,6 @@ module RubyLsp
         else
           false
         end
-      end
-
-      # Generate scope_id from node_context
-      # Format: "ClassName#method_name" or "ClassName" or "#method_name" or ""
-      # @param node_context [RubyLsp::NodeContext] The context of the node
-      # @return [String] The scope identifier
-      def generate_scope_id(node_context)
-        class_path = node_context.nesting.map do |n|
-          n.is_a?(String) ? n : n.name.to_s
-        end.join("::")
-
-        method_name = node_context.surrounding_method
-
-        if method_name
-          "#{class_path}##{method_name}"
-        else
-          class_path
-        end
-      end
-
-      # Generate node_hash from Prism node to match IR node_hash format
-      # @param node [Prism::Node] The Prism node
-      # @param node_context [RubyLsp::NodeContext] The context (for block param detection)
-      # @return [String, nil] The node hash or nil
-      def generate_node_hash(node, node_context)
-        offset = node.location.start_offset
-        case node
-        when Prism::LocalVariableWriteNode, Prism::LocalVariableTargetNode
-          NodeKeyGenerator.local_write(node.name, offset)
-        when Prism::LocalVariableReadNode
-          NodeKeyGenerator.local_read(node.name, offset)
-        when Prism::InstanceVariableWriteNode, Prism::InstanceVariableTargetNode
-          NodeKeyGenerator.ivar_write(node.name, offset)
-        when Prism::InstanceVariableReadNode
-          NodeKeyGenerator.ivar_read(node.name, offset)
-        when Prism::RequiredParameterNode, Prism::OptionalParameterNode, Prism::RestParameterNode,
-             Prism::RequiredKeywordParameterNode, Prism::OptionalKeywordParameterNode,
-             Prism::KeywordRestParameterNode, Prism::BlockParameterNode
-          # Check if this is a block parameter
-          if block_parameter?(node, node_context)
-            index = block_parameter_index(node, node_context)
-            NodeKeyGenerator.bparam(index, offset)
-          else
-            NodeKeyGenerator.param(node.name, offset)
-          end
-        end
-      end
-
-      # Check if a parameter node is inside a block (not a method definition)
-      # @param node [Prism::Node] The parameter node
-      # @param node_context [RubyLsp::NodeContext] The context
-      # @return [Boolean] true if inside a block
-      def block_parameter?(node, node_context)
-        call_node = node_context.call_node
-        return false unless call_node&.block
-
-        block_params = call_node.block.parameters&.parameters
-        return false unless block_params
-
-        all_params = collect_block_params(block_params)
-        all_params.include?(node)
-      end
-
-      # Get the index of a block parameter
-      # @param node [Prism::Node] The parameter node
-      # @param node_context [RubyLsp::NodeContext] The context
-      # @return [Integer] The parameter index
-      def block_parameter_index(node, node_context)
-        call_node = node_context.call_node
-        return 0 unless call_node&.block
-
-        block_params = call_node.block.parameters&.parameters
-        return 0 unless block_params
-
-        all_params = collect_block_params(block_params)
-        all_params.index(node) || 0
-      end
-
-      # Collect all parameters from block parameters node
-      # @param block_params [Prism::ParametersNode] The block parameters
-      # @return [Array<Prism::Node>] All parameter nodes
-      def collect_block_params(block_params)
-        params = []
-        params.concat(block_params.requireds) if block_params.respond_to?(:requireds)
-        params.concat(block_params.optionals) if block_params.respond_to?(:optionals)
-        params << block_params.rest if block_params.respond_to?(:rest) && block_params.rest
-        params.concat(block_params.posts) if block_params.respond_to?(:posts)
-        params.concat(block_params.keywords) if block_params.respond_to?(:keywords)
-        params << block_params.keyword_rest if block_params.respond_to?(:keyword_rest) && block_params.keyword_rest
-        params << block_params.block if block_params.respond_to?(:block) && block_params.block
-        params.compact
       end
     end
   end

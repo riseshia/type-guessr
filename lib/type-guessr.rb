@@ -11,6 +11,7 @@ require_relative "type_guessr/version"
 # Load core components (IR-based architecture)
 require_relative "type_guessr/core/types"
 require_relative "type_guessr/core/node_key_generator"
+require_relative "type_guessr/core/node_context_helper"
 require_relative "type_guessr/core/ir/nodes"
 require_relative "type_guessr/core/index/location_index"
 require_relative "type_guessr/core/converter/prism_converter"

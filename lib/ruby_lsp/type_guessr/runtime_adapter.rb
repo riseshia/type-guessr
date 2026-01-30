@@ -9,6 +9,7 @@ require_relative "../../type_guessr/core/registry/signature_registry"
 require_relative "../../type_guessr/core/inference/resolver"
 require_relative "../../type_guessr/core/signature_builder"
 require_relative "../../type_guessr/core/type_simplifier"
+require_relative "../../type_guessr/core/node_context_helper"
 require_relative "code_index_adapter"
 require_relative "type_inferrer"
 
