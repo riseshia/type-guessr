@@ -110,6 +110,7 @@ type-guessr/
 │           ├── type_simplifier_spec.rb
 │           └── types_spec.rb
 ├── docs/
+│   ├── adr/                                     # Architecture Decision Records
 │   ├── architecture.md                          # Architecture documentation
 │   ├── benchmark-report.md                      # Performance benchmark results
 │   ├── class.md                                 # Class inference rules (generated)
@@ -371,6 +372,11 @@ Type guessing is performed through:
    - Fill gaps with heuristic inference
 
 ## Notes for Claude
+
+### Architecture Decision Records (ADR)
+
+Before proposing architectural changes, **check `docs/adr/` for existing decisions**.
+If proposing changes that conflict with an ADR, discuss with the user first.
 
 ### Project Understanding
 
