@@ -2,7 +2,7 @@
 
 source "https://rubygems.org"
 
-# Specify your gem's dependencies in ruby-lsp-guesser.gemspec
+# Specify your gem's dependencies in type-guessr.gemspec
 gemspec
 
 gem "irb"
