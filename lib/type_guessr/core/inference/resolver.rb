@@ -26,16 +26,16 @@ module TypeGuessr
         attr_reader :variable_registry
 
         # @param signature_registry [Registry::SignatureRegistry] Registry for stdlib RBS signatures
-        # @param type_simplifier [TypeSimplifier] Optional type simplifier
-        # @param code_index [#find_classes_defining_methods, #ancestors_of, #constant_kind, #class_method_owner, nil]
-        #   Adapter wrapping RubyIndexer (preferred over callbacks)
-        # @param method_registry [Registry::MethodRegistry, nil] Registry for project methods
-        # @param variable_registry [Registry::VariableRegistry, nil] Registry for variables
-        def initialize(signature_registry, type_simplifier:, code_index: nil, method_registry: nil, variable_registry: nil)
+        # @param type_simplifier [TypeSimplifier] Type simplifier for normalizing union types
+        # @param code_index [#find_classes_defining_methods, #ancestors_of, #constant_kind, #class_method_owner]
+        #   Adapter wrapping RubyIndexer
+        # @param method_registry [Registry::MethodRegistry] Registry for project methods
+        # @param variable_registry [Registry::VariableRegistry] Registry for variables
+        def initialize(signature_registry, type_simplifier:, code_index:, method_registry:, variable_registry:)
           @signature_registry = signature_registry
           @code_index = code_index
-          @method_registry = method_registry || Registry::MethodRegistry.new
-          @variable_registry = variable_registry || Registry::VariableRegistry.new
+          @method_registry = method_registry
+          @variable_registry = variable_registry
           @cache = {}.compare_by_identity
           @type_simplifier = type_simplifier
         end
@@ -578,7 +578,6 @@ module TypeGuessr
         # @return [Type] The resulting type
         def resolve_called_methods(called_methods)
           return Types::Unknown.instance if called_methods.empty?
-          return Types::Unknown.instance unless @code_index
 
           method_names = called_methods.map(&:name)
           classes = @code_index.find_classes_defining_methods(method_names)
@@ -590,9 +589,6 @@ module TypeGuessr
         # @param classes [Array<String>] List of class names
         # @return [Array<String>] Filtered list with only the most general types
         def filter_to_most_general_types(classes)
-          # Use code_index adapter to get ancestors
-          return classes unless @code_index
-
           classes.reject do |class_name|
             ancestors = @code_index.ancestors_of(class_name)
             # Check if any ancestor (excluding self) is also in the matching list
