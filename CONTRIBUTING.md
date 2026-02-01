@@ -63,7 +63,7 @@ By participating in this project, you agree to maintain a respectful and inclusi
 1. Create a new branch from `main`:
    ```bash
    git checkout main
-   git pull upstream main
+   git pull --ff-only upstream main
    git checkout -b your-feature-branch
    ```
 
