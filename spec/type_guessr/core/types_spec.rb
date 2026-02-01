@@ -938,4 +938,74 @@ RSpec.describe TypeGuessr::Core::Types do
       end
     end
   end
+
+  describe "#inspect" do
+    it "returns readable output for Unknown" do
+      unknown = described_class::Unknown.instance
+      expect(unknown.inspect).to eq("#<Unknown>")
+    end
+
+    it "returns readable output for ClassInstance" do
+      type = described_class::ClassInstance.new("String")
+      expect(type.inspect).to eq("#<ClassInstance:String>")
+    end
+
+    it "returns readable output for SingletonType" do
+      type = described_class::SingletonType.new("User")
+      expect(type.inspect).to eq("#<SingletonType:User>")
+    end
+
+    it "returns readable output for Union" do
+      type1 = described_class::ClassInstance.new("String")
+      type2 = described_class::ClassInstance.new("Integer")
+      union = described_class::Union.new([type1, type2])
+      expect(union.inspect).to match(/#<Union:(String\|Integer|Integer\|String)>/)
+    end
+
+    it "returns readable output for ArrayType" do
+      element_type = described_class::ClassInstance.new("String")
+      array_type = described_class::ArrayType.new(element_type)
+      expect(array_type.inspect).to eq("#<ArrayType:String>")
+    end
+
+    it "returns readable output for HashType" do
+      key_type = described_class::ClassInstance.new("Symbol")
+      value_type = described_class::ClassInstance.new("String")
+      hash_type = described_class::HashType.new(key_type, value_type)
+      expect(hash_type.inspect).to eq("#<HashType:Symbol,String>")
+    end
+
+    it "returns readable output for RangeType" do
+      element_type = described_class::ClassInstance.new("Integer")
+      range_type = described_class::RangeType.new(element_type)
+      expect(range_type.inspect).to eq("#<RangeType:Integer>")
+    end
+
+    it "returns readable output for HashShape" do
+      fields = { id: described_class::ClassInstance.new("Integer") }
+      hash_shape = described_class::HashShape.new(fields)
+      expect(hash_shape.inspect).to eq("#<HashShape:{ id: Integer }>")
+    end
+
+    it "returns readable output for TypeVariable" do
+      type_var = described_class::TypeVariable.new(:Elem)
+      expect(type_var.inspect).to eq("#<TypeVariable:Elem>")
+    end
+
+    it "returns readable output for MethodSignature" do
+      params = [described_class::ParamSignature.new(name: :x, kind: :required, type: described_class::ClassInstance.new("String"))]
+      sig = described_class::MethodSignature.new(params, described_class::ClassInstance.new("Integer"))
+      expect(sig.inspect).to eq("#<MethodSignature:(String x) -> Integer>")
+    end
+
+    it "returns readable output for SelfType" do
+      self_type = described_class::SelfType.instance
+      expect(self_type.inspect).to eq("#<SelfType>")
+    end
+
+    it "returns readable output for ForwardingArgs" do
+      forwarding = described_class::ForwardingArgs.instance
+      expect(forwarding.inspect).to eq("#<ForwardingArgs>")
+    end
+  end
 end

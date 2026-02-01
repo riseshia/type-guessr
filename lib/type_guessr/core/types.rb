@@ -39,6 +39,12 @@ module TypeGuessr
         def type_variable_substitutions
           {}
         end
+
+        # Readable inspect output for debugging
+        # @return [String]
+        def inspect
+          "#<#{self.class.name.split("::").last}>"
+        end
       end
 
       # Unknown type - no information available
@@ -85,6 +91,10 @@ module TypeGuessr
           end
         end
 
+        def inspect
+          "#<ClassInstance:#{@name}>"
+        end
+
         def rbs_class_name
           @name
         end
@@ -109,6 +119,10 @@ module TypeGuessr
 
         def to_s
           "singleton(#{@name})"
+        end
+
+        def inspect
+          "#<SingletonType:#{@name}>"
         end
 
         def rbs_class_name
@@ -144,6 +158,10 @@ module TypeGuessr
           else
             @types.map(&:to_s).sort.join(" | ")
           end
+        end
+
+        def inspect
+          "#<Union:#{@types.map(&:to_s).join("|")}>"
         end
 
         def substitute(substitutions)
@@ -228,6 +246,10 @@ module TypeGuessr
           "Array[#{@element_type}]"
         end
 
+        def inspect
+          "#<ArrayType:#{@element_type}>"
+        end
+
         def substitute(substitutions)
           new_element = @element_type.substitute(substitutions)
           return self if new_element.equal?(@element_type)
@@ -266,6 +288,10 @@ module TypeGuessr
           "Hash[#{@key_type}, #{@value_type}]"
         end
 
+        def inspect
+          "#<HashType:#{@key_type},#{@value_type}>"
+        end
+
         def substitute(substitutions)
           new_key = @key_type.substitute(substitutions)
           new_value = @value_type.substitute(substitutions)
@@ -302,6 +328,10 @@ module TypeGuessr
 
         def to_s
           "Range[#{@element_type}]"
+        end
+
+        def inspect
+          "#<RangeType:#{@element_type}>"
         end
 
         def substitute(substitutions)
@@ -349,6 +379,10 @@ module TypeGuessr
 
           fields_str = @fields.map { |k, v| "#{k}: #{v}" }.join(", ")
           "{ #{fields_str} }"
+        end
+
+        def inspect
+          "#<HashShape:#{self}>"
         end
 
         def merge_field(key, value_type, max_fields: 15)
@@ -400,6 +434,10 @@ module TypeGuessr
 
         def to_s
           @name.to_s
+        end
+
+        def inspect
+          "#<TypeVariable:#{@name}>"
         end
 
         def substitute(substitutions)
@@ -470,6 +508,10 @@ module TypeGuessr
         def to_s
           params_str = @params.map(&:to_s).join(", ")
           "(#{params_str}) -> #{@return_type}"
+        end
+
+        def inspect
+          "#<MethodSignature:#{self}>"
         end
 
         def substitute(substitutions)
