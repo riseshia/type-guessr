@@ -17,10 +17,6 @@ module TypeGuessr
         # Sentinel value to detect circular references during inference
         INFERRING = Object.new.freeze
 
-        # Type simplifier for normalizing union types
-        # @return [TypeSimplifier, nil]
-        attr_accessor :type_simplifier
-
         # Method registry for storing and looking up project method definitions
         # @return [Registry::MethodRegistry]
         attr_reader :method_registry
@@ -30,17 +26,18 @@ module TypeGuessr
         attr_reader :variable_registry
 
         # @param signature_registry [Registry::SignatureRegistry] Registry for stdlib RBS signatures
+        # @param type_simplifier [TypeSimplifier] Optional type simplifier
         # @param code_index [#find_classes_defining_methods, #ancestors_of, #constant_kind, #class_method_owner, nil]
         #   Adapter wrapping RubyIndexer (preferred over callbacks)
         # @param method_registry [Registry::MethodRegistry, nil] Registry for project methods
         # @param variable_registry [Registry::VariableRegistry, nil] Registry for variables
-        def initialize(signature_registry, code_index: nil, method_registry: nil, variable_registry: nil)
+        def initialize(signature_registry, type_simplifier:, code_index: nil, method_registry: nil, variable_registry: nil)
           @signature_registry = signature_registry
           @code_index = code_index
           @method_registry = method_registry || Registry::MethodRegistry.new
           @variable_registry = variable_registry || Registry::VariableRegistry.new
           @cache = {}.compare_by_identity
-          @type_simplifier = nil
+          @type_simplifier = type_simplifier
         end
 
         # Infer the type of an IR node

@@ -43,17 +43,18 @@ module RubyLsp
           code_index: @code_index
         )
 
+        # Create type simplifier with code_index for inheritance lookup
+        type_simplifier = ::TypeGuessr::Core::TypeSimplifier.new(
+          code_index: @code_index
+        )
+
         # Create resolver with signature_registry and registries
         @resolver = ::TypeGuessr::Core::Inference::Resolver.new(
           @signature_registry,
           code_index: @code_index,
           method_registry: @method_registry,
-          variable_registry: @variable_registry
-        )
-
-        # Set up type simplifier with code_index for inheritance lookup
-        @resolver.type_simplifier = ::TypeGuessr::Core::TypeSimplifier.new(
-          code_index: @code_index
+          variable_registry: @variable_registry,
+          type_simplifier: type_simplifier
         )
 
         # Build method signatures from DefNodes using resolver
