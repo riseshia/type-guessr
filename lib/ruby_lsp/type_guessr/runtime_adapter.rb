@@ -25,7 +25,7 @@ module RubyLsp
         @message_queue = message_queue
         @converter = ::TypeGuessr::Core::Converter::PrismConverter.new
         @location_index = ::TypeGuessr::Core::Index::LocationIndex.new
-        @signature_registry = ::TypeGuessr::Core::Registry::SignatureRegistry.instance.preload
+        @signature_registry = ::TypeGuessr::Core::Registry::SignatureRegistry.instance
         @indexing_completed = false
         @mutex = Mutex.new
         @original_type_inferrer = nil
@@ -262,6 +262,7 @@ module RubyLsp
           @mutex.synchronize { @location_index.finalize! }
 
           log_message("File indexing completed. Processed #{total} files.")
+          @signature_registry.preload
           @indexing_completed = true
         rescue StandardError => e
           log_message("Error during file indexing: #{e.message}\n#{e.backtrace.first(10).join("\n")}")

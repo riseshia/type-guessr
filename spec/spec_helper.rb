@@ -14,6 +14,11 @@ require_relative "support/doc_collector"
 require_relative "support/full_index_helper"
 
 RSpec.configure do |config|
+  # Preload RBS signatures once before all tests
+  config.before(:suite) do
+    TypeGuessr::Core::Registry::SignatureRegistry.instance.preload
+  end
+
   # Disable debug logging and server for all tests
   config.before do
     allow(RubyLsp::TypeGuessr::Config).to receive_messages(
