@@ -31,6 +31,22 @@ jobs:
       - name: Run tests
         run: bundle exec rspec
 
+  e2e:
+    runs-on: ubuntu-latest
+    name: E2E Tests
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '4.0'
+          bundler-cache: true
+      - name: Run E2E tests
+        run: bundle exec rspec --tag e2e
+
   lint:
     runs-on: ubuntu-latest
     name: Lint

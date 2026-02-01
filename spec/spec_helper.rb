@@ -7,16 +7,20 @@ require "ruby_lsp/type_guessr/addon"
 require "ruby_lsp/test_helper"
 require "uri"
 
-# Load doc collector for generating documentation from tests
-require_relative "support/doc_collector"
-
-# Load full index helper for tests that need gem/stdlib method definitions
-require_relative "support/full_index_helper"
+# Load all support files dynamically
+Dir[File.join(__dir__, "support", "**", "*.rb")].each { |f| require f }
 
 RSpec.configure do |config|
   # Preload RBS signatures once before all tests
   config.before(:suite) do
     TypeGuessr::Core::Registry::SignatureRegistry.instance.preload
+
+    # Start E2E server if E2E tests are being run
+    SharedLspServer.instance if config.filter.rules[:e2e] || ARGV.any? { |arg| arg.include?("e2e") }
+  end
+
+  config.after(:suite) do
+    SharedLspServer.shutdown!
   end
 
   # Disable debug logging and server for all tests
@@ -27,6 +31,9 @@ RSpec.configure do |config|
       debug_server_port: 7010
     )
   end
+
+  # Include E2EHelper for specs tagged with :e2e
+  config.include E2EHelper, :e2e
 
   # Enable flags like --only-failures and --next-failure
   config.example_status_persistence_file_path = ".rspec_status"
