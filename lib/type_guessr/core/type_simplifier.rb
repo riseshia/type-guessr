@@ -7,6 +7,9 @@ module TypeGuessr
     # Simplifies types by unwrapping single-element unions and
     # unifying parent/child class relationships
     class TypeSimplifier
+      # Maximum number of types in a Union before considering it too ambiguous
+      MAX_ELEMENT_IN_UNION = 3
+
       # @param code_index [#ancestors_of, nil] Adapter for inheritance lookup
       def initialize(code_index: nil)
         @code_index = code_index
@@ -37,6 +40,8 @@ module TypeGuessr
 
         # 3. Check again after filtering
         return types.first if types.size == 1
+
+        return Types::Unknown.instance if types.size > MAX_ELEMENT_IN_UNION
 
         # 4. Multiple elements remain: create new Union
         Types::Union.new(types)

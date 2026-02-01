@@ -753,9 +753,9 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
   end
 
   describe "#classes_to_type" do
-    it "returns nil for empty list" do
+    it "returns Unknown for empty list" do
       result = resolver.classes_to_type([])
-      expect(result).to be_nil
+      expect(result).to eq(TypeGuessr::Core::Types::Unknown.instance)
     end
 
     it "returns ClassInstance for single class" do
@@ -776,9 +776,9 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
       expect(result.types.map(&:name)).to contain_exactly("Parser", "Compiler", "Optimizer")
     end
 
-    it "returns nil for four or more classes (too ambiguous)" do
+    it "returns Unknown for four or more classes (too ambiguous)" do
       result = resolver.classes_to_type(%w[A B C D])
-      expect(result).to be_nil
+      expect(result).to eq(TypeGuessr::Core::Types::Unknown.instance)
     end
   end
 

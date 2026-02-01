@@ -76,18 +76,14 @@ module TypeGuessr
 
         # Convert a list of matching class names to a type
         # @param classes [Array<String>] List of class names
-        # @return [Type, nil] ClassInstance (1 match), Union (2-3 matches), or nil
+        # @return [Type] The resulting type
         def classes_to_type(classes)
-          case classes.size
-          when 0
-            nil
-          when 1
-            Types::ClassInstance.for(classes.first)
-          when 2, 3
-            types = classes.map { |c| Types::ClassInstance.for(c) }
-            Types::Union.new(types)
-          end
-          # 4+ matches → nil (too ambiguous)
+          return Types::Unknown.instance if classes.empty?
+          return Types::ClassInstance.for(classes.first) if classes.size == 1
+
+          types = classes.map { |c| Types::ClassInstance.for(c) }
+          union = Types::Union.new(types)
+          @type_simplifier.simplify(union)
         end
 
         private
@@ -148,7 +144,8 @@ module TypeGuessr
           # If type is Unknown, try to resolve from called_methods
           if write_result.type.is_a?(Types::Unknown) && node.called_methods.any?
             resolved_type = resolve_called_methods(node.called_methods)
-            if resolved_type
+
+            if !resolved_type.is_a?(Types::Unknown)
               return Result.new(
                 resolved_type,
                 "variable inferred from #{node.called_methods.join(", ")}",
@@ -222,19 +219,20 @@ module TypeGuessr
           # Try to resolve type from called methods
           if node.called_methods.any?
             resolved_type = resolve_called_methods(node.called_methods)
-            if resolved_type
+
+            if resolved_type.is_a?(Types::Unknown)
+              return Result.new(
+                Types::Unknown.instance,
+                "parameter with unresolved methods: #{node.called_methods.join(", ")}",
+                :unknown
+              )
+            else
               return Result.new(
                 resolved_type,
                 "parameter inferred from #{node.called_methods.join(", ")}",
                 :project
               )
             end
-
-            return Result.new(
-              Types::Unknown.instance,
-              "parameter with unresolved methods: #{node.called_methods.join(", ")}",
-              :unknown
-            )
           end
 
           Result.new(Types::Unknown.instance, "parameter without type info", :unknown)
@@ -579,9 +577,11 @@ module TypeGuessr
         end
 
         # Resolve called methods to a type via code_index adapter
+        # @param called_methods [Array<String>] List of called method_names
+        # @return [Type] The resulting type
         def resolve_called_methods(called_methods)
-          return nil if called_methods.empty?
-          return nil unless @code_index
+          return Types::Unknown.instance if called_methods.empty?
+          return Types::Unknown.instance unless @code_index
 
           method_names = called_methods.map(&:name)
           classes = @code_index.find_classes_defining_methods(method_names)

@@ -68,6 +68,25 @@ RSpec.describe TypeGuessr::Core::TypeSimplifier do
         expect(result).to be_a(TypeGuessr::Core::Types::Union)
         expect(result.types).to contain_exactly(type1, type2)
       end
+
+      it "returns Unknown when Union has more than MAX_ELEMENT_IN_UNION elements" do
+        types = %w[A B C D].map { |name| TypeGuessr::Core::Types::ClassInstance.new(name) }
+        union = TypeGuessr::Core::Types::Union.new(types)
+
+        result = simplifier.simplify(union)
+
+        expect(result).to be_a(TypeGuessr::Core::Types::Unknown)
+      end
+
+      it "keeps Union when exactly MAX_ELEMENT_IN_UNION elements" do
+        types = %w[A B C].map { |name| TypeGuessr::Core::Types::ClassInstance.new(name) }
+        union = TypeGuessr::Core::Types::Union.new(types)
+
+        result = simplifier.simplify(union)
+
+        expect(result).to be_a(TypeGuessr::Core::Types::Union)
+        expect(result.types.size).to eq(3)
+      end
     end
 
     context "with code_index" do
