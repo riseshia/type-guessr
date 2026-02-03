@@ -440,19 +440,13 @@ module TypeGuessr
         private def convert_local_variable_read(prism_node, context)
           # Look up the most recent assignment
           write_node = context.lookup_variable(prism_node.name)
-          # Share called_methods array with the write node/parameter/block param for method-based inference
-          called_methods = if write_node.is_a?(IR::LocalWriteNode) ||
-                              write_node.is_a?(IR::ParamNode) ||
-                              write_node.is_a?(IR::BlockParamSlot)
-                             write_node.called_methods
-                           else
-                             []
-                           end
 
           IR::LocalReadNode.new(
             name: prism_node.name,
             write_node: write_node,
-            called_methods: called_methods,
+            # Share called_methods array for method-based inference
+            # nil case: rescue binding (=> e), pattern matching binding, etc. (not yet implemented)
+            called_methods: write_node&.called_methods || [],
             loc: convert_loc(prism_node.location)
           )
         end
@@ -461,18 +455,12 @@ module TypeGuessr
           value_node = convert(prism_node.value, context)
           class_name = context.current_class_name
 
-          # Share called_methods with the underlying param/variable node for type propagation
-          called_methods = if value_node.is_a?(IR::LocalReadNode) || value_node.is_a?(IR::ParamNode)
-                             value_node.called_methods
-                           else
-                             []
-                           end
-
           write_node = IR::InstanceVariableWriteNode.new(
             name: prism_node.name,
             class_name: class_name,
             value: value_node,
-            called_methods: called_methods,
+            # Share called_methods with value node for type propagation
+            called_methods: value_node.called_methods,
             loc: convert_loc(prism_node.location)
           )
           # Register at class level so it's visible across methods
@@ -483,38 +471,27 @@ module TypeGuessr
         private def convert_instance_variable_read(prism_node, context)
           # Look up from class level first
           write_node = context.lookup_instance_variable(prism_node.name)
-          class_name = context.current_class_name
-          called_methods = if write_node.is_a?(IR::InstanceVariableWriteNode) || write_node.is_a?(IR::ParamNode)
-                             write_node.called_methods
-                           else
-                             []
-                           end
 
           IR::InstanceVariableReadNode.new(
             name: prism_node.name,
-            class_name: class_name,
+            class_name: context.current_class_name,
             write_node: write_node,
-            called_methods: called_methods,
+            # Share called_methods array for method-based inference
+            # nil case: instance variable read before any assignment in current file
+            called_methods: write_node&.called_methods || [],
             loc: convert_loc(prism_node.location)
           )
         end
 
         private def convert_class_variable_write(prism_node, context)
           value_node = convert(prism_node.value, context)
-          class_name = context.current_class_name
-
-          # Share called_methods with the underlying param/variable node for type propagation
-          called_methods = if value_node.is_a?(IR::LocalReadNode) || value_node.is_a?(IR::ParamNode)
-                             value_node.called_methods
-                           else
-                             []
-                           end
 
           write_node = IR::ClassVariableWriteNode.new(
             name: prism_node.name,
-            class_name: class_name,
+            class_name: context.current_class_name,
             value: value_node,
-            called_methods: called_methods,
+            # Share called_methods with value node for type propagation
+            called_methods: value_node.called_methods,
             loc: convert_loc(prism_node.location)
           )
           context.register_variable(prism_node.name, write_node)
@@ -523,18 +500,14 @@ module TypeGuessr
 
         private def convert_class_variable_read(prism_node, context)
           write_node = context.lookup_variable(prism_node.name)
-          class_name = context.current_class_name
-          called_methods = if write_node.is_a?(IR::ClassVariableWriteNode) || write_node.is_a?(IR::ParamNode)
-                             write_node.called_methods
-                           else
-                             []
-                           end
 
           IR::ClassVariableReadNode.new(
             name: prism_node.name,
-            class_name: class_name,
+            class_name: context.current_class_name,
             write_node: write_node,
-            called_methods: called_methods,
+            # Share called_methods array for method-based inference
+            # nil case: class variable read before any assignment in current file
+            called_methods: write_node&.called_methods || [],
             loc: convert_loc(prism_node.location)
           )
         end
