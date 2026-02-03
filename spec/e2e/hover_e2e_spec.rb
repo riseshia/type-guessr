@@ -15,28 +15,28 @@ RSpec.describe "Hover E2E", :e2e do
 
   describe "type inference on project files" do
     context "lib/ruby_lsp/type_guessr/config.rb" do
-      it "shows method signature for enabled? method (line 19)" do
+      it "shows method signature for enabled? method (line 17)" do
         # def enabled?
-        result = server.query_hover("lib/ruby_lsp/type_guessr/config.rb", 19, 10)
+        result = server.query_hover("lib/ruby_lsp/type_guessr/config.rb", 17, 23)
         expect(result).to include("Guessed Signature")
         expect(result).to include("bool")
       end
 
-      it "shows method signature for debug? method (line 24)" do
+      it "shows method signature for debug? method (line 22)" do
         # def debug?
-        result = server.query_hover("lib/ruby_lsp/type_guessr/config.rb", 24, 10)
+        result = server.query_hover("lib/ruby_lsp/type_guessr/config.rb", 22, 23)
         expect(result).to include("Guessed Signature")
       end
 
-      it "infers type of raw variable from File.read (line 50)" do
+      it "infers type of raw variable from File.read (line 48)" do
         # raw = File.read(path)
-        result = server.query_hover("lib/ruby_lsp/type_guessr/config.rb", 50, 8)
+        result = server.query_hover("lib/ruby_lsp/type_guessr/config.rb", 48, 9)
         expect(result).to include_type("String")
       end
 
-      it "infers type of path variable (line 42)" do
+      it "infers type of path variable (line 40)" do
         # path = File.join(Dir.pwd, CONFIG_FILENAME)
-        result = server.query_hover("lib/ruby_lsp/type_guessr/config.rb", 42, 8)
+        result = server.query_hover("lib/ruby_lsp/type_guessr/config.rb", 40, 9)
         expect(result).to include_type("String")
       end
     end
@@ -54,7 +54,7 @@ RSpec.describe "Hover E2E", :e2e do
   describe "method signature display" do
     it "shows signature with return type for method def" do
       # def enabled? in config.rb
-      result = server.query_hover("lib/ruby_lsp/type_guessr/config.rb", 19, 10)
+      result = server.query_hover("lib/ruby_lsp/type_guessr/config.rb", 17, 23)
       expect(result).to include("Guessed Signature")
       expect(result).to include("->")
     end
@@ -71,14 +71,14 @@ RSpec.describe "Hover E2E", :e2e do
     # These tests verify that RBS signatures are correctly applied
 
     it "infers return type for File.read in config.rb" do
-      # raw = File.read(path) on line 50
-      result = server.query_hover("lib/ruby_lsp/type_guessr/config.rb", 50, 8)
+      # raw = File.read(path) on line 48
+      result = server.query_hover("lib/ruby_lsp/type_guessr/config.rb", 48, 9)
       expect(result).to include_type("String")
     end
 
     it "infers return type for File.join in config.rb" do
-      # path = File.join(...) on line 42
-      result = server.query_hover("lib/ruby_lsp/type_guessr/config.rb", 42, 8)
+      # path = File.join(...) on line 40
+      result = server.query_hover("lib/ruby_lsp/type_guessr/config.rb", 40, 9)
       expect(result).to include_type("String")
     end
   end
@@ -86,7 +86,7 @@ RSpec.describe "Hover E2E", :e2e do
   describe "type inference debug info" do
     it "shows TypeGuessr debug info when hovering on guessed type" do
       # On variables with guessed types, debug info should appear
-      result = server.query_hover("lib/ruby_lsp/type_guessr/config.rb", 50, 8)
+      result = server.query_hover("lib/ruby_lsp/type_guessr/config.rb", 48, 9)
       # Should include some TypeGuessr output (Guessed Type or Guessed Signature)
       expect(result).to(satisfy { |r| r.nil? || r.include?("Guessed") || r.include?("String") })
     end
