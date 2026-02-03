@@ -93,28 +93,8 @@ module RubyLsp
         return unless file_path
 
         parsed = document.parse_result
-        return unless parsed.value
 
-        @mutex.synchronize do
-          # Clear existing index for this file
-          @location_index.remove_file(file_path)
-          @resolver.clear_cache
-
-          # Create context with index/registry injection - nodes are registered during conversion
-          context = ::TypeGuessr::Core::Converter::PrismConverter::Context.new(
-            file_path: file_path,
-            location_index: @location_index,
-            method_registry: @method_registry,
-            variable_registry: @variable_registry
-          )
-
-          parsed.value.statements&.body&.each do |stmt|
-            @converter.convert(stmt, context)
-          end
-
-          # Finalize the index for efficient lookups
-          @location_index.finalize!
-        end
+        index_file_with_prism_result(file_path, parsed)
       rescue StandardError => e
         log_message("Error in index_file #{uri}: #{e.message}\n#{e.backtrace.first(5).join("\n")}")
       end
@@ -129,30 +109,9 @@ module RubyLsp
         file_path ||= uri_string.sub(%r{^file://}, "")
         return unless file_path
 
-        @mutex.synchronize do
-          # Clear existing index for this file
-          @location_index.remove_file(file_path)
-          @resolver.clear_cache
+        parsed = Prism.parse(source)
 
-          # Parse source code
-          parsed = Prism.parse(source)
-          return unless parsed.value
-
-          # Create context with index/registry injection - nodes are registered during conversion
-          context = ::TypeGuessr::Core::Converter::PrismConverter::Context.new(
-            file_path: file_path,
-            location_index: @location_index,
-            method_registry: @method_registry,
-            variable_registry: @variable_registry
-          )
-
-          parsed.value.statements&.body&.each do |stmt|
-            @converter.convert(stmt, context)
-          end
-
-          # Finalize the index for efficient lookups
-          @location_index.finalize!
-        end
+        index_file_with_prism_result(file_path, parsed)
       end
 
       # Remove indexed data for a file
@@ -357,6 +316,31 @@ module RubyLsp
       end
 
       private
+
+      def index_file_with_prism_result(file_path, prism_result)
+        return unless prism_result.value
+
+        @mutex.synchronize do
+          # Clear existing index for this file
+          @location_index.remove_file(file_path)
+          @resolver.clear_cache
+
+          # Create context with index/registry injection - nodes are registered during conversion
+          context = ::TypeGuessr::Core::Converter::PrismConverter::Context.new(
+            file_path: file_path,
+            location_index: @location_index,
+            method_registry: @method_registry,
+            variable_registry: @variable_registry
+          )
+
+          prism_result.value.statements&.body&.each do |stmt|
+            @converter.convert(stmt, context)
+          end
+
+          # Finalize the index for efficient lookups
+          @location_index.finalize!
+        end
+      end
 
       # Extract simple class name from singleton format
       # "File::<Class:File>" -> "File"
