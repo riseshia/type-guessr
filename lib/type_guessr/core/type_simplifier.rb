@@ -27,9 +27,7 @@ module TypeGuessr
         end
       end
 
-      private
-
-      def simplify_union(union)
+      private def simplify_union(union)
         types = union.types
 
         # 1. Single element: unwrap
@@ -50,7 +48,7 @@ module TypeGuessr
       # Filter out types whose ancestor is also in the list
       # @param types [Array<Types::Type>] List of types
       # @return [Array<Types::Type>] Filtered list with only the most general types
-      def filter_to_most_general_types(types)
+      private def filter_to_most_general_types(types)
         # Extract class names from ClassInstance types
         class_names = types.filter_map do |t|
           t.name if t.is_a?(Types::ClassInstance)

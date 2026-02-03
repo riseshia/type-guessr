@@ -20,15 +20,13 @@ module TypeGuessr
         Types::MethodSignature.new(params, return_type)
       end
 
-      private
-
-      def build_param_signatures(param_nodes)
+      private def build_param_signatures(param_nodes)
         return [] if param_nodes.nil? || param_nodes.empty?
 
         param_nodes.map { |p| build_param_signature(p) }
       end
 
-      def build_param_signature(param_node)
+      private def build_param_signature(param_node)
         type = @resolver.infer(param_node).type
         Types::ParamSignature.new(
           name: param_node.name,

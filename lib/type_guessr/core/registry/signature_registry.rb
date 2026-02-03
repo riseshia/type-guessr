@@ -46,9 +46,7 @@ module TypeGuessr
             @method_types
           end
 
-          private
-
-          def compute_block_param_types
+          private def compute_block_param_types
             # Find the signature with a block
             sig_with_block = @method_types.find(&:block)
             return [] unless sig_with_block
@@ -56,7 +54,7 @@ module TypeGuessr
             extract_block_param_types(sig_with_block)
           end
 
-          def extract_block_param_types(method_type)
+          private def extract_block_param_types(method_type)
             return [] unless method_type.block
 
             block_func = method_type.block.type
@@ -73,7 +71,7 @@ module TypeGuessr
           # Find the best matching overload for given argument types
           # @param arg_types [Array<Types::Type>] argument types
           # @return [RBS::MethodType] best matching method type (first if no match)
-          def find_best_overload(arg_types)
+          private def find_best_overload(arg_types)
             return @method_types.first if arg_types.empty?
 
             # Score each overload
@@ -88,7 +86,7 @@ module TypeGuessr
           end
 
           # Calculate match score for an overload
-          def calculate_overload_score(method_type, arg_types)
+          private def calculate_overload_score(method_type, arg_types)
             func = method_type.type
             required = func.required_positionals
             optional = func.optional_positionals
@@ -119,7 +117,7 @@ module TypeGuessr
           end
 
           # Calculate match score between our type and RBS parameter type
-          def type_match_score(our_type, rbs_type)
+          private def type_match_score(our_type, rbs_type)
             case rbs_type
             when RBS::Types::ClassInstance
               class_name = rbs_type.name.to_s.delete_prefix("::")
@@ -135,7 +133,7 @@ module TypeGuessr
             end
           end
 
-          def types_match_class?(our_type, class_name)
+          private def types_match_class?(our_type, class_name)
             case our_type
             when Types::ClassInstance
               our_type.name == class_name
@@ -274,9 +272,7 @@ module TypeGuessr
           end
         end
 
-        private
-
-        def load_stdlib_rbs
+        private def load_stdlib_rbs
           loader = RBS::EnvironmentLoader.new
           env = RBS::Environment.from_loader(loader).resolve_type_names
           builder = RBS::DefinitionBuilder.new(env: env)
@@ -288,7 +284,7 @@ module TypeGuessr
           Logger.error("Failed to preload RBS environment", e)
         end
 
-        def load_class_definitions(type_name, builder)
+        private def load_class_definitions(type_name, builder)
           class_name = type_name.to_s.delete_prefix("::")
 
           # Load instance methods
@@ -308,7 +304,7 @@ module TypeGuessr
           end
         end
 
-        def build_method_entries(definition)
+        private def build_method_entries(definition)
           # RBS methods hash uses Symbol keys, but we use String keys for lookup
           definition.methods.to_h do |method_name, method_def|
             [method_name.to_s, MethodEntry.new(method_def.method_types, @converter)]

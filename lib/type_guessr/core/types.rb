@@ -171,9 +171,7 @@ module TypeGuessr
           Union.new(new_types)
         end
 
-        private
-
-        def bool_type?
+        private def bool_type?
           return false unless @types.size == 2
 
           has_true = @types.any? { |t| t.is_a?(ClassInstance) && t.name == "TrueClass" }
@@ -181,19 +179,19 @@ module TypeGuessr
           has_true && has_false
         end
 
-        def optional_type?
+        private def optional_type?
           @types.size == 2 && @types.any? { |t| nil_type?(t) }
         end
 
-        def nil_type?(type)
+        private def nil_type?(type)
           type.is_a?(ClassInstance) && type.name == "NilClass"
         end
 
-        def non_nil_type
+        private def non_nil_type
           @types.find { |t| !nil_type?(t) }
         end
 
-        def normalize(types, cutoff)
+        private def normalize(types, cutoff)
           # Flatten nested unions
           flattened = flatten_unions(types)
 
@@ -207,20 +205,20 @@ module TypeGuessr
           apply_cutoff(filtered, cutoff)
         end
 
-        def flatten_unions(types)
+        private def flatten_unions(types)
           types.flat_map do |type|
             type.is_a?(Union) ? type.types : type
           end
         end
 
-        def simplify_if_unknown_present(types)
+        private def simplify_if_unknown_present(types)
           return types if types.size <= 1
 
           has_unknown = types.any? { |t| t.is_a?(Unknown) }
           has_unknown ? [Unknown.instance] : types
         end
 
-        def apply_cutoff(types, cutoff)
+        private def apply_cutoff(types, cutoff)
           types.take(cutoff)
         end
       end

@@ -113,9 +113,7 @@ class SharedLspServer
     @wait_thr&.value
   end
 
-  private
-
-  def initialize_server
+  private def initialize_server
     root_uri = "file://#{Dir.pwd}"
     response = @client.send_request("initialize", {
                                       processId: Process.pid,
@@ -144,7 +142,7 @@ class SharedLspServer
     wait_for_indexing
   end
 
-  def wait_for_indexing
+  private def wait_for_indexing
     timeout = Time.now + 120 # 2 minutes timeout
 
     @client.drain_notifications(timeout: 0.5) until @indexing_complete || Time.now > timeout
@@ -156,7 +154,7 @@ class SharedLspServer
     end
   end
 
-  def handle_notification(msg)
+  private def handle_notification(msg)
     method = msg["method"]
     params = msg["params"]
 
@@ -176,7 +174,7 @@ class SharedLspServer
     end
   end
 
-  def open_file(uri, file_path)
+  private def open_file(uri, file_path)
     source = File.read(file_path)
     @client.send_notification("textDocument/didOpen", {
                                 textDocument: {
@@ -191,7 +189,7 @@ class SharedLspServer
     sleep 0.3
   end
 
-  def extract_hover_content(contents)
+  private def extract_hover_content(contents)
     if contents.is_a?(Hash)
       contents["value"]
     elsif contents.is_a?(Array)

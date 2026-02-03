@@ -72,9 +72,7 @@ class LspClient
     end
   end
 
-  private
-
-  def read_message
+  private def read_message
     # Read Content-Length header
     header = ""
     loop do
@@ -93,7 +91,7 @@ class LspClient
     JSON.parse(body)
   end
 
-  def write_message(message)
+  private def write_message(message)
     json = JSON.generate(message)
     @stdin.write("Content-Length: #{json.bytesize}\r\n\r\n#{json}")
     @stdin.flush

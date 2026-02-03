@@ -73,9 +73,7 @@ module RubyLsp
         end
       end
 
-      private
-
-      def extend_hover_targets
+      private def extend_hover_targets
         targets = RubyLsp::Listeners::Hover::ALLOWED_TARGETS
 
         Constants::HOVER_NODE_MAPPING.each_value do |target|
@@ -83,7 +81,7 @@ module RubyLsp
         end
       end
 
-      def reindex_file(uri)
+      private def reindex_file(uri)
         file_path = uri.path
         return unless file_path && File.exist?(file_path)
 
@@ -93,7 +91,7 @@ module RubyLsp
         warn("[TypeGuessr] Error indexing #{uri}: #{e.message}")
       end
 
-      def start_debug_server
+      private def start_debug_server
         port = Config.debug_server_port
         warn("[TypeGuessr] Starting debug server on port #{port}...")
         @debug_server = DebugServer.new(@global_state, @runtime_adapter, port: port)

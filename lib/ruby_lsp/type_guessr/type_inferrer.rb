@@ -27,14 +27,7 @@ module RubyLsp
         guess_type_from_ir(node_context)
       end
 
-      private
-
-      # Attempt to guess type using IR-based inference
-      # Returns GuessedType only when type can be resolved
-      #
-      # @param node_context [RubyLsp::NodeContext] The context of the node
-      # @return [GuessedType, nil] The guessed type or nil if unknown
-      def guess_type_from_ir(node_context)
+      private def guess_type_from_ir(node_context)
         node = node_context.node
 
         # For CallNode, we need to infer the receiver's type
@@ -65,7 +58,7 @@ module RubyLsp
       # @param node [Prism::Node] The Prism node
       # @param node_context [RubyLsp::NodeContext] The context of the node
       # @return [TypeGuessr::Core::IR::Node, nil] The IR node or nil
-      def find_ir_node(node, node_context)
+      private def find_ir_node(node, node_context)
         scope_id = NodeContextHelper.generate_scope_id(node_context)
         node_hash = NodeContextHelper.generate_node_hash(node, node_context)
         return nil unless node_hash
@@ -77,7 +70,7 @@ module RubyLsp
       # Extract the variable node from a CallNode's receiver
       # @param call_node [Prism::CallNode] The call node
       # @return [Prism::Node, nil] The receiver variable node or nil
-      def extract_receiver_variable(call_node)
+      private def extract_receiver_variable(call_node)
         receiver = call_node.receiver
         return nil unless receiver
 
@@ -93,7 +86,7 @@ module RubyLsp
       # Check if the node is a variable node that we can analyze
       # @param node [Prism::Node] The node to check
       # @return [Boolean] true if the node is a variable node
-      def variable_node?(node)
+      private def variable_node?(node)
         case node
         when Prism::LocalVariableReadNode, Prism::LocalVariableWriteNode, Prism::LocalVariableTargetNode,
              Prism::InstanceVariableReadNode, Prism::InstanceVariableWriteNode, Prism::InstanceVariableTargetNode,

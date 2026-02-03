@@ -85,9 +85,7 @@ class LspClient
     end
   end
 
-  private
-
-  def read_message
+  private def read_message
     # Read Content-Length header
     header = ""
     loop do
@@ -106,7 +104,7 @@ class LspClient
     JSON.parse(body)
   end
 
-  def write_message(message)
+  private def write_message(message)
     json = JSON.generate(message)
     @stdin.write("Content-Length: #{json.bytesize}\r\n\r\n#{json}")
     @stdin.flush
@@ -212,9 +210,7 @@ class HoverRepl
     @wait_thr&.value
   end
 
-  private
-
-  def initialize_server
+  private def initialize_server
     root_uri = "file://#{Dir.pwd}"
     response = @client.send_request("initialize", {
                                       processId: Process.pid,
@@ -244,7 +240,7 @@ class HoverRepl
     wait_for_indexing
   end
 
-  def wait_for_indexing
+  private def wait_for_indexing
     timeout = Time.now + 120 # 2 minutes timeout
 
     # Drain notifications from stdout, checking for indexing completion
@@ -257,7 +253,7 @@ class HoverRepl
     end
   end
 
-  def process_command(input)
+  private def process_command(input)
     parts = input.split
     if parts.size < 3
       puts "Usage: <file_path> <line> <column>"
@@ -278,7 +274,7 @@ class HoverRepl
     puts result || "(no hover info)"
   end
 
-  def hover_result(file_path, line, column)
+  private def hover_result(file_path, line, column)
     uri = "file://#{file_path}"
 
     # Open file if not already opened
@@ -298,7 +294,7 @@ class HoverRepl
     extract_hover_content(result["contents"])
   end
 
-  def extract_hover_content(contents)
+  private def extract_hover_content(contents)
     if contents.is_a?(Hash)
       contents["value"]
     elsif contents.is_a?(Array)
@@ -308,7 +304,7 @@ class HoverRepl
     end
   end
 
-  def open_file(uri, file_path)
+  private def open_file(uri, file_path)
     source = File.read(file_path)
     @client.send_notification("textDocument/didOpen", {
                                 textDocument: {

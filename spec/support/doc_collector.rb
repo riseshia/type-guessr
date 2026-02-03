@@ -71,9 +71,7 @@ module DocCollector
       @entries = []
     end
 
-    private
-
-    def build_markdown_for_file(file_entries, doc_name)
+    private def build_markdown_for_file(file_entries, doc_name)
       title = doc_name.split("_").map(&:capitalize).join(" ")
       output = "# #{title} Type Inference\n\n"
       output += "This document is auto-generated from tests tagged with `:doc`.\n\n"
@@ -97,7 +95,7 @@ module DocCollector
       output
     end
 
-    def group_by_hierarchy(file_entries)
+    private def group_by_hierarchy(file_entries)
       result = {}
 
       file_entries.each do |entry|
@@ -113,7 +111,7 @@ module DocCollector
       result
     end
 
-    def format_example(example)
+    private def format_example(example)
       output = "```ruby\n"
       output += if example[:type] == :method_signature
                   add_signature_marker(example[:source], example[:line], example[:column], example[:expected])
@@ -124,7 +122,7 @@ module DocCollector
       output
     end
 
-    def add_hover_marker(source, line, column, expected_type)
+    private def add_hover_marker(source, line, column, expected_type)
       lines = source.lines
       return source if line > lines.size
 
@@ -147,7 +145,7 @@ module DocCollector
       lines.join
     end
 
-    def add_signature_marker(source, line, column, expected_signature)
+    private def add_signature_marker(source, line, column, expected_signature)
       lines = source.lines
       return source if line > lines.size
 
@@ -187,9 +185,7 @@ module TypeGuessrDocHelper
     super
   end
 
-  private
-
-  def record_for_doc(type, **kwargs)
+  private def record_for_doc(type, **kwargs)
     return unless RSpec.current_example.metadata[:doc]
 
     group_hierarchy = extract_group_hierarchy
@@ -218,7 +214,7 @@ module TypeGuessrDocHelper
     end
   end
 
-  def extract_group_hierarchy
+  private def extract_group_hierarchy
     hierarchy = []
 
     # Start from the current example's metadata

@@ -47,12 +47,7 @@ module TypeGuessr
           end
         end
 
-        private
-
-        # Convert RBS ClassInstance to internal type
-        # @param rbs_type [RBS::Types::ClassInstance] RBS class instance
-        # @return [Types::Type] internal type
-        def convert_class_instance(rbs_type)
+        private def convert_class_instance(rbs_type)
           class_name = rbs_type.name.to_s.delete_prefix("::")
 
           # Handle Array with type parameter
@@ -69,7 +64,7 @@ module TypeGuessr
         # Convert RBS Union to internal Union type
         # @param rbs_type [RBS::Types::Union] RBS union type
         # @return [Types::Union] internal union type
-        def convert_union(rbs_type)
+        private def convert_union(rbs_type)
           types = rbs_type.types.map { |t| convert(t) }
           Types::Union.new(types)
         end
@@ -78,7 +73,7 @@ module TypeGuessr
         # Tuples like [K, V] are converted to Array[K | V]
         # @param rbs_type [RBS::Types::Tuple] RBS tuple type
         # @return [Types::ArrayType] internal array type with union element type
-        def convert_tuple(rbs_type)
+        private def convert_tuple(rbs_type)
           element_types = rbs_type.types.map { |t| convert(t) }
           Types::ArrayType.new(Types::Union.new(element_types))
         end

@@ -7,12 +7,7 @@ module TypeGuessr
     # Unified logging interface for TypeGuessr
     # Uses Config.debug? to control output
     module Logger
-      module_function
-
-      # Log debug message with optional context
-      # @param msg [String] the debug message
-      # @param context [Hash] optional context information
-      def debug(msg, context = {})
+      module_function def debug(msg, context = {})
         return unless debug_enabled?
 
         output = "[TypeGuessr:DEBUG] #{msg}"
@@ -23,7 +18,7 @@ module TypeGuessr
       # Log error message with optional exception
       # @param msg [String] the error message
       # @param exception [Exception, nil] optional exception for backtrace
-      def error(msg, exception = nil)
+      module_function def error(msg, exception = nil)
         return unless debug_enabled?
 
         warn "[TypeGuessr:ERROR] #{msg}"
@@ -35,7 +30,7 @@ module TypeGuessr
 
       # Check if debug mode is enabled
       # @return [Boolean] true if Config.debug? returns true
-      def debug_enabled?
+      module_function def debug_enabled?
         RubyLsp::TypeGuessr::Config.debug?
       end
     end

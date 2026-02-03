@@ -10,14 +10,7 @@ module TypeGuessr
     # This module provides framework-agnostic utilities that bridge between ruby-lsp's
     # NodeContext and TypeGuessr's IR node key format.
     module NodeContextHelper
-      module_function
-
-      # Generate scope_id from node_context
-      # Format: "ClassName#method_name" or "ClassName" or "#method_name" or ""
-      # @param node_context [RubyLsp::NodeContext] The context of the node
-      # @param exclude_method [Boolean] Whether to exclude method from scope (for DefNode)
-      # @return [String] The scope identifier
-      def generate_scope_id(node_context, exclude_method: false)
+      module_function def generate_scope_id(node_context, exclude_method: false)
         class_path = node_context.nesting.map do |n|
           n.is_a?(String) ? n : n.name.to_s
         end.join("::")
@@ -35,7 +28,7 @@ module TypeGuessr
       # @param node [Prism::Node] The Prism node
       # @param node_context [RubyLsp::NodeContext] The context (for block param detection and nesting)
       # @return [String, nil] The node hash or nil for unsupported node types
-      def generate_node_hash(node, node_context)
+      module_function def generate_node_hash(node, node_context)
         offset = node.location.start_offset
         case node
         when Prism::LocalVariableWriteNode, Prism::LocalVariableTargetNode
@@ -86,7 +79,7 @@ module TypeGuessr
       # @param node [Prism::Node] The parameter node
       # @param node_context [RubyLsp::NodeContext] The context
       # @return [Boolean] true if inside a block
-      def block_parameter?(node, node_context)
+      module_function def block_parameter?(node, node_context)
         call_node = node_context.call_node
         return false unless call_node&.block
 
@@ -102,7 +95,7 @@ module TypeGuessr
       # @param node [Prism::Node] The parameter node
       # @param node_context [RubyLsp::NodeContext] The context
       # @return [Integer] The parameter index
-      def block_parameter_index(node, node_context)
+      module_function def block_parameter_index(node, node_context)
         call_node = node_context.call_node
         return 0 unless call_node&.block
 
@@ -117,7 +110,7 @@ module TypeGuessr
       # Uses respond_to? guards for safety across different Prism versions
       # @param block_params [Prism::ParametersNode] The block parameters
       # @return [Array<Prism::Node>] All parameter nodes
-      def collect_block_params(block_params)
+      module_function def collect_block_params(block_params)
         params = []
         params.concat(block_params.requireds) if block_params.respond_to?(:requireds)
         params.concat(block_params.optionals) if block_params.respond_to?(:optionals)

@@ -56,13 +56,11 @@ module TypeGuessr
           lines.join("\n")
         end
 
-        private
-
-        def format_loc
+        private def format_loc
           loc ? "@#{loc.offset}" : "∅"
         end
 
-        def tree_field(name, value, indent, last: false)
+        private def tree_field(name, value, indent, last: false)
           prefix = last ? LAST_BRANCH : BRANCH
           case value
           when nil
@@ -98,7 +96,7 @@ module TypeGuessr
           end
         end
 
-        def tree_inspect_fields(_indent)
+        private def tree_inspect_fields(_indent)
           []
         end
       end

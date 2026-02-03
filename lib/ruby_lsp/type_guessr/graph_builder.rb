@@ -41,9 +41,7 @@ module RubyLsp
       # Limit to MAX_NODES to prevent infinite/huge graphs
       MAX_NODES = 200
 
-      private
-
-      def build_def_node_graph(def_node, def_key)
+      private def build_def_node_graph(def_node, def_key)
         method_scope = @scope_id.empty? ? "##{def_node.name}" : "#{@scope_id}##{def_node.name}"
 
         # 1. Add DefNode
@@ -84,7 +82,7 @@ module RubyLsp
         add_edge(return_key, def_key)
       end
 
-      def process_body_node(node, scope_id, return_sources)
+      private def process_body_node(node, scope_id, return_sources)
         return unless node
         return if @nodes.size >= MAX_NODES
 
@@ -149,7 +147,7 @@ module RubyLsp
         node_key
       end
 
-      def add_node(node, scope_id = @scope_id)
+      private def add_node(node, scope_id = @scope_id)
         node_key = node.node_key(scope_id)
         return node_key if @nodes.key?(node_key)
 
@@ -157,20 +155,20 @@ module RubyLsp
         node_key
       end
 
-      def add_edge(from_key, to_key)
+      private def add_edge(from_key, to_key)
         return unless from_key && to_key
 
         edge = { from: from_key, to: to_key }
         @edges << edge unless @edges.include?(edge)
       end
 
-      def infer_type_str(node)
+      private def infer_type_str(node)
         result = @runtime_adapter.infer_type(node)
         result.type.to_s
       end
 
       # BFS traversal for non-DefNode (fallback)
-      def traverse_dependencies(node, node_key)
+      private def traverse_dependencies(node, node_key)
         visited = Set.new
         queue = [[node, node_key]]
 
@@ -193,7 +191,7 @@ module RubyLsp
 
       # Extract scope_id from a node key
       # Key format: {scope_id}:{type}:{name}:{line}
-      def extract_scope_id(node_key)
+      private def extract_scope_id(node_key)
         # For root key like "Class:def:name:line", scope is "Class"
         # For "Class#method:type:name:line", scope is "Class#method"
         # Find the last occurrence of known type prefixes
@@ -226,7 +224,7 @@ module RubyLsp
       end
 
       # Serialize a node to hash format
-      def serialize_node(node, node_key)
+      private def serialize_node(node, node_key)
         warn("[GraphBuilder] serialize_node: #{node_key}") if Config.debug?
         result = @runtime_adapter.infer_type(node)
         warn("[GraphBuilder] infer_type done for: #{node_key}") if Config.debug?
@@ -241,12 +239,12 @@ module RubyLsp
       end
 
       # Get the short type name for a node
-      def node_type_name(node)
+      private def node_type_name(node)
         ::TypeGuessr::Core::IR.extract_last_name(node.class.name)
       end
 
       # Extract details based on node type
-      def extract_details(node, node_key)
+      private def extract_details(node, node_key)
         case node
         when ::TypeGuessr::Core::IR::DefNode
           # Build full method signature with param types
@@ -302,7 +300,7 @@ module RubyLsp
       end
 
       # Format receiver node for display
-      def format_receiver(receiver)
+      private def format_receiver(receiver)
         return nil unless receiver
 
         case receiver
@@ -321,7 +319,7 @@ module RubyLsp
 
       # Infer node key for a dependency
       # Uses parent node info to determine correct scope for children
-      def infer_dependency_key(dep_node, parent_key, parent_node = nil)
+      private def infer_dependency_key(dep_node, parent_key, parent_node = nil)
         # Extract scope_id from parent key
         # Key format: {scope_id}:{type}:{name}:{line}
         # scope_id can contain :: for namespaces and # for methods

@@ -95,9 +95,7 @@ module TypeGuessrTestHelper
     end
   end
 
-  private
-
-  def did_open_message(uri, source)
+  private def did_open_message(uri, source)
     {
       method: "textDocument/didOpen",
       params: {
@@ -106,7 +104,7 @@ module TypeGuessrTestHelper
     }
   end
 
-  def did_close_message(uri)
+  private def did_close_message(uri)
     {
       method: "textDocument/didClose",
       params: { textDocument: { uri: uri } }

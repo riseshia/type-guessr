@@ -43,9 +43,7 @@ module FullIndexHelper
       @server = nil
     end
 
-    private
-
-    def create_server_with_cached_index
+    private def create_server_with_cached_index
       if cache_valid?
         create_server_from_cache
       else
@@ -55,7 +53,7 @@ module FullIndexHelper
       end
     end
 
-    def create_server_from_cache
+    private def create_server_from_cache
       server = RubyLsp::Server.new(test_mode: true)
 
       # Load cached index
@@ -67,7 +65,7 @@ module FullIndexHelper
       server
     end
 
-    def create_fully_indexed_server
+    private def create_fully_indexed_server
       server = RubyLsp::Server.new(test_mode: false)
 
       # Send LSP initialize request to trigger full indexing
@@ -89,7 +87,7 @@ module FullIndexHelper
 
     # Cache management
 
-    def cache_valid?
+    private def cache_valid?
       return false unless File.exist?(cache_file)
       return false unless File.exist?(cache_key_file)
 
@@ -97,22 +95,22 @@ module FullIndexHelper
       stored_key == current_cache_key
     end
 
-    def current_cache_key
+    private def current_cache_key
       lockfile = File.join(Dir.pwd, "Gemfile.lock")
       return "" unless File.exist?(lockfile)
 
       Digest::SHA256.hexdigest(File.read(lockfile))
     end
 
-    def cache_file
+    private def cache_file
       File.join(CACHE_DIR, "index.marshal")
     end
 
-    def cache_key_file
+    private def cache_key_file
       File.join(CACHE_DIR, "cache_key")
     end
 
-    def save_cache(index)
+    private def save_cache(index)
       FileUtils.mkdir_p(CACHE_DIR)
 
       # Save the index
@@ -122,7 +120,7 @@ module FullIndexHelper
       File.write(cache_key_file, current_cache_key)
     end
 
-    def load_cache
+    private def load_cache
       # rubocop:disable Security/MarshalLoad
       # Safe: Loading our own cache file, validated by cache key check
       Marshal.load(File.binread(cache_file))

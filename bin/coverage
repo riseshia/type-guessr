@@ -81,14 +81,11 @@ module CoverageRunner
       dump_untyped_nodes(report) if @dump_untyped
     end
 
-    private
-
-    # Print message unless in JSON mode
-    def log(message = "")
+    private def log(message = "")
       puts message unless @json
     end
 
-    def collect_indexable_files
+    private def collect_indexable_files
       if @path
         collect_files_from_project(@path)
       else
@@ -97,7 +94,7 @@ module CoverageRunner
       end
     end
 
-    def collect_files_from_project(project_path)
+    private def collect_files_from_project(project_path)
       script = <<~RUBY
         require 'bundler/setup'
         require 'ruby_indexer/ruby_indexer'
@@ -126,7 +123,7 @@ module CoverageRunner
       output.lines.map(&:chomp)
     end
 
-    def build_index(files)
+    private def build_index(files)
       converter = TypeGuessr::Core::Converter::PrismConverter.new
       location_index = TypeGuessr::Core::Index::LocationIndex.new
       method_registry = TypeGuessr::Core::Registry::MethodRegistry.new
@@ -154,7 +151,7 @@ module CoverageRunner
       [location_index, method_registry, resolver]
     end
 
-    def index_node_recursively(location_index, method_registry, file_path, node, scope_id)
+    private def index_node_recursively(location_index, method_registry, file_path, node, scope_id)
       return unless node
 
       case node
@@ -225,14 +222,14 @@ module CoverageRunner
       end
     end
 
-    def singleton_scope_for(scope, singleton:)
+    private def singleton_scope_for(scope, singleton:)
       return scope unless singleton
 
       parent_name = scope.split("::").last || "Object"
       scope.empty? ? "<Class:Object>" : "#{scope}::<Class:#{parent_name}>"
     end
 
-    def output_text(result, file_count)
+    private def output_text(result, file_count)
       nc = result[:node_coverage]
       ss = result[:signature_score]
 
@@ -257,7 +254,7 @@ module CoverageRunner
       puts "Files analyzed: #{file_count}"
     end
 
-    def output_json(result, file_count)
+    private def output_json(result, file_count)
       output = {
         node_coverage: result[:node_coverage],
         signature_score: result[:signature_score],
@@ -266,7 +263,7 @@ module CoverageRunner
       puts JSON.pretty_generate(output)
     end
 
-    def generate_markdown_report(result, files)
+    private def generate_markdown_report(result, files)
       log "\n=== Generating Coverage Report ==="
 
       FileUtils.mkdir_p("docs")
@@ -275,7 +272,7 @@ module CoverageRunner
       log "Report saved to: #{report_path}"
     end
 
-    def build_markdown_content(result, files)
+    private def build_markdown_content(result, files)
       nc = result[:node_coverage]
       ss = result[:signature_score]
 
@@ -332,7 +329,7 @@ module CoverageRunner
       MARKDOWN
     end
 
-    def dump_untyped_nodes(report)
+    private def dump_untyped_nodes(report)
       log "\n=== Dumping Untyped Nodes ==="
 
       FileUtils.mkdir_p("tmp")

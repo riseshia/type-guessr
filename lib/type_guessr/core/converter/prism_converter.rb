@@ -264,9 +264,7 @@ module TypeGuessr
           node
         end
 
-        private
-
-        def convert_literal(prism_node)
+        private def convert_literal(prism_node)
           type = literal_type_for(prism_node)
           literal_value = extract_literal_value(prism_node)
           IR::LiteralNode.new(
@@ -278,7 +276,7 @@ module TypeGuessr
         end
 
         # Extract the actual value from a literal node (for Symbol, Integer, String)
-        def extract_literal_value(prism_node)
+        private def extract_literal_value(prism_node)
           case prism_node
           when Prism::SymbolNode
             prism_node.value.to_sym
@@ -289,7 +287,7 @@ module TypeGuessr
           end
         end
 
-        def convert_array_literal(prism_node, context)
+        private def convert_array_literal(prism_node, context)
           type = array_element_type_for(prism_node)
 
           # Convert each element to an IR node
@@ -322,19 +320,19 @@ module TypeGuessr
           )
         end
 
-        def convert_hash_literal(prism_node, context)
+        private def convert_hash_literal(prism_node, context)
           type = hash_element_types_for(prism_node)
           build_hash_literal_node(prism_node, type, context)
         end
 
         # Convert KeywordHashNode (keyword arguments in method calls like `foo(a: 1, b: x)`)
-        def convert_keyword_hash(prism_node, context)
+        private def convert_keyword_hash(prism_node, context)
           type = infer_keyword_hash_type(prism_node)
           build_hash_literal_node(prism_node, type, context)
         end
 
         # Shared helper for hash-like nodes (HashNode, KeywordHashNode)
-        def build_hash_literal_node(prism_node, type, context)
+        private def build_hash_literal_node(prism_node, type, context)
           value_nodes = prism_node.elements.filter_map do |elem|
             case elem
             when Prism::AssocNode
@@ -353,7 +351,7 @@ module TypeGuessr
         end
 
         # Infer type for KeywordHashNode (always has symbol keys)
-        def infer_keyword_hash_type(keyword_hash_node)
+        private def infer_keyword_hash_type(keyword_hash_node)
           return Types::HashShape.new({}) if keyword_hash_node.elements.empty?
 
           fields = keyword_hash_node.elements.each_with_object({}) do |elem, hash|
@@ -364,7 +362,7 @@ module TypeGuessr
           Types::HashShape.new(fields)
         end
 
-        def literal_type_for(prism_node)
+        private def literal_type_for(prism_node)
           case prism_node
           when Prism::IntegerNode
             Types::ClassInstance.for("Integer")
@@ -400,7 +398,7 @@ module TypeGuessr
           end
         end
 
-        def range_element_type_for(range_node)
+        private def range_element_type_for(range_node)
           left_type = range_node.left ? literal_type_for(range_node.left) : nil
           right_type = range_node.right ? literal_type_for(range_node.right) : nil
 
@@ -420,7 +418,7 @@ module TypeGuessr
           Types::RangeType.new(element_type)
         end
 
-        def convert_local_variable_write(prism_node, context)
+        private def convert_local_variable_write(prism_node, context)
           value_node = convert(prism_node.value, context)
           write_node = IR::LocalWriteNode.new(
             name: prism_node.name,
@@ -432,7 +430,7 @@ module TypeGuessr
           write_node
         end
 
-        def convert_local_variable_read(prism_node, context)
+        private def convert_local_variable_read(prism_node, context)
           # Look up the most recent assignment
           write_node = context.lookup_variable(prism_node.name)
           # Share called_methods array with the write node/parameter for method-based inference
@@ -450,7 +448,7 @@ module TypeGuessr
           )
         end
 
-        def convert_instance_variable_write(prism_node, context)
+        private def convert_instance_variable_write(prism_node, context)
           value_node = convert(prism_node.value, context)
           class_name = context.current_class_name
 
@@ -473,7 +471,7 @@ module TypeGuessr
           write_node
         end
 
-        def convert_instance_variable_read(prism_node, context)
+        private def convert_instance_variable_read(prism_node, context)
           # Look up from class level first
           write_node = context.lookup_instance_variable(prism_node.name)
           class_name = context.current_class_name
@@ -492,7 +490,7 @@ module TypeGuessr
           )
         end
 
-        def convert_class_variable_write(prism_node, context)
+        private def convert_class_variable_write(prism_node, context)
           value_node = convert(prism_node.value, context)
           class_name = context.current_class_name
 
@@ -514,7 +512,7 @@ module TypeGuessr
           write_node
         end
 
-        def convert_class_variable_read(prism_node, context)
+        private def convert_class_variable_read(prism_node, context)
           write_node = context.lookup_variable(prism_node.name)
           class_name = context.current_class_name
           called_methods = if write_node.is_a?(IR::ClassVariableWriteNode) || write_node.is_a?(IR::ParamNode)
@@ -534,38 +532,38 @@ module TypeGuessr
 
         # Compound assignment: x ||= value
         # Result type is union of original and new value type
-        def convert_local_variable_or_write(prism_node, context)
+        private def convert_local_variable_or_write(prism_node, context)
           convert_or_write(prism_node, context, :local)
         end
 
         # Compound assignment: x &&= value
         # Result type is union of original and new value type
-        def convert_local_variable_and_write(prism_node, context)
+        private def convert_local_variable_and_write(prism_node, context)
           convert_and_write(prism_node, context, :local)
         end
 
         # Compound assignment: x += value, x -= value, etc.
         # Result type depends on the operator method return type
-        def convert_local_variable_operator_write(prism_node, context)
+        private def convert_local_variable_operator_write(prism_node, context)
           convert_operator_write(prism_node, context, :local)
         end
 
-        def convert_instance_variable_or_write(prism_node, context)
+        private def convert_instance_variable_or_write(prism_node, context)
           convert_or_write(prism_node, context, :instance)
         end
 
-        def convert_instance_variable_and_write(prism_node, context)
+        private def convert_instance_variable_and_write(prism_node, context)
           convert_and_write(prism_node, context, :instance)
         end
 
-        def convert_instance_variable_operator_write(prism_node, context)
+        private def convert_instance_variable_operator_write(prism_node, context)
           convert_operator_write(prism_node, context, :instance)
         end
 
         # Generic ||= handler
         # x ||= value means: if x is nil/false, x = value, else keep x
         # Type is union of original type and value type
-        def convert_or_write(prism_node, context, kind)
+        private def convert_or_write(prism_node, context, kind)
           original_node = lookup_by_kind(prism_node.name, kind, context)
           value_node = convert(prism_node.value, context)
 
@@ -592,7 +590,7 @@ module TypeGuessr
         # Generic &&= handler
         # x &&= value means: if x is truthy, x = value, else keep x
         # Type is union of original type and value type
-        def convert_and_write(prism_node, context, kind)
+        private def convert_and_write(prism_node, context, kind)
           original_node = lookup_by_kind(prism_node.name, kind, context)
           value_node = convert(prism_node.value, context)
 
@@ -618,7 +616,7 @@ module TypeGuessr
         # Generic operator write handler (+=, -=, *=, etc.)
         # x += value is equivalent to x = x.+(value)
         # Type is the return type of the operator method
-        def convert_operator_write(prism_node, context, kind)
+        private def convert_operator_write(prism_node, context, kind)
           original_node = lookup_by_kind(prism_node.name, kind, context)
           value_node = convert(prism_node.value, context)
 
@@ -640,7 +638,7 @@ module TypeGuessr
         end
 
         # Helper to create the appropriate write node type based on kind
-        def create_write_node(name, kind, value, context, location)
+        private def create_write_node(name, kind, value, context, location)
           loc = convert_loc(location)
           case kind
           when :local
@@ -670,7 +668,7 @@ module TypeGuessr
         end
 
         # Helper to lookup variable by kind
-        def lookup_by_kind(name, kind, context)
+        private def lookup_by_kind(name, kind, context)
           case kind
           when :instance
             context.lookup_instance_variable(name)
@@ -680,7 +678,7 @@ module TypeGuessr
         end
 
         # Helper to register variable by kind
-        def register_by_kind(name, node, kind, context)
+        private def register_by_kind(name, node, kind, context)
           case kind
           when :instance
             context.register_instance_variable(name, node)
@@ -689,7 +687,7 @@ module TypeGuessr
           end
         end
 
-        def convert_call(prism_node, context)
+        private def convert_call(prism_node, context)
           # Convert receiver - if nil and inside a class, create implicit SelfNode
           receiver_node = if prism_node.receiver
                             convert(prism_node.receiver, context)
@@ -744,7 +742,7 @@ module TypeGuessr
         end
 
         # Check if node is any variable node (for method call tracking)
-        def variable_node?(node)
+        private def variable_node?(node)
           node.is_a?(IR::LocalWriteNode) ||
             node.is_a?(IR::LocalReadNode) ||
             node.is_a?(IR::InstanceVariableWriteNode) ||
@@ -755,7 +753,7 @@ module TypeGuessr
         end
 
         # Build CalledMethod with signature information from Prism CallNode
-        def build_called_method(prism_node)
+        private def build_called_method(prism_node)
           positional_count, has_splat, keywords = extract_call_signature(prism_node)
 
           IR::CalledMethod.new(
@@ -767,7 +765,7 @@ module TypeGuessr
 
         # Extract positional count, splat presence, and keywords from call arguments
         # @return [Array(Integer, Boolean, Array<Symbol>)] [positional_count, has_splat, keywords]
-        def extract_call_signature(prism_node)
+        private def extract_call_signature(prism_node)
           arguments = prism_node.arguments&.arguments || []
           positional_count = 0
           has_splat = false
@@ -788,7 +786,7 @@ module TypeGuessr
         end
 
         # Extract keyword argument names from KeywordHashNode
-        def extract_keywords_from_hash(hash_node, keywords)
+        private def extract_keywords_from_hash(hash_node, keywords)
           hash_node.elements.each do |element|
             next unless element.is_a?(Prism::AssocNode)
 
@@ -798,11 +796,11 @@ module TypeGuessr
         end
 
         # Check if node is a local variable node (for indexed assignment)
-        def local_variable_node?(node)
+        private def local_variable_node?(node)
           node.is_a?(IR::LocalWriteNode) || node.is_a?(IR::LocalReadNode)
         end
 
-        def extract_literal_type(ir_node)
+        private def extract_literal_type(ir_node)
           case ir_node
           when IR::LiteralNode
             ir_node.type
@@ -811,7 +809,7 @@ module TypeGuessr
           end
         end
 
-        def widen_to_hash_type(original_type, key_arg, value_type)
+        private def widen_to_hash_type(original_type, key_arg, value_type)
           # When mixing key types, widen to generic HashType
           new_key_type = infer_key_type(key_arg)
 
@@ -836,7 +834,7 @@ module TypeGuessr
           end
         end
 
-        def union_types(type1, type2)
+        private def union_types(type1, type2)
           return type2 if type1.nil? || type1.is_a?(Types::Unknown)
           return type1 if type2.nil? || type2.is_a?(Types::Unknown)
           return type1 if type1 == type2
@@ -847,7 +845,7 @@ module TypeGuessr
           Types::Union.new(types.uniq)
         end
 
-        def infer_key_type(key_arg)
+        private def infer_key_type(key_arg)
           case key_arg
           when Prism::SymbolNode
             Types::ClassInstance.for("Symbol")
@@ -861,7 +859,7 @@ module TypeGuessr
         end
 
         # Check if method is a container mutating method
-        def container_mutating_method?(method, receiver_node)
+        private def container_mutating_method?(method, receiver_node)
           return false unless local_variable_node?(receiver_node)
 
           receiver_type = get_receiver_type(receiver_node)
@@ -875,7 +873,7 @@ module TypeGuessr
         end
 
         # Get receiver's current type
-        def get_receiver_type(receiver_node)
+        private def get_receiver_type(receiver_node)
           return nil unless receiver_node.respond_to?(:write_node)
 
           write_node = receiver_node.write_node
@@ -889,17 +887,17 @@ module TypeGuessr
         end
 
         # Check if type is hash-like
-        def hash_like?(type)
+        private def hash_like?(type)
           type.is_a?(Types::HashShape) || type.is_a?(Types::HashType)
         end
 
         # Check if type is array-like
-        def array_like?(type)
+        private def array_like?(type)
           type.is_a?(Types::ArrayType)
         end
 
         # Handle container mutation by creating new LocalWriteNode with merged type
-        def handle_container_mutation(prism_node, receiver_node, args, context)
+        private def handle_container_mutation(prism_node, receiver_node, args, context)
           merged_type = compute_merged_type(receiver_node, prism_node.name, args, prism_node)
           return receiver_node unless merged_type
 
@@ -936,7 +934,7 @@ module TypeGuessr
         end
 
         # Compute merged type for container mutation
-        def compute_merged_type(receiver_node, method, args, prism_node)
+        private def compute_merged_type(receiver_node, method, args, prism_node)
           original_type = get_receiver_type(receiver_node)
           return nil unless original_type
 
@@ -953,7 +951,7 @@ module TypeGuessr
         end
 
         # Compute Hash type after indexed assignment
-        def compute_hash_assignment_type(original_type, args, prism_node)
+        private def compute_hash_assignment_type(original_type, args, prism_node)
           return nil unless args.size == 2
 
           key_arg = prism_node.arguments.arguments[0]
@@ -985,13 +983,13 @@ module TypeGuessr
         end
 
         # Check if HashType is empty (has Unknown types)
-        def empty_hash_type?(hash_type)
+        private def empty_hash_type?(hash_type)
           (hash_type.key_type.nil? || hash_type.key_type.is_a?(Types::Unknown)) &&
             (hash_type.value_type.nil? || hash_type.value_type.is_a?(Types::Unknown))
         end
 
         # Compute Array type after indexed assignment
-        def compute_array_assignment_type(original_type, args)
+        private def compute_array_assignment_type(original_type, args)
           return nil unless args.size == 2
 
           value_type = extract_literal_type(args[1])
@@ -1000,7 +998,7 @@ module TypeGuessr
         end
 
         # Compute Array type after << operator
-        def compute_array_append_type(original_type, args)
+        private def compute_array_append_type(original_type, args)
           return nil unless args.size == 1
 
           value_type = extract_literal_type(args[0])
@@ -1010,7 +1008,7 @@ module TypeGuessr
 
         # Extract IR param nodes from a Prism parameter node
         # Handles destructuring (MultiTargetNode) by flattening nested params
-        def extract_param_nodes(param, kind, context, default_value: nil)
+        private def extract_param_nodes(param, kind, context, default_value: nil)
           case param
           when Prism::MultiTargetNode
             # Destructuring parameter like (a, b) - extract all nested params
@@ -1031,7 +1029,7 @@ module TypeGuessr
           end
         end
 
-        def convert_block(block_node, call_node, context)
+        private def convert_block(block_node, call_node, context)
           # Create block parameter slots and register them in context
           block_context = context.fork(:block)
 
@@ -1072,7 +1070,7 @@ module TypeGuessr
           block_node.body ? convert(block_node.body, block_context) : nil
         end
 
-        def convert_if(prism_node, context)
+        private def convert_if(prism_node, context)
           # Convert then branch
           then_context = context.fork(:then)
           then_node = convert(prism_node.statements, then_context) if prism_node.statements
@@ -1092,7 +1090,7 @@ module TypeGuessr
           merge_modified_variables(context, then_context, else_context, then_node, else_node, prism_node.location)
         end
 
-        def convert_unless(prism_node, context)
+        private def convert_unless(prism_node, context)
           # Unless is like if with inverted condition
           # We treat the unless body as the "else" branch and the consequent as "then"
 
@@ -1105,7 +1103,7 @@ module TypeGuessr
           merge_modified_variables(context, unless_context, else_context, unless_node, else_node, prism_node.location)
         end
 
-        def convert_case(prism_node, context)
+        private def convert_case(prism_node, context)
           branches = []
           branch_contexts = []
 
@@ -1144,13 +1142,13 @@ module TypeGuessr
           merge_case_variables(context, branch_contexts, branches, prism_node.location)
         end
 
-        def convert_case_match(prism_node, context)
+        private def convert_case_match(prism_node, context)
           # Pattern matching case (Ruby 3.0+)
           # For now, treat it similarly to regular case
           convert_case(prism_node, context)
         end
 
-        def convert_statements(prism_node, context)
+        private def convert_statements(prism_node, context)
           last_node = nil
           prism_node.body.each do |stmt|
             last_node = convert(stmt, context)
@@ -1162,7 +1160,7 @@ module TypeGuessr
         # @param body [Array<Prism::Node>, nil] Array of statement nodes
         # @param context [Context] Conversion context
         # @return [Array<IR::Node>] Array of converted IR nodes
-        def convert_statements_body(body, context)
+        private def convert_statements_body(body, context)
           return [] unless body
 
           nodes = []
@@ -1174,7 +1172,7 @@ module TypeGuessr
         end
 
         # Convert begin/rescue/ensure block
-        def convert_begin(prism_node, context)
+        private def convert_begin(prism_node, context)
           body_nodes = extract_begin_body_nodes(prism_node, context)
           # Return the last node (represents the value of the begin block)
           body_nodes.last
@@ -1182,7 +1180,7 @@ module TypeGuessr
 
         # Convert || (or) operator to MergeNode
         # a || b → result is either a or b (short-circuit evaluation)
-        def convert_or_node(prism_node, context)
+        private def convert_or_node(prism_node, context)
           left_node = convert(prism_node.left, context)
           right_node = convert(prism_node.right, context)
 
@@ -1198,7 +1196,7 @@ module TypeGuessr
 
         # Convert && (and) operator to MergeNode
         # a && b → result is either a or b (short-circuit evaluation)
-        def convert_and_node(prism_node, context)
+        private def convert_and_node(prism_node, context)
           left_node = convert(prism_node.left, context)
           right_node = convert(prism_node.right, context)
 
@@ -1216,7 +1214,7 @@ module TypeGuessr
         # @param begin_node [Prism::BeginNode] The begin node
         # @param context [Context] Conversion context
         # @return [Array<IR::Node>] Array of all body nodes
-        def extract_begin_body_nodes(begin_node, context)
+        private def extract_begin_body_nodes(begin_node, context)
           body_nodes = []
 
           # Convert main body statements
@@ -1245,7 +1243,7 @@ module TypeGuessr
           body_nodes
         end
 
-        def convert_def(prism_node, context)
+        private def convert_def(prism_node, context)
           def_context = context.fork(:method)
           def_context.current_method = prism_node.name.to_s
           def_context.in_singleton_method = prism_node.receiver.is_a?(Prism::SelfNode)
@@ -1392,7 +1390,7 @@ module TypeGuessr
         # @param body_nodes [Array<IR::Node>] All nodes in the method body
         # @param loc [Prism::Location] Location for the MergeNode if needed
         # @return [IR::Node, nil] The return node (MergeNode if multiple returns)
-        def compute_return_node(body_nodes, loc)
+        private def compute_return_node(body_nodes, loc)
           return nil if body_nodes.empty?
 
           # Collect all explicit returns from the body
@@ -1422,7 +1420,7 @@ module TypeGuessr
         # Searches inside MergeNode branches to find nested returns from if/case
         # @param nodes [Array<IR::Node>] Nodes to search
         # @return [Array<IR::ReturnNode>] All explicit return nodes
-        def collect_returns(nodes)
+        private def collect_returns(nodes)
           returns = []
           nodes.each do |node|
             case node
@@ -1438,11 +1436,11 @@ module TypeGuessr
         # Check if the last node in body is a ReturnNode
         # @param body_nodes [Array<IR::Node>] Body nodes
         # @return [Boolean]
-        def last_node_returns?(body_nodes)
+        private def last_node_returns?(body_nodes)
           body_nodes.last.is_a?(IR::ReturnNode)
         end
 
-        def convert_constant_read(prism_node, context)
+        private def convert_constant_read(prism_node, context)
           name = case prism_node
                  when Prism::ConstantReadNode
                    prism_node.name.to_s
@@ -1459,7 +1457,7 @@ module TypeGuessr
           )
         end
 
-        def convert_constant_write(prism_node, context)
+        private def convert_constant_write(prism_node, context)
           value_node = convert(prism_node.value, context)
           context.register_constant(prism_node.name.to_s, value_node)
           IR::ConstantNode.new(
@@ -1469,7 +1467,7 @@ module TypeGuessr
           )
         end
 
-        def merge_modified_variables(parent_context, then_context, else_context, then_node, else_node, location)
+        private def merge_modified_variables(parent_context, then_context, else_context, then_node, else_node, location)
           # Skip non-returning branches (raise, fail, etc.)
           then_node = nil if non_returning?(then_node)
           else_node = nil if non_returning?(else_node)
@@ -1550,7 +1548,7 @@ module TypeGuessr
           end
         end
 
-        def merge_case_variables(parent_context, branch_contexts, branches, location)
+        private def merge_case_variables(parent_context, branch_contexts, branches, location)
           # Collect all variables modified in any branch
           all_modified_vars = branch_contexts.flat_map { |ctx| ctx&.local_variables || [] }.uniq
 
@@ -1590,7 +1588,7 @@ module TypeGuessr
           end
         end
 
-        def create_nil_literal(location)
+        private def create_nil_literal(location)
           IR::LiteralNode.new(
             type: Types::ClassInstance.for("NilClass"),
             literal_value: nil,
@@ -1601,13 +1599,13 @@ module TypeGuessr
 
         # Check if a node represents a non-returning expression (raise, fail, exit, abort)
         # These should be excluded from branch type inference
-        def non_returning?(node)
+        private def non_returning?(node)
           return false unless node.is_a?(IR::CallNode)
 
           node.receiver.nil? && %i[raise fail exit abort].include?(node.method)
         end
 
-        def convert_class_or_module(prism_node, context)
+        private def convert_class_or_module(prism_node, context)
           # Get class/module name first
           name = case prism_node.constant_path
                  when Prism::ConstantReadNode
@@ -1648,7 +1646,7 @@ module TypeGuessr
           )
         end
 
-        def convert_singleton_class(prism_node, context)
+        private def convert_singleton_class(prism_node, context)
           # Create a new context for singleton class scope
           singleton_context = context.fork(:class)
 
@@ -1676,7 +1674,7 @@ module TypeGuessr
           )
         end
 
-        def array_element_type_for(array_node)
+        private def array_element_type_for(array_node)
           return Types::ArrayType.new if array_node.elements.empty?
 
           element_types = array_node.elements.filter_map do |elem|
@@ -1697,7 +1695,7 @@ module TypeGuessr
           Types::ArrayType.new(element_type)
         end
 
-        def hash_element_types_for(hash_node)
+        private def hash_element_types_for(hash_node)
           return Types::HashType.new if hash_node.elements.empty?
 
           # Check if all keys are symbols for HashShape
@@ -1755,13 +1753,13 @@ module TypeGuessr
           end
         end
 
-        def convert_loc(prism_location)
+        private def convert_loc(prism_location)
           IR::Loc.new(offset: prism_location.start_offset)
         end
 
         # Register node in location_index and registries during conversion
         # This eliminates the need for a separate tree traversal after conversion
-        def register_node(node, context)
+        private def register_node(node, context)
           return unless context.location_index
 
           case node
@@ -1801,7 +1799,7 @@ module TypeGuessr
 
         # Register method in method_registry
         # Only registers top-level methods; class methods are handled by register_class_module
-        def register_method(node, context)
+        private def register_method(node, context)
           return unless context.method_registry
 
           # Only register top-level methods (no class context)
@@ -1811,7 +1809,7 @@ module TypeGuessr
         end
 
         # Register methods from a class/module in method_registry
-        def register_class_module(node, context)
+        private def register_class_module(node, context)
           return unless context.method_registry
 
           # Build the full class path from parent context + node name
@@ -1832,7 +1830,7 @@ module TypeGuessr
         # @param scope [String] Base scope (e.g., "RBS::Environment")
         # @param singleton [Boolean] Whether the method is a singleton method
         # @return [String] Scope with singleton class suffix if applicable
-        def singleton_scope_for(scope, singleton:)
+        private def singleton_scope_for(scope, singleton:)
           return scope unless singleton
 
           parent_name = IR.extract_last_name(scope) || "Object"

@@ -57,12 +57,7 @@ module CoverageRunner
       nodes.count { |node| !typed?(node) }
     end
 
-    private
-
-    # Calculate node-level type coverage
-    # Excludes DefNode to avoid duplicate counting (params/return are already counted)
-    # @return [Hash] Coverage stats with :total, :typed, :percentage, :breakdown
-    def calculate_node_coverage
+    private def calculate_node_coverage
       nodes = collect_all_nodes
       # Exclude DefNode - it would double-count params and return
       nodes = nodes.reject { |n| n.is_a?(IR::DefNode) }
@@ -84,7 +79,7 @@ module CoverageRunner
     # Score = average of (typed_slots / total_slots) for each method
     # Slots = parameters + return type
     # @return [Hash] Score stats with :method_count, :average_score
-    def calculate_signature_score
+    private def calculate_signature_score
       methods = collect_project_methods
       return { method_count: 0, average_score: 0.0 } if methods.empty?
 
@@ -99,14 +94,14 @@ module CoverageRunner
 
     # Collect all nodes from the index
     # @return [Array<IR::Node>]
-    def collect_all_nodes
+    private def collect_all_nodes
       @location_index.all_files.flat_map { |file_path| @location_index.nodes_for_file(file_path) }
     end
 
     # Collect project methods from the method registry
     # Iterates through all registered class/method combinations
     # @return [Array<IR::DefNode>]
-    def collect_project_methods
+    private def collect_project_methods
       @method_registry.search("").map do |_class_name, _method_name, def_node|
         def_node
       end
@@ -115,7 +110,7 @@ module CoverageRunner
     # Build breakdown by node type
     # @param nodes [Array<IR::Node>]
     # @return [Hash{String => Hash}]
-    def build_breakdown(nodes)
+    private def build_breakdown(nodes)
       grouped = nodes.group_by { |n| n.class.name.split("::").last }
       grouped.transform_values do |group_nodes|
         typed_count = count_typed_nodes(group_nodes)
@@ -130,7 +125,7 @@ module CoverageRunner
     # Count nodes that have a known (non-Unknown) type
     # @param nodes [Array<IR::Node>]
     # @return [Integer]
-    def count_typed_nodes(nodes)
+    private def count_typed_nodes(nodes)
       nodes.count { |node| typed?(node) }
     end
 
@@ -138,7 +133,7 @@ module CoverageRunner
     # Returns false if inference fails (e.g., circular dependencies)
     # @param node [IR::Node]
     # @return [Boolean]
-    def typed?(node)
+    private def typed?(node)
       result = @resolver.infer(node)
       !result.type.is_a?(Types::Unknown)
     rescue SystemStackError, StandardError
@@ -149,7 +144,7 @@ module CoverageRunner
     # Score = typed_slots / total_slots
     # @param def_node [IR::DefNode]
     # @return [Float]
-    def method_slot_score(def_node)
+    private def method_slot_score(def_node)
       params = def_node.params || []
       total_slots = params.size + 1 # params + return
       typed_slots = params.count { |param| typed?(param) }
@@ -162,7 +157,7 @@ module CoverageRunner
     # @param numerator [Integer]
     # @param denominator [Integer]
     # @return [Float]
-    def calculate_percentage(numerator, denominator)
+    private def calculate_percentage(numerator, denominator)
       return 0.0 unless denominator.positive?
 
       (numerator.to_f / denominator * 100).round(1)
@@ -171,14 +166,14 @@ module CoverageRunner
     # Get the simple class name for a node (e.g., "ParamNode")
     # @param node [IR::Node]
     # @return [String]
-    def node_type_name(node)
+    private def node_type_name(node)
       node.class.name.split("::").last
     end
 
     # Extract displayable info from a node
     # @param node [IR::Node]
     # @return [Hash]
-    def extract_node_info(node)
+    private def extract_node_info(node)
       result = begin
         @resolver.infer(node)
       rescue StandardError
@@ -198,7 +193,7 @@ module CoverageRunner
     # Get a human-readable name for a node
     # @param node [IR::Node]
     # @return [String, nil]
-    def node_name(node)
+    private def node_name(node)
       case node
       when IR::ParamNode, IR::LocalWriteNode
         node.name.to_s
@@ -216,7 +211,7 @@ module CoverageRunner
     # Find the file path containing a node
     # @param node [IR::Node]
     # @return [String, nil]
-    def find_file_for_node(node)
+    private def find_file_for_node(node)
       @location_index.all_files.find do |file_path|
         @location_index.nodes_for_file(file_path).include?(node)
       end
@@ -225,7 +220,7 @@ module CoverageRunner
     # Find the scope ID for a node
     # @param node [IR::Node]
     # @return [String, nil]
-    def find_scope_for_node(node)
+    private def find_scope_for_node(node)
       @location_index.all_files.each do |file_path|
         scope = @location_index.scope_for_node(file_path, node)
         return scope if scope

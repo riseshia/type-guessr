@@ -25,9 +25,7 @@ module RubyLsp
         end
       end
 
-      private
-
-      def register_listeners(dispatcher)
+      private def register_listeners(dispatcher)
         dispatcher.register(
           self,
           *Constants::HOVER_NODE_MAPPING.keys.map { |type| :"on_#{type}_node_enter" }
@@ -38,7 +36,7 @@ module RubyLsp
       IR = ::TypeGuessr::Core::IR
       private_constant :IR
 
-      def add_hover_content(node)
+      private def add_hover_content(node)
         # Generate node_key from scope and Prism node
         # DefNode is indexed with parent scope (not including the method itself)
         exclude_method = node.is_a?(Prism::DefNode)
@@ -79,7 +77,7 @@ module RubyLsp
         warn "[TypeGuessr] Error in add_hover_content: #{e.message}\n#{e.backtrace.first(5).join("\n")}"
       end
 
-      def add_def_node_hover(def_node)
+      private def add_def_node_hover(def_node)
         method_sig = @runtime_adapter.build_method_signature(def_node)
         content = "**Guessed Signature:** `#{method_sig}`"
 
@@ -91,7 +89,7 @@ module RubyLsp
         @response_builder.push(content, category: :documentation)
       end
 
-      def add_call_node_hover(call_node)
+      private def add_call_node_hover(call_node)
         # Special case: Handle .new calls to show constructor signature
         # Support both ClassName.new (ConstantNode) and self.new (SelfNode) in singleton methods
         if call_node.method == :new &&
@@ -183,7 +181,7 @@ module RubyLsp
       end
 
       # Build parameter signature for a method call using RubyIndexer
-      def build_call_signature_params(call_node)
+      private def build_call_signature_params(call_node)
         method_entry = lookup_method_entry_for_call(call_node)
 
         if method_entry&.signatures&.any?
@@ -196,7 +194,7 @@ module RubyLsp
       end
 
       # Look up method entry from RubyIndexer based on call node
-      def lookup_method_entry_for_call(call_node)
+      private def lookup_method_entry_for_call(call_node)
         return nil unless @global_state&.index
         return nil unless call_node.receiver
 
@@ -211,7 +209,7 @@ module RubyLsp
       end
 
       # Format parameters from RubyIndexer method entry with inferred argument types
-      def format_params_from_entry(method_entry, args)
+      private def format_params_from_entry(method_entry, args)
         params = method_entry.signatures.first.parameters
         return "" if params.nil? || params.empty?
 
@@ -226,7 +224,7 @@ module RubyLsp
       end
 
       # Format a single parameter based on its type
-      def format_single_param(param, arg_type)
+      private def format_single_param(param, arg_type)
         param_name = param.name.to_s
 
         case param
@@ -250,7 +248,7 @@ module RubyLsp
       end
 
       # Format arguments when no method entry is available
-      def format_params_from_args(args)
+      private def format_params_from_args(args)
         args.each_with_index.map do |arg, i|
           arg_type = @runtime_adapter.infer_type(arg).type.to_s
           "#{arg_type} arg#{i + 1}"
@@ -258,7 +256,7 @@ module RubyLsp
       end
 
       # Look up class method entry from RubyIndexer
-      def lookup_class_method_entry(class_name, method_name)
+      private def lookup_class_method_entry(class_name, method_name)
         return nil unless @global_state&.index
 
         # Query singleton class for the method
@@ -274,7 +272,7 @@ module RubyLsp
       end
 
       # Look up instance method entry from RubyIndexer
-      def lookup_instance_method_entry(class_name, method_name)
+      private def lookup_instance_method_entry(class_name, method_name)
         return nil unless @global_state&.index
 
         entries = @global_state.index.resolve_method(method_name, class_name)
@@ -287,7 +285,7 @@ module RubyLsp
 
       # Look up DefNode for implicit self calls (receiver is nil)
       # Searches in current class scope and falls back to top-level
-      def lookup_def_node_for_implicit_self(call_node)
+      private def lookup_def_node_for_implicit_self(call_node)
         method_name = call_node.method.to_s
 
         # Get current class scope from node_context
@@ -301,7 +299,7 @@ module RubyLsp
         @runtime_adapter.lookup_method("", method_name)
       end
 
-      def extract_class_name(type)
+      private def extract_class_name(type)
         case type
         when Types::ClassInstance
           type.name
@@ -315,7 +313,7 @@ module RubyLsp
       end
 
       # Handle .new calls to show constructor signature
-      def add_new_call_hover(call_node)
+      private def add_new_call_hover(call_node)
         class_name = resolve_receiver_class_name(call_node.receiver)
         result = @runtime_adapter.build_constructor_signature(class_name)
 
@@ -335,7 +333,7 @@ module RubyLsp
 
       # Resolve receiver to class name (handles aliases via type inference)
       # Uses CodeIndexAdapter to resolve short constant names to fully qualified names
-      def resolve_receiver_class_name(receiver)
+      private def resolve_receiver_class_name(receiver)
         receiver_result = @runtime_adapter.infer_type(receiver)
         short_name = case receiver_result.type
                      when Types::SingletonType then receiver_result.type.name
@@ -348,18 +346,18 @@ module RubyLsp
       end
 
       # Build debug info for .new calls
-      def build_debug_info_for_new(source, class_name)
+      private def build_debug_info_for_new(source, class_name)
         info = "\n\n**[TypeGuessr Debug]**"
         info += "\n\n**Class:** `#{class_name}`"
         info += "\n\n**Source:** #{source}"
         info
       end
 
-      def debug_enabled?
+      private def debug_enabled?
         Config.debug?
       end
 
-      def build_debug_info(result, ir_node = nil)
+      private def build_debug_info(result, ir_node = nil)
         info = "\n\n**[TypeGuessr Debug]**"
         info += "\n\n**Reason:** #{result.reason}"
         info += "\n\n**Source:** #{result.source}"
@@ -370,7 +368,7 @@ module RubyLsp
         info
       end
 
-      def extract_called_methods(ir_node)
+      private def extract_called_methods(ir_node)
         case ir_node
         when IR::LocalWriteNode, IR::LocalReadNode,
              IR::InstanceVariableWriteNode, IR::InstanceVariableReadNode,
@@ -386,7 +384,7 @@ module RubyLsp
       end
 
       # Format type with definition link if available
-      def format_type_with_link(type)
+      private def format_type_with_link(type)
         formatted = type.to_s
 
         # Only link ClassInstance types
@@ -403,7 +401,7 @@ module RubyLsp
       end
 
       # Find entry for a type name in RubyIndexer
-      def find_type_entry(type_name)
+      private def find_type_entry(type_name)
         return nil unless @global_state&.index
 
         entries = @global_state.index.resolve(type_name, [])
@@ -414,7 +412,7 @@ module RubyLsp
       end
 
       # Build a location link from an entry
-      def build_location_link(entry)
+      private def build_location_link(entry)
         uri = entry.uri
         return nil if uri.nil?
 

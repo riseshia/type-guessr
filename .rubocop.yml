@@ -21,6 +21,9 @@ Style/StringLiteralsInInterpolation:
 Style/TrailingCommaInArrayLiteral:
   EnforcedStyleForMultiline: comma
 
+Style/AccessModifierDeclarations:
+  EnforcedStyle: inline
+
 Naming/FileName:
   Enabled: false
 

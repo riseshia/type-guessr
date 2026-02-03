@@ -54,9 +54,7 @@ module HoverMatchers
     response
   end
 
-  private
-
-  def extract_guessed_type(content)
+  private def extract_guessed_type(content)
     # Try linked format first: [`Type`](url)
     if (match = content.match(/Guessed Type:\*\*\s*\[`([^`]+)`\]/))
       return match[1]

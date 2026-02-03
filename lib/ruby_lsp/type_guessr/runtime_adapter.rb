@@ -315,9 +315,7 @@ module RubyLsp
         end
       end
 
-      private
-
-      def index_file_with_prism_result(file_path, prism_result)
+      private def index_file_with_prism_result(file_path, prism_result)
         return unless prism_result.value
 
         @mutex.synchronize do
@@ -347,7 +345,7 @@ module RubyLsp
       # "Namespace::MyClass::<Class:MyClass>" -> "Namespace::MyClass"
       # @param owner_class [String] Owner class name (may be singleton format)
       # @return [String] Simple class name
-      def extract_class_from_singleton(owner_class)
+      private def extract_class_from_singleton(owner_class)
         # Match singleton pattern: "ClassName::<Class:ClassName>"
         if owner_class.match?(/::<Class:[^>]+>\z/)
           owner_class.sub(/::<Class:[^>]+>\z/, "")
@@ -357,7 +355,7 @@ module RubyLsp
       end
 
       # Traverse and index a single file
-      def traverse_file(uri)
+      private def traverse_file(uri)
         file_path = uri.to_standardized_path
         return unless file_path && File.exist?(file_path)
 
@@ -388,7 +386,7 @@ module RubyLsp
         log_message("Error indexing #{uri}: #{e.class}: #{e.message}\n#{bt}")
       end
 
-      def log_message(message)
+      private def log_message(message)
         return unless @message_queue
         return if @message_queue.closed?
 

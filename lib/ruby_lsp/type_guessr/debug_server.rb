@@ -38,9 +38,7 @@ module RubyLsp
         @server = nil
       end
 
-      private
-
-      def run_server
+      private def run_server
         @server = TCPServer.new("127.0.0.1", @port)
         warn("[TypeGuessr DebugServer] Listening on 127.0.0.1:#{@port}")
 
@@ -63,7 +61,7 @@ module RubyLsp
         warn("[TypeGuessr DebugServer] #{e.backtrace&.first(5)&.join("\n")}")
       end
 
-      def handle_request(client)
+      private def handle_request(client)
         request_line = client.gets
         return client.close if request_line.nil?
 
@@ -85,7 +83,7 @@ module RubyLsp
         client.close
       end
 
-      def parse_query_string(query_string)
+      private def parse_query_string(query_string)
         return {} unless query_string
 
         query_string.split("&").to_h do |pair|
@@ -94,7 +92,7 @@ module RubyLsp
         end
       end
 
-      def route_request(path, params)
+      private def route_request(path, params)
         case path
         when "/"
           index_page
@@ -111,7 +109,7 @@ module RubyLsp
         end
       end
 
-      def send_response(client, response)
+      private def send_response(client, response)
         client.print "HTTP/1.1 #{response[:status]}\r\n"
         client.print "Content-Type: #{response[:content_type]}\r\n"
         client.print "Content-Length: #{response[:body].bytesize}\r\n"
@@ -122,14 +120,14 @@ module RubyLsp
 
       # API Endpoints
 
-      def search_api(query)
+      private def search_api(query)
         return json_response({ query: query, results: [] }) if query.empty?
 
         results = @runtime_adapter.search_project_methods(query)
         json_response({ query: query, results: results })
       end
 
-      def keys_api(query)
+      private def keys_api(query)
         all_keys = @runtime_adapter.instance_variable_get(:@location_index)
                                    .instance_variable_get(:@key_index).keys
         keys = if query.empty?
@@ -140,7 +138,7 @@ module RubyLsp
         json_response({ query: query, total: all_keys.size, keys: keys })
       end
 
-      def graph_api(node_key)
+      private def graph_api(node_key)
         return json_error("node_key parameter required", 400) if node_key.empty?
 
         begin
@@ -164,7 +162,7 @@ module RubyLsp
         end
       end
 
-      def json_response(data)
+      private def json_response(data)
         {
           status: "200 OK",
           content_type: "application/json; charset=utf-8",
@@ -172,7 +170,7 @@ module RubyLsp
         }
       end
 
-      def json_error(message, status_code)
+      private def json_error(message, status_code)
         status_text = status_code == 404 ? "Not Found" : "Bad Request"
         {
           status: "#{status_code} #{status_text}",
@@ -181,7 +179,7 @@ module RubyLsp
         }
       end
 
-      def not_found
+      private def not_found
         {
           status: "404 Not Found",
           content_type: "text/html; charset=utf-8",
@@ -191,7 +189,7 @@ module RubyLsp
 
       # HTML Pages
 
-      def index_page
+      private def index_page
         {
           status: "200 OK",
           content_type: "text/html; charset=utf-8",
@@ -337,7 +335,7 @@ module RubyLsp
         }
       end
 
-      def graph_page(node_key)
+      private def graph_page(node_key)
         return not_found if node_key.empty?
 
         {

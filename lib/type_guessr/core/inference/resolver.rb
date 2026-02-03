@@ -83,9 +83,7 @@ module TypeGuessr
           @type_simplifier.simplify(union)
         end
 
-        private
-
-        def infer_node(node)
+        private def infer_node(node)
           case node
           when IR::LiteralNode
             infer_literal(node)
@@ -122,18 +120,18 @@ module TypeGuessr
           end
         end
 
-        def infer_literal(node)
+        private def infer_literal(node)
           Result.new(node.type, "literal", :literal)
         end
 
-        def infer_local_write(node)
+        private def infer_local_write(node)
           return Result.new(Types::Unknown.instance, "unassigned variable", :unknown) unless node.value
 
           dep_result = infer(node.value)
           Result.new(dep_result.type, "assigned from #{dep_result.reason}", dep_result.source)
         end
 
-        def infer_local_read(node)
+        private def infer_local_read(node)
           return Result.new(Types::Unknown.instance, "unassigned variable", :unknown) unless node.write_node
 
           write_result = infer(node.write_node)
@@ -154,14 +152,14 @@ module TypeGuessr
           write_result
         end
 
-        def infer_instance_variable_write(node)
+        private def infer_instance_variable_write(node)
           return Result.new(Types::Unknown.instance, "unassigned instance variable", :unknown) unless node.value
 
           dep_result = infer(node.value)
           Result.new(dep_result.type, "assigned from #{dep_result.reason}", dep_result.source)
         end
 
-        def infer_instance_variable_read(node)
+        private def infer_instance_variable_read(node)
           write_node = node.write_node
 
           # Deferred lookup: if write_node is nil at conversion time, try registry
@@ -172,14 +170,14 @@ module TypeGuessr
           infer(write_node)
         end
 
-        def infer_class_variable_write(node)
+        private def infer_class_variable_write(node)
           return Result.new(Types::Unknown.instance, "unassigned class variable", :unknown) unless node.value
 
           dep_result = infer(node.value)
           Result.new(dep_result.type, "assigned from #{dep_result.reason}", dep_result.source)
         end
 
-        def infer_class_variable_read(node)
+        private def infer_class_variable_read(node)
           write_node = node.write_node
 
           # Deferred lookup: if write_node is nil at conversion time, try registry
@@ -190,7 +188,7 @@ module TypeGuessr
           infer(write_node)
         end
 
-        def infer_param(node)
+        private def infer_param(node)
           # Handle special parameter kinds first
           case node.kind
           when :rest
@@ -235,7 +233,7 @@ module TypeGuessr
           Result.new(Types::Unknown.instance, "parameter without type info", :unknown)
         end
 
-        def infer_constant(node)
+        private def infer_constant(node)
           # If there's a dependency (e.g., constant write), infer from it
           if node.dependency
             dep_result = infer(node.dependency)
@@ -256,7 +254,7 @@ module TypeGuessr
           Result.new(Types::Unknown.instance, "undefined constant", :unknown)
         end
 
-        def infer_call(node)
+        private def infer_call(node)
           # Special case: Class method calls (ClassName.method)
           if node.receiver.is_a?(IR::ConstantNode)
             # Resolve constant first (handles aliases like RecipeAlias = Recipe)
@@ -419,7 +417,7 @@ module TypeGuessr
           Result.new(Types::Unknown.instance, "call #{node.method} on unknown receiver", :unknown)
         end
 
-        def infer_block_param_slot(node)
+        private def infer_block_param_slot(node)
           return Result.new(Types::Unknown.instance, "block param without type info", :unknown) unless node.call_node.receiver
 
           receiver_type = infer(node.call_node.receiver).type
@@ -443,7 +441,7 @@ module TypeGuessr
           Result.new(resolved_type, "block param from #{class_name}##{node.call_node.method}", :stdlib)
         end
 
-        def infer_merge(node)
+        private def infer_merge(node)
           # Infer types from all branches and create union
           branch_results = node.branches.map { |branch| infer(branch) }
           branch_types = branch_results.map(&:type)
@@ -458,7 +456,7 @@ module TypeGuessr
           Result.new(union_type, "branch merge: #{reasons}", :unknown)
         end
 
-        def infer_def(node)
+        private def infer_def(node)
           # initialize always returns self (the class instance)
           if node.name == :initialize && node.class_name
             return Result.new(
@@ -485,7 +483,7 @@ module TypeGuessr
           )
         end
 
-        def infer_self(node)
+        private def infer_self(node)
           type = if node.singleton
                    Types::SingletonType.new(node.class_name)
                  else
@@ -494,7 +492,7 @@ module TypeGuessr
           Result.new(type, "self in #{node.class_name}", :inference)
         end
 
-        def infer_return(node)
+        private def infer_return(node)
           if node.value
             value_result = infer(node.value)
             Result.new(value_result.type, "explicit return: #{value_result.reason}", value_result.source)
@@ -507,7 +505,7 @@ module TypeGuessr
         # @param class_name [String] The class name
         # @param node [IR::CallNode] The call node
         # @return [Result, nil] The result if resolved, nil otherwise
-        def infer_class_method_call(class_name, node)
+        private def infer_class_method_call(class_name, node)
           # ClassName.new returns instance of that class
           if node.method == :new
             return Result.new(
@@ -556,7 +554,7 @@ module TypeGuessr
         # @param hash_shape [Types::HashShape] The hash shape type
         # @param key_node [IR::Node] The key argument node
         # @return [Result, nil] The field type result, or nil if not a known symbol key
-        def infer_hash_shape_access(hash_shape, key_node)
+        private def infer_hash_shape_access(hash_shape, key_node)
           # Only handle symbol literal keys
           return nil unless key_node.is_a?(IR::LiteralNode)
           return nil unless key_node.type.is_a?(Types::ClassInstance) && key_node.type.name == "Symbol"
@@ -576,7 +574,7 @@ module TypeGuessr
         # Resolve called methods to a type via code_index adapter
         # @param called_methods [Array<String>] List of called method_names
         # @return [Type] The resulting type
-        def resolve_called_methods(called_methods)
+        private def resolve_called_methods(called_methods)
           return Types::Unknown.instance if called_methods.empty?
 
           method_names = called_methods.map(&:name)
@@ -588,7 +586,7 @@ module TypeGuessr
         # This ensures we return the most general type that satisfies the constraint
         # @param classes [Array<String>] List of class names
         # @return [Array<String>] Filtered list with only the most general types
-        def filter_to_most_general_types(classes)
+        private def filter_to_most_general_types(classes)
           classes.reject do |class_name|
             ancestors = @code_index.ancestors_of(class_name)
             # Check if any ancestor (excluding self) is also in the matching list
@@ -599,7 +597,7 @@ module TypeGuessr
         # Apply type simplification to a result
         # @param result [Result] The inference result
         # @return [Result] Result with simplified type
-        def simplify_result(result)
+        private def simplify_result(result)
           simplified_type = @type_simplifier.simplify(result.type)
           return result if simplified_type.equal?(result.type)
 
@@ -609,7 +607,7 @@ module TypeGuessr
         # Build substitutions hash with type variables and self
         # @param receiver_type [Type] The receiver type
         # @return [Hash{Symbol => Type}] Substitutions including :self
-        def build_substitutions(receiver_type)
+        private def build_substitutions(receiver_type)
           substitutions = receiver_type.type_variable_substitutions.dup
           substitutions[:self] = receiver_type
           substitutions
@@ -617,7 +615,7 @@ module TypeGuessr
 
         # Check if a method call signature matches the RBS definition for a class
         # Returns true (conservative) when: splat used or no RBS definition
-        def signature_matches?(class_name, called_method)
+        private def signature_matches?(class_name, called_method)
           return true if called_method.positional_count.nil?
 
           signatures = @signature_registry.get_method_signatures(class_name, called_method.name.to_s)
@@ -627,7 +625,7 @@ module TypeGuessr
         end
 
         # Check if an RBS overload can accept the given positional argument count
-        def overload_accepts?(method_type, positional_count)
+        private def overload_accepts?(method_type, positional_count)
           func = method_type.type
           min = func.required_positionals.size
           max = func.rest_positionals ? Float::INFINITY : min + func.optional_positionals.size

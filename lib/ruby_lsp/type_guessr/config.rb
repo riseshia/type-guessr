@@ -10,33 +10,31 @@ module RubyLsp
     module Config
       CONFIG_FILENAME = ".type-guessr.yml"
 
-      module_function
-
-      def reset!
+      module_function def reset!
         @cached_config = nil
       end
 
-      def enabled?
+      module_function def enabled?
         value = load_config.fetch("enabled", true)
         value != false
       end
 
-      def debug?
+      module_function def debug?
         load_config["debug"] == true
       end
 
-      def debug_server_enabled?
+      module_function def debug_server_enabled?
         config = load_config
         return config["debug_server"] if config.key?("debug_server")
 
         debug?
       end
 
-      def debug_server_port
+      module_function def debug_server_port
         load_config.fetch("debug_server_port", 7010)
       end
 
-      def load_config
+      module_function def load_config
         return @cached_config if @cached_config
 
         path = File.join(Dir.pwd, CONFIG_FILENAME)
@@ -57,7 +55,7 @@ module RubyLsp
         default_config
       end
 
-      def default_config
+      module_function def default_config
         {
           "enabled" => true,
           "debug" => false
