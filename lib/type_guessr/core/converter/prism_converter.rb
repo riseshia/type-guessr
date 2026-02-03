@@ -741,6 +741,55 @@ module TypeGuessr
             node.is_a?(IR::BlockParamSlot)
         end
 
+        # Register exception variable from rescue clause (=> e)
+        # @param rescue_clause [Prism::RescueNode] The rescue clause
+        # @param context [Context] Conversion context
+        private def register_rescue_variable(rescue_clause, context)
+          var_name = rescue_clause.reference.name
+          exception_type = infer_rescue_exception_type(rescue_clause.exceptions)
+          loc = convert_loc(rescue_clause.reference.location)
+
+          value_node = IR::LiteralNode.new(
+            type: exception_type,
+            literal_value: nil,
+            values: nil,
+            called_methods: [],
+            loc: loc
+          )
+
+          write_node = IR::LocalWriteNode.new(
+            name: var_name,
+            value: value_node,
+            called_methods: [],
+            loc: loc
+          )
+
+          context.register_variable(var_name, write_node)
+        end
+
+        # Infer exception type from rescue clause's exception list
+        # @param exceptions [Array<Prism::Node>] List of exception class nodes
+        # @return [Types::ClassInstance, Types::Union] Inferred exception type
+        private def infer_rescue_exception_type(exceptions)
+          # Default to StandardError if no exception class specified (rescue => e)
+          return Types::ClassInstance.new("StandardError") if exceptions.empty?
+
+          types = exceptions.map do |exc|
+            class_name = case exc
+                         when Prism::ConstantReadNode
+                           exc.name.to_s
+                         when Prism::ConstantPathNode
+                           # Handle namespaced constants like Net::HTTPError
+                           exc.full_name
+                         else
+                           "StandardError"
+                         end
+            Types::ClassInstance.new(class_name)
+          end
+
+          types.size == 1 ? types.first : Types::Union.new(types)
+        end
+
         # Build CalledMethod with signature information from Prism CallNode
         private def build_called_method(prism_node)
           positional_count, has_splat, keywords = extract_call_signature(prism_node)
@@ -1215,6 +1264,9 @@ module TypeGuessr
           # Convert rescue clause(s)
           rescue_clause = begin_node.rescue_clause
           while rescue_clause
+            # Register exception variable (=> e) if present
+            register_rescue_variable(rescue_clause, context) if rescue_clause.reference.is_a?(Prism::LocalVariableTargetNode)
+
             rescue_nodes = convert_statements_body(rescue_clause.statements&.body, context)
             body_nodes.concat(rescue_nodes)
             rescue_clause = rescue_clause.subsequent

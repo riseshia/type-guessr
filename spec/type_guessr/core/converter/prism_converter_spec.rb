@@ -1669,6 +1669,60 @@ RSpec.describe TypeGuessr::Core::Converter::PrismConverter do
         # Should have body nodes from main body + all rescue clauses
         expect(node.body_nodes.size).to be >= 4
       end
+
+      it "registers exception variable in context and tracks method calls" do
+        source = <<~RUBY
+          begin
+            risky
+          rescue StandardError => e
+            e.message
+          end
+        RUBY
+        parsed = Prism.parse(source)
+        context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+        converter.convert(parsed.value.statements.body.first, context)
+
+        # Exception variable should be registered
+        write_node = context.lookup_variable(:e)
+        expect(write_node).not_to be_nil
+        expect(write_node).to be_a(TypeGuessr::Core::IR::LocalWriteNode)
+        # Method calls on exception variable should be tracked
+        expect(write_node.called_methods.map(&:name)).to include(:message)
+      end
+
+      it "infers exception type from rescue clause" do
+        source = <<~RUBY
+          begin
+            risky
+          rescue TypeError => e
+            e
+          end
+        RUBY
+        parsed = Prism.parse(source)
+        context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+        converter.convert(parsed.value.statements.body.first, context)
+
+        write_node = context.lookup_variable(:e)
+        expect(write_node.value).to be_a(TypeGuessr::Core::IR::LiteralNode)
+        expect(write_node.value.type).to be_a(TypeGuessr::Core::Types::ClassInstance)
+        expect(write_node.value.type.name).to eq("TypeError")
+      end
+
+      it "uses StandardError as default when no exception class specified" do
+        source = <<~RUBY
+          begin
+            risky
+          rescue => e
+            e
+          end
+        RUBY
+        parsed = Prism.parse(source)
+        context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+        converter.convert(parsed.value.statements.body.first, context)
+
+        write_node = context.lookup_variable(:e)
+        expect(write_node.value.type.name).to eq("StandardError")
+      end
     end
 
     describe "pattern matching (case/in)" do
