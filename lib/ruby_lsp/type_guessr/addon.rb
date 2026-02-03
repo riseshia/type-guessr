@@ -68,7 +68,7 @@ module RubyLsp
             reindex_file(uri)
           when RubyLsp::Constant::FileChangeType::DELETED
             file_path = uri.to_standardized_path
-            @runtime_adapter.instance_variable_get(:@location_index).remove_file(file_path) if file_path
+            @runtime_adapter.remove_indexed_file(file_path) if file_path
           end
         end
       end

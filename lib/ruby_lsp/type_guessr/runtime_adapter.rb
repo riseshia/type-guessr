@@ -155,6 +155,15 @@ module RubyLsp
         end
       end
 
+      # Remove indexed data for a file
+      # @param file_path [String] File path to remove
+      def remove_indexed_file(file_path)
+        @mutex.synchronize do
+          @location_index.remove_file(file_path)
+          @resolver.clear_cache
+        end
+      end
+
       # Find IR node by its unique key
       # @param node_key [String] The node key (scope_id:node_hash)
       # @return [TypeGuessr::Core::IR::Node, nil] IR node or nil if not found
