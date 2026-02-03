@@ -570,6 +570,25 @@ RSpec.describe TypeGuessr::Core::Converter::PrismConverter do
       # Block parameter should not be visible in outer context
       expect(context.lookup_variable(:x)).to be_nil
     end
+
+    it "tracks method calls on block parameters" do
+      source = "[1, 2, 3].each { |x| x.to_s }"
+      parsed = Prism.parse(source)
+      context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+      node = converter.convert(parsed.value.statements.body.first, context)
+
+      expect(node).to be_a(TypeGuessr::Core::IR::CallNode)
+      expect(node.block_params.first.called_methods.map(&:name)).to include(:to_s)
+    end
+
+    it "tracks multiple method calls on block parameters" do
+      source = "users.each { |user| user.name; user.email }"
+      parsed = Prism.parse(source)
+      context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+      node = converter.convert(parsed.value.statements.body.first, context)
+
+      expect(node.block_params.first.called_methods.map(&:name)).to contain_exactly(:name, :email)
+    end
   end
 
   describe "if statement conversion" do

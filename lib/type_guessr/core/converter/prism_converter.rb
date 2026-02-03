@@ -440,8 +440,10 @@ module TypeGuessr
         private def convert_local_variable_read(prism_node, context)
           # Look up the most recent assignment
           write_node = context.lookup_variable(prism_node.name)
-          # Share called_methods array with the write node/parameter for method-based inference
-          called_methods = if write_node.is_a?(IR::LocalWriteNode) || write_node.is_a?(IR::ParamNode)
+          # Share called_methods array with the write node/parameter/block param for method-based inference
+          called_methods = if write_node.is_a?(IR::LocalWriteNode) ||
+                              write_node.is_a?(IR::ParamNode) ||
+                              write_node.is_a?(IR::BlockParamSlot)
                              write_node.called_methods
                            else
                              []
@@ -762,7 +764,8 @@ module TypeGuessr
             node.is_a?(IR::InstanceVariableReadNode) ||
             node.is_a?(IR::ClassVariableWriteNode) ||
             node.is_a?(IR::ClassVariableReadNode) ||
-            node.is_a?(IR::ParamNode)
+            node.is_a?(IR::ParamNode) ||
+            node.is_a?(IR::BlockParamSlot)
         end
 
         # Build CalledMethod with signature information from Prism CallNode
