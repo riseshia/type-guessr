@@ -105,12 +105,13 @@ module TypeGuessr
       # @param type [TypeGuessr::Core::Types::Type] The type of the literal
       # @param literal_value [Object, nil] The actual literal value (for Symbol, Integer, String)
       # @param values [Array<Node>, nil] Internal value nodes for compound literals (Hash/Array)
+      # @param called_methods [Array<CalledMethod>] Methods called on this node (for method-based inference)
       # @param loc [Loc] Location information
       #
       # Examples: "hello" → String, 123 → Integer, [] → Array, {} → Hash
       # For compound literals, values contains the internal expression nodes
       # For simple literals, literal_value stores the actual value (e.g., :a for symbols)
-      LiteralNode = Data.define(:type, :literal_value, :values, :loc) do
+      LiteralNode = Data.define(:type, :literal_value, :values, :called_methods, :loc) do
         include TreeInspect
 
         def dependencies
@@ -131,7 +132,8 @@ module TypeGuessr
           [
             tree_field(:type, type_str, indent),
             tree_field(:literal_value, literal_value, indent),
-            tree_field(:values, values, indent, last: true),
+            tree_field(:values, values, indent),
+            tree_field(:called_methods, called_methods, indent, last: true),
           ]
         end
       end
@@ -362,8 +364,9 @@ module TypeGuessr
       # Constant reference node
       # @param name [String] Constant name (e.g., "DEFAULT_NAME", "User::ADMIN")
       # @param dependency [Node] The node where this constant is defined
+      # @param called_methods [Array<CalledMethod>] Methods called on this node (for method-based inference)
       # @param loc [Loc] Location information
-      ConstantNode = Data.define(:name, :dependency, :loc) do
+      ConstantNode = Data.define(:name, :dependency, :called_methods, :loc) do
         include TreeInspect
 
         def dependencies
@@ -381,7 +384,8 @@ module TypeGuessr
         def tree_inspect_fields(indent)
           [
             tree_field(:name, name, indent),
-            tree_field(:dependency, dependency, indent, last: true),
+            tree_field(:dependency, dependency, indent),
+            tree_field(:called_methods, called_methods, indent, last: true),
           ]
         end
       end
@@ -393,8 +397,9 @@ module TypeGuessr
       # @param block_params [Array<BlockParamSlot>] Block parameter slots
       # @param block_body [Node, nil] Block body return node (for inferring block return type)
       # @param has_block [Boolean] Whether a block was provided (even if empty)
+      # @param called_methods [Array<CalledMethod>] Methods called on this node (for method-based inference)
       # @param loc [Loc] Location information
-      CallNode = Data.define(:method, :receiver, :args, :block_params, :block_body, :has_block, :loc) do
+      CallNode = Data.define(:method, :receiver, :args, :block_params, :block_body, :has_block, :called_methods, :loc) do
         include TreeInspect
 
         def dependencies
@@ -420,7 +425,8 @@ module TypeGuessr
             tree_field(:args, args, indent),
             tree_field(:block_params, block_params, indent),
             tree_field(:block_body, block_body, indent),
-            tree_field(:has_block, has_block, indent, last: true),
+            tree_field(:has_block, has_block, indent),
+            tree_field(:called_methods, called_methods, indent, last: true),
           ]
         end
       end
@@ -429,8 +435,9 @@ module TypeGuessr
       # Represents a parameter slot in a block (e.g., |user| in users.each { |user| ... })
       # @param index [Integer] Parameter index (0-based)
       # @param call_node [CallNode] The call node this slot belongs to
+      # @param called_methods [Array<CalledMethod>] Methods called on this node (for method-based inference)
       # @param loc [Loc] Location information for the parameter itself
-      BlockParamSlot = Data.define(:index, :call_node, :loc) do
+      BlockParamSlot = Data.define(:index, :call_node, :called_methods, :loc) do
         include TreeInspect
 
         def dependencies
@@ -448,7 +455,8 @@ module TypeGuessr
         def tree_inspect_fields(indent)
           [
             tree_field(:index, index, indent),
-            tree_field(:call_node, "(CallNode ref)", indent, last: true),
+            tree_field(:call_node, "(CallNode ref)", indent),
+            tree_field(:called_methods, called_methods, indent, last: true),
           ]
         end
       end
@@ -457,8 +465,9 @@ module TypeGuessr
       # Represents the convergence point of multiple branches (if/else, case/when, etc.)
       # The type is the union of all branch types
       # @param branches [Array<Node>] Final nodes from each branch
+      # @param called_methods [Array<CalledMethod>] Methods called on this node (for method-based inference)
       # @param loc [Loc] Location information
-      MergeNode = Data.define(:branches, :loc) do
+      MergeNode = Data.define(:branches, :called_methods, :loc) do
         include TreeInspect
 
         def dependencies
@@ -474,7 +483,10 @@ module TypeGuessr
         end
 
         def tree_inspect_fields(indent)
-          [tree_field(:branches, branches, indent, last: true)]
+          [
+            tree_field(:branches, branches, indent),
+            tree_field(:called_methods, called_methods, indent, last: true),
+          ]
         end
       end
 
@@ -484,9 +496,10 @@ module TypeGuessr
       # @param params [Array<ParamNode>] Parameter nodes
       # @param return_node [Node] Node representing the return value
       # @param body_nodes [Array<Node>] All nodes in the method body
+      # @param called_methods [Array<CalledMethod>] Methods called on this node (for method-based inference)
       # @param loc [Loc] Location information
       # @param singleton [Boolean] true if this is a singleton method (def self.method_name)
-      DefNode = Data.define(:name, :class_name, :params, :return_node, :body_nodes, :loc, :singleton) do
+      DefNode = Data.define(:name, :class_name, :params, :return_node, :body_nodes, :called_methods, :loc, :singleton) do
         include TreeInspect
 
         def dependencies
@@ -511,6 +524,7 @@ module TypeGuessr
             tree_field(:params, params, indent),
             tree_field(:return_node, return_node, indent),
             tree_field(:body_nodes, body_nodes, indent),
+            tree_field(:called_methods, called_methods, indent),
             tree_field(:singleton, singleton, indent, last: true),
           ]
         end
@@ -519,8 +533,9 @@ module TypeGuessr
       # Class/Module node - container for methods and other definitions
       # @param name [String] Class or module name
       # @param methods [Array<DefNode>] Method definitions in this class/module
+      # @param called_methods [Array<CalledMethod>] Methods called on this node (for method-based inference)
       # @param loc [Loc] Location information
-      ClassModuleNode = Data.define(:name, :methods, :loc) do
+      ClassModuleNode = Data.define(:name, :methods, :called_methods, :loc) do
         include TreeInspect
 
         def dependencies
@@ -538,7 +553,8 @@ module TypeGuessr
         def tree_inspect_fields(indent)
           [
             tree_field(:name, name, indent),
-            tree_field(:methods, methods, indent, last: true),
+            tree_field(:methods, methods, indent),
+            tree_field(:called_methods, called_methods, indent, last: true),
           ]
         end
       end
@@ -546,8 +562,9 @@ module TypeGuessr
       # Self reference node
       # @param class_name [String] Name of the enclosing class/module
       # @param singleton [Boolean] Whether this self is in a singleton method context
+      # @param called_methods [Array<CalledMethod>] Methods called on this node (for method-based inference)
       # @param loc [Loc] Location information
-      SelfNode = Data.define(:class_name, :singleton, :loc) do
+      SelfNode = Data.define(:class_name, :singleton, :called_methods, :loc) do
         include TreeInspect
 
         def dependencies
@@ -565,15 +582,17 @@ module TypeGuessr
         def tree_inspect_fields(indent)
           [
             tree_field(:class_name, class_name, indent),
-            tree_field(:singleton, singleton, indent, last: true),
+            tree_field(:singleton, singleton, indent),
+            tree_field(:called_methods, called_methods, indent, last: true),
           ]
         end
       end
 
       # Explicit return statement node
       # @param value [Node, nil] Return value node (nil for bare `return`)
+      # @param called_methods [Array<CalledMethod>] Methods called on this node (for method-based inference)
       # @param loc [Loc] Location information
-      ReturnNode = Data.define(:value, :loc) do
+      ReturnNode = Data.define(:value, :called_methods, :loc) do
         include TreeInspect
 
         def dependencies
@@ -589,7 +608,10 @@ module TypeGuessr
         end
 
         def tree_inspect_fields(indent)
-          [tree_field(:value, value, indent, last: true)]
+          [
+            tree_field(:value, value, indent),
+            tree_field(:called_methods, called_methods, indent, last: true),
+          ]
         end
       end
     end

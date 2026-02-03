@@ -230,11 +230,13 @@ module TypeGuessr
                                     type: Types::ClassInstance.for("NilClass"),
                                     literal_value: nil,
                                     values: nil,
+                                    called_methods: [],
                                     loc: convert_loc(prism_node.location)
                                   )
                                 end
                    IR::ReturnNode.new(
                      value: value_node,
+                     called_methods: [],
                      loc: convert_loc(prism_node.location)
                    )
 
@@ -243,6 +245,7 @@ module TypeGuessr
                    IR::SelfNode.new(
                      class_name: context.current_class_name || "Object",
                      singleton: context.in_singleton_method,
+                     called_methods: [],
                      loc: convert_loc(prism_node.location)
                    )
 
@@ -271,6 +274,7 @@ module TypeGuessr
             type: type,
             literal_value: literal_value,
             values: nil,
+            called_methods: [],
             loc: convert_loc(prism_node.location)
           )
         end
@@ -305,6 +309,7 @@ module TypeGuessr
                 block_params: [],
                 block_body: nil,
                 has_block: false,
+                called_methods: [],
                 loc: convert_loc(elem.location)
               )
             else
@@ -316,6 +321,7 @@ module TypeGuessr
             type: type,
             literal_value: nil,
             values: value_nodes.empty? ? nil : value_nodes,
+            called_methods: [],
             loc: convert_loc(prism_node.location)
           )
         end
@@ -346,6 +352,7 @@ module TypeGuessr
             type: type,
             literal_value: nil,
             values: value_nodes.empty? ? nil : value_nodes,
+            called_methods: [],
             loc: convert_loc(prism_node.location)
           )
         end
@@ -577,6 +584,7 @@ module TypeGuessr
                        else
                          IR::MergeNode.new(
                            branches: branches,
+                           called_methods: [],
                            loc: convert_loc(prism_node.location)
                          )
                        end
@@ -604,6 +612,7 @@ module TypeGuessr
                        else
                          IR::MergeNode.new(
                            branches: branches,
+                           called_methods: [],
                            loc: convert_loc(prism_node.location)
                          )
                        end
@@ -628,6 +637,7 @@ module TypeGuessr
             block_params: [],
             block_body: nil,
             has_block: false,
+            called_methods: [],
             loc: convert_loc(prism_node.location)
           )
 
@@ -695,6 +705,7 @@ module TypeGuessr
                             IR::SelfNode.new(
                               class_name: context.current_class_name,
                               singleton: context.in_singleton_method,
+                              called_methods: [],
                               loc: convert_loc(prism_node.location)
                             )
                           end
@@ -720,6 +731,7 @@ module TypeGuessr
             block_params: [],
             block_body: nil,
             has_block: has_block,
+            called_methods: [],
             loc: call_loc
           )
 
@@ -734,6 +746,7 @@ module TypeGuessr
               block_params: call_node.block_params,
               block_body: block_body,
               has_block: true,
+              called_methods: [],
               loc: call_loc
             )
           end
@@ -902,7 +915,7 @@ module TypeGuessr
           return receiver_node unless merged_type
 
           # Create new LiteralNode with merged type
-          value_node = IR::LiteralNode.new(type: merged_type, literal_value: nil, values: nil, loc: receiver_node.loc)
+          value_node = IR::LiteralNode.new(type: merged_type, literal_value: nil, values: nil, called_methods: [], loc: receiver_node.loc)
 
           # Create new LocalWriteNode with merged type
           new_write = IR::LocalWriteNode.new(
@@ -1058,6 +1071,7 @@ module TypeGuessr
                 slot = IR::BlockParamSlot.new(
                   index: index,
                   call_node: call_node,
+                  called_methods: [],
                   loc: convert_loc(param_loc)
                 )
                 call_node.block_params << slot
@@ -1190,6 +1204,7 @@ module TypeGuessr
 
           IR::MergeNode.new(
             branches: branches,
+            called_methods: [],
             loc: convert_loc(prism_node.location)
           )
         end
@@ -1206,6 +1221,7 @@ module TypeGuessr
 
           IR::MergeNode.new(
             branches: branches,
+            called_methods: [],
             loc: convert_loc(prism_node.location)
           )
         end
@@ -1381,6 +1397,7 @@ module TypeGuessr
             params: params,
             return_node: return_node,
             body_nodes: body_nodes,
+            called_methods: [],
             loc: convert_loc(prism_node.name_loc),
             singleton: prism_node.receiver.is_a?(Prism::SelfNode)
           )
@@ -1411,6 +1428,7 @@ module TypeGuessr
           else
             IR::MergeNode.new(
               branches: return_points,
+              called_methods: [],
               loc: convert_loc(loc)
             )
           end
@@ -1453,6 +1471,7 @@ module TypeGuessr
           IR::ConstantNode.new(
             name: name,
             dependency: context.lookup_constant(name),
+            called_methods: [],
             loc: convert_loc(prism_node.location)
           )
         end
@@ -1463,6 +1482,7 @@ module TypeGuessr
           IR::ConstantNode.new(
             name: prism_node.name.to_s,
             dependency: value_node,
+            called_methods: [],
             loc: convert_loc(prism_node.location)
           )
         end
@@ -1508,6 +1528,7 @@ module TypeGuessr
                 type: Types::ClassInstance.for("NilClass"),
                 literal_value: nil,
                 values: nil,
+                called_methods: [],
                 loc: convert_loc(location)
               )
               branches << nil_node
@@ -1517,6 +1538,7 @@ module TypeGuessr
             if branches.size > 1
               merge_node = IR::MergeNode.new(
                 branches: branches.uniq,
+                called_methods: [],
                 loc: convert_loc(location)
               )
               parent_context.register_variable(var_name, merge_node)
@@ -1530,6 +1552,7 @@ module TypeGuessr
           if then_node && else_node
             IR::MergeNode.new(
               branches: [then_node, else_node].compact,
+              called_methods: [],
               loc: convert_loc(location)
             )
           elsif then_node || else_node
@@ -1539,10 +1562,12 @@ module TypeGuessr
               type: Types::ClassInstance.for("NilClass"),
               literal_value: nil,
               values: nil,
+              called_methods: [],
               loc: convert_loc(location)
             )
             IR::MergeNode.new(
               branches: [branch_node, nil_node],
+              called_methods: [],
               loc: convert_loc(location)
             )
           end
@@ -1569,6 +1594,7 @@ module TypeGuessr
             if merge_branches.size > 1
               merge_node = IR::MergeNode.new(
                 branches: merge_branches,
+                called_methods: [],
                 loc: convert_loc(location)
               )
               parent_context.register_variable(var_name, merge_node)
@@ -1581,6 +1607,7 @@ module TypeGuessr
           if branches.size > 1
             IR::MergeNode.new(
               branches: branches.compact.uniq,
+              called_methods: [],
               loc: convert_loc(location)
             )
           elsif branches.size == 1
@@ -1593,6 +1620,7 @@ module TypeGuessr
             type: Types::ClassInstance.for("NilClass"),
             literal_value: nil,
             values: nil,
+            called_methods: [],
             loc: convert_loc(location)
           )
         end
@@ -1642,6 +1670,7 @@ module TypeGuessr
           IR::ClassModuleNode.new(
             name: name,
             methods: methods,
+            called_methods: [],
             loc: convert_loc(prism_node.constant_path&.location || prism_node.location)
           )
         end
@@ -1670,6 +1699,7 @@ module TypeGuessr
           IR::ClassModuleNode.new(
             name: singleton_name,
             methods: methods,
+            called_methods: [],
             loc: convert_loc(prism_node.location)
           )
         end

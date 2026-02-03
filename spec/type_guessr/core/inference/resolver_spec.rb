@@ -30,6 +30,7 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
       params: params,
       return_node: return_node,
       body_nodes: body_nodes,
+      called_methods: [],
       loc: loc,
       singleton: singleton
     )
@@ -63,6 +64,7 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
           type: TypeGuessr::Core::Types::ClassInstance.new("String"),
           literal_value: nil,
           values: nil,
+          called_methods: [],
           loc: loc
         )
 
@@ -80,6 +82,7 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
           type: TypeGuessr::Core::Types::ClassInstance.new("Integer"),
           literal_value: nil,
           values: nil,
+          called_methods: [],
           loc: loc
         )
         write_node = TypeGuessr::Core::IR::LocalWriteNode.new(
@@ -114,6 +117,7 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
           type: TypeGuessr::Core::Types::ClassInstance.new("String"),
           literal_value: nil,
           values: nil,
+          called_methods: [],
           loc: loc
         )
         write_node = TypeGuessr::Core::IR::LocalWriteNode.new(
@@ -153,6 +157,7 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
           type: TypeGuessr::Core::Types::ClassInstance.new("String"),
           literal_value: nil,
           values: nil,
+          called_methods: [],
           loc: loc
         )
         param = TypeGuessr::Core::IR::ParamNode.new(
@@ -203,11 +208,13 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
           type: TypeGuessr::Core::Types::ClassInstance.new("String"),
           literal_value: nil,
           values: nil,
+          called_methods: [],
           loc: loc
         )
         const = TypeGuessr::Core::IR::ConstantNode.new(
           name: "DEFAULT_NAME",
           dependency: literal,
+          called_methods: [],
           loc: loc
         )
 
@@ -222,6 +229,7 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
         const = TypeGuessr::Core::IR::ConstantNode.new(
           name: "User",
           dependency: nil,
+          called_methods: [],
           loc: loc
         )
 
@@ -238,6 +246,7 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
         const = TypeGuessr::Core::IR::ConstantNode.new(
           name: "MyModule",
           dependency: nil,
+          called_methods: [],
           loc: loc
         )
 
@@ -254,6 +263,7 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
         const = TypeGuessr::Core::IR::ConstantNode.new(
           name: "MAX_SIZE",
           dependency: nil,
+          called_methods: [],
           loc: loc
         )
 
@@ -272,6 +282,7 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
             type: TypeGuessr::Core::Types::ClassInstance.new("String"),
             literal_value: nil,
             values: nil,
+            called_methods: [],
             loc: loc
           ),
           called_methods: [],
@@ -284,6 +295,7 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
           block_params: [],
           block_body: nil,
           has_block: false,
+          called_methods: [],
           loc: loc
         )
 
@@ -303,6 +315,7 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
             type: array_type,
             literal_value: nil,
             values: nil,
+            called_methods: [],
             loc: loc
           ),
           called_methods: [],
@@ -315,6 +328,7 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
           block_params: [],
           block_body: nil,
           has_block: false,
+          called_methods: [],
           loc: loc
         )
 
@@ -335,6 +349,7 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
             type: array_type,
             literal_value: nil,
             values: nil,
+            called_methods: [],
             loc: loc
           ),
           called_methods: [],
@@ -347,9 +362,10 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
           block_params: [],
           block_body: nil,
           has_block: true,
+          called_methods: [],
           loc: loc
         )
-        slot = TypeGuessr::Core::IR::BlockParamSlot.new(index: 0, call_node: call, loc: loc)
+        slot = TypeGuessr::Core::IR::BlockParamSlot.new(index: 0, call_node: call, called_methods: [], loc: loc)
 
         result = resolver.infer(slot)
         expect(result.type).to be_a(TypeGuessr::Core::Types::ClassInstance)
@@ -364,16 +380,19 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
           type: TypeGuessr::Core::Types::ClassInstance.new("String"),
           literal_value: nil,
           values: nil,
+          called_methods: [],
           loc: loc
         )
         branch2 = TypeGuessr::Core::IR::LiteralNode.new(
           type: TypeGuessr::Core::Types::ClassInstance.new("Integer"),
           literal_value: nil,
           values: nil,
+          called_methods: [],
           loc: loc
         )
         merge = TypeGuessr::Core::IR::MergeNode.new(
           branches: [branch1, branch2],
+          called_methods: [],
           loc: loc
         )
 
@@ -388,10 +407,12 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
           type: TypeGuessr::Core::Types::ClassInstance.new("String"),
           literal_value: nil,
           values: nil,
+          called_methods: [],
           loc: loc
         )
         merge = TypeGuessr::Core::IR::MergeNode.new(
           branches: [branch],
+          called_methods: [],
           loc: loc
         )
 
@@ -406,6 +427,7 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
         # After filtering non-returning branches, we may have empty branches
         merge = TypeGuessr::Core::IR::MergeNode.new(
           branches: [],
+          called_methods: [],
           loc: loc
         )
 
@@ -440,6 +462,7 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
           block_params: [],
           block_body: nil,
           has_block: false,
+          called_methods: [],
           loc: loc
         )
 
@@ -457,6 +480,7 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
           block_params: [],
           block_body: nil,
           has_block: false,
+          called_methods: [],
           loc: loc
         )
 
@@ -475,6 +499,7 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
           block_params: [],
           block_body: nil,
           has_block: false,
+          called_methods: [],
           loc: loc
         )
 
@@ -491,6 +516,7 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
           block_params: [],
           block_body: nil,
           has_block: false,
+          called_methods: [],
           loc: loc
         )
 
@@ -507,6 +533,7 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
           type: TypeGuessr::Core::Types::ClassInstance.new("Integer"),
           literal_value: 42,
           values: nil,
+          called_methods: [],
           loc: loc
         )
         depot_def = create_def_node(
@@ -522,6 +549,7 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
           type: TypeGuessr::Core::Types::Unknown.instance,
           literal_value: nil,
           values: nil,
+          called_methods: [],
           loc: loc
         )
 
@@ -533,6 +561,7 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
           block_params: [],
           block_body: nil,
           has_block: false,
+          called_methods: [],
           loc: loc
         )
 
@@ -548,6 +577,7 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
           type: TypeGuessr::Core::Types::Unknown.instance,
           literal_value: nil,
           values: nil,
+          called_methods: [],
           loc: loc
         )
 
@@ -559,6 +589,7 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
           block_params: [],
           block_body: nil,
           has_block: false,
+          called_methods: [],
           loc: loc
         )
 
@@ -574,6 +605,7 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
           type: TypeGuessr::Core::Types::ClassInstance.new("Integer"),
           literal_value: nil,
           values: nil,
+          called_methods: [],
           loc: loc
         )
         def_node = create_def_node(name: :foo, return_node: return_node, body_nodes: [return_node])
@@ -608,6 +640,7 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
         # This simulates patterns like `x ||= x` or complex control flow
         merge_node = TypeGuessr::Core::IR::MergeNode.new(
           branches: [],
+          called_methods: [],
           loc: loc
         )
 
@@ -670,6 +703,7 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
         # Use a MergeNode to wrap the circular reference
         merge_for_c = TypeGuessr::Core::IR::MergeNode.new(
           branches: [read_a],
+          called_methods: [],
           loc: loc
         )
 
@@ -706,6 +740,7 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
         # Rebuild the chain with proper circular reference
         TypeGuessr::Core::IR::MergeNode.new(
           branches: [read_a_circular],
+          called_methods: [],
           loc: loc
         )
 
@@ -724,6 +759,7 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
           type: TypeGuessr::Core::Types::ClassInstance.new("String"),
           literal_value: nil,
           values: nil,
+          called_methods: [],
           loc: loc
         )
 
@@ -738,6 +774,7 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
           type: TypeGuessr::Core::Types::ClassInstance.new("String"),
           literal_value: nil,
           values: nil,
+          called_methods: [],
           loc: loc
         )
 

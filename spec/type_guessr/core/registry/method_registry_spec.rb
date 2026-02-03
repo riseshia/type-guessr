@@ -15,6 +15,7 @@ RSpec.describe TypeGuessr::Core::Registry::MethodRegistry do
       params: [],
       return_node: nil,
       body_nodes: [],
+      called_methods: [],
       loc: nil,
       singleton: false
     )

@@ -68,6 +68,7 @@ RSpec.describe TypeGuessr::Core::Index::LocationIndex do
         type: string_type,
         literal_value: nil,
         values: nil,
+        called_methods: [],
         loc: nil
       )
 

@@ -38,6 +38,7 @@ RSpec.describe RubyLsp::TypeGuessr::GraphBuilder do
           type: TypeGuessr::Core::Types::ClassInstance.new("String"),
           literal_value: nil,
           values: nil,
+          called_methods: [],
           loc: loc
         )
       end
@@ -73,6 +74,7 @@ RSpec.describe RubyLsp::TypeGuessr::GraphBuilder do
           type: TypeGuessr::Core::Types::ClassInstance.new("String"),
           literal_value: nil,
           values: nil,
+          called_methods: [],
           loc: loc
         )
       end
@@ -107,6 +109,7 @@ RSpec.describe RubyLsp::TypeGuessr::GraphBuilder do
           type: TypeGuessr::Core::Types::ClassInstance.new("String"),
           literal_value: nil,
           values: nil,
+          called_methods: [],
           loc: loc
         )
       end
@@ -132,6 +135,7 @@ RSpec.describe RubyLsp::TypeGuessr::GraphBuilder do
       let(:merge) do
         TypeGuessr::Core::IR::MergeNode.new(
           branches: [branch_a, branch_b],
+          called_methods: [],
           loc: TypeGuessr::Core::IR::Loc.new(offset: 70)
         )
       end
@@ -159,6 +163,7 @@ RSpec.describe RubyLsp::TypeGuessr::GraphBuilder do
           type: TypeGuessr::Core::Types::ClassInstance.new("Integer"),
           literal_value: nil,
           values: nil,
+          called_methods: [],
           loc: loc
         )
       end
@@ -179,6 +184,7 @@ RSpec.describe RubyLsp::TypeGuessr::GraphBuilder do
           ),
           literal_value: nil,
           values: [read_node, inner_literal],
+          called_methods: [],
           loc: loc
         )
       end
@@ -221,6 +227,7 @@ RSpec.describe RubyLsp::TypeGuessr::GraphBuilder do
         ),
         literal_value: nil,
         values: nil,
+        called_methods: [],
         loc: loc
       )
       nodes["Test:lit:ArrayType:100"] = literal
@@ -245,6 +252,7 @@ RSpec.describe RubyLsp::TypeGuessr::GraphBuilder do
         type: TypeGuessr::Core::Types::ClassInstance.new("String"),
         literal_value: nil,
         values: nil,
+        called_methods: [],
         loc: loc
       )
       nodes["Test:lit:ClassInstance:100"] = literal
@@ -266,6 +274,7 @@ RSpec.describe RubyLsp::TypeGuessr::GraphBuilder do
         ],
         return_node: nil,
         body_nodes: [],
+        called_methods: [],
         loc: loc,
         singleton: false
       )
@@ -286,6 +295,7 @@ RSpec.describe RubyLsp::TypeGuessr::GraphBuilder do
         block_params: [],
         block_body: nil,
         has_block: true,
+        called_methods: [],
         loc: loc
       )
       nodes["Test:call:upcase:100"] = call_node

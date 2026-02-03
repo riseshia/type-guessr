@@ -21,7 +21,7 @@ RSpec.describe TypeGuessr::Core::SignatureBuilder do
   def make_def_node(name:, params: [])
     TypeGuessr::Core::IR::DefNode.new(
       name: name, class_name: nil, params: params,
-      return_node: nil, body_nodes: [], loc: nil, singleton: false
+      return_node: nil, body_nodes: [], called_methods: [], loc: nil, singleton: false
     )
   end
 
