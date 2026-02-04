@@ -391,6 +391,18 @@ If proposing changes that conflict with an ADR, discuss with the user first.
 - **Atomic commits:** Group related changes into single commits
 - **AST traversal:** When working with Prism nodes, be careful with node types and methods
 
+### Testing
+
+When implementing changes across IR nodes or similar parallel structures, always check ALL spec files that might reference the modified interfaces (resolver_spec, method_registry_spec, graph_builder_spec, signature_builder_spec, location_index_spec, etc.)
+
+### IR Node Architecture
+
+When adding fields to IR nodes, verify if any nodes share state with others (e.g., LocalReadNode shares called_methods with BlockParamSlot) before implementing.
+
+### Design Decisions
+
+For Ruby/Rails type inference work, consider ruby-lsp-rails integration points when designing DSL handling.
+
 ### TodoWrite Usage
 
 **Skip TodoWrite for simple tasks** (single file, 1-2 steps, simple fixes)
