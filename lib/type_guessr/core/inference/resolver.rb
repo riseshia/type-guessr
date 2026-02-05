@@ -44,14 +44,17 @@ module TypeGuessr
         # @param node [IR::Node] IR node to infer type for
         # @return [Result] Inference result with type and reason
         def infer(node)
+          # Early return: nil node passed (defensive, shouldn't happen in normal flow)
           return Result.new(Types::Unknown.instance, "no node", :unknown) unless node
 
           # Use cache to avoid redundant inference
           cached = @cache[node]
 
-          # Detect circular reference: INFERRING sentinel means we're already processing this node
+          # Early return: circular reference detected (A→B→A pattern)
+          # INFERRING sentinel means we're already processing this node up the call stack
           return Result.new(Types::Unknown.instance, "circular reference", :unknown) if cached.equal?(INFERRING)
 
+          # Early return: cache hit - return previously computed result
           return cached if cached
 
           # Mark as in-progress to detect cycles
@@ -75,7 +78,9 @@ module TypeGuessr
         # @param classes [Array<String>] List of class names
         # @return [Type] The resulting type
         def classes_to_type(classes)
+          # Early return: no classes matched the called_methods query
           return Types::Unknown.instance if classes.empty?
+          # Early return: single class match - no Union needed
           return Types::ClassInstance.for(classes.first) if classes.size == 1
 
           types = classes.map { |c| Types::ClassInstance.for(c) }
@@ -125,6 +130,7 @@ module TypeGuessr
         end
 
         private def infer_local_write(node)
+          # Early return: variable declared but no value assigned (shouldn't happen in valid Ruby)
           return Result.new(Types::Unknown.instance, "unassigned variable", :unknown) unless node.value
 
           dep_result = infer(node.value)
@@ -132,14 +138,16 @@ module TypeGuessr
         end
 
         private def infer_local_read(node)
+          # Early return: variable read without corresponding write (undefined variable)
           return Result.new(Types::Unknown.instance, "unassigned variable", :unknown) unless node.write_node
 
           write_result = infer(node.write_node)
 
-          # If type is Unknown, try to resolve from called_methods
+          # Fallback: write type is Unknown, try called_methods inference
           if write_result.type.is_a?(Types::Unknown) && node.called_methods.any?
             resolved_type = resolve_called_methods(node.called_methods)
 
+            # Early return: called_methods successfully resolved to a type
             if !resolved_type.is_a?(Types::Unknown)
               return Result.new(
                 resolved_type,
@@ -153,6 +161,7 @@ module TypeGuessr
         end
 
         private def infer_instance_variable_write(node)
+          # Early return: @var declared but no value assigned (shouldn't happen in valid Ruby)
           return Result.new(Types::Unknown.instance, "unassigned instance variable", :unknown) unless node.value
 
           dep_result = infer(node.value)
@@ -165,12 +174,14 @@ module TypeGuessr
           # Deferred lookup: if write_node is nil at conversion time, try registry
           write_node = @variable_registry.lookup_instance_variable(node.class_name, node.name) if write_node.nil? && node.class_name
 
+          # Early return: @var write not found (conversion + registry both failed)
           return Result.new(Types::Unknown.instance, "unassigned instance variable", :unknown) unless write_node
 
           infer(write_node)
         end
 
         private def infer_class_variable_write(node)
+          # Early return: @@var declared but no value assigned (shouldn't happen in valid Ruby)
           return Result.new(Types::Unknown.instance, "unassigned class variable", :unknown) unless node.value
 
           dep_result = infer(node.value)
@@ -183,44 +194,47 @@ module TypeGuessr
           # Deferred lookup: if write_node is nil at conversion time, try registry
           write_node = @variable_registry.lookup_class_variable(node.class_name, node.name) if write_node.nil? && node.class_name
 
+          # Early return: @@var write not found (conversion + registry both failed)
           return Result.new(Types::Unknown.instance, "unassigned class variable", :unknown) unless write_node
 
           infer(write_node)
         end
 
         private def infer_param(node)
-          # Handle special parameter kinds first
+          # Early returns for special parameter kinds (type is known structurally)
           case node.kind
           when :rest
-            # Rest parameter (*args) is always Array
+            # Early return: *args is always Array
             return Result.new(Types::ArrayType.new, "rest parameter", :inference)
           when :keyword_rest
-            # Keyword rest parameter (**kwargs) is always Hash
+            # Early return: **kwargs is always Hash
             return Result.new(Types::ClassInstance.for("Hash"), "keyword rest parameter", :inference)
           when :block
-            # Block parameter (&block) is always Proc
+            # Early return: &block is always Proc
             return Result.new(Types::ClassInstance.for("Proc"), "block parameter", :inference)
           when :forwarding
-            # Forwarding parameter (...) forwards all arguments
+            # Early return: ... forwards all arguments
             return Result.new(Types::ForwardingArgs.instance, "forwarding parameter", :inference)
           end
 
-          # Try default value for optional parameters
+          # Early return: optional parameter with default value - infer from default
           if node.default_value
             dep_result = infer(node.default_value)
             return Result.new(dep_result.type, "parameter default: #{dep_result.reason}", dep_result.source)
           end
 
-          # Try to resolve type from called methods
+          # Fallback: try to resolve type from called methods
           if node.called_methods.any?
             resolved_type = resolve_called_methods(node.called_methods)
 
+            # Early return: called_methods query found no matching classes
             if resolved_type.is_a?(Types::Unknown)
               return Result.new(
                 Types::Unknown.instance,
                 "parameter with unresolved methods: #{node.called_methods.join(", ")}",
                 :unknown
               )
+            # Early return: called_methods successfully resolved to a type
             else
               return Result.new(
                 resolved_type,
@@ -234,7 +248,7 @@ module TypeGuessr
         end
 
         private def infer_constant(node)
-          # If there's a dependency (e.g., constant write), infer from it
+          # Early return: constant assignment (Foo = ...) - infer from assigned value
           if node.dependency
             dep_result = infer(node.dependency)
             return Result.new(dep_result.type, "constant #{node.name}: #{dep_result.reason}", dep_result.source)
@@ -243,6 +257,7 @@ module TypeGuessr
           # Check if constant is a class or module using code_index adapter
           kind = @code_index&.constant_kind(node.name)
 
+          # Early return: class/module constant - return singleton type
           if %i[class module].include?(kind)
             return Result.new(
               Types::SingletonType.new(node.name),
@@ -265,6 +280,7 @@ module TypeGuessr
                          end
 
             result = infer_class_method_call(class_name, node)
+            # Early return: ClassName.method resolved successfully
             return result if result
           end
 
@@ -277,10 +293,12 @@ module TypeGuessr
             case receiver_type
             when Types::SingletonType
               result = infer_class_method_call(receiver_type.name, node)
+              # Early return: singleton.method resolved successfully
               return result if result
             when Types::ClassInstance
               # 1. Try project methods first
               def_node = @method_registry.lookup(receiver_type.name, node.method.to_s)
+              # Early return: project method found - use project inference
               if def_node
                 return_result = infer(def_node)
                 return Result.new(
@@ -310,6 +328,7 @@ module TypeGuessr
               # Substitute self with receiver type
               return_type = return_type.substitute({ self: receiver_type })
 
+              # Early return: ClassInstance RBS lookup (may be Unknown if not found)
               return Result.new(
                 return_type,
                 "#{receiver_type.name}##{node.method}",
@@ -333,6 +352,7 @@ module TypeGuessr
               # Get raw return type, then substitute type variables
               raw_return_type = @signature_registry.get_method_return_type("Array", node.method.to_s)
               return_type = raw_return_type.substitute(substitutions)
+              # Early return: ArrayType RBS lookup with type variable substitution
               return Result.new(
                 return_type,
                 "Array[#{receiver_type.element_type || "untyped"}]##{node.method}",
@@ -342,6 +362,7 @@ module TypeGuessr
               # Handle HashShape field access with [] method
               if node.method == :[] && node.args.size == 1
                 key_result = infer_hash_shape_access(receiver_type, node.args.first)
+                # Early return: hash[:key] with known symbol key resolved to field type
                 return key_result if key_result
               end
 
@@ -349,6 +370,7 @@ module TypeGuessr
               substitutions = build_substitutions(receiver_type)
               raw_return_type = @signature_registry.get_method_return_type("Hash", node.method.to_s)
               return_type = raw_return_type.substitute(substitutions)
+              # Early return: HashShape RBS lookup for non-[] methods
               return Result.new(
                 return_type,
                 "HashShape##{node.method}",
@@ -359,6 +381,7 @@ module TypeGuessr
               substitutions = build_substitutions(receiver_type)
               raw_return_type = @signature_registry.get_method_return_type("Hash", node.method.to_s)
               return_type = raw_return_type.substitute(substitutions)
+              # Early return: HashType RBS lookup with type variable substitution
               return Result.new(
                 return_type,
                 "Hash[#{receiver_type.key_type}, #{receiver_type.value_type}]##{node.method}",
@@ -366,7 +389,7 @@ module TypeGuessr
               )
             end
 
-            # Try to infer Unknown receiver type from method uniqueness
+            # Fallback: try to infer Unknown receiver type from method uniqueness
             if receiver_type.is_a?(Types::Unknown)
               # Create CalledMethod with nil positional_count to skip signature matching
               cm = IR::CalledMethod.new(name: node.method, positional_count: nil, keywords: [])
@@ -374,6 +397,7 @@ module TypeGuessr
               if inferred_receiver.is_a?(Types::ClassInstance)
                 # Try project methods with inferred receiver type
                 def_node = @method_registry.lookup(inferred_receiver.name, node.method.to_s)
+                # Early return: inferred receiver → project method found
                 if def_node
                   return_result = infer(def_node)
                   return Result.new(
@@ -383,7 +407,7 @@ module TypeGuessr
                   )
                 end
 
-                # Fall back to RBS
+                # Early return: inferred receiver → RBS lookup
                 arg_types = node.args.map { |arg| infer(arg).type }
                 return_type = @signature_registry.get_method_return_type(
                   inferred_receiver.name,
@@ -399,9 +423,10 @@ module TypeGuessr
             end
           end
 
-          # Method call without receiver or unknown receiver type
+          # Fallback: method call without receiver or unknown receiver type
           # First, try to lookup top-level method
           def_node = @method_registry.lookup("", node.method.to_s)
+          # Early return: top-level project method found
           if def_node
             return_type = infer(def_node.return_node)
             return Result.new(return_type.type, "top-level method #{node.method}", :project)
@@ -412,16 +437,19 @@ module TypeGuessr
           return_type = @signature_registry.get_method_return_type("Object", node.method.to_s, arg_types)
           # Substitute self with receiver type if available (e.g., Object#dup returns self)
           return_type = return_type.substitute({ self: receiver_type }) if receiver_type
+          # Early return: Object common method found in RBS
           return Result.new(return_type, "Object##{node.method}", :stdlib) unless return_type.is_a?(Types::Unknown)
 
           Result.new(Types::Unknown.instance, "call #{node.method} on unknown receiver", :unknown)
         end
 
         private def infer_block_param_slot(node)
+          # Early return: top-level block (each { } without receiver class context)
           return Result.new(Types::Unknown.instance, "block param without type info", :unknown) unless node.call_node.receiver
 
           receiver_type = infer(node.call_node.receiver).type
           class_name = receiver_type.rbs_class_name
+          # Early return: receiver type has no RBS class name (Unknown, Union, etc.)
           return Result.new(Types::Unknown.instance, "block param without type info", :unknown) unless class_name
 
           # Get block parameter types (returns internal types with TypeVariables)
@@ -432,6 +460,8 @@ module TypeGuessr
             raw_block_param_types = @signature_registry.get_block_param_types("Object", node.call_node.method.to_s)
           end
 
+          # Early return: RBS has no block param info for this method/index
+          # TODO: could fallback to called_methods inference like infer_param does
           return Result.new(Types::Unknown.instance, "block param without type info", :unknown) unless raw_block_param_types.size > node.index
 
           # Type#substitute applies type variable and self substitutions
@@ -457,7 +487,7 @@ module TypeGuessr
         end
 
         private def infer_def(node)
-          # initialize always returns self (the class instance)
+          # Early return: initialize always returns self (Ruby semantics)
           if node.name == :initialize && node.class_name
             return Result.new(
               Types::SelfType.instance,
@@ -466,7 +496,7 @@ module TypeGuessr
             )
           end
 
-          # Empty method body returns nil
+          # Early return: empty method body returns nil (Ruby semantics)
           unless node.return_node
             return Result.new(
               Types::ClassInstance.for("NilClass"),
@@ -493,20 +523,22 @@ module TypeGuessr
         end
 
         private def infer_return(node)
+          # Early return: `return expr` - infer from expression
           if node.value
             value_result = infer(node.value)
-            Result.new(value_result.type, "explicit return: #{value_result.reason}", value_result.source)
-          else
-            Result.new(Types::ClassInstance.for("NilClass"), "explicit return nil", :inference)
+            return Result.new(value_result.type, "explicit return: #{value_result.reason}", value_result.source)
           end
+
+          # Default: bare `return` returns nil
+          Result.new(Types::ClassInstance.for("NilClass"), "explicit return nil", :inference)
         end
 
         # Infer class method call (ClassName.method or self.method in singleton context)
         # @param class_name [String] The class name
         # @param node [IR::CallNode] The call node
-        # @return [Result, nil] The result if resolved, nil otherwise
+        # @return [Result, nil] The result if resolved, nil otherwise (caller handles fallback)
         private def infer_class_method_call(class_name, node)
-          # ClassName.new returns instance of that class
+          # Early return: Foo.new always returns Foo instance
           if node.method == :new
             return Result.new(
               Types::ClassInstance.for(class_name),
@@ -519,6 +551,7 @@ module TypeGuessr
           # Use code_index adapter to find method owner
           owner_name = @code_index&.class_method_owner(class_name, node.method.to_s)
 
+          # Early return: project class method found
           if owner_name
             def_node = @method_registry.lookup(owner_name, node.method.to_s)
             if def_node
@@ -539,6 +572,7 @@ module TypeGuessr
             arg_types
           )
 
+          # Early return: RBS class method found
           unless return_type.is_a?(Types::Unknown)
             return Result.new(
               return_type,
@@ -547,34 +581,37 @@ module TypeGuessr
             )
           end
 
+          # Return nil to let caller try other fallback strategies
           nil
         end
 
         # Infer type for HashShape field access (hash[:key])
         # @param hash_shape [Types::HashShape] The hash shape type
         # @param key_node [IR::Node] The key argument node
-        # @return [Result, nil] The field type result, or nil if not a known symbol key
+        # @return [Result, nil] The field type result, or nil if not a known symbol key (caller falls back to Hash RBS)
         private def infer_hash_shape_access(hash_shape, key_node)
-          # Only handle symbol literal keys
+          # Early return nil: dynamic key (hash[var]) - can't resolve at static analysis time
           return nil unless key_node.is_a?(IR::LiteralNode)
+          # Early return nil: non-symbol key (hash["key"]) - HashShape only tracks symbol keys
           return nil unless key_node.type.is_a?(Types::ClassInstance) && key_node.type.name == "Symbol"
+          # Early return nil: literal_value not Symbol (defensive)
           return nil unless key_node.literal_value.is_a?(Symbol)
 
           key = key_node.literal_value
           field_type = hash_shape.fields[key]
 
-          if field_type
-            Result.new(field_type, "HashShape[:#{key}]", :inference)
-          else
-            # Key not found in shape - return nil type (like Hash#[] for missing keys)
-            Result.new(Types::ClassInstance.for("NilClass"), "HashShape[:#{key}] (missing)", :inference)
-          end
+          # Early return: known field found in shape
+          return Result.new(field_type, "HashShape[:#{key}]", :inference) if field_type
+
+          # Default: key not found in shape - return nil type (like Hash#[] for missing keys)
+          Result.new(Types::ClassInstance.for("NilClass"), "HashShape[:#{key}] (missing)", :inference)
         end
 
         # Resolve called methods to a type via code_index adapter
-        # @param called_methods [Array<String>] List of called method_names
+        # @param called_methods [Array<CalledMethod>] List of called methods
         # @return [Type] The resulting type
         private def resolve_called_methods(called_methods)
+          # Early return: no method call info available for inference
           return Types::Unknown.instance if called_methods.empty?
 
           method_names = called_methods.map(&:name)
