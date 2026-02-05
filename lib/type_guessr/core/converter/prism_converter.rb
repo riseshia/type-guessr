@@ -460,7 +460,8 @@ module TypeGuessr
             class_name: class_name,
             value: value_node,
             # Share called_methods with value node for type propagation
-            called_methods: value_node.called_methods,
+            # nil case: value is an unhandled node type (convert() returns nil)
+            called_methods: value_node&.called_methods || [],
             loc: convert_loc(prism_node.location)
           )
           # Register at class level so it's visible across methods

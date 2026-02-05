@@ -2066,6 +2066,25 @@ RSpec.describe TypeGuessr::Core::Converter::PrismConverter do
     end
   end
 
+  describe "instance variable assignment with unhandled value node" do
+    it "handles nil value_node gracefully when value is an unhandled node type" do
+      # ForwardingSuperNode is not handled by convert(), returning nil
+      # This should not crash when accessing called_methods
+      source = <<~RUBY
+        class Child < Parent
+          def initialize(name)
+            @name = super
+          end
+        end
+      RUBY
+      parsed = Prism.parse(source)
+      context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+
+      # Should not raise NoMethodError: undefined method 'called_methods' for nil
+      expect { converter.convert(parsed.value.statements.body.first, context) }.not_to raise_error
+    end
+  end
+
   describe "unhandled node types" do
     before { pending "Not yet implemented - these node types need PrismConverter support" }
 
