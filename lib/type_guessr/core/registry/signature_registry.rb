@@ -186,26 +186,6 @@ module TypeGuessr
           @class_methods.dig(class_name, method_name)
         end
 
-        # Look up instance method with ancestor chain traversal
-        # @param class_name [String] the class name
-        # @param method_name [String] the method name
-        # @param code_index [#ancestors_of, nil] adapter for ancestry lookup
-        # @return [MethodEntry, nil] method entry or nil if not found
-        def lookup_with_ancestors(class_name, method_name, code_index: nil)
-          entry = lookup(class_name, method_name)
-          return entry if entry
-
-          return nil unless code_index
-
-          code_index.ancestors_of(class_name)&.each do |ancestor|
-            next if ancestor == class_name
-
-            entry = lookup(ancestor, method_name)
-            return entry if entry
-          end
-          nil
-        end
-
         # Get method return type (convenience method matching old SignatureProvider API)
         # @param class_name [String] the class name
         # @param method_name [String] the method name
