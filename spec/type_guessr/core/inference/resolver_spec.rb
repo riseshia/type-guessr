@@ -372,6 +372,107 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
         expect(result.type.name).to eq("String")
         expect(result.reason).to include("Array#each")
       end
+
+      it "falls back to called_methods when receiver type is Unknown" do
+        allow(code_index).to receive(:find_classes_defining_methods).with(["name"]).and_return(["User"])
+        allow(code_index).to receive(:ancestors_of).with("User").and_return(%w[User Object])
+
+        # Receiver is Unknown (e.g., variable with no type info)
+        unknown_receiver = TypeGuessr::Core::IR::LocalWriteNode.new(
+          name: :users,
+          value: nil,
+          called_methods: [],
+          loc: loc
+        )
+        call = TypeGuessr::Core::IR::CallNode.new(
+          method: :each,
+          receiver: unknown_receiver,
+          args: [],
+          block_params: [],
+          block_body: nil,
+          has_block: true,
+          called_methods: [],
+          loc: loc
+        )
+        slot = TypeGuessr::Core::IR::BlockParamSlot.new(
+          index: 0,
+          call_node: call,
+          called_methods: %i[name],
+          loc: loc
+        )
+
+        result = resolver.infer(slot)
+        expect(result.type).to be_a(TypeGuessr::Core::Types::ClassInstance)
+        expect(result.type.name).to eq("User")
+        expect(result.reason).to include("block param inferred from")
+        expect(result.source).to eq(:project)
+      end
+
+      it "falls back to called_methods when RBS has no block param info" do
+        allow(code_index).to receive(:find_classes_defining_methods).with(["title"]).and_return(["Post"])
+        allow(code_index).to receive(:ancestors_of).with("Post").and_return(%w[Post Object])
+
+        # Receiver has a known type but the method has no RBS block param info
+        receiver = TypeGuessr::Core::IR::LiteralNode.new(
+          type: TypeGuessr::Core::Types::ClassInstance.new("String"),
+          literal_value: nil,
+          values: nil,
+          called_methods: [],
+          loc: loc
+        )
+        call = TypeGuessr::Core::IR::CallNode.new(
+          method: :custom_each,
+          receiver: receiver,
+          args: [],
+          block_params: [],
+          block_body: nil,
+          has_block: true,
+          called_methods: [],
+          loc: loc
+        )
+        slot = TypeGuessr::Core::IR::BlockParamSlot.new(
+          index: 0,
+          call_node: call,
+          called_methods: %i[title],
+          loc: loc
+        )
+
+        result = resolver.infer(slot)
+        expect(result.type).to be_a(TypeGuessr::Core::Types::ClassInstance)
+        expect(result.type.name).to eq("Post")
+        expect(result.reason).to include("block param inferred from")
+        expect(result.source).to eq(:project)
+      end
+
+      it "returns Unknown with unresolved reason when called_methods cannot be resolved" do
+        # No mock on code_index — will return empty by default
+        unknown_receiver = TypeGuessr::Core::IR::LocalWriteNode.new(
+          name: :items,
+          value: nil,
+          called_methods: [],
+          loc: loc
+        )
+        call = TypeGuessr::Core::IR::CallNode.new(
+          method: :each,
+          receiver: unknown_receiver,
+          args: [],
+          block_params: [],
+          block_body: nil,
+          has_block: true,
+          called_methods: [],
+          loc: loc
+        )
+        slot = TypeGuessr::Core::IR::BlockParamSlot.new(
+          index: 0,
+          call_node: call,
+          called_methods: %i[nonexistent_method],
+          loc: loc
+        )
+
+        result = resolver.infer(slot)
+        expect(result.type).to be(TypeGuessr::Core::Types::Unknown.instance)
+        expect(result.reason).to include("unresolved methods")
+      end
     end
 
     context "with MergeNode" do

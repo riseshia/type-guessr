@@ -449,26 +449,42 @@ module TypeGuessr
 
           receiver_type = infer(node.call_node.receiver).type
           class_name = receiver_type.rbs_class_name
-          # Early return: receiver type has no RBS class name (Unknown, Union, etc.)
-          return Result.new(Types::Unknown.instance, "block param without type info", :unknown) unless class_name
 
-          # Get block parameter types (returns internal types with TypeVariables)
-          raw_block_param_types = @signature_registry.get_block_param_types(class_name, node.call_node.method.to_s)
+          # Path 1: RBS-based inference (when receiver type has a class name)
+          if class_name
+            raw_block_param_types = @signature_registry.get_block_param_types(class_name, node.call_node.method.to_s)
 
-          # Fall back to Object if class-specific lookup returns empty
-          if raw_block_param_types.empty? && class_name != "Object"
-            raw_block_param_types = @signature_registry.get_block_param_types("Object", node.call_node.method.to_s)
+            if raw_block_param_types.empty? && class_name != "Object"
+              raw_block_param_types = @signature_registry.get_block_param_types("Object", node.call_node.method.to_s)
+            end
+
+            if raw_block_param_types.size > node.index
+              raw_type = raw_block_param_types[node.index]
+              resolved_type = raw_type.substitute(build_substitutions(receiver_type))
+              return Result.new(resolved_type, "block param from #{class_name}##{node.call_node.method}", :stdlib)
+            end
           end
 
-          # Early return: RBS has no block param info for this method/index
-          # TODO: could fallback to called_methods inference like infer_param does
-          return Result.new(Types::Unknown.instance, "block param without type info", :unknown) unless raw_block_param_types.size > node.index
+          # Path 2: Fallback to called_methods inference (like infer_param)
+          if node.called_methods.any?
+            resolved_type = resolve_called_methods(node.called_methods)
 
-          # Type#substitute applies type variable and self substitutions
-          raw_type = raw_block_param_types[node.index]
-          resolved_type = raw_type.substitute(build_substitutions(receiver_type))
+            if resolved_type.is_a?(Types::Unknown)
+              return Result.new(
+                Types::Unknown.instance,
+                "block param with unresolved methods: #{node.called_methods.join(", ")}",
+                :unknown
+              )
+            end
 
-          Result.new(resolved_type, "block param from #{class_name}##{node.call_node.method}", :stdlib)
+            return Result.new(
+              resolved_type,
+              "block param inferred from #{node.called_methods.join(", ")}",
+              :project
+            )
+          end
+
+          Result.new(Types::Unknown.instance, "block param without type info", :unknown)
         end
 
         private def infer_merge(node)
