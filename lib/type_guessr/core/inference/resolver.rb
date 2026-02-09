@@ -642,18 +642,6 @@ module TypeGuessr
           classes_to_type(classes)
         end
 
-        # Filter out classes whose ancestor is also in the list
-        # This ensures we return the most general type that satisfies the constraint
-        # @param classes [Array<String>] List of class names
-        # @return [Array<String>] Filtered list with only the most general types
-        private def filter_to_most_general_types(classes)
-          classes.reject do |class_name|
-            ancestors = @code_index.ancestors_of(class_name)
-            # Check if any ancestor (excluding self) is also in the matching list
-            ancestors.any? { |ancestor| ancestor != class_name && classes.include?(ancestor) }
-          end
-        end
-
         # Apply type simplification to a result
         # @param result [Result] The inference result
         # @return [Result] Result with simplified type
@@ -671,26 +659,6 @@ module TypeGuessr
           substitutions = receiver_type.type_variable_substitutions.dup
           substitutions[:self] = receiver_type
           substitutions
-        end
-
-        # Check if a method call signature matches the RBS definition for a class
-        # Returns true (conservative) when: splat used or no RBS definition
-        private def signature_matches?(class_name, called_method)
-          return true if called_method.positional_count.nil?
-
-          signatures = @signature_registry.get_method_signatures(class_name, called_method.name.to_s)
-          return true if signatures.empty?
-
-          signatures.any? { |sig| overload_accepts?(sig.method_type, called_method.positional_count) }
-        end
-
-        # Check if an RBS overload can accept the given positional argument count
-        private def overload_accepts?(method_type, positional_count)
-          func = method_type.type
-          min = func.required_positionals.size
-          max = func.rest_positionals ? Float::INFINITY : min + func.optional_positionals.size
-
-          positional_count.between?(min, max)
         end
       end
     end
