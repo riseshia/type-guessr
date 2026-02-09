@@ -12,11 +12,11 @@ module TypeGuessr
       class PrismConverter
         # Context for tracking variable bindings during conversion
         class Context
-          attr_reader :variables, :file_path, :location_index, :method_registry, :variable_registry
+          attr_reader :variables, :file_path, :location_index, :method_registry, :ivar_registry, :cvar_registry
           attr_accessor :current_class, :current_method, :in_singleton_method
 
           def initialize(parent = nil, file_path: nil, location_index: nil,
-                         method_registry: nil, variable_registry: nil)
+                         method_registry: nil, ivar_registry: nil, cvar_registry: nil)
             @parent = parent
             @variables = {} # name => node
             @instance_variables = {} # @name => node (only for class-level context)
@@ -30,7 +30,8 @@ module TypeGuessr
             @file_path = file_path || parent&.file_path
             @location_index = location_index || parent&.location_index
             @method_registry = method_registry || parent&.method_registry
-            @variable_registry = variable_registry || parent&.variable_registry
+            @ivar_registry = ivar_registry || parent&.ivar_registry
+            @cvar_registry = cvar_registry || parent&.cvar_registry
           end
 
           def register_variable(name, node)
@@ -1846,10 +1847,10 @@ module TypeGuessr
             end
           when IR::InstanceVariableWriteNode
             context.location_index.add(context.file_path, node, context.scope_id)
-            context.variable_registry&.register_instance_variable(node.class_name, node.name, node)
+            context.ivar_registry&.register(node.class_name, node.name, node)
           when IR::ClassVariableWriteNode
             context.location_index.add(context.file_path, node, context.scope_id)
-            context.variable_registry&.register_class_variable(node.class_name, node.name, node)
+            context.cvar_registry&.register(node.class_name, node.name, node)
           else
             # All other nodes (MergeNode, LiteralNode, etc.)
             context.location_index.add(context.file_path, node, context.scope_id)

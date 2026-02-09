@@ -4,7 +4,8 @@ require_relative "../ir/nodes"
 require_relative "../types"
 require_relative "../type_simplifier"
 require_relative "../registry/method_registry"
-require_relative "../registry/variable_registry"
+require_relative "../registry/instance_variable_registry"
+require_relative "../registry/class_variable_registry"
 require_relative "../registry/signature_registry"
 require_relative "result"
 
@@ -21,21 +22,27 @@ module TypeGuessr
         # @return [Registry::MethodRegistry]
         attr_reader :method_registry
 
-        # Variable registry for storing and looking up instance/class variables
-        # @return [Registry::VariableRegistry]
-        attr_reader :variable_registry
+        # Instance variable registry for storing and looking up instance variables
+        # @return [Registry::InstanceVariableRegistry]
+        attr_reader :ivar_registry
+
+        # Class variable registry for storing and looking up class variables
+        # @return [Registry::ClassVariableRegistry]
+        attr_reader :cvar_registry
 
         # @param signature_registry [Registry::SignatureRegistry] Registry for stdlib RBS signatures
         # @param type_simplifier [TypeSimplifier] Type simplifier for normalizing union types
         # @param code_index [#find_classes_defining_methods, #ancestors_of, #constant_kind, #class_method_owner]
         #   Adapter wrapping RubyIndexer
         # @param method_registry [Registry::MethodRegistry] Registry for project methods
-        # @param variable_registry [Registry::VariableRegistry] Registry for variables
-        def initialize(signature_registry, type_simplifier:, code_index:, method_registry:, variable_registry:)
+        # @param ivar_registry [Registry::InstanceVariableRegistry] Registry for instance variables
+        # @param cvar_registry [Registry::ClassVariableRegistry] Registry for class variables
+        def initialize(signature_registry, type_simplifier:, code_index:, method_registry:, ivar_registry:, cvar_registry:)
           @signature_registry = signature_registry
           @code_index = code_index
           @method_registry = method_registry
-          @variable_registry = variable_registry
+          @ivar_registry = ivar_registry
+          @cvar_registry = cvar_registry
           @cache = {}.compare_by_identity
           @type_simplifier = type_simplifier
         end
@@ -172,7 +179,7 @@ module TypeGuessr
           write_node = node.write_node
 
           # Deferred lookup: if write_node is nil at conversion time, try registry
-          write_node = @variable_registry.lookup_instance_variable(node.class_name, node.name) if write_node.nil? && node.class_name
+          write_node = @ivar_registry.lookup(node.class_name, node.name) if write_node.nil? && node.class_name
 
           # Early return: @var write not found (conversion + registry both failed)
           return Result.new(Types::Unknown.instance, "unassigned instance variable", :unknown) unless write_node
@@ -192,7 +199,7 @@ module TypeGuessr
           write_node = node.write_node
 
           # Deferred lookup: if write_node is nil at conversion time, try registry
-          write_node = @variable_registry.lookup_class_variable(node.class_name, node.name) if write_node.nil? && node.class_name
+          write_node = @cvar_registry.lookup(node.class_name, node.name) if write_node.nil? && node.class_name
 
           # Early return: @@var write not found (conversion + registry both failed)
           return Result.new(Types::Unknown.instance, "unassigned class variable", :unknown) unless write_node

@@ -4,7 +4,8 @@ require "prism"
 require_relative "../../type_guessr/core/converter/prism_converter"
 require_relative "../../type_guessr/core/index/location_index"
 require_relative "../../type_guessr/core/registry/method_registry"
-require_relative "../../type_guessr/core/registry/variable_registry"
+require_relative "../../type_guessr/core/registry/instance_variable_registry"
+require_relative "../../type_guessr/core/registry/class_variable_registry"
 require_relative "../../type_guessr/core/registry/signature_registry"
 require_relative "../../type_guessr/core/inference/resolver"
 require_relative "../../type_guessr/core/signature_builder"
@@ -38,10 +39,11 @@ module RubyLsp
           code_index: @code_index
         )
 
-        # Create variable registry with code_index for inheritance lookup
-        @variable_registry = ::TypeGuessr::Core::Registry::VariableRegistry.new(
+        # Create variable registries (ivar needs code_index for inheritance lookup)
+        @ivar_registry = ::TypeGuessr::Core::Registry::InstanceVariableRegistry.new(
           code_index: @code_index
         )
+        @cvar_registry = ::TypeGuessr::Core::Registry::ClassVariableRegistry.new
 
         # Create type simplifier with code_index for inheritance lookup
         type_simplifier = ::TypeGuessr::Core::TypeSimplifier.new(
@@ -53,7 +55,8 @@ module RubyLsp
           @signature_registry,
           code_index: @code_index,
           method_registry: @method_registry,
-          variable_registry: @variable_registry,
+          ivar_registry: @ivar_registry,
+          cvar_registry: @cvar_registry,
           type_simplifier: type_simplifier
         )
 
@@ -328,7 +331,8 @@ module RubyLsp
             file_path: file_path,
             location_index: @location_index,
             method_registry: @method_registry,
-            variable_registry: @variable_registry
+            ivar_registry: @ivar_registry,
+            cvar_registry: @cvar_registry
           )
 
           prism_result.value.statements&.body&.each do |stmt|
@@ -373,7 +377,8 @@ module RubyLsp
             file_path: file_path,
             location_index: @location_index,
             method_registry: @method_registry,
-            variable_registry: @variable_registry
+            ivar_registry: @ivar_registry,
+            cvar_registry: @cvar_registry
           )
 
           parsed.value.statements&.body&.each do |stmt|

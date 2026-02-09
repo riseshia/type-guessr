@@ -10,14 +10,16 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
   let(:type_simplifier) { TypeGuessr::Core::TypeSimplifier.new }
   let(:code_index) { RubyLsp::TypeGuessr::CodeIndexAdapter.new(nil) }
   let(:method_registry) { TypeGuessr::Core::Registry::MethodRegistry.new }
-  let(:variable_registry) { TypeGuessr::Core::Registry::VariableRegistry.new }
+  let(:ivar_registry) { TypeGuessr::Core::Registry::InstanceVariableRegistry.new }
+  let(:cvar_registry) { TypeGuessr::Core::Registry::ClassVariableRegistry.new }
   let(:resolver) do
     described_class.new(
       signature_registry,
       type_simplifier: type_simplifier,
       code_index: code_index,
       method_registry: method_registry,
-      variable_registry: variable_registry
+      ivar_registry: ivar_registry,
+      cvar_registry: cvar_registry
     )
   end
   let(:loc) { TypeGuessr::Core::IR::Loc.new(offset: 0) }
