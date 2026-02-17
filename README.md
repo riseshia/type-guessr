@@ -80,6 +80,41 @@ When enabled, a web server starts at `http://127.0.0.1:<port>` (default port: 70
 
 This is useful for understanding how TypeGuessr analyzes your codebase and debugging type inference issues.
 
+## MCP Server
+
+TypeGuessr can run as a standalone [MCP](https://modelcontextprotocol.io/) server, exposing its type inference engine to AI tools like Claude Code.
+
+### Setup
+
+Add to your project's `.mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "type-guessr": {
+      "command": "bundle",
+      "args": ["exec", "ruby", "/path/to/type-guessr/exe/type-guessr", "mcp"]
+    }
+  }
+}
+```
+
+Or run directly:
+
+```bash
+bundle exec ruby exe/type-guessr mcp [project_path]
+```
+
+If `project_path` is omitted, the current directory is used.
+
+### Available Tools
+
+| Tool | Description |
+|------|-------------|
+| `infer_type` | Infer the type at a specific file/line/column |
+| `get_method_signature` | Get the inferred signature of a method |
+| `search_methods` | Search for method definitions by name or pattern |
+
 ## Development
 
 After checking out the repo, run `bin/setup` to install dependencies. Then, run `bundle exec rspec` to run the tests. You can also run `bin/console` for an interactive prompt that will allow you to experiment.
