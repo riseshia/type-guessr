@@ -143,6 +143,7 @@ module TypeGuessr
 
       private def build_infer_type_tool
         runtime = @runtime
+        to_response = method(:json_response)
 
         ::MCP::Tool.define(
           name: "infer_type",
@@ -158,12 +159,13 @@ module TypeGuessr
             required: %w[file_path line column]
           }
         ) do |file_path:, line:, column:, **|
-          json_response(runtime.infer_at(file_path, line, column))
+          to_response.call(runtime.infer_at(file_path, line, column))
         end
       end
 
       private def build_get_method_signature_tool
         runtime = @runtime
+        to_response = method(:json_response)
 
         ::MCP::Tool.define(
           name: "get_method_signature",
@@ -178,12 +180,13 @@ module TypeGuessr
             required: %w[class_name method_name]
           }
         ) do |class_name:, method_name:, **|
-          json_response(runtime.method_signature(class_name, method_name))
+          to_response.call(runtime.method_signature(class_name, method_name))
         end
       end
 
       private def build_search_methods_tool
         runtime = @runtime
+        to_response = method(:json_response)
 
         ::MCP::Tool.define(
           name: "search_methods",
@@ -197,7 +200,7 @@ module TypeGuessr
             required: %w[query]
           }
         ) do |query:, **|
-          json_response(runtime.search_methods(query))
+          to_response.call(runtime.search_methods(query))
         end
       end
 
