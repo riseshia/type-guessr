@@ -16,3 +16,5 @@ gem "rspec", require: false
 gem "benchmark", require: false
 gem "benchmark-ips", require: false
 gem "stackprof", require: false
+
+gem "mcp"
