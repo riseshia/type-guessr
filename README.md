@@ -86,7 +86,13 @@ TypeGuessr can run as a standalone [MCP](https://modelcontextprotocol.io/) serve
 
 ### Setup
 
-Add to your project's `.mcp.json`:
+Using Claude Code CLI:
+
+```bash
+claude mcp add type-guessr -- bundle exec ruby /path/to/type-guessr/exe/type-guessr mcp
+```
+
+Or add to your project's `.mcp.json` manually:
 
 ```json
 {
