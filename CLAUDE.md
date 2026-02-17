@@ -38,6 +38,8 @@ type-guessr/
 │   ├── hover-repl                               # Interactive hover testing
 │   ├── profile                                  # Profiling tool
 │   └── setup
+├── exe/
+│   └── type-guessr                              # CLI executable (mcp, version, help)
 ├── lib/
 │   ├── type-guessr.rb                           # Main entry point
 │   ├── ruby_lsp/
@@ -51,6 +53,9 @@ type-guessr/
 │   │       └── type_inferrer.rb                 # Type inference coordinator
 │   └── type_guessr/
 │       ├── version.rb                           # Version constant
+│       ├── mcp/
+│       │   ├── server.rb                        # MCP server (stdio transport)
+│       │   └── standalone_runtime.rb            # Standalone inference runtime
 │       └── core/
 │           ├── converter/
 │           │   ├── prism_converter.rb           # Prism AST → Node graph
@@ -90,6 +95,8 @@ type-guessr/
 │   ├── support/
 │   │   └── doc_collector.rb                     # Documentation collection helper
 │   └── type_guessr/
+│       ├── mcp/
+│       │   └── standalone_runtime_spec.rb       # MCP standalone runtime tests
 │       └── core/
 │           ├── converter/
 │           │   ├── prism_converter_spec.rb
@@ -182,6 +189,18 @@ The project is organized into two main layers:
 #### 11. TypeSimplifier (`type_simplifier.rb`)
 - Simplifies complex union types
 - Normalizes type representations for cleaner display
+
+### MCP Layer (`lib/type_guessr/mcp/`)
+
+#### 1. Server (`server.rb`)
+- Standalone MCP server exposing type inference via stdio transport
+- Indexes project on startup (RubyIndexer + TypeGuessr)
+- Provides tools: `infer_type`, `get_method_signature`, `search_methods`
+
+#### 2. StandaloneRuntime (`standalone_runtime.rb`)
+- Mirrors RuntimeAdapter's query interface without ruby-lsp's GlobalState
+- Thread-safe inference via mutex
+- Methods: `index_parsed_file`, `finalize_index!`, `preload_signatures!`, `infer_at`, `method_signature`, `search_methods`
 
 ### Integration Layer (`lib/ruby_lsp/type_guessr/`)
 
