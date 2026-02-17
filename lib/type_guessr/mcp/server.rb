@@ -31,6 +31,8 @@ require_relative "../../ruby_lsp/type_guessr/code_index_adapter"
 
 module TypeGuessr
   module MCP
+    # MCP server that exposes type-guessr's inference engine as tools.
+    # Indexes the project on startup and serves queries via stdio transport.
     class Server
       attr_reader :runtime_adapter
 
@@ -40,46 +42,44 @@ module TypeGuessr
       end
 
       def start
-        $stderr.puts "[TypeGuessr MCP] Initializing for project: #{@project_path}"
+        warn "[TypeGuessr MCP] Initializing for project: #{@project_path}"
 
         # Build RubyIndexer index
         index = build_ruby_index
-        $stderr.puts "[TypeGuessr MCP] RubyIndexer completed"
+        warn "[TypeGuessr MCP] RubyIndexer completed"
 
         # Build RuntimeAdapter-equivalent components
         @runtime_adapter = build_runtime(index)
-        $stderr.puts "[TypeGuessr MCP] Runtime initialized"
+        warn "[TypeGuessr MCP] Runtime initialized"
 
         # Index project files with TypeGuessr
         index_project_files(index)
-        $stderr.puts "[TypeGuessr MCP] TypeGuessr indexing completed"
+        warn "[TypeGuessr MCP] TypeGuessr indexing completed"
 
         # Create and start MCP server
         @server = ::MCP::Server.new(
           name: "type-guessr",
           version: TypeGuessr::VERSION,
-          tools: build_tools,
+          tools: build_tools
         )
 
-        $stderr.puts "[TypeGuessr MCP] Server starting on stdio..."
+        warn "[TypeGuessr MCP] Server starting on stdio..."
         transport = ::MCP::Server::Transports::StdioTransport.new(@server)
         transport.open
       end
 
-      private
-
-      def build_ruby_index
+      private def build_ruby_index
         Dir.chdir(@project_path) do
           config = RubyIndexer::Configuration.new
           index = RubyIndexer::Index.new
           uris = config.indexable_uris
-          $stderr.puts "[TypeGuessr MCP] Indexing #{uris.size} files with RubyIndexer..."
+          warn "[TypeGuessr MCP] Indexing #{uris.size} files with RubyIndexer..."
           index.index_all(uris: uris)
           index
         end
       end
 
-      def build_runtime(ruby_index)
+      private def build_runtime(ruby_index)
         code_index = RubyLsp::TypeGuessr::CodeIndexAdapter.new(ruby_index)
 
         converter = Core::Converter::PrismConverter.new
@@ -98,7 +98,7 @@ module TypeGuessr
           method_registry: method_registry,
           ivar_registry: ivar_registry,
           cvar_registry: cvar_registry,
-          type_simplifier: type_simplifier,
+          type_simplifier: type_simplifier
         )
 
         signature_builder = Core::SignatureBuilder.new(resolver)
@@ -112,17 +112,17 @@ module TypeGuessr
           cvar_registry: cvar_registry,
           resolver: resolver,
           signature_builder: signature_builder,
-          code_index: code_index,
+          code_index: code_index
         )
       end
 
-      def index_project_files(ruby_index)
+      private def index_project_files(_ruby_index)
         config = Dir.chdir(@project_path) { RubyIndexer::Configuration.new }
         uris = Dir.chdir(@project_path) { config.indexable_uris }
         total = uris.size
         processed = 0
 
-        $stderr.puts "[TypeGuessr MCP] Indexing #{total} files with TypeGuessr..."
+        warn "[TypeGuessr MCP] Indexing #{total} files with TypeGuessr..."
 
         uris.each do |uri|
           file_path = uri.respond_to?(:to_standardized_path) ? uri.to_standardized_path : uri.path
@@ -135,15 +135,15 @@ module TypeGuessr
           @runtime_adapter.index_parsed_file(file_path, parsed)
           processed += 1
         rescue StandardError => e
-          $stderr.puts "[TypeGuessr MCP] Error indexing #{file_path}: #{e.message}"
+          warn "[TypeGuessr MCP] Error indexing #{file_path}: #{e.message}"
         end
 
         @runtime_adapter.finalize_index!
         @runtime_adapter.preload_signatures!
-        $stderr.puts "[TypeGuessr MCP] Indexed #{processed}/#{total} files"
+        warn "[TypeGuessr MCP] Indexed #{processed}/#{total} files"
       end
 
-      def build_tools
+      private def build_tools
         runtime = @runtime_adapter
 
         infer_type_tool = ::MCP::Tool.define(
@@ -155,26 +155,26 @@ module TypeGuessr
             properties: {
               file_path: {
                 type: "string",
-                description: "Absolute path to the Ruby file",
+                description: "Absolute path to the Ruby file"
               },
               line: {
                 type: "integer",
-                description: "Line number (1-based)",
+                description: "Line number (1-based)"
               },
               column: {
                 type: "integer",
-                description: "Column number (0-based)",
-              },
+                description: "Column number (0-based)"
+              }
             },
-            required: %w[file_path line column],
-          },
-        ) do |file_path:, line:, column:, server_context: nil|
+            required: %w[file_path line column]
+          }
+        ) do |file_path:, line:, column:, _server_context: nil|
           result = runtime.infer_at(file_path, line, column)
 
           ::MCP::Tool::Response.new([{
-            type: "text",
-            text: JSON.generate(result),
-          }])
+                                      type: "text",
+                                      text: JSON.generate(result)
+                                    }])
         end
 
         get_method_signature_tool = ::MCP::Tool.define(
@@ -186,22 +186,22 @@ module TypeGuessr
             properties: {
               class_name: {
                 type: "string",
-                description: "Fully qualified class name (e.g., 'User', 'Admin::User')",
+                description: "Fully qualified class name (e.g., 'User', 'Admin::User')"
               },
               method_name: {
                 type: "string",
-                description: "Method name (e.g., 'save', 'initialize')",
-              },
+                description: "Method name (e.g., 'save', 'initialize')"
+              }
             },
-            required: %w[class_name method_name],
-          },
-        ) do |class_name:, method_name:, server_context: nil|
+            required: %w[class_name method_name]
+          }
+        ) do |class_name:, method_name:, _server_context: nil|
           result = runtime.method_signature(class_name, method_name)
 
           ::MCP::Tool::Response.new([{
-            type: "text",
-            text: JSON.generate(result),
-          }])
+                                      type: "text",
+                                      text: JSON.generate(result)
+                                    }])
         end
 
         search_methods_tool = ::MCP::Tool.define(
@@ -213,18 +213,18 @@ module TypeGuessr
             properties: {
               query: {
                 type: "string",
-                description: "Search query (e.g., 'User#save', 'save', 'initialize')",
-              },
+                description: "Search query (e.g., 'User#save', 'save', 'initialize')"
+              }
             },
-            required: %w[query],
-          },
-        ) do |query:, server_context: nil|
+            required: %w[query]
+          }
+        ) do |query:, _server_context: nil|
           results = runtime.search_methods(query)
 
           ::MCP::Tool::Response.new([{
-            type: "text",
-            text: JSON.generate(results),
-          }])
+                                      type: "text",
+                                      text: JSON.generate(results)
+                                    }])
         end
 
         [infer_type_tool, get_method_signature_tool, search_methods_tool]
@@ -263,7 +263,7 @@ module TypeGuessr
             location_index: @location_index,
             method_registry: @method_registry,
             ivar_registry: @ivar_registry,
-            cvar_registry: @cvar_registry,
+            cvar_registry: @cvar_registry
           )
 
           prism_result.value.statements&.body&.each do |stmt|
@@ -301,7 +301,7 @@ module TypeGuessr
         node_context = RubyLsp::RubyDocument.locate(
           ast,
           char_position,
-          code_units_cache: code_units_cache,
+          code_units_cache: code_units_cache
         )
 
         prism_node = node_context.node
@@ -325,7 +325,7 @@ module TypeGuessr
           return {
             type: "method_signature",
             signature: sig.to_s,
-            node_type: "DefNode",
+            node_type: "DefNode"
           }
         end
 
@@ -336,7 +336,7 @@ module TypeGuessr
             type: result.type.to_s,
             method: ir_node.method.to_s,
             reason: result.reason,
-            node_type: "CallNode",
+            node_type: "CallNode"
           }
         end
 
@@ -345,7 +345,7 @@ module TypeGuessr
         {
           type: result.type.to_s,
           reason: result.reason,
-          node_type: ir_node.class.name.split("::").last,
+          node_type: ir_node.class.name.split("::").last
         }
       rescue StandardError => e
         { error: e.message, backtrace: e.backtrace&.first(3) }
@@ -361,7 +361,7 @@ module TypeGuessr
           if sigs.any?
             return {
               source: "rbs",
-              signatures: sigs.map { |s| s.method_type.to_s },
+              signatures: sigs.map { |s| s.method_type.to_s }
             }
           end
 
@@ -373,7 +373,7 @@ module TypeGuessr
           source: "project",
           signature: sig.to_s,
           class_name: class_name,
-          method_name: method_name,
+          method_name: method_name
         }
       rescue StandardError => e
         { error: e.message }
@@ -388,7 +388,7 @@ module TypeGuessr
               class_name: class_name,
               method_name: method_name,
               full_name: "#{class_name}##{method_name}",
-              location: def_node.loc ? { offset: def_node.loc.offset } : nil,
+              location: def_node.loc ? { offset: def_node.loc.offset } : nil
             }
           end
         end
@@ -396,19 +396,15 @@ module TypeGuessr
         { error: e.message }
       end
 
-      private
-
       # Convert 1-based line/0-based column to byte offset
-      def line_column_to_offset(source, line, column)
+      private def line_column_to_offset(source, line, column)
         current_line = 1
         current_offset = 0
 
         source.each_char do |char|
           return current_offset + column if current_line == line
 
-          if char == "\n"
-            current_line += 1
-          end
+          current_line += 1 if char == "\n"
           current_offset += char.bytesize
         end
 

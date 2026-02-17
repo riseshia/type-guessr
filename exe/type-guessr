@@ -24,7 +24,7 @@ when "help", "--help", "-h", nil
       help                 Show this help
   USAGE
 else
-  $stderr.puts "Unknown command: #{command}"
-  $stderr.puts "Run 'type-guessr help' for usage"
+  warn "Unknown command: #{command}"
+  warn "Run 'type-guessr help' for usage"
   exit 1
 end
