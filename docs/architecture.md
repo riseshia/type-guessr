@@ -194,6 +194,36 @@ Simplifies complex union types.
 - Normalize type representations
 - Reduce union complexity for cleaner display
 
+## MCP Server (`lib/type_guessr/mcp/`)
+
+Standalone MCP server that exposes type inference to AI tools (e.g., Claude Code) via stdio transport.
+
+### Components
+
+- **Server** (`server.rb`): Indexes project on startup, defines MCP tools, starts stdio transport
+- **StandaloneRuntime** (`standalone_runtime.rb`): Mirrors RuntimeAdapter's query interface without ruby-lsp's GlobalState dependency
+
+### MCP Tools
+
+| Tool | Input | Output |
+|------|-------|--------|
+| `infer_type` | file_path, line, column | Inferred type at position |
+| `get_method_signature` | class_name, method_name | Parameter and return types |
+| `search_methods` | query pattern | Matching method definitions |
+
+### Startup Flow
+
+```
+exe/type-guessr mcp [project_path]
+    │
+    ├── RubyIndexer: index all project files (class/method definitions)
+    ├── Build StandaloneRuntime (converter, registries, resolver)
+    ├── TypeGuessr: index all project files (IR nodes, signatures)
+    │
+    ▼
+MCP::Server → StdioTransport.open (blocks, handles JSON-RPC)
+```
+
 ## Data Flow
 
 ### Initial Indexing

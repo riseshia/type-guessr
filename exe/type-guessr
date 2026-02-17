@@ -1,0 +1,30 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "bundler/setup"
+
+command = ARGV[0]
+
+case command
+when "mcp"
+  project_path = ARGV[1] || Dir.pwd
+  require_relative "../lib/type_guessr/mcp/server"
+  server = TypeGuessr::MCP::Server.new(project_path: project_path)
+  server.start
+when "version", "--version", "-v"
+  require_relative "../lib/type_guessr/version"
+  puts "type-guessr #{TypeGuessr::VERSION}"
+when "help", "--help", "-h", nil
+  puts <<~USAGE
+    Usage: type-guessr <command> [options]
+
+    Commands:
+      mcp [project_path]   Start MCP server for the given project (default: current directory)
+      version              Show version
+      help                 Show this help
+  USAGE
+else
+  warn "Unknown command: #{command}"
+  warn "Run 'type-guessr help' for usage"
+  exit 1
+end
