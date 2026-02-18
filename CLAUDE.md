@@ -394,7 +394,7 @@ Type guessing is performed through:
 
 ### Architecture Decision Records (ADR)
 
-Before proposing architectural changes, **check `docs/adr/` for existing decisions**.
+Before proposing design or architectural changes, **check `docs/adr/` for existing decisions**.
 If proposing changes that conflict with an ADR, discuss with the user first.
 
 ### Project Understanding
