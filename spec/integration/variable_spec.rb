@@ -167,8 +167,8 @@ RSpec.describe "Variable Type Inference", :doc do
         RUBY
       end
 
-      it "→ ?Symbol" do
-        expect_hover_type(line: 5, column: 6, expected: "?Symbol")
+      it "→ Symbol (nil filtered by truthiness)" do
+        expect_hover_type(line: 5, column: 6, expected: "Symbol")
       end
     end
 

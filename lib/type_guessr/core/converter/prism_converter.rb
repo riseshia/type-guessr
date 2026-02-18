@@ -546,28 +546,23 @@ module TypeGuessr
 
         # Generic ||= handler
         # x ||= value means: if x is nil/false, x = value, else keep x
-        # Type is union of original type and value type
+        # Uses OrNode to apply truthiness filtering (removes nil/false from LHS)
         private def convert_or_write(prism_node, context, kind)
           original_node = lookup_by_kind(prism_node.name, kind, context)
           value_node = convert(prism_node.value, context)
 
-          # Create merge node for union type (original | value)
-          branches = []
-          branches << original_node if original_node
-          branches << value_node
+          or_node = if original_node
+                      IR::OrNode.new(
+                        lhs: original_node,
+                        rhs: value_node,
+                        called_methods: [],
+                        loc: convert_loc(prism_node.location)
+                      )
+                    else
+                      value_node
+                    end
 
-          merge_node = if branches.size == 1
-                         branches.first
-                       else
-                         IR::MergeNode.new(
-                           branches: branches,
-                           called_methods: [],
-                           loc: convert_loc(prism_node.location)
-                         )
-                       end
-
-          # Create write node with merged value
-          write_node = create_write_node(prism_node.name, kind, merge_node, context, prism_node.location)
+          write_node = create_write_node(prism_node.name, kind, or_node, context, prism_node.location)
           register_by_kind(prism_node.name, write_node, kind, context)
           write_node
         end
@@ -1219,18 +1214,19 @@ module TypeGuessr
           body_nodes.last
         end
 
-        # Convert || (or) operator to MergeNode
-        # a || b → result is either a or b (short-circuit evaluation)
+        # Convert || (or) operator to OrNode
+        # a || b → LHS evaluated first, RHS only if LHS is falsy
         private def convert_or_node(prism_node, context)
           left_node = convert(prism_node.left, context)
           right_node = convert(prism_node.right, context)
 
-          branches = [left_node, right_node].compact
-          return nil if branches.empty?
-          return branches.first if branches.size == 1
+          return nil if left_node.nil? && right_node.nil?
+          return left_node if right_node.nil?
+          return right_node if left_node.nil?
 
-          IR::MergeNode.new(
-            branches: branches,
+          IR::OrNode.new(
+            lhs: left_node,
+            rhs: right_node,
             called_methods: [],
             loc: convert_loc(prism_node.location)
           )
@@ -1476,6 +1472,8 @@ module TypeGuessr
               returns << node
             when IR::MergeNode
               returns.concat(collect_returns(node.branches))
+            when IR::OrNode
+              returns.concat(collect_returns([node.lhs, node.rhs]))
             end
           end
           returns

@@ -205,6 +205,11 @@ module CoverageRunner
         location_index.add(file_path, node, scope_id)
         node.branches&.each { |branch| index_node_recursively(location_index, method_registry, file_path, branch, scope_id) }
 
+      when TypeGuessr::Core::IR::OrNode
+        location_index.add(file_path, node, scope_id)
+        index_node_recursively(location_index, method_registry, file_path, node.lhs, scope_id)
+        index_node_recursively(location_index, method_registry, file_path, node.rhs, scope_id)
+
       when TypeGuessr::Core::IR::ReturnNode
         location_index.add(file_path, node, scope_id)
         index_node_recursively(location_index, method_registry, file_path, node.value, scope_id) if node.value

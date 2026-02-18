@@ -135,6 +135,11 @@ module RubyLsp
             branch_key = process_body_node(branch, scope_id, return_sources)
             add_edge(branch_key, node_key) if branch_key
           end
+        when ::TypeGuessr::Core::IR::OrNode
+          [node.lhs, node.rhs].each do |child|
+            child_key = process_body_node(child, scope_id, return_sources)
+            add_edge(child_key, node_key) if child_key
+          end
         when ::TypeGuessr::Core::IR::LiteralNode
           # Process internal values (for Hash/Array literals with expressions) # -- values is an Array attribute, not Hash#values
           node.values&.each do |value_node|
@@ -195,8 +200,8 @@ module RubyLsp
         # For root key like "Class:def:name:line", scope is "Class"
         # For "Class#method:type:name:line", scope is "Class#method"
         # Find the last occurrence of known type prefixes
-        type_prefixes = %w[def: param: call: lit: local_write: local_read: ivar_write: ivar_read: cvar_write: cvar_read: merge: const: bparam: return: class:
-                           self:]
+        type_prefixes = %w[def: param: call: lit: local_write: local_read: ivar_write: ivar_read:
+                           cvar_write: cvar_read: merge: or: const: bparam: return: class: self:]
         last_type_pos = nil
 
         type_prefixes.each do |prefix|
@@ -286,6 +291,8 @@ module RubyLsp
           { literal_type: node.type.to_s }
         when ::TypeGuessr::Core::IR::MergeNode
           { branches_count: node.branches.size }
+        when ::TypeGuessr::Core::IR::OrNode
+          { kind: "or" }
         when ::TypeGuessr::Core::IR::ConstantNode
           { name: node.name.to_s }
         when ::TypeGuessr::Core::IR::BlockParamSlot

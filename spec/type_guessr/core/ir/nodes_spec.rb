@@ -502,6 +502,48 @@ RSpec.describe TypeGuessr::Core::IR do
     end
   end
 
+  describe "OrNode" do
+    it "stores lhs and rhs" do
+      lhs = described_class::LiteralNode.new(type: string_type, literal_value: nil, values: nil, called_methods: [], loc: loc)
+      rhs = described_class::LiteralNode.new(type: string_type, literal_value: nil, values: nil, called_methods: [], loc: loc)
+      node = described_class::OrNode.new(
+        lhs: lhs,
+        rhs: rhs,
+        called_methods: [],
+        loc: loc
+      )
+
+      expect(node.lhs).to eq(lhs)
+      expect(node.rhs).to eq(rhs)
+    end
+
+    it "returns lhs and rhs as dependencies" do
+      lhs = described_class::LiteralNode.new(type: string_type, literal_value: nil, values: nil, called_methods: [], loc: loc)
+      rhs = described_class::LiteralNode.new(type: string_type, literal_value: nil, values: nil, called_methods: [], loc: loc)
+      node = described_class::OrNode.new(
+        lhs: lhs,
+        rhs: rhs,
+        called_methods: [],
+        loc: loc
+      )
+
+      expect(node.dependencies).to eq([lhs, rhs])
+    end
+
+    it "generates or node_hash" do
+      lhs = described_class::LiteralNode.new(type: string_type, literal_value: nil, values: nil, called_methods: [], loc: loc)
+      rhs = described_class::LiteralNode.new(type: string_type, literal_value: nil, values: nil, called_methods: [], loc: loc)
+      node = described_class::OrNode.new(
+        lhs: lhs,
+        rhs: rhs,
+        called_methods: [],
+        loc: loc
+      )
+
+      expect(node.node_hash).to eq("or:0")
+    end
+  end
+
   describe "CalledMethod" do
     it "stores method name and signature information" do
       cm = described_class::CalledMethod.new(name: :foo, positional_count: 2, keywords: %i[bar baz])

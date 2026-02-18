@@ -358,7 +358,7 @@ RSpec.describe "Control Flow Type Inference", :doc do
       end
     end
 
-    context "||= compound assignment" do
+    context "||= compound assignment with nil lhs" do
       let(:source) do
         <<~RUBY
           def foo
@@ -369,8 +369,24 @@ RSpec.describe "Control Flow Type Inference", :doc do
         RUBY
       end
 
-      it "→ ?Integer" do
-        expect_hover_type(line: 4, column: 2, expected: "?Integer")
+      it "→ Integer (nil filtered by truthiness)" do
+        expect_hover_type(line: 4, column: 2, expected: "Integer")
+      end
+    end
+
+    context "||= compound assignment with truthy lhs" do
+      let(:source) do
+        <<~RUBY
+          def foo
+            x = 1
+            x ||= "hello"
+            x
+          end
+        RUBY
+      end
+
+      it "→ Integer (truthy lhs, rhs unreachable)" do
+        expect_hover_type(line: 4, column: 2, expected: "Integer")
       end
     end
 

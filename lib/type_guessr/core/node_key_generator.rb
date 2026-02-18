@@ -21,6 +21,7 @@ module TypeGuessr
       module_function def self_node(class_name, offset) = "self:#{class_name}:#{offset}"
       module_function def return_node(offset) = "return:#{offset}"
       module_function def merge(offset) = "merge:#{offset}"
+      module_function def or_node(offset) = "or:#{offset}"
       module_function def literal(type_name, offset) = "lit:#{type_name}:#{offset}"
       module_function def constant(name, offset) = "const:#{name}:#{offset}"
       module_function def class_module(name, offset) = "class:#{name}:#{offset}"

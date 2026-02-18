@@ -806,6 +806,10 @@ module RubyLsp
                     return escapeForMermaid(`Merge (${d.branches_count} branches)\\n(L${node.line})`);
                   }
 
+                  if (node.type === 'OrNode') {
+                    return escapeForMermaid(`Or (||)\\n(L${node.line})`);
+                  }
+
                   // Default format for other nodes
                   let label = node.type;
                   if (d.name) label += `: ${d.name}`;
@@ -836,6 +840,7 @@ module RubyLsp
                     ParamNode: 'paramNode',
                     LiteralNode: 'literalNode',
                     MergeNode: 'mergeNode',
+                    OrNode: 'mergeNode',
                     BlockParamSlot: 'blockParamNode'
                   };
                   return styles[nodeType] || 'otherNode';

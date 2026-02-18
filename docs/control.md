@@ -183,13 +183,23 @@ def foo(flag)
 end
 ```
 
-### ||= compound assignment
+### ||= compound assignment with nil lhs
 
 ```ruby
 def foo
   x = nil
   x ||= 1
-  [x]  # Guessed Type: ?Integer
+  [x]  # Guessed Type: Integer
+end
+```
+
+### ||= compound assignment with truthy lhs
+
+```ruby
+def foo
+  x = 1
+  x ||= "hello"
+  [x]  # Guessed Type: Integer
 end
 ```
 

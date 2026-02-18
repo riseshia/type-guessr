@@ -490,6 +490,37 @@ module TypeGuessr
         end
       end
 
+      # Short-circuit or node
+      # Represents || and ||= operations where LHS is evaluated first,
+      # and RHS is only evaluated if LHS is falsy (nil/false)
+      # @param lhs [Node] Left-hand side (evaluated first)
+      # @param rhs [Node] Right-hand side (evaluated only if LHS is falsy)
+      # @param called_methods [Array<CalledMethod>] Methods called on this node
+      # @param loc [Loc] Location information
+      OrNode = Data.define(:lhs, :rhs, :called_methods, :loc) do
+        include TreeInspect
+
+        def dependencies
+          [lhs, rhs]
+        end
+
+        def node_hash
+          NodeKeyGenerator.or_node(loc&.offset)
+        end
+
+        def node_key(scope_id)
+          "#{scope_id}:#{node_hash}"
+        end
+
+        def tree_inspect_fields(indent)
+          [
+            tree_field(:lhs, lhs, indent),
+            tree_field(:rhs, rhs, indent),
+            tree_field(:called_methods, called_methods, indent, last: true),
+          ]
+        end
+      end
+
       # Method definition node
       # @param name [Symbol] Method name
       # @param class_name [String, nil] Enclosing class name

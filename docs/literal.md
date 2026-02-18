@@ -38,7 +38,7 @@ items = []
 
 ```ruby
 data = {}
-[d]ata  # Guessed Type: Hash[untyped, untyped]
+[d]ata  # Guessed Type: { }
 ```
 
 ### Symbol literal

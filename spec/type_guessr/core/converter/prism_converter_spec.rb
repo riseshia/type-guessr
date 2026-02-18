@@ -846,7 +846,7 @@ RSpec.describe TypeGuessr::Core::Converter::PrismConverter do
         expect(node.value).to be_a(TypeGuessr::Core::IR::LiteralNode)
       end
 
-      it "creates MergeNode for defined variable" do
+      it "creates OrNode for defined variable" do
         source = <<~RUBY
           x = nil
           x ||= 1
@@ -862,9 +862,10 @@ RSpec.describe TypeGuessr::Core::Converter::PrismConverter do
 
         expect(node).to be_a(TypeGuessr::Core::IR::LocalWriteNode)
         expect(node.name).to eq(:x)
-        # Should be MergeNode with original and new value
-        expect(node.value).to be_a(TypeGuessr::Core::IR::MergeNode)
-        expect(node.value.branches.size).to eq(2)
+        # Should be OrNode with lhs (original) and rhs (new value)
+        expect(node.value).to be_a(TypeGuessr::Core::IR::OrNode)
+        expect(node.value.lhs).to be_a(TypeGuessr::Core::IR::LocalWriteNode)
+        expect(node.value.rhs).to be_a(TypeGuessr::Core::IR::LiteralNode)
       end
     end
 
@@ -963,7 +964,7 @@ RSpec.describe TypeGuessr::Core::Converter::PrismConverter do
     end
 
     describe "instance variable ||=" do
-      it "creates InstanceVariableWriteNode with MergeNode for defined variable" do
+      it "creates InstanceVariableWriteNode with OrNode for defined variable" do
         source = <<~RUBY
           class Foo
             def setup
@@ -984,7 +985,7 @@ RSpec.describe TypeGuessr::Core::Converter::PrismConverter do
         or_write_node = body_nodes[1]
         expect(or_write_node).to be_a(TypeGuessr::Core::IR::InstanceVariableWriteNode)
         expect(or_write_node.name).to eq(:@cache)
-        expect(or_write_node.value).to be_a(TypeGuessr::Core::IR::MergeNode)
+        expect(or_write_node.value).to be_a(TypeGuessr::Core::IR::OrNode)
       end
     end
 
@@ -1995,14 +1996,15 @@ RSpec.describe TypeGuessr::Core::Converter::PrismConverter do
   end
 
   describe "OrNode (|| operator)" do
-    it "converts || to MergeNode with both branches" do
+    it "converts || to OrNode with lhs and rhs" do
       source = "a || b"
       parsed = Prism.parse(source)
       context = TypeGuessr::Core::Converter::PrismConverter::Context.new
       node = converter.convert(parsed.value.statements.body.first, context)
 
-      expect(node).to be_a(TypeGuessr::Core::IR::MergeNode)
-      expect(node.branches.size).to eq(2)
+      expect(node).to be_a(TypeGuessr::Core::IR::OrNode)
+      expect(node.lhs).not_to be_nil
+      expect(node.rhs).not_to be_nil
     end
 
     it "converts method with || chain to have proper return_node" do
@@ -2018,7 +2020,7 @@ RSpec.describe TypeGuessr::Core::Converter::PrismConverter do
       class_node = converter.convert(parsed.value.statements.body.first, context)
 
       lookup_method = class_node.methods.first
-      expect(lookup_method.return_node).to be_a(TypeGuessr::Core::IR::MergeNode)
+      expect(lookup_method.return_node).to be_a(TypeGuessr::Core::IR::OrNode)
     end
 
     it "converts predicate method with || chain" do
@@ -2034,7 +2036,7 @@ RSpec.describe TypeGuessr::Core::Converter::PrismConverter do
       class_node = converter.convert(parsed.value.statements.body.first, context)
 
       valid_method = class_node.methods.first
-      expect(valid_method.return_node).to be_a(TypeGuessr::Core::IR::MergeNode)
+      expect(valid_method.return_node).to be_a(TypeGuessr::Core::IR::OrNode)
     end
   end
 

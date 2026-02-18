@@ -544,6 +544,78 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
       end
     end
 
+    context "with OrNode" do
+      it "returns RHS type when LHS is entirely falsy (nil)" do
+        lhs = TypeGuessr::Core::IR::LiteralNode.new(
+          type: TypeGuessr::Core::Types::ClassInstance.new("NilClass"),
+          literal_value: nil, values: nil, called_methods: [], loc: loc
+        )
+        rhs = TypeGuessr::Core::IR::LiteralNode.new(
+          type: TypeGuessr::Core::Types::ClassInstance.new("Integer"),
+          literal_value: nil, values: nil, called_methods: [], loc: loc
+        )
+        or_node = TypeGuessr::Core::IR::OrNode.new(lhs: lhs, rhs: rhs, called_methods: [], loc: loc)
+
+        result = resolver.infer(or_node)
+        expect(result.type).to be_a(TypeGuessr::Core::Types::ClassInstance)
+        expect(result.type.name).to eq("Integer")
+        expect(result.reason).to include("lhs falsy")
+      end
+
+      it "returns LHS type when LHS is always truthy" do
+        lhs = TypeGuessr::Core::IR::LiteralNode.new(
+          type: TypeGuessr::Core::Types::ClassInstance.new("Integer"),
+          literal_value: nil, values: nil, called_methods: [], loc: loc
+        )
+        rhs = TypeGuessr::Core::IR::LiteralNode.new(
+          type: TypeGuessr::Core::Types::ClassInstance.new("String"),
+          literal_value: nil, values: nil, called_methods: [], loc: loc
+        )
+        or_node = TypeGuessr::Core::IR::OrNode.new(lhs: lhs, rhs: rhs, called_methods: [], loc: loc)
+
+        result = resolver.infer(or_node)
+        expect(result.type).to be_a(TypeGuessr::Core::Types::ClassInstance)
+        expect(result.type.name).to eq("Integer")
+        expect(result.reason).to include("always truthy")
+      end
+
+      it "returns truthy LHS | RHS when LHS is mixed (truthy + falsy)" do
+        lhs_type = TypeGuessr::Core::Types::Union.new([
+                                                        TypeGuessr::Core::Types::ClassInstance.new("String"),
+                                                        TypeGuessr::Core::Types::ClassInstance.new("NilClass"),
+                                                      ])
+        lhs = TypeGuessr::Core::IR::LiteralNode.new(
+          type: lhs_type, literal_value: nil, values: nil, called_methods: [], loc: loc
+        )
+        rhs = TypeGuessr::Core::IR::LiteralNode.new(
+          type: TypeGuessr::Core::Types::ClassInstance.new("Integer"),
+          literal_value: nil, values: nil, called_methods: [], loc: loc
+        )
+        or_node = TypeGuessr::Core::IR::OrNode.new(lhs: lhs, rhs: rhs, called_methods: [], loc: loc)
+
+        result = resolver.infer(or_node)
+        expect(result.type).to be_a(TypeGuessr::Core::Types::Union)
+        type_names = result.type.types.map(&:name)
+        expect(type_names).to contain_exactly("String", "Integer")
+      end
+
+      it "returns RHS type when LHS is FalseClass" do
+        lhs = TypeGuessr::Core::IR::LiteralNode.new(
+          type: TypeGuessr::Core::Types::ClassInstance.new("FalseClass"),
+          literal_value: nil, values: nil, called_methods: [], loc: loc
+        )
+        rhs = TypeGuessr::Core::IR::LiteralNode.new(
+          type: TypeGuessr::Core::Types::ClassInstance.new("String"),
+          literal_value: nil, values: nil, called_methods: [], loc: loc
+        )
+        or_node = TypeGuessr::Core::IR::OrNode.new(lhs: lhs, rhs: rhs, called_methods: [], loc: loc)
+
+        result = resolver.infer(or_node)
+        expect(result.type).to be_a(TypeGuessr::Core::Types::ClassInstance)
+        expect(result.type.name).to eq("String")
+      end
+    end
+
     context "with unknown receiver fallback to Object" do
       # Helper to check if type is bool (either Union[TrueClass, FalseClass] or ClassInstance("bool"))
       def bool_type?(type)

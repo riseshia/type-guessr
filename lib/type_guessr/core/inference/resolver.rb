@@ -119,6 +119,8 @@ module TypeGuessr
             infer_call(node)
           when IR::BlockParamSlot
             infer_block_param_slot(node)
+          when IR::OrNode
+            infer_or(node)
           when IR::MergeNode
             infer_merge(node)
           when IR::DefNode
@@ -507,6 +509,55 @@ module TypeGuessr
 
           reasons = branch_results.map(&:reason).uniq.join(" | ")
           Result.new(union_type, "branch merge: #{reasons}", :unknown)
+        end
+
+        private def infer_or(node)
+          lhs_result = infer(node.lhs)
+          rhs_result = infer(node.rhs)
+          lhs_type = lhs_result.type
+
+          # Separate LHS into truthy and falsy parts
+          truthy_lhs = remove_falsy_types(lhs_type)
+          has_falsy = falsy_types?(lhs_type)
+
+          if !has_falsy
+            # LHS is always truthy → RHS unreachable
+            Result.new(lhs_type, "or: #{lhs_result.reason} (always truthy)", lhs_result.source)
+          elsif truthy_lhs.is_a?(Types::Unknown)
+            # LHS is entirely falsy → RHS only
+            Result.new(rhs_result.type, "or: #{rhs_result.reason} (lhs falsy)", rhs_result.source)
+          else
+            # Mixed: truthy part of LHS | RHS
+            union = Types::Union.new([truthy_lhs, rhs_result.type])
+            Result.new(union, "or: #{lhs_result.reason} | #{rhs_result.reason}", :unknown)
+          end
+        end
+
+        private def remove_falsy_types(type)
+          case type
+          when Types::Union
+            truthy = type.types.reject { |t| falsy_type?(t) }
+            case truthy.size
+            when 0 then Types::Unknown.instance
+            when 1 then truthy.first
+            else Types::Union.new(truthy)
+            end
+          else
+            falsy_type?(type) ? Types::Unknown.instance : type
+          end
+        end
+
+        private def falsy_types?(type)
+          case type
+          when Types::Union
+            type.types.any? { |t| falsy_type?(t) }
+          else
+            falsy_type?(type)
+          end
+        end
+
+        private def falsy_type?(type)
+          type.is_a?(Types::ClassInstance) && %w[NilClass FalseClass].include?(type.name)
         end
 
         private def infer_def(node)

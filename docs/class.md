@@ -110,6 +110,42 @@ class User
 end
 ```
 
+### when calling .new with short constant name in nested module
+
+```ruby
+module Outer
+  class Inner
+    def initialize(arg1, arg2 = nil)
+    end
+  end
+
+  class User
+    def create
+      Inner.[n]ew("test")  # Signature: (untyped arg1, ?nil arg2) -> Outer::Inner
+    end
+  end
+end
+```
+
+### when calling .new with deeply nested short constant name
+
+```ruby
+module A
+  module B
+    class Target
+      def initialize(x, y, z = 0)
+      end
+    end
+
+    class Consumer
+      def build
+        Target.[n]ew(1, 2)  # Signature: (untyped x, untyped y, ?Integer z) -> A::B::Target
+      end
+    end
+  end
+end
+```
+
 ## Class instantiation (misc)
 
 ### basic class instantiation

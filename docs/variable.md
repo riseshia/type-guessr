@@ -99,7 +99,7 @@ class C
   def get_lv
     lv = nil
     lv ||= :LVar
-    lv  # Guessed Type: ?Symbol
+    lv  # Guessed Type: Symbol
   end
 end
 ```
