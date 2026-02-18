@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "type-guessr": {
+      "command": "ruby",
+      "args": ["exe/type-guessr", "mcp", "."]
+    }
+  }
+}
+
