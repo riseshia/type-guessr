@@ -69,7 +69,7 @@ RSpec.describe "Literal Type Inference", :doc do
       end
 
       it "→ Hash" do
-        expect_hover_type(line: 2, column: 0, expected: "Hash[untyped, untyped]")
+        expect_hover_type(line: 2, column: 0, expected: "{ }")
       end
     end
 

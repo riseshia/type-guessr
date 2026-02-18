@@ -1756,7 +1756,7 @@ module TypeGuessr
         end
 
         private def hash_element_types_for(hash_node)
-          return Types::HashType.new if hash_node.elements.empty?
+          return Types::HashShape.new({}) if hash_node.elements.empty?
 
           # Check if all keys are symbols for HashShape
           all_symbol_keys = hash_node.elements.all? do |elem|

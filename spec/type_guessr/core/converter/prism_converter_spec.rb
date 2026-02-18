@@ -41,7 +41,7 @@ RSpec.describe TypeGuessr::Core::Converter::PrismConverter do
       node = converter.convert(parsed.value.statements.body.first)
 
       expect(node).to be_a(TypeGuessr::Core::IR::LiteralNode)
-      expect(node.type).to be_a(TypeGuessr::Core::Types::HashType)
+      expect(node.type).to be_a(TypeGuessr::Core::Types::HashShape)
     end
   end
 
