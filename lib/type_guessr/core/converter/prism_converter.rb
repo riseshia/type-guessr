@@ -262,6 +262,9 @@ module TypeGuessr
 
                  when Prism::AndNode
                    convert_and_node(prism_node, context)
+
+                 when Prism::IndexOrWriteNode
+                   convert_index_or_write(prism_node, context)
                  end
 
           register_node(node, context) if node
@@ -1244,6 +1247,31 @@ module TypeGuessr
 
           IR::MergeNode.new(
             branches: branches,
+            called_methods: [],
+            loc: convert_loc(prism_node.location)
+          )
+        end
+
+        # Convert h[:key] ||= value → OrNode(h.[](:key), value)
+        private def convert_index_or_write(prism_node, context)
+          receiver_node = convert(prism_node.receiver, context)
+          args = prism_node.arguments&.arguments&.map { |arg| convert(arg, context) } || []
+          value_node = convert(prism_node.value, context)
+
+          read_call = IR::CallNode.new(
+            method: :[],
+            receiver: receiver_node,
+            args: args,
+            block_params: [],
+            block_body: nil,
+            has_block: false,
+            called_methods: [],
+            loc: convert_loc(prism_node.opening_loc)
+          )
+
+          IR::OrNode.new(
+            lhs: read_call,
+            rhs: value_node,
             called_methods: [],
             loc: convert_loc(prism_node.location)
           )

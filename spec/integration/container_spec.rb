@@ -333,6 +333,25 @@ RSpec.describe "Container Type Inference", :doc do
     end
   end
 
+  describe "Hash indexed ||= assignment" do
+    context "hash indexed ||= on empty hash" do
+      let(:source) do
+        <<~RUBY
+          def foo
+            h = {}
+            h[:a] ||= 1
+          end
+
+          r = foo
+        RUBY
+      end
+
+      it "→ Integer" do
+        expect_hover_type(line: 6, column: 0, expected: "Integer")
+      end
+    end
+  end
+
   describe "Array indexed assignment" do
     context "with different type" do
       let(:source) do

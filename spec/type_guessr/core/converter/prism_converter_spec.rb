@@ -963,6 +963,26 @@ RSpec.describe TypeGuessr::Core::Converter::PrismConverter do
       end
     end
 
+    describe "index ||= (IndexOrWriteNode)" do
+      it "creates OrNode with CallNode(:[]) as LHS" do
+        source = <<~RUBY
+          h = {}
+          h[:a] ||= 1
+        RUBY
+        parsed = Prism.parse(source)
+        context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+
+        converter.convert(parsed.value.statements.body[0], context)
+        node = converter.convert(parsed.value.statements.body[1], context)
+
+        expect(node).to be_a(TypeGuessr::Core::IR::OrNode)
+        expect(node.lhs).to be_a(TypeGuessr::Core::IR::CallNode)
+        expect(node.lhs.method).to eq(:[])
+        expect(node.rhs).to be_a(TypeGuessr::Core::IR::LiteralNode)
+        expect(node.rhs.type.name).to eq("Integer")
+      end
+    end
+
     describe "instance variable ||=" do
       it "creates InstanceVariableWriteNode with OrNode for defined variable" do
         source = <<~RUBY
