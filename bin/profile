@@ -38,6 +38,10 @@ require_relative "../lib/type_guessr/core/converter/prism_converter"
 require_relative "../lib/type_guessr/core/index/location_index"
 require_relative "../lib/type_guessr/core/inference/resolver"
 require_relative "../lib/type_guessr/core/registry/signature_registry"
+require_relative "../lib/type_guessr/core/registry/method_registry"
+require_relative "../lib/type_guessr/core/registry/instance_variable_registry"
+require_relative "../lib/type_guessr/core/registry/class_variable_registry"
+require_relative "../lib/type_guessr/core/type_simplifier"
 
 module ProfileIndexing
   # Runs stackprof profiling on TypeGuessr
@@ -98,7 +102,18 @@ module ProfileIndexing
 
     def build_resolver
       signature_registry = TypeGuessr::Core::Registry::SignatureRegistry.instance.preload
-      TypeGuessr::Core::Inference::Resolver.new(signature_registry)
+      method_registry = TypeGuessr::Core::Registry::MethodRegistry.new
+      ivar_registry = TypeGuessr::Core::Registry::InstanceVariableRegistry.new
+      cvar_registry = TypeGuessr::Core::Registry::ClassVariableRegistry.new
+      type_simplifier = TypeGuessr::Core::TypeSimplifier.new
+      TypeGuessr::Core::Inference::Resolver.new(
+        signature_registry,
+        type_simplifier: type_simplifier,
+        code_index: nil,
+        method_registry: method_registry,
+        ivar_registry: ivar_registry,
+        cvar_registry: cvar_registry
+      )
     end
 
     def collect_indexable_files
