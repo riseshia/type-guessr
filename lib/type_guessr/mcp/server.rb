@@ -27,9 +27,10 @@ require_relative "../core/signature_builder"
 require_relative "../core/type_simplifier"
 require_relative "../core/logger"
 
-# Load CodeIndexAdapter and StandaloneRuntime
+# Load CodeIndexAdapter, StandaloneRuntime, and FileWatcher
 require_relative "../../ruby_lsp/type_guessr/code_index_adapter"
 require_relative "standalone_runtime"
+require_relative "file_watcher"
 
 module TypeGuessr
   module MCP
@@ -56,6 +57,7 @@ module TypeGuessr
         index = build_ruby_index
         @runtime = build_runtime(index)
         index_project_files
+        start_file_watcher
 
         server = ::MCP::Server.new(
           name: "type-guessr",
@@ -135,6 +137,31 @@ module TypeGuessr
         @runtime.finalize_index!
         @runtime.preload_signatures!
         warn "[type-guessr] Indexed #{processed}/#{total} files"
+      end
+
+      private def start_file_watcher
+        @file_watcher = FileWatcher.new(
+          project_path: @project_path,
+          on_change: method(:handle_file_changes)
+        )
+        @file_watcher.start
+        warn "[type-guessr] File watcher started (polling every 2s)"
+      end
+
+      private def handle_file_changes(modified, added, removed)
+        (modified + added).each do |file_path|
+          source = File.read(file_path)
+          parsed = Prism.parse(source)
+          @runtime.index_parsed_file(file_path, parsed)
+          warn "[type-guessr] Re-indexed: #{file_path}"
+        rescue StandardError => e
+          warn "[type-guessr] Error re-indexing #{file_path}: #{e.message}"
+        end
+
+        removed.each do |file_path|
+          @runtime.remove_indexed_file(file_path)
+          warn "[type-guessr] Removed from index: #{file_path}"
+        end
       end
 
       private def build_tools

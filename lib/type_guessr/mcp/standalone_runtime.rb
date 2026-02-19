@@ -41,6 +41,7 @@ module TypeGuessr
 
         @mutex.synchronize do
           @location_index.remove_file(file_path)
+          @resolver.clear_cache
 
           context = Core::Converter::PrismConverter::Context.new(
             file_path: file_path,
@@ -53,6 +54,15 @@ module TypeGuessr
           prism_result.value.statements&.body&.each do |stmt|
             @converter.convert(stmt, context)
           end
+        end
+      end
+
+      # Remove all indexed data for a file
+      # @param file_path [String] Absolute path to the file
+      def remove_indexed_file(file_path)
+        @mutex.synchronize do
+          @location_index.remove_file(file_path)
+          @resolver.clear_cache
         end
       end
 
