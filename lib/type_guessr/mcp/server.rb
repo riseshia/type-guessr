@@ -56,6 +56,7 @@ module TypeGuessr
         index = build_ruby_index
         @runtime = build_runtime(index)
         index_project_files
+        start_file_watcher
 
         server = ::MCP::Server.new(
           name: "type-guessr",
@@ -137,6 +138,31 @@ module TypeGuessr
         warn "[type-guessr] Indexed #{processed}/#{total} files"
       end
 
+      private def start_file_watcher
+        @file_watcher = FileWatcher.new(
+          project_path: @project_path,
+          on_change: method(:handle_file_changes)
+        )
+        @file_watcher.start
+        warn "[type-guessr] File watcher started (polling every 2s)"
+      end
+
+      private def handle_file_changes(modified, added, removed)
+        (modified + added).each do |file_path|
+          source = File.read(file_path)
+          parsed = Prism.parse(source)
+          @runtime.index_parsed_file(file_path, parsed)
+          warn "[type-guessr] Re-indexed: #{file_path}"
+        rescue StandardError => e
+          warn "[type-guessr] Error re-indexing #{file_path}: #{e.message}"
+        end
+
+        removed.each do |file_path|
+          @runtime.remove_indexed_file(file_path)
+          warn "[type-guessr] Removed from index: #{file_path}"
+        end
+      end
+
       private def build_tools
         [build_infer_type_tool, build_get_method_signature_tool, build_search_methods_tool]
       end
@@ -206,6 +232,90 @@ module TypeGuessr
 
       private def json_response(data)
         ::MCP::Tool::Response.new([{ type: "text", text: JSON.generate(data) }])
+      end
+    end
+
+    # Watches a project directory for .rb file changes using mtime polling.
+    # Detects modified, added, and deleted files and invokes a callback.
+    #
+    # Usage:
+    #   watcher = FileWatcher.new(project_path: "/path/to/project", interval: 2) do |modified, added, removed|
+    #     modified.each { |f| reindex(f) }
+    #     removed.each { |f| remove(f) }
+    #   end
+    #   watcher.start
+    class FileWatcher
+      # @param project_path [String] Root directory to watch
+      # @param interval [Numeric] Polling interval in seconds (default: 2)
+      # @param on_change [Proc] Callback receiving (modified, added, removed) arrays
+      def initialize(project_path:, interval: 2, on_change:)
+        @project_path = project_path
+        @interval = interval
+        @on_change = on_change
+        @thread = nil
+        @running = false
+      end
+
+      def start
+        @running = true
+        @snapshot = take_snapshot
+        @thread = Thread.new { poll_loop }
+        @thread.abort_on_exception = true
+      end
+
+      def stop
+        @running = false
+        @thread&.join(5)
+        @thread = nil
+      end
+
+      def running?
+        @running && @thread&.alive?
+      end
+
+      private
+
+      def poll_loop
+        while @running
+          sleep(@interval)
+          check_changes
+        end
+      end
+
+      def check_changes
+        current = take_snapshot
+        previous = @snapshot
+
+        modified = []
+        added = []
+        removed = []
+
+        current.each do |path, mtime|
+          if previous.key?(path)
+            modified << path if mtime > previous[path]
+          else
+            added << path
+          end
+        end
+
+        previous.each_key do |path|
+          removed << path unless current.key?(path)
+        end
+
+        @snapshot = current
+
+        return if modified.empty? && added.empty? && removed.empty?
+
+        @on_change.call(modified, added, removed)
+      end
+
+      def take_snapshot
+        pattern = File.join(@project_path, "**", "*.rb")
+        Dir.glob(pattern).each_with_object({}) do |path, hash|
+          hash[path] = File.mtime(path)
+        rescue Errno::ENOENT
+          # File deleted between glob and mtime - skip
+        end
       end
     end
   end

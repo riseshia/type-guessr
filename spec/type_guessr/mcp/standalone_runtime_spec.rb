@@ -228,5 +228,62 @@ RSpec.describe TypeGuessr::MCP::StandaloneRuntime do
         expect { runtime.index_parsed_file("/tmp/bad.rb", bad_result) }.not_to raise_error
       end
     end
+
+    it "reflects updated type after re-indexing a modified file" do
+      source = <<~RUBY
+        class Updater
+          def value
+            x = "hello"
+          end
+        end
+      RUBY
+
+      build_runtime_with_source(source) do |runtime, file_path|
+        result = runtime.infer_at(file_path, 3, 4)
+        expect(result[:type]).to include("String")
+
+        # Modify the file: change string to integer
+        new_source = <<~RUBY
+          class Updater
+            def value
+              x = 42
+            end
+          end
+        RUBY
+        File.write(file_path, new_source)
+
+        # Re-index
+        parsed = Prism.parse(new_source)
+        runtime.index_parsed_file(file_path, parsed)
+
+        result = runtime.infer_at(file_path, 3, 4)
+        expect(result[:type]).to include("Integer")
+      end
+    end
+  end
+
+  describe "#remove_indexed_file" do
+    it "removes indexed nodes so queries return error" do
+      source = <<~RUBY
+        class Removable
+          def greet
+            name = "hello"
+          end
+        end
+      RUBY
+
+      build_runtime_with_source(source) do |runtime, file_path|
+        # Verify it works before removal
+        result = runtime.infer_at(file_path, 3, 4)
+        expect(result).not_to have_key(:error)
+
+        # Remove the file from index
+        runtime.remove_indexed_file(file_path)
+
+        # Now queries should return error (node not indexed)
+        result = runtime.infer_at(file_path, 3, 4)
+        expect(result).to have_key(:error)
+      end
+    end
   end
 end
