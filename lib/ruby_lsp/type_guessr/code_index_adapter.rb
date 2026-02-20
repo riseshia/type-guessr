@@ -18,7 +18,7 @@ module RubyLsp
 
         method_sets = method_names.map do |method_name|
           entries = @index.fuzzy_search(method_name.to_s) do |entry|
-            entry.is_a?(RubyIndexer::Entry::Method) && entry.name == method_name.to_s
+            entry.is_a?(RubyIndexer::Entry::Member) && entry.name == method_name.to_s
           end
           entries.filter_map do |entry|
             entry.owner.name if entry.respond_to?(:owner) && entry.owner

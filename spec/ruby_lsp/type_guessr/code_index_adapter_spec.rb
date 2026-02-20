@@ -99,6 +99,67 @@ RSpec.describe RubyLsp::TypeGuessr::CodeIndexAdapter do
     end
   end
 
+  describe "#find_classes_defining_methods" do
+    it "finds classes defining methods via def" do
+      source = <<~RUBY
+        class Recipe
+          def comments
+          end
+        end
+      RUBY
+
+      with_server_and_addon(source) do |server, _uri|
+        adapter = described_class.new(server.global_state.index)
+
+        result = adapter.find_classes_defining_methods([:comments])
+        expect(result).to include("Recipe")
+      end
+    end
+
+    it "finds classes defining methods via attr_reader" do
+      source = <<~RUBY
+        class DefNode
+          attr_reader :name, :params
+        end
+      RUBY
+
+      with_server_and_addon(source) do |server, _uri|
+        adapter = described_class.new(server.global_state.index)
+
+        result = adapter.find_classes_defining_methods(%i[name params])
+        expect(result).to include("DefNode")
+      end
+    end
+
+    it "returns intersection of classes defining all methods" do
+      source = <<~RUBY
+        class A
+          def foo; end
+          def bar; end
+        end
+
+        class B
+          def foo; end
+        end
+      RUBY
+
+      with_server_and_addon(source) do |server, _uri|
+        adapter = described_class.new(server.global_state.index)
+
+        result = adapter.find_classes_defining_methods(%i[foo bar])
+        expect(result).to include("A")
+        expect(result).not_to include("B")
+      end
+    end
+
+    it "returns empty array for empty method names" do
+      adapter = described_class.new(nil)
+
+      result = adapter.find_classes_defining_methods([])
+      expect(result).to eq([])
+    end
+  end
+
   describe "#instance_method_owner" do
     it "returns Object for tap method on custom class" do
       source = <<~RUBY
