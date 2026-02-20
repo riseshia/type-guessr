@@ -698,7 +698,11 @@ module TypeGuessr
                            exc.name.to_s
                          when Prism::ConstantPathNode
                            # Handle namespaced constants like Net::HTTPError
-                           exc.full_name
+                           begin
+                             exc.full_name
+                           rescue Prism::ConstantPathNode::DynamicPartsInConstantPathError
+                             "StandardError"
+                           end
                          else
                            "StandardError"
                          end

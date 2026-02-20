@@ -1744,6 +1744,20 @@ RSpec.describe TypeGuessr::Core::Converter::PrismConverter do
         write_node = context.lookup_variable(:e)
         expect(write_node.value.type.name).to eq("StandardError")
       end
+
+      it "handles dynamic constant path in rescue clause" do
+        source = <<~RUBY
+          begin
+            risky
+          rescue self::CustomError => e
+            e
+          end
+        RUBY
+        parsed = Prism.parse(source)
+        context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+
+        expect { converter.convert(parsed.value.statements.body.first, context) }.not_to raise_error
+      end
     end
 
     describe "pattern matching (case/in)" do
