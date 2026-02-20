@@ -339,7 +339,13 @@ This project follows strict Test-Driven Development (TDD) practices.
 1. Run linter on changed files: `bundle exec rubocop -a <changed_files>`
 2. Run all tests: `bundle exec rspec`
 3. Regenerate docs if any `:doc` tagged integration specs were modified: `bin/gen-doc`
-4. Make ONE atomic commit
+4. If any of the following files were changed, suggest running `/sync-docs`:
+   - `lib/type_guessr/core/types.rb` (Type additions/removals)
+   - `lib/type_guessr/core/ir/nodes.rb` (IR Node additions/removals)
+   - `lib/type_guessr/core/registry/` (registry structure changes)
+   - `lib/type_guessr/core/index/` (index mechanism changes)
+   - `lib/ruby_lsp/type_guessr/` (new integration files)
+5. Make ONE atomic commit
 
 ## Commit Strategy
 
