@@ -467,7 +467,8 @@ module TypeGuessr
             context.current_class_name,
             value_node,
             # Share called_methods with value node for type propagation
-            value_node.called_methods,
+            # nil case: value is an unhandled node type (e.g., LambdaNode)
+            value_node&.called_methods || [],
             convert_loc(prism_node.location)
           )
           context.register_variable(prism_node.name, write_node)
