@@ -7,6 +7,13 @@ module TypeGuessr
     # Intermediate Representation (IR) nodes for type inference.
     # Each node represents a construct in the source code and forms a
     # reverse dependency graph where nodes point to their dependencies.
+    #
+    # Performance note: All node types use plain Class with positional arguments
+    # and attr_reader/attr_accessor. This avoids the overhead of keyword argument
+    # processing in CRuby's VM (setup_parameters_complex path), yielding the
+    # fastest possible object allocation. Loc (formerly Data.define(:offset)) is
+    # inlined as a plain Integer to eliminate ~2M wrapper object allocations
+    # during indexing.
     module IR
       # Shortcut to NodeKeyGenerator for generating node hash keys
       NodeKeyGenerator = Core::NodeKeyGenerator
@@ -21,10 +28,6 @@ module TypeGuessr
         last_sep = path.rindex("::")
         last_sep ? path[(last_sep + 2)..] : path
       end
-
-      # Location information for IR nodes
-      # @param offset [Integer] Byte offset from start of file (0-indexed)
-      Loc = Data.define(:offset)
 
       # Method call signature for duck typing inference
       # @param name [Symbol] Method name
@@ -57,7 +60,7 @@ module TypeGuessr
         end
 
         private def format_loc
-          loc ? "@#{loc.offset}" : "∅"
+          loc ? "@#{loc}" : "∅"
         end
 
         private def tree_field(name, value, indent, last: false)
@@ -106,13 +109,19 @@ module TypeGuessr
       # @param literal_value [Object, nil] The actual literal value (for Symbol, Integer, String)
       # @param values [Array<Node>, nil] Internal value nodes for compound literals (Hash/Array)
       # @param called_methods [Array<CalledMethod>] Methods called on this node (for method-based inference)
-      # @param loc [Loc] Location information
-      #
-      # Examples: "hello" → String, 123 → Integer, [] → Array, {} → Hash
-      # For compound literals, values contains the internal expression nodes
-      # For simple literals, literal_value stores the actual value (e.g., :a for symbols)
-      LiteralNode = Data.define(:type, :literal_value, :values, :called_methods, :loc) do
+      # @param loc [Integer, nil] Byte offset from start of file (0-indexed)
+      class LiteralNode
         include TreeInspect
+
+        attr_reader :type, :literal_value, :values, :called_methods, :loc
+
+        def initialize(type, literal_value, values, called_methods, loc)
+          @type = type
+          @literal_value = literal_value
+          @values = values
+          @called_methods = called_methods
+          @loc = loc
+        end
 
         def dependencies
           values || []
@@ -120,7 +129,7 @@ module TypeGuessr
 
         def node_hash
           type_name = type.is_a?(Class) ? IR.extract_last_name(type.name) : IR.extract_last_name(type.class.name)
-          NodeKeyGenerator.literal(type_name, loc&.offset)
+          NodeKeyGenerator.literal(type_name, loc)
         end
 
         def node_key(scope_id)
@@ -142,18 +151,27 @@ module TypeGuessr
       # @param name [Symbol] Variable name
       # @param value [Node] The node of the assigned value
       # @param called_methods [Array<Symbol>] Methods called on this variable (for method-based inference)
-      # @param loc [Loc] Location information
+      # @param loc [Integer, nil] Byte offset from start of file (0-indexed)
       #
       # Note: called_methods is a shared array object that can be mutated during parsing
-      LocalWriteNode = Data.define(:name, :value, :called_methods, :loc) do
+      class LocalWriteNode
         include TreeInspect
+
+        attr_reader :name, :value, :called_methods, :loc
+
+        def initialize(name, value, called_methods, loc)
+          @name = name
+          @value = value
+          @called_methods = called_methods
+          @loc = loc
+        end
 
         def dependencies
           value ? [value] : []
         end
 
         def node_hash
-          NodeKeyGenerator.local_write(name, loc&.offset)
+          NodeKeyGenerator.local_write(name, loc)
         end
 
         def node_key(scope_id)
@@ -173,18 +191,27 @@ module TypeGuessr
       # @param name [Symbol] Variable name
       # @param write_node [LocalWriteNode, nil] The LocalWriteNode this read references
       # @param called_methods [Array<Symbol>] Methods called on this variable (for method-based inference)
-      # @param loc [Loc] Location information
+      # @param loc [Integer, nil] Byte offset from start of file (0-indexed)
       #
       # Note: called_methods is shared with LocalWriteNode for method-based inference propagation
-      LocalReadNode = Data.define(:name, :write_node, :called_methods, :loc) do
+      class LocalReadNode
         include TreeInspect
+
+        attr_reader :name, :write_node, :called_methods, :loc
+
+        def initialize(name, write_node, called_methods, loc)
+          @name = name
+          @write_node = write_node
+          @called_methods = called_methods
+          @loc = loc
+        end
 
         def dependencies
           write_node ? [write_node] : []
         end
 
         def node_hash
-          NodeKeyGenerator.local_read(name, loc&.offset)
+          NodeKeyGenerator.local_read(name, loc)
         end
 
         def node_key(scope_id)
@@ -205,16 +232,26 @@ module TypeGuessr
       # @param class_name [String, nil] Enclosing class name for deferred resolution
       # @param value [Node] The node of the assigned value
       # @param called_methods [Array<Symbol>] Methods called on this variable (for method-based inference)
-      # @param loc [Loc] Location information
-      InstanceVariableWriteNode = Data.define(:name, :class_name, :value, :called_methods, :loc) do
+      # @param loc [Integer, nil] Byte offset from start of file (0-indexed)
+      class InstanceVariableWriteNode
         include TreeInspect
+
+        attr_reader :name, :class_name, :value, :called_methods, :loc
+
+        def initialize(name, class_name, value, called_methods, loc)
+          @name = name
+          @class_name = class_name
+          @value = value
+          @called_methods = called_methods
+          @loc = loc
+        end
 
         def dependencies
           value ? [value] : []
         end
 
         def node_hash
-          NodeKeyGenerator.ivar_write(name, loc&.offset)
+          NodeKeyGenerator.ivar_write(name, loc)
         end
 
         def node_key(scope_id)
@@ -236,19 +273,29 @@ module TypeGuessr
       # @param class_name [String, nil] Enclosing class name for deferred resolution
       # @param write_node [InstanceVariableWriteNode, nil] The write node this read references
       # @param called_methods [Array<Symbol>] Methods called on this variable (for method-based inference)
-      # @param loc [Loc] Location information
+      # @param loc [Integer, nil] Byte offset from start of file (0-indexed)
       #
       # Note: write_node may be nil at conversion time if assignment appears later.
       # Resolver performs deferred lookup using class_name.
-      InstanceVariableReadNode = Data.define(:name, :class_name, :write_node, :called_methods, :loc) do
+      class InstanceVariableReadNode
         include TreeInspect
+
+        attr_reader :name, :class_name, :write_node, :called_methods, :loc
+
+        def initialize(name, class_name, write_node, called_methods, loc)
+          @name = name
+          @class_name = class_name
+          @write_node = write_node
+          @called_methods = called_methods
+          @loc = loc
+        end
 
         def dependencies
           write_node ? [write_node] : []
         end
 
         def node_hash
-          NodeKeyGenerator.ivar_read(name, loc&.offset)
+          NodeKeyGenerator.ivar_read(name, loc)
         end
 
         def node_key(scope_id)
@@ -270,16 +317,26 @@ module TypeGuessr
       # @param class_name [String, nil] Enclosing class name for deferred resolution
       # @param value [Node] The node of the assigned value
       # @param called_methods [Array<Symbol>] Methods called on this variable (for method-based inference)
-      # @param loc [Loc] Location information
-      ClassVariableWriteNode = Data.define(:name, :class_name, :value, :called_methods, :loc) do
+      # @param loc [Integer, nil] Byte offset from start of file (0-indexed)
+      class ClassVariableWriteNode
         include TreeInspect
+
+        attr_reader :name, :class_name, :value, :called_methods, :loc
+
+        def initialize(name, class_name, value, called_methods, loc)
+          @name = name
+          @class_name = class_name
+          @value = value
+          @called_methods = called_methods
+          @loc = loc
+        end
 
         def dependencies
           value ? [value] : []
         end
 
         def node_hash
-          NodeKeyGenerator.cvar_write(name, loc&.offset)
+          NodeKeyGenerator.cvar_write(name, loc)
         end
 
         def node_key(scope_id)
@@ -301,16 +358,26 @@ module TypeGuessr
       # @param class_name [String, nil] Enclosing class name for deferred resolution
       # @param write_node [ClassVariableWriteNode, nil] The write node this read references
       # @param called_methods [Array<Symbol>] Methods called on this variable (for method-based inference)
-      # @param loc [Loc] Location information
-      ClassVariableReadNode = Data.define(:name, :class_name, :write_node, :called_methods, :loc) do
+      # @param loc [Integer, nil] Byte offset from start of file (0-indexed)
+      class ClassVariableReadNode
         include TreeInspect
+
+        attr_reader :name, :class_name, :write_node, :called_methods, :loc
+
+        def initialize(name, class_name, write_node, called_methods, loc)
+          @name = name
+          @class_name = class_name
+          @write_node = write_node
+          @called_methods = called_methods
+          @loc = loc
+        end
 
         def dependencies
           write_node ? [write_node] : []
         end
 
         def node_hash
-          NodeKeyGenerator.cvar_read(name, loc&.offset)
+          NodeKeyGenerator.cvar_read(name, loc)
         end
 
         def node_key(scope_id)
@@ -333,18 +400,28 @@ module TypeGuessr
       #                      :keyword_optional, :keyword_rest, :block, :forwarding)
       # @param default_value [Node, nil] Default value node (nil if no default)
       # @param called_methods [Array<Symbol>] Methods called on this parameter (for method-based inference)
-      # @param loc [Loc] Location information
+      # @param loc [Integer, nil] Byte offset from start of file (0-indexed)
       #
       # Note: called_methods is a shared array object that can be mutated during parsing
-      ParamNode = Data.define(:name, :kind, :default_value, :called_methods, :loc) do
+      class ParamNode
         include TreeInspect
+
+        attr_reader :name, :kind, :default_value, :called_methods, :loc
+
+        def initialize(name, kind, default_value, called_methods, loc)
+          @name = name
+          @kind = kind
+          @default_value = default_value
+          @called_methods = called_methods
+          @loc = loc
+        end
 
         def dependencies
           default_value ? [default_value] : []
         end
 
         def node_hash
-          NodeKeyGenerator.param(name, loc&.offset)
+          NodeKeyGenerator.param(name, loc)
         end
 
         def node_key(scope_id)
@@ -365,16 +442,25 @@ module TypeGuessr
       # @param name [String] Constant name (e.g., "DEFAULT_NAME", "User::ADMIN")
       # @param dependency [Node] The node where this constant is defined
       # @param called_methods [Array<CalledMethod>] Methods called on this node (for method-based inference)
-      # @param loc [Loc] Location information
-      ConstantNode = Data.define(:name, :dependency, :called_methods, :loc) do
+      # @param loc [Integer, nil] Byte offset from start of file (0-indexed)
+      class ConstantNode
         include TreeInspect
+
+        attr_reader :name, :dependency, :called_methods, :loc
+
+        def initialize(name, dependency, called_methods, loc)
+          @name = name
+          @dependency = dependency
+          @called_methods = called_methods
+          @loc = loc
+        end
 
         def dependencies
           dependency ? [dependency] : []
         end
 
         def node_hash
-          NodeKeyGenerator.constant(name, loc&.offset)
+          NodeKeyGenerator.constant(name, loc)
         end
 
         def node_key(scope_id)
@@ -398,9 +484,23 @@ module TypeGuessr
       # @param block_body [Node, nil] Block body return node (for inferring block return type)
       # @param has_block [Boolean] Whether a block was provided (even if empty)
       # @param called_methods [Array<CalledMethod>] Methods called on this node (for method-based inference)
-      # @param loc [Loc] Location information
-      CallNode = Data.define(:method, :receiver, :args, :block_params, :block_body, :has_block, :called_methods, :loc) do
+      # @param loc [Integer, nil] Byte offset from start of file (0-indexed)
+      class CallNode
         include TreeInspect
+
+        attr_reader :method, :receiver, :args, :called_methods, :loc
+        attr_accessor :block_params, :block_body, :has_block
+
+        def initialize(method, receiver, args, block_params, block_body, has_block, called_methods, loc)
+          @method = method
+          @receiver = receiver
+          @args = args
+          @block_params = block_params
+          @block_body = block_body
+          @has_block = has_block
+          @called_methods = called_methods
+          @loc = loc
+        end
 
         def dependencies
           deps = []
@@ -411,7 +511,7 @@ module TypeGuessr
         end
 
         def node_hash
-          NodeKeyGenerator.call(method, loc&.offset)
+          NodeKeyGenerator.call(method, loc)
         end
 
         def node_key(scope_id)
@@ -436,16 +536,25 @@ module TypeGuessr
       # @param index [Integer] Parameter index (0-based)
       # @param call_node [CallNode] The call node this slot belongs to
       # @param called_methods [Array<CalledMethod>] Methods called on this node (for method-based inference)
-      # @param loc [Loc] Location information for the parameter itself
-      BlockParamSlot = Data.define(:index, :call_node, :called_methods, :loc) do
+      # @param loc [Integer, nil] Byte offset from start of file (0-indexed)
+      class BlockParamSlot
         include TreeInspect
+
+        attr_reader :index, :call_node, :called_methods, :loc
+
+        def initialize(index, call_node, called_methods, loc)
+          @index = index
+          @call_node = call_node
+          @called_methods = called_methods
+          @loc = loc
+        end
 
         def dependencies
           [call_node]
         end
 
         def node_hash
-          NodeKeyGenerator.bparam(index, loc&.offset)
+          NodeKeyGenerator.bparam(index, loc)
         end
 
         def node_key(scope_id)
@@ -466,16 +575,24 @@ module TypeGuessr
       # The type is the union of all branch types
       # @param branches [Array<Node>] Final nodes from each branch
       # @param called_methods [Array<CalledMethod>] Methods called on this node (for method-based inference)
-      # @param loc [Loc] Location information
-      MergeNode = Data.define(:branches, :called_methods, :loc) do
+      # @param loc [Integer, nil] Byte offset from start of file (0-indexed)
+      class MergeNode
         include TreeInspect
+
+        attr_reader :branches, :called_methods, :loc
+
+        def initialize(branches, called_methods, loc)
+          @branches = branches
+          @called_methods = called_methods
+          @loc = loc
+        end
 
         def dependencies
           branches
         end
 
         def node_hash
-          NodeKeyGenerator.merge(loc&.offset)
+          NodeKeyGenerator.merge(loc)
         end
 
         def node_key(scope_id)
@@ -496,16 +613,25 @@ module TypeGuessr
       # @param lhs [Node] Left-hand side (evaluated first)
       # @param rhs [Node] Right-hand side (evaluated only if LHS is falsy)
       # @param called_methods [Array<CalledMethod>] Methods called on this node
-      # @param loc [Loc] Location information
-      OrNode = Data.define(:lhs, :rhs, :called_methods, :loc) do
+      # @param loc [Integer, nil] Byte offset from start of file (0-indexed)
+      class OrNode
         include TreeInspect
+
+        attr_reader :lhs, :rhs, :called_methods, :loc
+
+        def initialize(lhs, rhs, called_methods, loc)
+          @lhs = lhs
+          @rhs = rhs
+          @called_methods = called_methods
+          @loc = loc
+        end
 
         def dependencies
           [lhs, rhs]
         end
 
         def node_hash
-          NodeKeyGenerator.or_node(loc&.offset)
+          NodeKeyGenerator.or_node(loc)
         end
 
         def node_key(scope_id)
@@ -528,10 +654,23 @@ module TypeGuessr
       # @param return_node [Node] Node representing the return value
       # @param body_nodes [Array<Node>] All nodes in the method body
       # @param called_methods [Array<CalledMethod>] Methods called on this node (for method-based inference)
-      # @param loc [Loc] Location information
+      # @param loc [Integer, nil] Byte offset from start of file (0-indexed)
       # @param singleton [Boolean] true if this is a singleton method (def self.method_name)
-      DefNode = Data.define(:name, :class_name, :params, :return_node, :body_nodes, :called_methods, :loc, :singleton) do
+      class DefNode
         include TreeInspect
+
+        attr_reader :name, :class_name, :params, :return_node, :body_nodes, :called_methods, :loc, :singleton
+
+        def initialize(name, class_name, params, return_node, body_nodes, called_methods, loc, singleton)
+          @name = name
+          @class_name = class_name
+          @params = params
+          @return_node = return_node
+          @body_nodes = body_nodes
+          @called_methods = called_methods
+          @loc = loc
+          @singleton = singleton
+        end
 
         def dependencies
           deps = params.dup
@@ -541,7 +680,7 @@ module TypeGuessr
         end
 
         def node_hash
-          NodeKeyGenerator.def_node(name, loc&.offset)
+          NodeKeyGenerator.def_node(name, loc)
         end
 
         def node_key(scope_id)
@@ -565,16 +704,25 @@ module TypeGuessr
       # @param name [String] Class or module name
       # @param methods [Array<DefNode>] Method definitions in this class/module
       # @param called_methods [Array<CalledMethod>] Methods called on this node (for method-based inference)
-      # @param loc [Loc] Location information
-      ClassModuleNode = Data.define(:name, :methods, :called_methods, :loc) do
+      # @param loc [Integer, nil] Byte offset from start of file (0-indexed)
+      class ClassModuleNode
         include TreeInspect
+
+        attr_reader :name, :methods, :called_methods, :loc
+
+        def initialize(name, methods, called_methods, loc)
+          @name = name
+          @methods = methods
+          @called_methods = called_methods
+          @loc = loc
+        end
 
         def dependencies
           methods
         end
 
         def node_hash
-          NodeKeyGenerator.class_module(name, loc&.offset)
+          NodeKeyGenerator.class_module(name, loc)
         end
 
         def node_key(scope_id)
@@ -594,16 +742,25 @@ module TypeGuessr
       # @param class_name [String] Name of the enclosing class/module
       # @param singleton [Boolean] Whether this self is in a singleton method context
       # @param called_methods [Array<CalledMethod>] Methods called on this node (for method-based inference)
-      # @param loc [Loc] Location information
-      SelfNode = Data.define(:class_name, :singleton, :called_methods, :loc) do
+      # @param loc [Integer, nil] Byte offset from start of file (0-indexed)
+      class SelfNode
         include TreeInspect
+
+        attr_reader :class_name, :singleton, :called_methods, :loc
+
+        def initialize(class_name, singleton, called_methods, loc)
+          @class_name = class_name
+          @singleton = singleton
+          @called_methods = called_methods
+          @loc = loc
+        end
 
         def dependencies
           []
         end
 
         def node_hash
-          NodeKeyGenerator.self_node(class_name, loc&.offset)
+          NodeKeyGenerator.self_node(class_name, loc)
         end
 
         def node_key(scope_id)
@@ -622,16 +779,24 @@ module TypeGuessr
       # Explicit return statement node
       # @param value [Node, nil] Return value node (nil for bare `return`)
       # @param called_methods [Array<CalledMethod>] Methods called on this node (for method-based inference)
-      # @param loc [Loc] Location information
-      ReturnNode = Data.define(:value, :called_methods, :loc) do
+      # @param loc [Integer, nil] Byte offset from start of file (0-indexed)
+      class ReturnNode
         include TreeInspect
+
+        attr_reader :value, :called_methods, :loc
+
+        def initialize(value, called_methods, loc)
+          @value = value
+          @called_methods = called_methods
+          @loc = loc
+        end
 
         def dependencies
           value ? [value] : []
         end
 
         def node_hash
-          NodeKeyGenerator.return_node(loc&.offset)
+          NodeKeyGenerator.return_node(loc)
         end
 
         def node_key(scope_id)

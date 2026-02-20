@@ -13,16 +13,11 @@ RSpec.describe TypeGuessr::Core::SignatureBuilder do
   let(:unknown_type) { TypeGuessr::Core::Types::Unknown.instance }
 
   def make_param(name:, kind: :required)
-    TypeGuessr::Core::IR::ParamNode.new(
-      name: name, kind: kind, default_value: nil, called_methods: [], loc: nil
-    )
+    TypeGuessr::Core::IR::ParamNode.new(name, kind, nil, [], nil)
   end
 
   def make_def_node(name:, params: [])
-    TypeGuessr::Core::IR::DefNode.new(
-      name: name, class_name: nil, params: params,
-      return_node: nil, body_nodes: [], called_methods: [], loc: nil, singleton: false
-    )
+    TypeGuessr::Core::IR::DefNode.new(name, nil, params, nil, [], [], nil, false)
   end
 
   def infer_result(type)

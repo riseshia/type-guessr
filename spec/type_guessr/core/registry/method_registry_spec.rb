@@ -9,16 +9,7 @@ RSpec.describe TypeGuessr::Core::Registry::MethodRegistry do
 
   # Create a mock DefNode for testing
   def create_def_node(name)
-    TypeGuessr::Core::IR::DefNode.new(
-      name: name.to_sym,
-      class_name: nil,
-      params: [],
-      return_node: nil,
-      body_nodes: [],
-      called_methods: [],
-      loc: nil,
-      singleton: false
-    )
+    TypeGuessr::Core::IR::DefNode.new(name.to_sym, nil, [], nil, [], [], nil, false)
   end
 
   describe "#register and #lookup" do

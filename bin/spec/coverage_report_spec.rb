@@ -24,43 +24,19 @@ RSpec.describe CoverageRunner::CoverageReport do
   let(:unknown_type) { TypeGuessr::Core::Types::Unknown.instance }
 
   def make_literal_node(type, offset:)
-    TypeGuessr::Core::IR::LiteralNode.new(
-      type: type,
-      literal_value: nil,
-      values: nil,
-      loc: TypeGuessr::Core::IR::Loc.new(offset: offset)
-    )
+    TypeGuessr::Core::IR::LiteralNode.new(type, nil, nil, [], offset)
   end
 
   def make_param_node(name, offset:, called_methods: [])
-    TypeGuessr::Core::IR::ParamNode.new(
-      name: name,
-      kind: :required,
-      default_value: nil,
-      called_methods: called_methods,
-      loc: TypeGuessr::Core::IR::Loc.new(offset: offset)
-    )
+    TypeGuessr::Core::IR::ParamNode.new(name, :required, nil, called_methods, offset)
   end
 
   def make_local_write_node(name, value, offset:)
-    TypeGuessr::Core::IR::LocalWriteNode.new(
-      name: name,
-      value: value,
-      called_methods: [],
-      loc: TypeGuessr::Core::IR::Loc.new(offset: offset)
-    )
+    TypeGuessr::Core::IR::LocalWriteNode.new(name, value, [], offset)
   end
 
   def make_def_node(name, params, return_node, offset:)
-    TypeGuessr::Core::IR::DefNode.new(
-      name: name,
-      class_name: "TestClass",
-      params: params,
-      return_node: return_node,
-      body_nodes: [],
-      loc: TypeGuessr::Core::IR::Loc.new(offset: offset),
-      singleton: false
-    )
+    TypeGuessr::Core::IR::DefNode.new(name, "TestClass", params, return_node, [], [], offset, false)
   end
 
   describe "#generate" do
@@ -151,13 +127,7 @@ RSpec.describe CoverageRunner::CoverageReport do
       # Method with typed param (has default) and typed return
       # Slots: 1 param + 1 return = 2 slots, all typed
       default_value = make_literal_node(integer_type, offset: 1)
-      param = TypeGuessr::Core::IR::ParamNode.new(
-        name: :x,
-        kind: :optional,
-        default_value: default_value,
-        called_methods: [],
-        loc: TypeGuessr::Core::IR::Loc.new(offset: 2, col_range: 0...5)
-      )
+      param = TypeGuessr::Core::IR::ParamNode.new(:x, :optional, default_value, [], 2)
       return_value = make_literal_node(string_type, offset: 3)
       def_node = make_def_node(:method2, [param], return_value, offset: 4)
 
@@ -185,13 +155,7 @@ RSpec.describe CoverageRunner::CoverageReport do
       # Method with no return value (empty body) - treated as NilClass return
       param = make_param_node(:x, offset: 1)
       def_node = TypeGuessr::Core::IR::DefNode.new(
-        name: :method3,
-        class_name: "TestClass",
-        params: [param],
-        return_node: nil,
-        body_nodes: [],
-        loc: TypeGuessr::Core::IR::Loc.new(offset: 2, col_range: 0...5),
-        singleton: false
+        :method3, "TestClass", [param], nil, [], [], 2, false
       )
 
       method_registry.register("TestClass", "method3", def_node)
