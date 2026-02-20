@@ -22,19 +22,12 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
       cvar_registry: cvar_registry
     )
   end
-  let(:loc) { TypeGuessr::Core::IR::Loc.new(offset: 0) }
+  let(:loc) { 0 }
 
   # Helper to create DefNode with common defaults
   def create_def_node(name:, class_name: nil, params: [], return_node: nil, body_nodes: [], singleton: false)
     TypeGuessr::Core::IR::DefNode.new(
-      name: name,
-      class_name: class_name,
-      params: params,
-      return_node: return_node,
-      body_nodes: body_nodes,
-      called_methods: [],
-      loc: loc,
-      singleton: singleton
+      name, class_name, params, return_node, body_nodes, [], loc, singleton
     )
   end
 
@@ -63,11 +56,11 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
     context "with LiteralNode" do
       it "returns the literal type" do
         node = TypeGuessr::Core::IR::LiteralNode.new(
-          type: TypeGuessr::Core::Types::ClassInstance.new("String"),
-          literal_value: nil,
-          values: nil,
-          called_methods: [],
-          loc: loc
+          TypeGuessr::Core::Types::ClassInstance.new("String"),
+          nil,
+          nil,
+          [],
+          loc
         )
 
         result = resolver.infer(node)
@@ -81,17 +74,17 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
     context "with LocalWriteNode" do
       it "infers type from value" do
         literal = TypeGuessr::Core::IR::LiteralNode.new(
-          type: TypeGuessr::Core::Types::ClassInstance.new("Integer"),
-          literal_value: nil,
-          values: nil,
-          called_methods: [],
-          loc: loc
+          TypeGuessr::Core::Types::ClassInstance.new("Integer"),
+          nil,
+          nil,
+          [],
+          loc
         )
         write_node = TypeGuessr::Core::IR::LocalWriteNode.new(
-          name: :x,
-          value: literal,
-          called_methods: [],
-          loc: loc
+          :x,
+          literal,
+          [],
+          loc
         )
 
         result = resolver.infer(write_node)
@@ -101,10 +94,10 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
 
       it "returns Unknown for unassigned variable" do
         write_node = TypeGuessr::Core::IR::LocalWriteNode.new(
-          name: :x,
-          value: nil,
-          called_methods: [],
-          loc: loc
+          :x,
+          nil,
+          [],
+          loc
         )
 
         result = resolver.infer(write_node)
@@ -116,23 +109,23 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
     context "with LocalReadNode" do
       it "infers type from write_node" do
         literal = TypeGuessr::Core::IR::LiteralNode.new(
-          type: TypeGuessr::Core::Types::ClassInstance.new("String"),
-          literal_value: nil,
-          values: nil,
-          called_methods: [],
-          loc: loc
+          TypeGuessr::Core::Types::ClassInstance.new("String"),
+          nil,
+          nil,
+          [],
+          loc
         )
         write_node = TypeGuessr::Core::IR::LocalWriteNode.new(
-          name: :x,
-          value: literal,
-          called_methods: [],
-          loc: loc
+          :x,
+          literal,
+          [],
+          loc
         )
         read_node = TypeGuessr::Core::IR::LocalReadNode.new(
-          name: :x,
-          write_node: write_node,
-          called_methods: write_node.called_methods,
-          loc: loc
+          :x,
+          write_node,
+          write_node.called_methods,
+          loc
         )
 
         result = resolver.infer(read_node)
@@ -141,10 +134,10 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
 
       it "returns Unknown for unassigned variable" do
         read_node = TypeGuessr::Core::IR::LocalReadNode.new(
-          name: :x,
-          write_node: nil,
-          called_methods: [],
-          loc: loc
+          :x,
+          nil,
+          [],
+          loc
         )
 
         result = resolver.infer(read_node)
@@ -156,18 +149,18 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
     context "with ParamNode" do
       it "infers type from default value" do
         default = TypeGuessr::Core::IR::LiteralNode.new(
-          type: TypeGuessr::Core::Types::ClassInstance.new("String"),
-          literal_value: nil,
-          values: nil,
-          called_methods: [],
-          loc: loc
+          TypeGuessr::Core::Types::ClassInstance.new("String"),
+          nil,
+          nil,
+          [],
+          loc
         )
         param = TypeGuessr::Core::IR::ParamNode.new(
-          name: :name,
-          kind: :optional,
-          default_value: default,
-          called_methods: [],
-          loc: loc
+          :name,
+          :optional,
+          default,
+          [],
+          loc
         )
 
         result = resolver.infer(param)
@@ -177,11 +170,11 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
 
       it "returns Unknown for parameter without default or methods" do
         param = TypeGuessr::Core::IR::ParamNode.new(
-          name: :x,
-          kind: :required,
-          default_value: nil,
-          called_methods: [],
-          loc: loc
+          :x,
+          :required,
+          nil,
+          [],
+          loc
         )
 
         result = resolver.infer(param)
@@ -191,11 +184,11 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
 
       it "returns Unknown when called methods cannot be resolved" do
         param = TypeGuessr::Core::IR::ParamNode.new(
-          name: :recipe,
-          kind: :required,
-          default_value: nil,
-          called_methods: %i[comments title],
-          loc: loc
+          :recipe,
+          :required,
+          nil,
+          %i[comments title],
+          loc
         )
 
         result = resolver.infer(param)
@@ -207,17 +200,17 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
     context "with ConstantNode" do
       it "infers type from dependency" do
         literal = TypeGuessr::Core::IR::LiteralNode.new(
-          type: TypeGuessr::Core::Types::ClassInstance.new("String"),
-          literal_value: nil,
-          values: nil,
-          called_methods: [],
-          loc: loc
+          TypeGuessr::Core::Types::ClassInstance.new("String"),
+          nil,
+          nil,
+          [],
+          loc
         )
         const = TypeGuessr::Core::IR::ConstantNode.new(
-          name: "DEFAULT_NAME",
-          dependency: literal,
-          called_methods: [],
-          loc: loc
+          "DEFAULT_NAME",
+          literal,
+          [],
+          loc
         )
 
         result = resolver.infer(const)
@@ -229,10 +222,10 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
         allow(code_index).to receive(:constant_kind).with("User").and_return(:class)
 
         const = TypeGuessr::Core::IR::ConstantNode.new(
-          name: "User",
-          dependency: nil,
-          called_methods: [],
-          loc: loc
+          "User",
+          nil,
+          [],
+          loc
         )
 
         result = resolver.infer(const)
@@ -246,10 +239,10 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
         allow(code_index).to receive(:constant_kind).with("MyModule").and_return(:module)
 
         const = TypeGuessr::Core::IR::ConstantNode.new(
-          name: "MyModule",
-          dependency: nil,
-          called_methods: [],
-          loc: loc
+          "MyModule",
+          nil,
+          [],
+          loc
         )
 
         result = resolver.infer(const)
@@ -263,10 +256,10 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
         allow(code_index).to receive(:constant_kind).with("MAX_SIZE").and_return(nil)
 
         const = TypeGuessr::Core::IR::ConstantNode.new(
-          name: "MAX_SIZE",
-          dependency: nil,
-          called_methods: [],
-          loc: loc
+          "MAX_SIZE",
+          nil,
+          [],
+          loc
         )
 
         result = resolver.infer(const)
@@ -279,26 +272,26 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
     context "with CallNode" do
       it "queries RBS for return type" do
         receiver_var = TypeGuessr::Core::IR::LocalWriteNode.new(
-          name: :str,
-          value: TypeGuessr::Core::IR::LiteralNode.new(
-            type: TypeGuessr::Core::Types::ClassInstance.new("String"),
-            literal_value: nil,
-            values: nil,
-            called_methods: [],
-            loc: loc
+          :str,
+          TypeGuessr::Core::IR::LiteralNode.new(
+            TypeGuessr::Core::Types::ClassInstance.new("String"),
+            nil,
+            nil,
+            [],
+            loc
           ),
-          called_methods: [],
-          loc: loc
+          [],
+          loc
         )
         call = TypeGuessr::Core::IR::CallNode.new(
-          method: :upcase,
-          receiver: receiver_var,
-          args: [],
-          block_params: [],
-          block_body: nil,
-          has_block: false,
-          called_methods: [],
-          loc: loc
+          :upcase,
+          receiver_var,
+          [],
+          [],
+          nil,
+          false,
+          [],
+          loc
         )
 
         result = resolver.infer(call)
@@ -312,26 +305,26 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
           TypeGuessr::Core::Types::ClassInstance.new("Integer")
         )
         receiver_var = TypeGuessr::Core::IR::LocalWriteNode.new(
-          name: :arr,
-          value: TypeGuessr::Core::IR::LiteralNode.new(
-            type: array_type,
-            literal_value: nil,
-            values: nil,
-            called_methods: [],
-            loc: loc
+          :arr,
+          TypeGuessr::Core::IR::LiteralNode.new(
+            array_type,
+            nil,
+            nil,
+            [],
+            loc
           ),
-          called_methods: [],
-          loc: loc
+          [],
+          loc
         )
         call = TypeGuessr::Core::IR::CallNode.new(
-          method: :compact,
-          receiver: receiver_var,
-          args: [],
-          block_params: [],
-          block_body: nil,
-          has_block: false,
-          called_methods: [],
-          loc: loc
+          :compact,
+          receiver_var,
+          [],
+          [],
+          nil,
+          false,
+          [],
+          loc
         )
 
         result = resolver.infer(call)
@@ -346,28 +339,28 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
           TypeGuessr::Core::Types::ClassInstance.new("String")
         )
         receiver_var = TypeGuessr::Core::IR::LocalWriteNode.new(
-          name: :arr,
-          value: TypeGuessr::Core::IR::LiteralNode.new(
-            type: array_type,
-            literal_value: nil,
-            values: nil,
-            called_methods: [],
-            loc: loc
+          :arr,
+          TypeGuessr::Core::IR::LiteralNode.new(
+            array_type,
+            nil,
+            nil,
+            [],
+            loc
           ),
-          called_methods: [],
-          loc: loc
+          [],
+          loc
         )
         call = TypeGuessr::Core::IR::CallNode.new(
-          method: :each,
-          receiver: receiver_var,
-          args: [],
-          block_params: [],
-          block_body: nil,
-          has_block: true,
-          called_methods: [],
-          loc: loc
+          :each,
+          receiver_var,
+          [],
+          [],
+          nil,
+          true,
+          [],
+          loc
         )
-        slot = TypeGuessr::Core::IR::BlockParamSlot.new(index: 0, call_node: call, called_methods: [], loc: loc)
+        slot = TypeGuessr::Core::IR::BlockParamSlot.new(0, call, [], loc)
 
         result = resolver.infer(slot)
         expect(result.type).to be_a(TypeGuessr::Core::Types::ClassInstance)
@@ -381,26 +374,26 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
 
         # Receiver is Unknown (e.g., variable with no type info)
         unknown_receiver = TypeGuessr::Core::IR::LocalWriteNode.new(
-          name: :users,
-          value: nil,
-          called_methods: [],
-          loc: loc
+          :users,
+          nil,
+          [],
+          loc
         )
         call = TypeGuessr::Core::IR::CallNode.new(
-          method: :each,
-          receiver: unknown_receiver,
-          args: [],
-          block_params: [],
-          block_body: nil,
-          has_block: true,
-          called_methods: [],
-          loc: loc
+          :each,
+          unknown_receiver,
+          [],
+          [],
+          nil,
+          true,
+          [],
+          loc
         )
         slot = TypeGuessr::Core::IR::BlockParamSlot.new(
-          index: 0,
-          call_node: call,
-          called_methods: %i[name],
-          loc: loc
+          0,
+          call,
+          %i[name],
+          loc
         )
 
         result = resolver.infer(slot)
@@ -416,27 +409,27 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
 
         # Receiver has a known type but the method has no RBS block param info
         receiver = TypeGuessr::Core::IR::LiteralNode.new(
-          type: TypeGuessr::Core::Types::ClassInstance.new("String"),
-          literal_value: nil,
-          values: nil,
-          called_methods: [],
-          loc: loc
+          TypeGuessr::Core::Types::ClassInstance.new("String"),
+          nil,
+          nil,
+          [],
+          loc
         )
         call = TypeGuessr::Core::IR::CallNode.new(
-          method: :custom_each,
-          receiver: receiver,
-          args: [],
-          block_params: [],
-          block_body: nil,
-          has_block: true,
-          called_methods: [],
-          loc: loc
+          :custom_each,
+          receiver,
+          [],
+          [],
+          nil,
+          true,
+          [],
+          loc
         )
         slot = TypeGuessr::Core::IR::BlockParamSlot.new(
-          index: 0,
-          call_node: call,
-          called_methods: %i[title],
-          loc: loc
+          0,
+          call,
+          %i[title],
+          loc
         )
 
         result = resolver.infer(slot)
@@ -449,26 +442,26 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
       it "returns Unknown with unresolved reason when called_methods cannot be resolved" do
         # No mock on code_index — will return empty by default
         unknown_receiver = TypeGuessr::Core::IR::LocalWriteNode.new(
-          name: :items,
-          value: nil,
-          called_methods: [],
-          loc: loc
+          :items,
+          nil,
+          [],
+          loc
         )
         call = TypeGuessr::Core::IR::CallNode.new(
-          method: :each,
-          receiver: unknown_receiver,
-          args: [],
-          block_params: [],
-          block_body: nil,
-          has_block: true,
-          called_methods: [],
-          loc: loc
+          :each,
+          unknown_receiver,
+          [],
+          [],
+          nil,
+          true,
+          [],
+          loc
         )
         slot = TypeGuessr::Core::IR::BlockParamSlot.new(
-          index: 0,
-          call_node: call,
-          called_methods: %i[nonexistent_method],
-          loc: loc
+          0,
+          call,
+          %i[nonexistent_method],
+          loc
         )
 
         result = resolver.infer(slot)
@@ -480,23 +473,23 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
     context "with MergeNode" do
       it "creates union type from branches" do
         branch1 = TypeGuessr::Core::IR::LiteralNode.new(
-          type: TypeGuessr::Core::Types::ClassInstance.new("String"),
-          literal_value: nil,
-          values: nil,
-          called_methods: [],
-          loc: loc
+          TypeGuessr::Core::Types::ClassInstance.new("String"),
+          nil,
+          nil,
+          [],
+          loc
         )
         branch2 = TypeGuessr::Core::IR::LiteralNode.new(
-          type: TypeGuessr::Core::Types::ClassInstance.new("Integer"),
-          literal_value: nil,
-          values: nil,
-          called_methods: [],
-          loc: loc
+          TypeGuessr::Core::Types::ClassInstance.new("Integer"),
+          nil,
+          nil,
+          [],
+          loc
         )
         merge = TypeGuessr::Core::IR::MergeNode.new(
-          branches: [branch1, branch2],
-          called_methods: [],
-          loc: loc
+          [branch1, branch2],
+          [],
+          loc
         )
 
         result = resolver.infer(merge)
@@ -507,16 +500,16 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
 
       it "returns single type when only one branch" do
         branch = TypeGuessr::Core::IR::LiteralNode.new(
-          type: TypeGuessr::Core::Types::ClassInstance.new("String"),
-          literal_value: nil,
-          values: nil,
-          called_methods: [],
-          loc: loc
+          TypeGuessr::Core::Types::ClassInstance.new("String"),
+          nil,
+          nil,
+          [],
+          loc
         )
         merge = TypeGuessr::Core::IR::MergeNode.new(
-          branches: [branch],
-          called_methods: [],
-          loc: loc
+          [branch],
+          [],
+          loc
         )
 
         result = resolver.infer(merge)
@@ -529,9 +522,9 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
         # case x; when 1 then raise "error1"; when 2 then raise "error2"; end
         # After filtering non-returning branches, we may have empty branches
         merge = TypeGuessr::Core::IR::MergeNode.new(
-          branches: [],
-          called_methods: [],
-          loc: loc
+          [],
+          [],
+          loc
         )
 
         # Should not crash, should return some reasonable type
@@ -547,14 +540,14 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
     context "with OrNode" do
       it "returns RHS type when LHS is entirely falsy (nil)" do
         lhs = TypeGuessr::Core::IR::LiteralNode.new(
-          type: TypeGuessr::Core::Types::ClassInstance.new("NilClass"),
-          literal_value: nil, values: nil, called_methods: [], loc: loc
+          TypeGuessr::Core::Types::ClassInstance.new("NilClass"),
+          nil, nil, [], loc
         )
         rhs = TypeGuessr::Core::IR::LiteralNode.new(
-          type: TypeGuessr::Core::Types::ClassInstance.new("Integer"),
-          literal_value: nil, values: nil, called_methods: [], loc: loc
+          TypeGuessr::Core::Types::ClassInstance.new("Integer"),
+          nil, nil, [], loc
         )
-        or_node = TypeGuessr::Core::IR::OrNode.new(lhs: lhs, rhs: rhs, called_methods: [], loc: loc)
+        or_node = TypeGuessr::Core::IR::OrNode.new(lhs, rhs, [], loc)
 
         result = resolver.infer(or_node)
         expect(result.type).to be_a(TypeGuessr::Core::Types::ClassInstance)
@@ -564,14 +557,14 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
 
       it "returns LHS type when LHS is always truthy" do
         lhs = TypeGuessr::Core::IR::LiteralNode.new(
-          type: TypeGuessr::Core::Types::ClassInstance.new("Integer"),
-          literal_value: nil, values: nil, called_methods: [], loc: loc
+          TypeGuessr::Core::Types::ClassInstance.new("Integer"),
+          nil, nil, [], loc
         )
         rhs = TypeGuessr::Core::IR::LiteralNode.new(
-          type: TypeGuessr::Core::Types::ClassInstance.new("String"),
-          literal_value: nil, values: nil, called_methods: [], loc: loc
+          TypeGuessr::Core::Types::ClassInstance.new("String"),
+          nil, nil, [], loc
         )
-        or_node = TypeGuessr::Core::IR::OrNode.new(lhs: lhs, rhs: rhs, called_methods: [], loc: loc)
+        or_node = TypeGuessr::Core::IR::OrNode.new(lhs, rhs, [], loc)
 
         result = resolver.infer(or_node)
         expect(result.type).to be_a(TypeGuessr::Core::Types::ClassInstance)
@@ -585,13 +578,13 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
                                                         TypeGuessr::Core::Types::ClassInstance.new("NilClass"),
                                                       ])
         lhs = TypeGuessr::Core::IR::LiteralNode.new(
-          type: lhs_type, literal_value: nil, values: nil, called_methods: [], loc: loc
+          lhs_type, nil, nil, [], loc
         )
         rhs = TypeGuessr::Core::IR::LiteralNode.new(
-          type: TypeGuessr::Core::Types::ClassInstance.new("Integer"),
-          literal_value: nil, values: nil, called_methods: [], loc: loc
+          TypeGuessr::Core::Types::ClassInstance.new("Integer"),
+          nil, nil, [], loc
         )
-        or_node = TypeGuessr::Core::IR::OrNode.new(lhs: lhs, rhs: rhs, called_methods: [], loc: loc)
+        or_node = TypeGuessr::Core::IR::OrNode.new(lhs, rhs, [], loc)
 
         result = resolver.infer(or_node)
         expect(result.type).to be_a(TypeGuessr::Core::Types::Union)
@@ -601,14 +594,14 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
 
       it "returns RHS type when LHS is FalseClass" do
         lhs = TypeGuessr::Core::IR::LiteralNode.new(
-          type: TypeGuessr::Core::Types::ClassInstance.new("FalseClass"),
-          literal_value: nil, values: nil, called_methods: [], loc: loc
+          TypeGuessr::Core::Types::ClassInstance.new("FalseClass"),
+          nil, nil, [], loc
         )
         rhs = TypeGuessr::Core::IR::LiteralNode.new(
-          type: TypeGuessr::Core::Types::ClassInstance.new("String"),
-          literal_value: nil, values: nil, called_methods: [], loc: loc
+          TypeGuessr::Core::Types::ClassInstance.new("String"),
+          nil, nil, [], loc
         )
-        or_node = TypeGuessr::Core::IR::OrNode.new(lhs: lhs, rhs: rhs, called_methods: [], loc: loc)
+        or_node = TypeGuessr::Core::IR::OrNode.new(lhs, rhs, [], loc)
 
         result = resolver.infer(or_node)
         expect(result.type).to be_a(TypeGuessr::Core::Types::ClassInstance)
@@ -631,14 +624,14 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
 
       it "treats unknown receiver as Object and queries RBS for ==" do
         call = TypeGuessr::Core::IR::CallNode.new(
-          method: :==,
-          receiver: nil,
-          args: [],
-          block_params: [],
-          block_body: nil,
-          has_block: false,
-          called_methods: [],
-          loc: loc
+          :==,
+          nil,
+          [],
+          [],
+          nil,
+          false,
+          [],
+          loc
         )
 
         result = resolver.infer(call)
@@ -649,14 +642,14 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
 
       it "treats unknown receiver as Object and queries RBS for to_s" do
         call = TypeGuessr::Core::IR::CallNode.new(
-          method: :to_s,
-          receiver: nil,
-          args: [],
-          block_params: [],
-          block_body: nil,
-          has_block: false,
-          called_methods: [],
-          loc: loc
+          :to_s,
+          nil,
+          [],
+          [],
+          nil,
+          false,
+          [],
+          loc
         )
 
         result = resolver.infer(call)
@@ -668,14 +661,14 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
 
       it "treats unknown receiver as Object and queries RBS for !" do
         call = TypeGuessr::Core::IR::CallNode.new(
-          method: :!,
-          receiver: nil,
-          args: [],
-          block_params: [],
-          block_body: nil,
-          has_block: false,
-          called_methods: [],
-          loc: loc
+          :!,
+          nil,
+          [],
+          [],
+          nil,
+          false,
+          [],
+          loc
         )
 
         result = resolver.infer(call)
@@ -685,14 +678,14 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
 
       it "returns Unknown for method not defined on Object" do
         call = TypeGuessr::Core::IR::CallNode.new(
-          method: :some_random_method_that_does_not_exist,
-          receiver: nil,
-          args: [],
-          block_params: [],
-          block_body: nil,
-          has_block: false,
-          called_methods: [],
-          loc: loc
+          :some_random_method_that_does_not_exist,
+          nil,
+          [],
+          [],
+          nil,
+          false,
+          [],
+          loc
         )
 
         result = resolver.infer(call)
@@ -705,11 +698,11 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
 
         # Register Store#depot that returns an Integer
         depot_return = TypeGuessr::Core::IR::LiteralNode.new(
-          type: TypeGuessr::Core::Types::ClassInstance.new("Integer"),
-          literal_value: 42,
-          values: nil,
-          called_methods: [],
-          loc: loc
+          TypeGuessr::Core::Types::ClassInstance.new("Integer"),
+          42,
+          nil,
+          [],
+          loc
         )
         depot_def = create_def_node(
           name: :depot,
@@ -721,23 +714,23 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
 
         # Create Unknown type receiver
         unknown_receiver = TypeGuessr::Core::IR::LiteralNode.new(
-          type: TypeGuessr::Core::Types::Unknown.instance,
-          literal_value: nil,
-          values: nil,
-          called_methods: [],
-          loc: loc
+          TypeGuessr::Core::Types::Unknown.instance,
+          nil,
+          nil,
+          [],
+          loc
         )
 
         # Call depot on Unknown receiver
         call = TypeGuessr::Core::IR::CallNode.new(
-          method: :depot,
-          receiver: unknown_receiver,
-          args: [],
-          block_params: [],
-          block_body: nil,
-          has_block: false,
-          called_methods: [],
-          loc: loc
+          :depot,
+          unknown_receiver,
+          [],
+          [],
+          nil,
+          false,
+          [],
+          loc
         )
 
         result = resolver.infer(call)
@@ -749,23 +742,23 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
       it "substitutes SelfType with Unknown when calling dup on Unknown receiver" do
         # Create Unknown type receiver (simulating an untyped parameter)
         unknown_receiver = TypeGuessr::Core::IR::LiteralNode.new(
-          type: TypeGuessr::Core::Types::Unknown.instance,
-          literal_value: nil,
-          values: nil,
-          called_methods: [],
-          loc: loc
+          TypeGuessr::Core::Types::Unknown.instance,
+          nil,
+          nil,
+          [],
+          loc
         )
 
         # Call dup on Unknown receiver - Object#dup returns self
         call = TypeGuessr::Core::IR::CallNode.new(
-          method: :dup,
-          receiver: unknown_receiver,
-          args: [],
-          block_params: [],
-          block_body: nil,
-          has_block: false,
-          called_methods: [],
-          loc: loc
+          :dup,
+          unknown_receiver,
+          [],
+          [],
+          nil,
+          false,
+          [],
+          loc
         )
 
         result = resolver.infer(call)
@@ -777,11 +770,11 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
     context "with DefNode" do
       it "infers return type from return node" do
         return_node = TypeGuessr::Core::IR::LiteralNode.new(
-          type: TypeGuessr::Core::Types::ClassInstance.new("Integer"),
-          literal_value: nil,
-          values: nil,
-          called_methods: [],
-          loc: loc
+          TypeGuessr::Core::Types::ClassInstance.new("Integer"),
+          nil,
+          nil,
+          [],
+          loc
         )
         def_node = create_def_node(name: :foo, return_node: return_node, body_nodes: [return_node])
 
@@ -814,23 +807,23 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
         # Create a circular reference: MergeNode -> LocalReadNode -> write_node -> MergeNode
         # This simulates patterns like `x ||= x` or complex control flow
         merge_node = TypeGuessr::Core::IR::MergeNode.new(
-          branches: [],
-          called_methods: [],
-          loc: loc
+          [],
+          [],
+          loc
         )
 
         write_node = TypeGuessr::Core::IR::LocalWriteNode.new(
-          name: :x,
-          value: merge_node,
-          called_methods: [],
-          loc: loc
+          :x,
+          merge_node,
+          [],
+          loc
         )
 
         read_node = TypeGuessr::Core::IR::LocalReadNode.new(
-          name: :x,
-          write_node: write_node,
-          called_methods: [],
-          loc: loc
+          :x,
+          write_node,
+          [],
+          loc
         )
 
         # Create circular reference: MergeNode.branches -> read_node -> write_node.value -> MergeNode
@@ -844,32 +837,32 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
         # Create circular reference through LocalWriteNode chain:
         # write_a.value -> write_b -> write_b.value -> write_c -> write_c.value -> read_a -> write_a
         write_c = TypeGuessr::Core::IR::LocalWriteNode.new(
-          name: :c,
-          value: nil, # Will be set below
-          called_methods: [],
-          loc: loc
+          :c,
+          nil, # Will be set below
+          [],
+          loc
         )
 
         write_b = TypeGuessr::Core::IR::LocalWriteNode.new(
-          name: :b,
-          value: write_c,
-          called_methods: [],
-          loc: loc
+          :b,
+          write_c,
+          [],
+          loc
         )
 
         write_a = TypeGuessr::Core::IR::LocalWriteNode.new(
-          name: :a,
-          value: write_b,
-          called_methods: [],
-          loc: loc
+          :a,
+          write_b,
+          [],
+          loc
         )
 
         # Create read node pointing back to write_a
         read_a = TypeGuessr::Core::IR::LocalReadNode.new(
-          name: :a,
-          write_node: write_a,
-          called_methods: [],
-          loc: loc
+          :a,
+          write_a,
+          [],
+          loc
         )
 
         # Complete the cycle: write_c.value points to read_a which points to write_a
@@ -877,46 +870,46 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
         # We need to manually set the value since Data.define is immutable
         # Use a MergeNode to wrap the circular reference
         merge_for_c = TypeGuessr::Core::IR::MergeNode.new(
-          branches: [read_a],
-          called_methods: [],
-          loc: loc
+          [read_a],
+          [],
+          loc
         )
 
         # Recreate write_c with the circular value
         write_c_circular = TypeGuessr::Core::IR::LocalWriteNode.new(
-          name: :c,
-          value: merge_for_c,
-          called_methods: [],
-          loc: loc
+          :c,
+          merge_for_c,
+          [],
+          loc
         )
 
         write_b_circular = TypeGuessr::Core::IR::LocalWriteNode.new(
-          name: :b,
-          value: write_c_circular,
-          called_methods: [],
-          loc: loc
+          :b,
+          write_c_circular,
+          [],
+          loc
         )
 
         write_a_circular = TypeGuessr::Core::IR::LocalWriteNode.new(
-          name: :a,
-          value: write_b_circular,
-          called_methods: [],
-          loc: loc
+          :a,
+          write_b_circular,
+          [],
+          loc
         )
 
         # Update read_a to point to the circular write_a
         read_a_circular = TypeGuessr::Core::IR::LocalReadNode.new(
-          name: :a,
-          write_node: write_a_circular,
-          called_methods: [],
-          loc: loc
+          :a,
+          write_a_circular,
+          [],
+          loc
         )
 
         # Rebuild the chain with proper circular reference
         TypeGuessr::Core::IR::MergeNode.new(
-          branches: [read_a_circular],
-          called_methods: [],
-          loc: loc
+          [read_a_circular],
+          [],
+          loc
         )
 
         # Inferring should not cause stack overflow (detected by INFERRING sentinel)
@@ -931,11 +924,11 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
     context "caching" do
       it "caches inference results" do
         node = TypeGuessr::Core::IR::LiteralNode.new(
-          type: TypeGuessr::Core::Types::ClassInstance.new("String"),
-          literal_value: nil,
-          values: nil,
-          called_methods: [],
-          loc: loc
+          TypeGuessr::Core::Types::ClassInstance.new("String"),
+          nil,
+          nil,
+          [],
+          loc
         )
 
         result1 = resolver.infer(node)
@@ -946,11 +939,11 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
 
       it "clears cache when requested" do
         node = TypeGuessr::Core::IR::LiteralNode.new(
-          type: TypeGuessr::Core::Types::ClassInstance.new("String"),
-          literal_value: nil,
-          values: nil,
-          called_methods: [],
-          loc: loc
+          TypeGuessr::Core::Types::ClassInstance.new("String"),
+          nil,
+          nil,
+          [],
+          loc
         )
 
         result1 = resolver.infer(node)

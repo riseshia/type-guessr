@@ -149,7 +149,7 @@ module TypeGuessr
               class_name: class_name,
               method_name: method_name,
               full_name: "#{class_name}##{method_name}",
-              location: def_node.loc ? { offset: def_node.loc.offset } : nil
+              location: def_node.loc ? { offset: def_node.loc } : nil
             }
           end
         end

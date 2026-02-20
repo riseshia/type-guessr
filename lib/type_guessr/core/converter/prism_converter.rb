@@ -228,26 +228,26 @@ module TypeGuessr
                                 else
                                   # return with no value returns nil
                                   IR::LiteralNode.new(
-                                    type: Types::ClassInstance.for("NilClass"),
-                                    literal_value: nil,
-                                    values: nil,
-                                    called_methods: [],
-                                    loc: convert_loc(prism_node.location)
+                                    Types::ClassInstance.for("NilClass"),
+                                    nil,
+                                    nil,
+                                    [],
+                                    convert_loc(prism_node.location)
                                   )
                                 end
                    IR::ReturnNode.new(
-                     value: value_node,
-                     called_methods: [],
-                     loc: convert_loc(prism_node.location)
+                     value_node,
+                     [],
+                     convert_loc(prism_node.location)
                    )
 
                  when Prism::SelfNode
                    # self keyword - returns the current class instance or singleton
                    IR::SelfNode.new(
-                     class_name: context.current_class_name || "Object",
-                     singleton: context.in_singleton_method,
-                     called_methods: [],
-                     loc: convert_loc(prism_node.location)
+                     context.current_class_name || "Object",
+                     context.in_singleton_method,
+                     [],
+                     convert_loc(prism_node.location)
                    )
 
                  when Prism::BeginNode
@@ -274,13 +274,7 @@ module TypeGuessr
         private def convert_literal(prism_node)
           type = literal_type_for(prism_node)
           literal_value = extract_literal_value(prism_node)
-          IR::LiteralNode.new(
-            type: type,
-            literal_value: literal_value,
-            values: nil,
-            called_methods: [],
-            loc: convert_loc(prism_node.location)
-          )
+          IR::LiteralNode.new(type, literal_value, nil, [], convert_loc(prism_node.location))
         end
 
         # Extract the actual value from a literal node (for Symbol, Integer, String)
@@ -306,28 +300,13 @@ module TypeGuessr
             when Prism::SplatNode
               # *arr → convert to CallNode for to_a
               splat_expr = convert(elem.expression, context)
-              IR::CallNode.new(
-                method: :to_a,
-                receiver: splat_expr,
-                args: [],
-                block_params: [],
-                block_body: nil,
-                has_block: false,
-                called_methods: [],
-                loc: convert_loc(elem.location)
-              )
+              IR::CallNode.new(:to_a, splat_expr, [], [], nil, false, [], convert_loc(elem.location))
             else
               convert(elem, context)
             end
           end
 
-          IR::LiteralNode.new(
-            type: type,
-            literal_value: nil,
-            values: value_nodes.empty? ? nil : value_nodes,
-            called_methods: [],
-            loc: convert_loc(prism_node.location)
-          )
+          IR::LiteralNode.new(type, nil, value_nodes.empty? ? nil : value_nodes, [], convert_loc(prism_node.location))
         end
 
         private def convert_hash_literal(prism_node, context)
@@ -352,13 +331,7 @@ module TypeGuessr
             end
           end
 
-          IR::LiteralNode.new(
-            type: type,
-            literal_value: nil,
-            values: value_nodes.empty? ? nil : value_nodes,
-            called_methods: [],
-            loc: convert_loc(prism_node.location)
-          )
+          IR::LiteralNode.new(type, nil, value_nodes.empty? ? nil : value_nodes, [], convert_loc(prism_node.location))
         end
 
         # Infer type for KeywordHashNode (always has symbol keys)
@@ -431,12 +404,7 @@ module TypeGuessr
 
         private def convert_local_variable_write(prism_node, context)
           value_node = convert(prism_node.value, context)
-          write_node = IR::LocalWriteNode.new(
-            name: prism_node.name,
-            value: value_node,
-            called_methods: [],
-            loc: convert_loc(prism_node.location)
-          )
+          write_node = IR::LocalWriteNode.new(prism_node.name, value_node, [], convert_loc(prism_node.location))
           context.register_variable(prism_node.name, write_node)
           write_node
         end
@@ -446,12 +414,12 @@ module TypeGuessr
           write_node = context.lookup_variable(prism_node.name)
 
           IR::LocalReadNode.new(
-            name: prism_node.name,
-            write_node: write_node,
+            prism_node.name,
+            write_node,
             # Share called_methods array for method-based inference
             # nil case: rescue binding (=> e), pattern matching binding, etc. (not yet implemented)
-            called_methods: write_node&.called_methods || [],
-            loc: convert_loc(prism_node.location)
+            write_node&.called_methods || [],
+            convert_loc(prism_node.location)
           )
         end
 
@@ -460,13 +428,13 @@ module TypeGuessr
           class_name = context.current_class_name
 
           write_node = IR::InstanceVariableWriteNode.new(
-            name: prism_node.name,
-            class_name: class_name,
-            value: value_node,
+            prism_node.name,
+            class_name,
+            value_node,
             # Share called_methods with value node for type propagation
             # nil case: value is an unhandled node type (convert() returns nil)
-            called_methods: value_node&.called_methods || [],
-            loc: convert_loc(prism_node.location)
+            value_node&.called_methods || [],
+            convert_loc(prism_node.location)
           )
           # Register at class level so it's visible across methods
           context.register_instance_variable(prism_node.name, write_node)
@@ -478,13 +446,13 @@ module TypeGuessr
           write_node = context.lookup_instance_variable(prism_node.name)
 
           IR::InstanceVariableReadNode.new(
-            name: prism_node.name,
-            class_name: context.current_class_name,
-            write_node: write_node,
+            prism_node.name,
+            context.current_class_name,
+            write_node,
             # Share called_methods array for method-based inference
             # nil case: instance variable read before any assignment in current file
-            called_methods: write_node&.called_methods || [],
-            loc: convert_loc(prism_node.location)
+            write_node&.called_methods || [],
+            convert_loc(prism_node.location)
           )
         end
 
@@ -492,12 +460,12 @@ module TypeGuessr
           value_node = convert(prism_node.value, context)
 
           write_node = IR::ClassVariableWriteNode.new(
-            name: prism_node.name,
-            class_name: context.current_class_name,
-            value: value_node,
+            prism_node.name,
+            context.current_class_name,
+            value_node,
             # Share called_methods with value node for type propagation
-            called_methods: value_node.called_methods,
-            loc: convert_loc(prism_node.location)
+            value_node.called_methods,
+            convert_loc(prism_node.location)
           )
           context.register_variable(prism_node.name, write_node)
           write_node
@@ -507,13 +475,13 @@ module TypeGuessr
           write_node = context.lookup_variable(prism_node.name)
 
           IR::ClassVariableReadNode.new(
-            name: prism_node.name,
-            class_name: context.current_class_name,
-            write_node: write_node,
+            prism_node.name,
+            context.current_class_name,
+            write_node,
             # Share called_methods array for method-based inference
             # nil case: class variable read before any assignment in current file
-            called_methods: write_node&.called_methods || [],
-            loc: convert_loc(prism_node.location)
+            write_node&.called_methods || [],
+            convert_loc(prism_node.location)
           )
         end
 
@@ -556,10 +524,10 @@ module TypeGuessr
 
           or_node = if original_node
                       IR::OrNode.new(
-                        lhs: original_node,
-                        rhs: value_node,
-                        called_methods: [],
-                        loc: convert_loc(prism_node.location)
+                        original_node,
+                        value_node,
+                        [],
+                        convert_loc(prism_node.location)
                       )
                     else
                       value_node
@@ -586,9 +554,9 @@ module TypeGuessr
                          branches.first
                        else
                          IR::MergeNode.new(
-                           branches: branches,
-                           called_methods: [],
-                           loc: convert_loc(prism_node.location)
+                           branches,
+                           [],
+                           convert_loc(prism_node.location)
                          )
                        end
 
@@ -606,14 +574,7 @@ module TypeGuessr
 
           # Create a call node representing x.operator(value)
           call_node = IR::CallNode.new(
-            method: prism_node.binary_operator,
-            receiver: original_node,
-            args: [value_node],
-            block_params: [],
-            block_body: nil,
-            has_block: false,
-            called_methods: [],
-            loc: convert_loc(prism_node.location)
+            prism_node.binary_operator, original_node, [value_node], [], nil, false, [], convert_loc(prism_node.location)
           )
 
           # Create write node with call result as value
@@ -627,28 +588,11 @@ module TypeGuessr
           loc = convert_loc(location)
           case kind
           when :local
-            IR::LocalWriteNode.new(
-              name: name,
-              value: value,
-              called_methods: [],
-              loc: loc
-            )
+            IR::LocalWriteNode.new(name, value, [], loc)
           when :instance
-            IR::InstanceVariableWriteNode.new(
-              name: name,
-              class_name: context.current_class_name,
-              value: value,
-              called_methods: [],
-              loc: loc
-            )
+            IR::InstanceVariableWriteNode.new(name, context.current_class_name, value, [], loc)
           when :class
-            IR::ClassVariableWriteNode.new(
-              name: name,
-              class_name: context.current_class_name,
-              value: value,
-              called_methods: [],
-              loc: loc
-            )
+            IR::ClassVariableWriteNode.new(name, context.current_class_name, value, [], loc)
           end
         end
 
@@ -678,10 +622,10 @@ module TypeGuessr
                             convert(prism_node.receiver, context)
                           elsif context.current_class_name
                             IR::SelfNode.new(
-                              class_name: context.current_class_name,
-                              singleton: context.in_singleton_method,
-                              called_methods: [],
-                              loc: convert_loc(prism_node.location)
+                              context.current_class_name,
+                              context.in_singleton_method,
+                              [],
+                              convert_loc(prism_node.location)
                             )
                           end
 
@@ -700,30 +644,15 @@ module TypeGuessr
           # Use message_loc for method name position to match hover lookup
           call_loc = convert_loc(prism_node.message_loc || prism_node.location)
           call_node = IR::CallNode.new(
-            method: prism_node.name,
-            receiver: receiver_node,
-            args: args,
-            block_params: [],
-            block_body: nil,
-            has_block: has_block,
-            called_methods: [],
-            loc: call_loc
+            prism_node.name, receiver_node, args, [], nil, has_block, [], call_loc
           )
 
           # Handle block if present (but not block arguments like &block)
           if prism_node.block.is_a?(Prism::BlockNode)
             block_body = convert_block(prism_node.block, call_node, context)
-            # Recreate CallNode with block_body since Data.define is immutable
-            call_node = IR::CallNode.new(
-              method: prism_node.name,
-              receiver: receiver_node,
-              args: args,
-              block_params: call_node.block_params,
-              block_body: block_body,
-              has_block: true,
-              called_methods: [],
-              loc: call_loc
-            )
+            # Update block_body and has_block on mutable Struct
+            call_node.block_body = block_body
+            call_node.has_block = true
           end
 
           call_node
@@ -749,20 +678,9 @@ module TypeGuessr
           exception_type = infer_rescue_exception_type(rescue_clause.exceptions)
           loc = convert_loc(rescue_clause.reference.location)
 
-          value_node = IR::LiteralNode.new(
-            type: exception_type,
-            literal_value: nil,
-            values: nil,
-            called_methods: [],
-            loc: loc
-          )
+          value_node = IR::LiteralNode.new(exception_type, nil, nil, [], loc)
 
-          write_node = IR::LocalWriteNode.new(
-            name: var_name,
-            value: value_node,
-            called_methods: [],
-            loc: loc
-          )
+          write_node = IR::LocalWriteNode.new(var_name, value_node, [], loc)
 
           context.register_variable(var_name, write_node)
         end
@@ -940,14 +858,11 @@ module TypeGuessr
           return receiver_node unless merged_type
 
           # Create new LiteralNode with merged type
-          value_node = IR::LiteralNode.new(type: merged_type, literal_value: nil, values: nil, called_methods: [], loc: receiver_node.loc)
+          value_node = IR::LiteralNode.new(merged_type, nil, nil, [], receiver_node.loc)
 
           # Create new LocalWriteNode with merged type
           new_write = IR::LocalWriteNode.new(
-            name: receiver_node.name,
-            value: value_node,
-            called_methods: receiver_node.called_methods,
-            loc: convert_loc(prism_node.location)
+            receiver_node.name, value_node, receiver_node.called_methods, convert_loc(prism_node.location)
           )
 
           # Register for next line references
@@ -955,10 +870,7 @@ module TypeGuessr
 
           # Create new LocalReadNode pointing to new write_node
           new_read = IR::LocalReadNode.new(
-            name: receiver_node.name,
-            write_node: new_write,
-            called_methods: receiver_node.called_methods,
-            loc: receiver_node.loc
+            receiver_node.name, new_write, receiver_node.called_methods, receiver_node.loc
           )
 
           # Register the newly created nodes in location_index
@@ -1053,13 +965,7 @@ module TypeGuessr
             param.lefts.flat_map { |p| extract_param_nodes(p, kind, context) } +
               param.rights.flat_map { |p| extract_param_nodes(p, kind, context) }
           when Prism::RequiredParameterNode, Prism::OptionalParameterNode
-            param_node = IR::ParamNode.new(
-              name: param.name,
-              kind: kind,
-              default_value: default_value,
-              called_methods: [],
-              loc: convert_loc(param.location)
-            )
+            param_node = IR::ParamNode.new(param.name, kind, default_value, [], convert_loc(param.location))
             context.register_variable(param.name, param_node)
             [param_node]
           else
@@ -1093,12 +999,7 @@ module TypeGuessr
                                           next
                                         end
 
-                slot = IR::BlockParamSlot.new(
-                  index: index,
-                  call_node: call_node,
-                  called_methods: [],
-                  loc: convert_loc(param_loc)
-                )
+                slot = IR::BlockParamSlot.new(index, call_node, [], convert_loc(param_loc))
                 call_node.block_params << slot
                 block_context.register_variable(param_name, slot)
               end
@@ -1227,12 +1128,7 @@ module TypeGuessr
           return left_node if right_node.nil?
           return right_node if left_node.nil?
 
-          IR::OrNode.new(
-            lhs: left_node,
-            rhs: right_node,
-            called_methods: [],
-            loc: convert_loc(prism_node.location)
-          )
+          IR::OrNode.new(left_node, right_node, [], convert_loc(prism_node.location))
         end
 
         # Convert && (and) operator to MergeNode
@@ -1245,11 +1141,7 @@ module TypeGuessr
           return nil if branches.empty?
           return branches.first if branches.size == 1
 
-          IR::MergeNode.new(
-            branches: branches,
-            called_methods: [],
-            loc: convert_loc(prism_node.location)
-          )
+          IR::MergeNode.new(branches, [], convert_loc(prism_node.location))
         end
 
         # Convert h[:key] ||= value → OrNode(h.[](:key), value)
@@ -1258,23 +1150,9 @@ module TypeGuessr
           args = prism_node.arguments&.arguments&.map { |arg| convert(arg, context) } || []
           value_node = convert(prism_node.value, context)
 
-          read_call = IR::CallNode.new(
-            method: :[],
-            receiver: receiver_node,
-            args: args,
-            block_params: [],
-            block_body: nil,
-            has_block: false,
-            called_methods: [],
-            loc: convert_loc(prism_node.opening_loc)
-          )
+          read_call = IR::CallNode.new(:[], receiver_node, args, [], nil, false, [], convert_loc(prism_node.opening_loc))
 
-          IR::OrNode.new(
-            lhs: read_call,
-            rhs: value_node,
-            called_methods: [],
-            loc: convert_loc(prism_node.location)
-          )
+          IR::OrNode.new(read_call, value_node, [], convert_loc(prism_node.location))
         end
 
         # Extract all body nodes from a BeginNode (for DefNode bodies with rescue/ensure)
@@ -1333,13 +1211,7 @@ module TypeGuessr
             # Optional parameters
             parameters_node.optionals&.each do |param|
               default_node = convert(param.value, def_context)
-              param_node = IR::ParamNode.new(
-                name: param.name,
-                kind: :optional,
-                default_value: default_node,
-                called_methods: [],
-                loc: convert_loc(param.location)
-              )
+              param_node = IR::ParamNode.new(param.name, :optional, default_node, [], convert_loc(param.location))
               params << param_node
               def_context.register_variable(param.name, param_node)
             end
@@ -1347,13 +1219,7 @@ module TypeGuessr
             # Rest parameter (*args)
             if parameters_node.rest.is_a?(Prism::RestParameterNode)
               rest = parameters_node.rest
-              param_node = IR::ParamNode.new(
-                name: rest.name || :*,
-                kind: :rest,
-                default_value: nil,
-                called_methods: [],
-                loc: convert_loc(rest.location)
-              )
+              param_node = IR::ParamNode.new(rest.name || :*, :rest, nil, [], convert_loc(rest.location))
               params << param_node
               def_context.register_variable(rest.name, param_node) if rest.name
             end
@@ -1362,24 +1228,12 @@ module TypeGuessr
             parameters_node.keywords&.each do |kw|
               case kw
               when Prism::RequiredKeywordParameterNode
-                param_node = IR::ParamNode.new(
-                  name: kw.name,
-                  kind: :keyword_required,
-                  default_value: nil,
-                  called_methods: [],
-                  loc: convert_loc(kw.location)
-                )
+                param_node = IR::ParamNode.new(kw.name, :keyword_required, nil, [], convert_loc(kw.location))
                 params << param_node
                 def_context.register_variable(kw.name, param_node)
               when Prism::OptionalKeywordParameterNode
                 default_node = convert(kw.value, def_context)
-                param_node = IR::ParamNode.new(
-                  name: kw.name,
-                  kind: :keyword_optional,
-                  default_value: default_node,
-                  called_methods: [],
-                  loc: convert_loc(kw.location)
-                )
+                param_node = IR::ParamNode.new(kw.name, :keyword_optional, default_node, [], convert_loc(kw.location))
                 params << param_node
                 def_context.register_variable(kw.name, param_node)
               end
@@ -1388,38 +1242,20 @@ module TypeGuessr
             # Keyword rest parameter (**kwargs)
             if parameters_node.keyword_rest.is_a?(Prism::KeywordRestParameterNode)
               kwrest = parameters_node.keyword_rest
-              param_node = IR::ParamNode.new(
-                name: kwrest.name || :**,
-                kind: :keyword_rest,
-                default_value: nil,
-                called_methods: [],
-                loc: convert_loc(kwrest.location)
-              )
+              param_node = IR::ParamNode.new(kwrest.name || :**, :keyword_rest, nil, [], convert_loc(kwrest.location))
               params << param_node
               def_context.register_variable(kwrest.name, param_node) if kwrest.name
             elsif parameters_node.keyword_rest.is_a?(Prism::ForwardingParameterNode)
               # Forwarding parameter (...)
               fwd = parameters_node.keyword_rest
-              param_node = IR::ParamNode.new(
-                name: :"...",
-                kind: :forwarding,
-                default_value: nil,
-                called_methods: [],
-                loc: convert_loc(fwd.location)
-              )
+              param_node = IR::ParamNode.new(:"...", :forwarding, nil, [], convert_loc(fwd.location))
               params << param_node
             end
 
             # Block parameter (&block)
             if parameters_node.block
               block = parameters_node.block
-              param_node = IR::ParamNode.new(
-                name: block.name || :&,
-                kind: :block,
-                default_value: nil,
-                called_methods: [],
-                loc: convert_loc(block.location)
-              )
+              param_node = IR::ParamNode.new(block.name || :&, :block, nil, [], convert_loc(block.location))
               params << param_node
               def_context.register_variable(block.name, param_node) if block.name
             end
@@ -1446,14 +1282,14 @@ module TypeGuessr
           return_node = compute_return_node(body_nodes, prism_node.name_loc)
 
           IR::DefNode.new(
-            name: prism_node.name,
-            class_name: def_context.current_class_name,
-            params: params,
-            return_node: return_node,
-            body_nodes: body_nodes,
-            called_methods: [],
-            loc: convert_loc(prism_node.name_loc),
-            singleton: prism_node.receiver.is_a?(Prism::SelfNode)
+            prism_node.name,
+            def_context.current_class_name,
+            params,
+            return_node,
+            body_nodes,
+            [],
+            convert_loc(prism_node.name_loc),
+            prism_node.receiver.is_a?(Prism::SelfNode)
           )
         end
 
@@ -1480,11 +1316,7 @@ module TypeGuessr
           when 1
             return_points.first
           else
-            IR::MergeNode.new(
-              branches: return_points,
-              called_methods: [],
-              loc: convert_loc(loc)
-            )
+            IR::MergeNode.new(return_points, [], convert_loc(loc))
           end
         end
 
@@ -1524,23 +1356,13 @@ module TypeGuessr
                    prism_node.to_s
                  end
 
-          IR::ConstantNode.new(
-            name: name,
-            dependency: context.lookup_constant(name),
-            called_methods: [],
-            loc: convert_loc(prism_node.location)
-          )
+          IR::ConstantNode.new(name, context.lookup_constant(name), [], convert_loc(prism_node.location))
         end
 
         private def convert_constant_write(prism_node, context)
           value_node = convert(prism_node.value, context)
           context.register_constant(prism_node.name.to_s, value_node)
-          IR::ConstantNode.new(
-            name: prism_node.name.to_s,
-            dependency: value_node,
-            called_methods: [],
-            loc: convert_loc(prism_node.location)
-          )
+          IR::ConstantNode.new(prism_node.name.to_s, value_node, [], convert_loc(prism_node.location))
         end
 
         private def merge_modified_variables(parent_context, then_context, else_context, then_node, else_node, location)
@@ -1581,22 +1403,14 @@ module TypeGuessr
               # Inline if/unless: no else branch and no original value
               # Add nil to represent "variable may not be assigned"
               nil_node = IR::LiteralNode.new(
-                type: Types::ClassInstance.for("NilClass"),
-                literal_value: nil,
-                values: nil,
-                called_methods: [],
-                loc: convert_loc(location)
+                Types::ClassInstance.for("NilClass"), nil, nil, [], convert_loc(location)
               )
               branches << nil_node
             end
 
             # Create MergeNode only if we have multiple branches
             if branches.size > 1
-              merge_node = IR::MergeNode.new(
-                branches: branches.uniq,
-                called_methods: [],
-                loc: convert_loc(location)
-              )
+              merge_node = IR::MergeNode.new(branches.uniq, [], convert_loc(location))
               parent_context.register_variable(var_name, merge_node)
             elsif branches.size == 1
               # Only one branch has a value, use it directly
@@ -1606,26 +1420,14 @@ module TypeGuessr
 
           # Return MergeNode for the if expression value
           if then_node && else_node
-            IR::MergeNode.new(
-              branches: [then_node, else_node].compact,
-              called_methods: [],
-              loc: convert_loc(location)
-            )
+            IR::MergeNode.new([then_node, else_node].compact, [], convert_loc(location))
           elsif then_node || else_node
             # Modifier form: one branch only → value or nil
             branch_node = then_node || else_node
             nil_node = IR::LiteralNode.new(
-              type: Types::ClassInstance.for("NilClass"),
-              literal_value: nil,
-              values: nil,
-              called_methods: [],
-              loc: convert_loc(location)
+              Types::ClassInstance.for("NilClass"), nil, nil, [], convert_loc(location)
             )
-            IR::MergeNode.new(
-              branches: [branch_node, nil_node],
-              called_methods: [],
-              loc: convert_loc(location)
-            )
+            IR::MergeNode.new([branch_node, nil_node], [], convert_loc(location))
           end
         end
 
@@ -1648,11 +1450,7 @@ module TypeGuessr
 
             # Create MergeNode if we have multiple different values
             if merge_branches.size > 1
-              merge_node = IR::MergeNode.new(
-                branches: merge_branches,
-                called_methods: [],
-                loc: convert_loc(location)
-              )
+              merge_node = IR::MergeNode.new(merge_branches, [], convert_loc(location))
               parent_context.register_variable(var_name, merge_node)
             elsif merge_branches.size == 1
               parent_context.register_variable(var_name, merge_branches.first)
@@ -1661,24 +1459,14 @@ module TypeGuessr
 
           # Return MergeNode for the case expression value
           if branches.size > 1
-            IR::MergeNode.new(
-              branches: branches.compact.uniq,
-              called_methods: [],
-              loc: convert_loc(location)
-            )
+            IR::MergeNode.new(branches.compact.uniq, [], convert_loc(location))
           elsif branches.size == 1
             branches.first
           end
         end
 
         private def create_nil_literal(location)
-          IR::LiteralNode.new(
-            type: Types::ClassInstance.for("NilClass"),
-            literal_value: nil,
-            values: nil,
-            called_methods: [],
-            loc: convert_loc(location)
-          )
+          IR::LiteralNode.new(Types::ClassInstance.for("NilClass"), nil, nil, [], convert_loc(location))
         end
 
         # Check if a node represents a non-returning expression (raise, fail, exit, abort)
@@ -1723,12 +1511,7 @@ module TypeGuessr
           # Store nested classes in methods array (RuntimeAdapter handles both types)
           methods.concat(nested_classes)
 
-          IR::ClassModuleNode.new(
-            name: name,
-            methods: methods,
-            called_methods: [],
-            loc: convert_loc(prism_node.constant_path&.location || prism_node.location)
-          )
+          IR::ClassModuleNode.new(name, methods, [], convert_loc(prism_node.constant_path&.location || prism_node.location))
         end
 
         private def convert_singleton_class(prism_node, context)
@@ -1752,12 +1535,7 @@ module TypeGuessr
             end
           end
 
-          IR::ClassModuleNode.new(
-            name: singleton_name,
-            methods: methods,
-            called_methods: [],
-            loc: convert_loc(prism_node.location)
-          )
+          IR::ClassModuleNode.new(singleton_name, methods, [], convert_loc(prism_node.location))
         end
 
         private def array_element_type_for(array_node)
@@ -1840,7 +1618,7 @@ module TypeGuessr
         end
 
         private def convert_loc(prism_location)
-          IR::Loc.new(offset: prism_location.start_offset)
+          prism_location.start_offset
         end
 
         # Register node in location_index and registries during conversion

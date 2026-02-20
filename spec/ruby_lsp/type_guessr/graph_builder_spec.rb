@@ -4,7 +4,7 @@ require "spec_helper"
 require "ruby_lsp/type_guessr/graph_builder"
 
 RSpec.describe RubyLsp::TypeGuessr::GraphBuilder do
-  let(:loc) { TypeGuessr::Core::IR::Loc.new(offset: 100) }
+  let(:loc) { 100 }
   let(:nodes) { {} }
 
   # Create a minimal mock runtime adapter
@@ -35,11 +35,11 @@ RSpec.describe RubyLsp::TypeGuessr::GraphBuilder do
     context "with a simple literal node" do
       let(:literal) do
         TypeGuessr::Core::IR::LiteralNode.new(
-          type: TypeGuessr::Core::Types::ClassInstance.new("String"),
-          literal_value: nil,
-          values: nil,
-          called_methods: [],
-          loc: loc
+          TypeGuessr::Core::Types::ClassInstance.new("String"),
+          nil,
+          nil,
+          [],
+          loc
         )
       end
 
@@ -71,20 +71,20 @@ RSpec.describe RubyLsp::TypeGuessr::GraphBuilder do
     context "with a variable node with dependency" do
       let(:literal) do
         TypeGuessr::Core::IR::LiteralNode.new(
-          type: TypeGuessr::Core::Types::ClassInstance.new("String"),
-          literal_value: nil,
-          values: nil,
-          called_methods: [],
-          loc: loc
+          TypeGuessr::Core::Types::ClassInstance.new("String"),
+          nil,
+          nil,
+          [],
+          loc
         )
       end
 
       let(:variable) do
         TypeGuessr::Core::IR::LocalWriteNode.new(
-          name: :name,
-          value: literal,
-          called_methods: [],
-          loc: TypeGuessr::Core::IR::Loc.new(offset: 50)
+          :name,
+          literal,
+          [],
+          50
         )
       end
 
@@ -106,37 +106,37 @@ RSpec.describe RubyLsp::TypeGuessr::GraphBuilder do
     context "with diamond pattern (same dependency from multiple nodes)" do
       let(:literal) do
         TypeGuessr::Core::IR::LiteralNode.new(
-          type: TypeGuessr::Core::Types::ClassInstance.new("String"),
-          literal_value: nil,
-          values: nil,
-          called_methods: [],
-          loc: loc
+          TypeGuessr::Core::Types::ClassInstance.new("String"),
+          nil,
+          nil,
+          [],
+          loc
         )
       end
 
       let(:branch_a) do
         TypeGuessr::Core::IR::LocalWriteNode.new(
-          name: :a,
-          value: literal,
-          called_methods: [],
-          loc: TypeGuessr::Core::IR::Loc.new(offset: 50)
+          :a,
+          literal,
+          [],
+          50
         )
       end
 
       let(:branch_b) do
         TypeGuessr::Core::IR::LocalWriteNode.new(
-          name: :b,
-          value: literal,
-          called_methods: [],
-          loc: TypeGuessr::Core::IR::Loc.new(offset: 60)
+          :b,
+          literal,
+          [],
+          60
         )
       end
 
       let(:merge) do
         TypeGuessr::Core::IR::MergeNode.new(
-          branches: [branch_a, branch_b],
-          called_methods: [],
-          loc: TypeGuessr::Core::IR::Loc.new(offset: 70)
+          [branch_a, branch_b],
+          [],
+          70
         )
       end
 
@@ -160,32 +160,32 @@ RSpec.describe RubyLsp::TypeGuessr::GraphBuilder do
     context "with LiteralNode containing values (Hash/Array with expressions)" do
       let(:inner_literal) do
         TypeGuessr::Core::IR::LiteralNode.new(
-          type: TypeGuessr::Core::Types::ClassInstance.new("Integer"),
-          literal_value: nil,
-          values: nil,
-          called_methods: [],
-          loc: loc
+          TypeGuessr::Core::Types::ClassInstance.new("Integer"),
+          nil,
+          nil,
+          [],
+          loc
         )
       end
 
       let(:read_node) do
         TypeGuessr::Core::IR::LocalReadNode.new(
-          name: :x,
-          write_node: nil,
-          called_methods: [],
-          loc: TypeGuessr::Core::IR::Loc.new(offset: 50)
+          :x,
+          nil,
+          [],
+          50
         )
       end
 
       let(:array_literal) do
         TypeGuessr::Core::IR::LiteralNode.new(
-          type: TypeGuessr::Core::Types::ArrayType.new(
+          TypeGuessr::Core::Types::ArrayType.new(
             TypeGuessr::Core::Types::ClassInstance.new("Integer")
           ),
-          literal_value: nil,
-          values: [read_node, inner_literal],
-          called_methods: [],
-          loc: loc
+          nil,
+          [read_node, inner_literal],
+          [],
+          loc
         )
       end
 
@@ -222,13 +222,13 @@ RSpec.describe RubyLsp::TypeGuessr::GraphBuilder do
       )
 
       literal = TypeGuessr::Core::IR::LiteralNode.new(
-        type: TypeGuessr::Core::Types::ArrayType.new(
+        TypeGuessr::Core::Types::ArrayType.new(
           TypeGuessr::Core::Types::ClassInstance.new("Integer")
         ),
-        literal_value: nil,
-        values: nil,
-        called_methods: [],
-        loc: loc
+        nil,
+        nil,
+        [],
+        loc
       )
       nodes["Test:lit:ArrayType:100"] = literal
 
@@ -249,11 +249,11 @@ RSpec.describe RubyLsp::TypeGuessr::GraphBuilder do
       )
 
       literal = TypeGuessr::Core::IR::LiteralNode.new(
-        type: TypeGuessr::Core::Types::ClassInstance.new("String"),
-        literal_value: nil,
-        values: nil,
-        called_methods: [],
-        loc: loc
+        TypeGuessr::Core::Types::ClassInstance.new("String"),
+        nil,
+        nil,
+        [],
+        loc
       )
       nodes["Test:lit:ClassInstance:100"] = literal
 
@@ -265,18 +265,18 @@ RSpec.describe RubyLsp::TypeGuessr::GraphBuilder do
   describe "node details extraction" do
     it "extracts DefNode details" do
       def_node = TypeGuessr::Core::IR::DefNode.new(
-        name: :save,
-        class_name: "Test",
-        params: [
+        :save,
+        "Test",
+        [
           TypeGuessr::Core::IR::ParamNode.new(
-            name: :user, kind: :required, default_value: nil, called_methods: [], loc: loc
+            :user, :required, nil, [], loc
           ),
         ],
-        return_node: nil,
-        body_nodes: [],
-        called_methods: [],
-        loc: loc,
-        singleton: false
+        nil,
+        [],
+        [],
+        loc,
+        false
       )
       nodes["Test:def:save:100"] = def_node
 
@@ -289,14 +289,14 @@ RSpec.describe RubyLsp::TypeGuessr::GraphBuilder do
 
     it "extracts CallNode details" do
       call_node = TypeGuessr::Core::IR::CallNode.new(
-        method: :upcase,
-        receiver: nil,
-        args: [],
-        block_params: [],
-        block_body: nil,
-        has_block: true,
-        called_methods: [],
-        loc: loc
+        :upcase,
+        nil,
+        [],
+        [],
+        nil,
+        true,
+        [],
+        loc
       )
       nodes["Test:call:upcase:100"] = call_node
 
@@ -309,11 +309,11 @@ RSpec.describe RubyLsp::TypeGuessr::GraphBuilder do
 
     it "extracts InstanceVariableWriteNode details" do
       write_node = TypeGuessr::Core::IR::InstanceVariableWriteNode.new(
-        name: :@user,
-        class_name: "Test",
-        value: nil,
-        called_methods: %i[name email],
-        loc: loc
+        :@user,
+        "Test",
+        nil,
+        %i[name email],
+        loc
       )
       nodes["Test:ivar_write:@user:100"] = write_node
 
@@ -328,16 +328,16 @@ RSpec.describe RubyLsp::TypeGuessr::GraphBuilder do
 
     it "extracts LocalReadNode details" do
       write_node = TypeGuessr::Core::IR::LocalWriteNode.new(
-        name: :user,
-        value: nil,
-        called_methods: [],
-        loc: TypeGuessr::Core::IR::Loc.new(offset: 50)
+        :user,
+        nil,
+        [],
+        50
       )
       read_node = TypeGuessr::Core::IR::LocalReadNode.new(
-        name: :user,
-        write_node: write_node,
-        called_methods: [],
-        loc: loc
+        :user,
+        write_node,
+        [],
+        loc
       )
       nodes["Test:local_read:user:100"] = read_node
       nodes["Test:local_write:user:50"] = write_node

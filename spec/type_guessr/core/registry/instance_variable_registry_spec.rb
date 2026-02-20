@@ -9,13 +9,7 @@ RSpec.describe TypeGuessr::Core::Registry::InstanceVariableRegistry do
 
   # Create a mock InstanceVariableWriteNode for testing
   def create_ivar_write_node(name, class_name = nil)
-    TypeGuessr::Core::IR::InstanceVariableWriteNode.new(
-      name: name,
-      class_name: class_name,
-      value: nil,
-      called_methods: [],
-      loc: nil
-    )
+    TypeGuessr::Core::IR::InstanceVariableWriteNode.new(name, class_name, nil, [], nil)
   end
 
   describe "#register and #lookup" do

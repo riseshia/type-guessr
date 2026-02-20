@@ -9,13 +9,7 @@ RSpec.describe TypeGuessr::Core::Registry::ClassVariableRegistry do
 
   # Create a mock ClassVariableWriteNode for testing
   def create_cvar_write_node(name, class_name = nil)
-    TypeGuessr::Core::IR::ClassVariableWriteNode.new(
-      name: name,
-      class_name: class_name,
-      value: nil,
-      called_methods: [],
-      loc: nil
-    )
+    TypeGuessr::Core::IR::ClassVariableWriteNode.new(name, class_name, nil, [], nil)
   end
 
   describe "#register and #lookup" do

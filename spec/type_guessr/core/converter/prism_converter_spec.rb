@@ -822,13 +822,13 @@ RSpec.describe TypeGuessr::Core::Converter::PrismConverter do
   end
 
   describe "location conversion" do
-    it "converts Prism location to IR Loc" do
+    it "converts Prism location to byte offset integer" do
       source = '"hello"'
       parsed = Prism.parse(source)
       node = converter.convert(parsed.value.statements.body.first)
 
-      expect(node.loc).to be_a(TypeGuessr::Core::IR::Loc)
-      expect(node.loc.offset).to eq(0)
+      expect(node.loc).to be_a(Integer)
+      expect(node.loc).to eq(0)
     end
   end
 

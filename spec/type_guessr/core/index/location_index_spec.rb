@@ -12,12 +12,7 @@ RSpec.describe TypeGuessr::Core::Index::LocationIndex do
 
   describe "#add and #find_by_key" do
     it "indexes and finds a node by key" do
-      node = TypeGuessr::Core::IR::LocalWriteNode.new(
-        name: :name,
-        value: nil,
-        called_methods: [],
-        loc: TypeGuessr::Core::IR::Loc.new(offset: 50)
-      )
+      node = TypeGuessr::Core::IR::LocalWriteNode.new(:name, nil, [], 50)
 
       index.add(file_path, node, "User#save")
       index.finalize!
@@ -28,12 +23,7 @@ RSpec.describe TypeGuessr::Core::Index::LocationIndex do
     end
 
     it "returns nil when key is not found" do
-      node = TypeGuessr::Core::IR::LocalWriteNode.new(
-        name: :name,
-        value: nil,
-        called_methods: [],
-        loc: TypeGuessr::Core::IR::Loc.new(offset: 50)
-      )
+      node = TypeGuessr::Core::IR::LocalWriteNode.new(:name, nil, [], 50)
 
       index.add(file_path, node, "User#save")
       index.finalize!
@@ -49,12 +39,7 @@ RSpec.describe TypeGuessr::Core::Index::LocationIndex do
     end
 
     it "works with empty scope_id" do
-      node = TypeGuessr::Core::IR::LocalWriteNode.new(
-        name: :x,
-        value: nil,
-        called_methods: [],
-        loc: TypeGuessr::Core::IR::Loc.new(offset: 0)
-      )
+      node = TypeGuessr::Core::IR::LocalWriteNode.new(:x, nil, [], 0)
 
       index.add(file_path, node, "")
 
@@ -64,13 +49,7 @@ RSpec.describe TypeGuessr::Core::Index::LocationIndex do
     end
 
     it "ignores nodes without location" do
-      node_without_loc = TypeGuessr::Core::IR::LiteralNode.new(
-        type: string_type,
-        literal_value: nil,
-        values: nil,
-        called_methods: [],
-        loc: nil
-      )
+      node_without_loc = TypeGuessr::Core::IR::LiteralNode.new(string_type, nil, nil, [], nil)
 
       index.add(file_path, node_without_loc)
       index.finalize!
@@ -81,18 +60,8 @@ RSpec.describe TypeGuessr::Core::Index::LocationIndex do
 
   describe "#nodes_for_file" do
     it "returns all nodes for a file" do
-      node1 = TypeGuessr::Core::IR::LocalWriteNode.new(
-        name: :x,
-        value: nil,
-        called_methods: [],
-        loc: TypeGuessr::Core::IR::Loc.new(offset: 0)
-      )
-      node2 = TypeGuessr::Core::IR::LocalWriteNode.new(
-        name: :y,
-        value: nil,
-        called_methods: [],
-        loc: TypeGuessr::Core::IR::Loc.new(offset: 10)
-      )
+      node1 = TypeGuessr::Core::IR::LocalWriteNode.new(:x, nil, [], 0)
+      node2 = TypeGuessr::Core::IR::LocalWriteNode.new(:y, nil, [], 10)
 
       index.add(file_path, node1, "")
       index.add(file_path, node2, "")
@@ -108,12 +77,7 @@ RSpec.describe TypeGuessr::Core::Index::LocationIndex do
 
   describe "#remove_file" do
     it "removes all entries for a file" do
-      node = TypeGuessr::Core::IR::LocalWriteNode.new(
-        name: :name,
-        value: nil,
-        called_methods: [],
-        loc: TypeGuessr::Core::IR::Loc.new(offset: 0)
-      )
+      node = TypeGuessr::Core::IR::LocalWriteNode.new(:name, nil, [], 0)
 
       index.add(file_path, node, "User#save")
       index.finalize!
@@ -127,18 +91,8 @@ RSpec.describe TypeGuessr::Core::Index::LocationIndex do
 
   describe "#clear" do
     it "clears all indexed data" do
-      node1 = TypeGuessr::Core::IR::LocalWriteNode.new(
-        name: :x,
-        value: nil,
-        called_methods: [],
-        loc: TypeGuessr::Core::IR::Loc.new(offset: 0)
-      )
-      node2 = TypeGuessr::Core::IR::LocalWriteNode.new(
-        name: :y,
-        value: nil,
-        called_methods: [],
-        loc: TypeGuessr::Core::IR::Loc.new(offset: 0)
-      )
+      node1 = TypeGuessr::Core::IR::LocalWriteNode.new(:x, nil, [], 0)
+      node2 = TypeGuessr::Core::IR::LocalWriteNode.new(:y, nil, [], 0)
 
       index.add(file_path, node1, "A#m")
       index.add("/other/file.rb", node2, "B#n")
@@ -153,24 +107,9 @@ RSpec.describe TypeGuessr::Core::Index::LocationIndex do
 
   describe "#stats" do
     it "returns statistics about the index" do
-      node1 = TypeGuessr::Core::IR::LocalWriteNode.new(
-        name: :x,
-        value: nil,
-        called_methods: [],
-        loc: TypeGuessr::Core::IR::Loc.new(offset: 0)
-      )
-      node2 = TypeGuessr::Core::IR::LocalWriteNode.new(
-        name: :y,
-        value: nil,
-        called_methods: [],
-        loc: TypeGuessr::Core::IR::Loc.new(offset: 10)
-      )
-      node3 = TypeGuessr::Core::IR::LocalWriteNode.new(
-        name: :z,
-        value: nil,
-        called_methods: [],
-        loc: TypeGuessr::Core::IR::Loc.new(offset: 0)
-      )
+      node1 = TypeGuessr::Core::IR::LocalWriteNode.new(:x, nil, [], 0)
+      node2 = TypeGuessr::Core::IR::LocalWriteNode.new(:y, nil, [], 10)
+      node3 = TypeGuessr::Core::IR::LocalWriteNode.new(:z, nil, [], 0)
 
       index.add(file_path, node1, "")
       index.add(file_path, node2, "")
@@ -184,18 +123,8 @@ RSpec.describe TypeGuessr::Core::Index::LocationIndex do
 
   describe "#all_files" do
     it "returns all indexed file paths" do
-      node1 = TypeGuessr::Core::IR::LocalWriteNode.new(
-        name: :x,
-        value: nil,
-        called_methods: [],
-        loc: TypeGuessr::Core::IR::Loc.new(offset: 0)
-      )
-      node2 = TypeGuessr::Core::IR::LocalWriteNode.new(
-        name: :y,
-        value: nil,
-        called_methods: [],
-        loc: TypeGuessr::Core::IR::Loc.new(offset: 0)
-      )
+      node1 = TypeGuessr::Core::IR::LocalWriteNode.new(:x, nil, [], 0)
+      node2 = TypeGuessr::Core::IR::LocalWriteNode.new(:y, nil, [], 0)
 
       index.add("/path/to/a.rb", node1, "")
       index.add("/path/to/b.rb", node2, "")
