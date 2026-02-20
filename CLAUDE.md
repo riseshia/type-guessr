@@ -45,7 +45,9 @@ type-guessr/
 │   ├── ruby_lsp/
 │   │   └── type_guessr/
 │   │       ├── addon.rb                         # LSP addon registration
+│   │       ├── code_index_adapter.rb            # RubyIndexer wrapper (ancestors, constants)
 │   │       ├── config.rb                        # Configuration management
+│   │       ├── constants.rb                     # Constant definitions
 │   │       ├── debug_server.rb                  # Debug web server
 │   │       ├── graph_builder.rb                 # Node graph construction
 │   │       ├── hover.rb                         # Hover provider
@@ -68,10 +70,13 @@ type-guessr/
 │           ├── ir/
 │           │   └── nodes.rb                     # Node definitions
 │           ├── registry/
+│           │   ├── class_variable_registry.rb   # Class variable storage
+│           │   ├── instance_variable_registry.rb # Instance variable storage (with inheritance)
 │           │   ├── method_registry.rb           # Project method storage
-│           │   ├── signature_registry.rb        # Stdlib RBS signatures
-│           │   └── variable_registry.rb         # Instance/class variable storage
+│           │   └── signature_registry.rb        # Stdlib RBS signatures
 │           ├── logger.rb                        # Logger utility
+│           ├── node_context_helper.rb           # NodeContext → node key bridge
+│           ├── node_key_generator.rb            # Unique node key generation
 │           ├── signature_builder.rb             # Method signature generation
 │           ├── type_simplifier.rb               # Type simplification
 │           └── types.rb                         # Type system
@@ -145,7 +150,7 @@ The project is organized into two main layers:
 #### 1. Nodes (`ir/nodes.rb`)
 - Defines node types for the dependency graph
 - Each node points to nodes it depends on for type inference
-- Types: `LiteralNode`, `VariableNode`, `ParamNode`, `CallNode`, `DefNode`, `MergeNode`, etc.
+- Types: `LiteralNode`, `LocalWriteNode`, `LocalReadNode`, `CallNode`, `DefNode`, `MergeNode`, `OrNode`, `ReturnNode`, etc.
 
 #### 2. PrismConverter (`converter/prism_converter.rb`)
 - Converts Prism AST to node graph at indexing time
@@ -163,10 +168,10 @@ The project is organized into two main layers:
 #### 5. Resolver (`inference/resolver.rb`)
 - Resolves nodes to types by traversing the dependency graph
 - Caches inference results per node
-- Uses injected MethodRegistry and VariableRegistry for storage
+- Uses injected MethodRegistry, InstanceVariableRegistry, and ClassVariableRegistry
 
 #### 6. Types (`types.rb`)
-- Type representations: `ClassInstance`, `ArrayType`, `HashType`, `HashShape`, `Union`, `Unknown`, etc.
+- Type representations: `ClassInstance`, `ArrayType`, `TupleType`, `HashType`, `HashShape`, `Union`, `MethodSignature`, `Unknown`, etc.
 
 #### 7. SignatureRegistry (`registry/signature_registry.rb`)
 - Preloads stdlib RBS signatures at startup (~250ms, ~10MB)
@@ -175,18 +180,26 @@ The project is organized into two main layers:
 
 #### 8. MethodRegistry (`registry/method_registry.rb`)
 - Stores project method definitions (DefNode)
-- Supports inheritance via ancestry_provider
+- Supports inheritance via code_index
 - Provides method lookup and search
 
-#### 9. VariableRegistry (`registry/variable_registry.rb`)
-- Stores instance/class variable definitions
-- Supports inheritance for instance variable lookup
+#### 9. InstanceVariableRegistry / ClassVariableRegistry (`registry/`)
+- Separate registries for instance variables and class variables
+- InstanceVariableRegistry supports inheritance via code_index
 
-#### 10. SignatureBuilder (`signature_builder.rb`)
+#### 10. NodeKeyGenerator (`node_key_generator.rb`)
+- Single source of truth for node key format (e.g., `local_write:name:offset`)
+- Used by both PrismConverter (node creation) and Hover/TypeInferrer (node lookup)
+
+#### 11. NodeContextHelper (`node_context_helper.rb`)
+- Bridges ruby-lsp's NodeContext and TypeGuessr's node key format
+- Generates scope IDs and node hashes from Prism nodes
+
+#### 12. SignatureBuilder (`signature_builder.rb`)
 - Generates method signatures from inferred types
 - Formats parameter types and return types for display
 
-#### 11. TypeSimplifier (`type_simplifier.rb`)
+#### 13. TypeSimplifier (`type_simplifier.rb`)
 - Simplifies complex union types
 - Normalizes type representations for cleaner display
 
@@ -234,6 +247,10 @@ The project is organized into two main layers:
 #### 7. TypeInferrer (`type_inferrer.rb`)
 - Coordinates type inference across the system
 - Bridges Ruby LSP's type inference with TypeGuessr's inference
+
+#### 8. CodeIndexAdapter (`code_index_adapter.rb`)
+- Wraps RubyIndexer for ancestor lookup, constant resolution, method owner detection
+- Provides `ancestors_of`, `resolve_constant_name`, `instance_method_owner`, etc.
 
 ## Development Workflow
 

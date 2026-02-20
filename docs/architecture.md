@@ -30,7 +30,7 @@ TypeGuessr is a Ruby LSP addon that provides heuristic type inference without re
 │  ┌───────────────┐  ┌───────────────┐  ┌───────────────┐  ┌───────────────┐   │
 │  │ PrismConverter│  │  RBSConverter │  │ LocationIndex │  │   Resolver    │   │
 │  │               │  │               │  │               │  │               │   │
-│  │ Prism AST→IR  │  │ RBS→Types     │  │ (file,line)   │  │ IR Node→Type  │   │
+│  │ Prism AST→IR  │  │ RBS→Types     │  │ node_key      │  │ IR Node→Type  │   │
 │  │               │  │               │  │  → IR Node    │  │               │   │
 │  └───────────────┘  └───────────────┘  └───────────────┘  └───────────────┘   │
 │                                                                                │
@@ -39,21 +39,23 @@ TypeGuessr is a Ruby LSP addon that provides heuristic type inference without re
 │  │               │  │               │  │                                   │   │
 │  │ - LiteralNode │  │ - ClassInst   │  │ - preload stdlib RBS              │   │
 │  │ - Local*Node  │  │ - ArrayType   │  │ - O(1) method lookup              │   │
-│  │ - IVar*Node   │  │ - HashType    │  │ - overload resolution             │   │
-│  │ - CVar*Node   │  │ - HashShape   │  │ - block param types               │   │
-│  │ - CallNode    │  │ - RangeType   │  │                                   │   │
-│  │ - ParamNode   │  │ - Union       │  │                                   │   │
-│  │ - DefNode     │  │ - Singleton   │  │                                   │   │
+│  │ - IVar*Node   │  │ - TupleType   │  │ - overload resolution             │   │
+│  │ - CVar*Node   │  │ - HashType    │  │ - block param types               │   │
+│  │ - CallNode    │  │ - HashShape   │  │                                   │   │
+│  │ - ParamNode   │  │ - RangeType   │  │                                   │   │
+│  │ - DefNode     │  │ - Union       │  │                                   │   │
+│  │ - MergeNode   │  │ - Singleton   │  │                                   │   │
+│  │ - OrNode      │  │ - MethodSig   │  │                                   │   │
 │  │ - SelfNode    │  │ - TypeVar     │  │                                   │   │
 │  │ - ReturnNode  │  │               │  │                                   │   │
 │  └───────────────┘  └───────────────┘  └───────────────────────────────────┘   │
 │                                                                                │
 │  ┌───────────────┐  ┌───────────────┐  ┌───────────────┐  ┌───────────────┐   │
-│  │TypeSimplifier │  │    Logger     │  │MethodRegistry │  │VariableRegstry│   │
-│  │               │  │               │  │               │  │               │   │
-│  │ - union simp  │  │ - debug log   │  │ - register    │  │ - ivar store  │   │
-│  │ - normalize   │  │               │  │ - lookup      │  │ - cvar store  │   │
-│  │               │  │               │  │ - inheritance │  │ - inheritance │   │
+│  │TypeSimplifier │  │    Logger     │  │MethodRegistry │  │IVarRegistry   │   │
+│  │               │  │               │  │               │  │CVarRegistry   │   │
+│  │ - union simp  │  │ - debug log   │  │ - register    │  │               │   │
+│  │ - normalize   │  │               │  │ - lookup      │  │ - ivar store  │   │
+│  │               │  │               │  │ - inheritance │  │ - cvar store  │   │
 │  └───────────────┘  └───────────────┘  └───────────────┘  └───────────────┘   │
 └───────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -78,6 +80,7 @@ Nodes form a reverse dependency graph where each node points to the nodes it dep
 | `DefNode` | Method definitions | Points to body (return value) |
 | `BlockParamSlot` | Block parameters | Filled by CallNode inference |
 | `MergeNode` | Control flow merge (if/else) | Points to all branches |
+| `OrNode` | Compound assignment (||=) | Points to left and right value nodes |
 | `ConstantNode` | Constants | Points to assigned value |
 | `ClassModuleNode` | Class/module definitions | Contains method DefNodes |
 | `SelfNode` | Self reference | None (resolved from class context) |
@@ -92,11 +95,14 @@ Converts Prism AST to node graph at indexing time.
 - Track variable definitions via Context
 - Handle method calls and track called methods on variables
 - Handle indexed assignment (`a[:key] = value`) for Hash type tracking
+- Handle multiple assignment (`a, b = expr`) via synthetic `[]` calls
+- Handle compound assignments (`||=`, `&&=`, `+=`)
 
 **Context:**
 - Maintains variable → IR node mapping within a scope
 - Enables variable reassignment tracking
 - Handles Hash indexed assignment type updates
+- Accepts injected registries (LocationIndex, MethodRegistry, variable registries) for inline node registration
 
 ### RBSConverter (`lib/type_guessr/core/converter/rbs_converter.rb`)
 
@@ -112,9 +118,10 @@ Converts RBS types to internal type system.
 O(1) lookup from node key to node.
 
 **Key features:**
-- Entries sorted by (line, col_range.begin) for binary search
-- Prefers assignment nodes over read nodes at same position
-- Per-file storage with `finalize!` for sorting
+- Hash-based O(1) lookup using `node_key` (generated by `NodeKeyGenerator`)
+- Per-file key tracking for efficient `remove_file` cleanup
+- `find_by_key(node_key)` - primary lookup method
+- `nodes_for_file(file_path)` - get all nodes for a file
 
 ### Resolver (`lib/type_guessr/core/inference/resolver.rb`)
 
@@ -125,7 +132,7 @@ Resolves nodes to types by traversing the dependency graph.
 - Handles RBS method signature lookup
 - Resolves block parameter types from receiver's element type
 - Method-based type inference via called method resolution
-- Uses injected `MethodRegistry` and `VariableRegistry` for storage
+- Uses injected `MethodRegistry`, `InstanceVariableRegistry`, and `ClassVariableRegistry` for storage
 
 ### MethodRegistry (`lib/type_guessr/core/registry/method_registry.rb`)
 
@@ -133,19 +140,25 @@ Stores and retrieves project method definitions (DefNode).
 
 **Key features:**
 - `register(class_name, method_name, def_node)` - Store method definition
-- `lookup(class_name, method_name)` - Find method (supports inheritance via ancestry_provider)
+- `lookup(class_name, method_name)` - Find method (supports inheritance via code_index)
 - `methods_for_class(class_name)` - Get direct methods for a class (debug server)
 - `search(pattern)` - Search methods by pattern (debug server)
 
-### VariableRegistry (`lib/type_guessr/core/registry/variable_registry.rb`)
+### InstanceVariableRegistry (`lib/type_guessr/core/registry/instance_variable_registry.rb`)
 
-Stores and retrieves instance/class variable definitions.
+Stores and retrieves instance variable definitions.
 
 **Key features:**
-- `register_instance_variable(class_name, name, write_node)` - Store instance variable
-- `lookup_instance_variable(class_name, name)` - Find instance variable (supports inheritance)
-- `register_class_variable(class_name, name, write_node)` - Store class variable
-- `lookup_class_variable(class_name, name)` - Find class variable
+- `register(class_name, name, write_node)` - Store instance variable
+- `lookup(class_name, name)` - Find instance variable (supports inheritance via code_index)
+
+### ClassVariableRegistry (`lib/type_guessr/core/registry/class_variable_registry.rb`)
+
+Stores and retrieves class variable definitions.
+
+**Key features:**
+- `register(class_name, name, write_node)` - Store class variable
+- `lookup(class_name, name)` - Find class variable
 
 ### Types (`lib/type_guessr/core/types.rb`)
 
@@ -156,6 +169,7 @@ Type representations:
 | `ClassInstance` | `String`, `Integer` | Single class type |
 | `SingletonType` | `singleton(User)` | Class object itself (singleton class) |
 | `ArrayType` | `Array[Integer]` | Array with element type |
+| `TupleType` | `[Integer, String]` | Array with per-position types (max 8 elements) |
 | `HashType` | `Hash[Symbol, String]` | Hash with key/value types |
 | `HashShape` | `{ a: Integer, b: String }` | Hash with known fields |
 | `RangeType` | `Range[Integer]` | Range with element type |
@@ -164,6 +178,7 @@ Type representations:
 | `TypeVariable` | `Elem`, `K`, `V` | RBS type variables |
 | `SelfType` | `self` | RBS self type (substituted at resolution) |
 | `ForwardingArgs` | `...` | Forwarding parameter type |
+| `MethodSignature` | `(String) -> Integer` | Method/Proc signature with params and return type |
 
 ### SignatureRegistry (`lib/type_guessr/core/registry/signature_registry.rb`)
 
@@ -185,6 +200,20 @@ Preloads stdlib RBS signatures and provides O(1) hash lookup for method return t
 **Lookup order (in Resolver):**
 1. MethodRegistry (project methods)
 2. SignatureRegistry (stdlib RBS)
+
+### NodeKeyGenerator (`lib/type_guessr/core/node_key_generator.rb`)
+
+Single source of truth for node key format. Ensures consistency between IR node generation (PrismConverter) and hover/type inference lookups (Hover, TypeInferrer).
+
+**Key methods:** `local_write`, `local_read`, `ivar_write`, `ivar_read`, `call`, `def_node`, etc.
+
+### NodeContextHelper (`lib/type_guessr/core/node_context_helper.rb`)
+
+Bridges ruby-lsp's `NodeContext` and TypeGuessr's IR node key format.
+
+**Key methods:**
+- `generate_scope_id(node_context)` - Extract scope (class + method) from Prism node context
+- `generate_node_hash(prism_node)` - Map Prism node types to node key format
 
 ### TypeSimplifier (`lib/type_guessr/core/type_simplifier.rb`)
 
@@ -231,44 +260,36 @@ MCP::Server → StdioTransport.open (blocks, handles JSON-RPC)
 ```
 start_indexing (background thread)
     │
-    ├── signature_registry.preload()  ← Load all stdlib RBS signatures
-    │
     ▼
-traverse_file(uri)
+traverse_file(uri) for each file
     │
     ├── File.read(file_path)
-    ├── Prism.parse(source)
-    ├── PrismConverter.convert(stmt, context)  ← Creates IR nodes
+    ├── Prism.parse(source)              ← Outside mutex (CPU-bound)
     │
     ▼
 @mutex.synchronize
     ├── location_index.remove_file(file_path)
-    ├── index_node_recursively(file_path, node)  ← Adds to LocationIndex
+    ├── Context.new(file_path:, location_index:, method_registry:, ...)
+    ├── PrismConverter.convert(stmt, context)  ← Nodes registered inline via Context
     │
     ▼
-finalize!  ← Sort entries for binary search (ONCE after all files)
+@mutex.synchronize { finalize! }         ← ONCE after all files
+signature_registry.preload()             ← Load all stdlib RBS signatures
 ```
 
 ### File Reindexing (on save)
 
 ```
-workspace_did_change_watched_files
-    │
-    ▼
-reindex_file(uri)
-    │
-    ├── File.read(file_path)
-    │
-    ▼
-index_source(uri_string, source)
+index_file(uri, document) / index_source(uri_string, source)
     │
     ├── Prism.parse(source)
-    ├── PrismConverter.convert(stmt, context)
     │
     ▼
 @mutex.synchronize
     ├── location_index.remove_file(file_path)
-    ├── index_node_recursively(file_path, node)
+    ├── resolver.clear_cache
+    ├── Context.new(file_path:, location_index:, method_registry:, ...)
+    ├── PrismConverter.convert(stmt, context)  ← Nodes registered inline
     ├── finalize!
 ```
 
@@ -277,13 +298,14 @@ index_source(uri_string, source)
 ```
 Hover.add_hover_content(prism_node)
     │
-    ├── Extract line/column from Prism node
+    ├── NodeContextHelper.generate_scope_id(node_context)
+    ├── NodeKeyGenerator.local_read(name, offset)  ← Build node key
     │
     ▼
-@runtime_adapter.find_node_at(nil, line, column)
+@runtime_adapter.find_node_by_key(node_key)
     │
     ├── @mutex.synchronize
-    ├── location_index.find(file_path, line, column)
+    ├── location_index.find_by_key(node_key)
     │
     ▼
 @runtime_adapter.infer_type(ir_node)
@@ -306,11 +328,11 @@ RuntimeAdapter uses a single Mutex to protect:
 - Cache operations
 
 **Synchronized operations:**
-- `find_node_at` - read from index
+- `find_node_by_key` - read from index
 - `infer_type` - read from resolver (uses cache)
-- `index_file` / `index_source` - write to index
-- `traverse_file` - write to index
-- `finalize!` - sort index entries
+- `index_file` / `index_source` - write to index + registries
+- `traverse_file` - write to index + registries
+- `finalize!` - finalize index (no-op in current key-based implementation)
 
 **Outside mutex (CPU-bound, no shared state):**
 - File reading
@@ -322,7 +344,7 @@ RuntimeAdapter uses a single Mutex to protect:
 ### File Path Mismatch Problem
 
 The main issue is that file_path format may differ between:
-1. Initial indexing: `traverse_file` uses `uri.full_path.to_s`
+1. Initial indexing: `traverse_file` uses `uri.to_standardized_path`
 2. Reindexing: `index_source` uses URI parsing logic
 
 If these don't match, `remove_file` won't clear the old data, causing stale entries.
