@@ -29,8 +29,8 @@ RSpec.describe "Container Type Inference", :doc do
         RUBY
       end
 
-      it "→ Array[Integer | String]" do
-        expect_hover_type(line: 2, column: 0, expected: "Array[Integer | String]")
+      it "→ [Integer, String]" do
+        expect_hover_type(line: 2, column: 0, expected: "[Integer, String]")
       end
     end
 
@@ -42,8 +42,8 @@ RSpec.describe "Container Type Inference", :doc do
         RUBY
       end
 
-      it "→ Array[Integer | String | Symbol]" do
-        expect_hover_type(line: 2, column: 0, expected: "Array[Integer | String | Symbol]")
+      it "→ [Integer, String, Symbol]" do
+        expect_hover_type(line: 2, column: 0, expected: "[Integer, String, Symbol]")
       end
     end
 
@@ -55,8 +55,8 @@ RSpec.describe "Container Type Inference", :doc do
         RUBY
       end
 
-      it "→ Array[Float | Integer | String | Symbol]" do
-        expect_hover_type(line: 2, column: 0, expected: "Array[Float | Integer | String | Symbol]")
+      it "→ [Integer, String, Symbol, Float]" do
+        expect_hover_type(line: 2, column: 0, expected: "[Integer, String, Symbol, Float]")
       end
     end
 
@@ -468,6 +468,102 @@ RSpec.describe "Container Type Inference", :doc do
 
       it "→ Array[Integer | String | Symbol]" do
         expect_hover_type(line: 4, column: 0, expected: "Array[Integer | String | Symbol]")
+      end
+    end
+  end
+
+  describe "TupleType inference" do
+    context "Tuple indexed access with integer literal" do
+      let(:source) do
+        <<~RUBY
+          def foo
+            t = [1, "a", :sym]
+            t[0]
+          end
+
+          r = foo
+        RUBY
+      end
+
+      it "→ Integer" do
+        expect_hover_type(line: 6, column: 0, expected: "Integer")
+      end
+    end
+
+    context "Tuple indexed access with last element" do
+      let(:source) do
+        <<~RUBY
+          def foo
+            t = [1, "a", :sym]
+            t[2]
+          end
+
+          r = foo
+        RUBY
+      end
+
+      it "→ Symbol" do
+        expect_hover_type(line: 6, column: 0, expected: "Symbol")
+      end
+    end
+
+    context "Tuple negative indexing" do
+      let(:source) do
+        <<~RUBY
+          def foo
+            t = [1, "a", :sym]
+            t[-1]
+          end
+
+          r = foo
+        RUBY
+      end
+
+      it "→ Symbol" do
+        expect_hover_type(line: 6, column: 0, expected: "Symbol")
+      end
+    end
+
+    context "Tuple out of range access" do
+      let(:source) do
+        <<~RUBY
+          def foo
+            t = [1, "a"]
+            t[5]
+          end
+
+          r = foo
+        RUBY
+      end
+
+      it "→ nil" do
+        expect_hover_type(line: 6, column: 0, expected: "nil")
+      end
+    end
+
+    context "Tuple method falls back to Array RBS" do
+      let(:source) do
+        <<~RUBY
+          t = [1, "a"]
+          r = t.size
+        RUBY
+      end
+
+      it "→ Integer" do
+        expect_hover_type(line: 2, column: 0, expected: "Integer")
+      end
+    end
+
+    context "Homogeneous array stays ArrayType" do
+      let(:source) do
+        <<~RUBY
+          nums = [1, 2, 3]
+          nums
+        RUBY
+      end
+
+      it "→ Array[Integer]" do
+        expect_hover_type(line: 2, column: 0, expected: "Array[Integer]")
       end
     end
   end

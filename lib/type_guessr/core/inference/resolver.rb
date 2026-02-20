@@ -360,6 +360,23 @@ module TypeGuessr
                 "Array[#{receiver_type.element_type || "untyped"}]##{node.method}",
                 :stdlib
               )
+            when Types::TupleType
+              # Handle indexed access with integer literal
+              if node.method == :[] && node.args.size == 1
+                tuple_result = infer_tuple_access(receiver_type, node.args.first)
+                return tuple_result if tuple_result
+              end
+
+              # Fall back to Array RBS for other methods
+              substitutions = build_substitutions(receiver_type)
+              add_block_return_substitution(substitutions, node)
+              raw_return_type = @signature_registry.get_method_return_type("Array", node.method.to_s)
+              return_type = raw_return_type.substitute(substitutions)
+              return Result.new(
+                return_type,
+                "[#{receiver_type.element_types.join(", ")}]##{node.method}",
+                :stdlib
+              )
             when Types::HashShape
               # Handle HashShape field access with [] method
               if node.method == :[] && node.args.size == 1
@@ -674,6 +691,25 @@ module TypeGuessr
 
           # Default: key not found in shape - return nil type (like Hash#[] for missing keys)
           Result.new(Types::ClassInstance.for("NilClass"), "HashShape[:#{key}] (missing)", :inference)
+        end
+
+        # Infer type for TupleType indexed access (tuple[0])
+        # @param tuple_type [Types::TupleType] The tuple type
+        # @param index_node [IR::Node] The index argument node
+        # @return [Result, nil] The element type result, or nil if not an integer literal (caller falls back to Array RBS)
+        private def infer_tuple_access(tuple_type, index_node)
+          return nil unless index_node.is_a?(IR::LiteralNode)
+          return nil unless index_node.type.is_a?(Types::ClassInstance) && index_node.type.name == "Integer"
+          return nil unless index_node.literal_value.is_a?(Integer)
+
+          index = index_node.literal_value
+          # Support negative indexing
+          index = tuple_type.element_types.size + index if index.negative?
+
+          element_type = tuple_type.element_types[index]
+          return Result.new(element_type, "Tuple[#{index}]", :inference) if element_type
+
+          Result.new(Types::ClassInstance.for("NilClass"), "Tuple[#{index}] (out of range)", :inference)
         end
 
         # Resolve called methods to a type via code_index adapter

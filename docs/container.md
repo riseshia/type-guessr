@@ -17,21 +17,21 @@ nums = [1, 2, 3]
 
 ```ruby
 mixed = [1, "a"]
-[m]ixed  # Guessed Type: Array[Integer | String]
+[m]ixed  # Guessed Type: [Integer, String]
 ```
 
 ### Mixed array with 3 types
 
 ```ruby
 mixed = [1, "a", :sym]
-[m]ixed  # Guessed Type: Array[Integer | String | Symbol]
+[m]ixed  # Guessed Type: [Integer, String, Symbol]
 ```
 
 ### Array with 4+ types
 
 ```ruby
 mixed = [1, "a", :sym, 1.0]
-[m]ixed  # Guessed Type: Array[Float | Integer | String | Symbol]
+[m]ixed  # Guessed Type: [Integer, String, Symbol, Float]
 ```
 
 ### Nested array
@@ -203,6 +203,19 @@ a = { a: 1 }
 [a][:b] = "x"  # Guessed Type: { a: Integer, b: String }
 ```
 
+## Hash indexed ||= assignment
+
+### hash indexed ||= on empty hash
+
+```ruby
+def foo
+  h = {}
+  h[:a] ||= 1
+end
+
+[r] = foo  # Guessed Type: Integer
+```
+
 ## Array indexed assignment
 
 ### with different type
@@ -277,6 +290,66 @@ arr = [1]
 arr[0] = "replaced"
 arr << :added
 [a]rr  # Guessed Type: Array[Integer | String | Symbol]
+```
+
+## TupleType inference
+
+### Tuple indexed access with integer literal
+
+```ruby
+def foo
+  t = [1, "a", :sym]
+  t[0]
+end
+
+[r] = foo  # Guessed Type: Integer
+```
+
+### Tuple indexed access with last element
+
+```ruby
+def foo
+  t = [1, "a", :sym]
+  t[2]
+end
+
+[r] = foo  # Guessed Type: Symbol
+```
+
+### Tuple negative indexing
+
+```ruby
+def foo
+  t = [1, "a", :sym]
+  t[-1]
+end
+
+[r] = foo  # Guessed Type: Symbol
+```
+
+### Tuple out of range access
+
+```ruby
+def foo
+  t = [1, "a"]
+  t[5]
+end
+
+[r] = foo  # Guessed Type: nil
+```
+
+### Tuple method falls back to Array RBS
+
+```ruby
+t = [1, "a"]
+[r] = t.size  # Guessed Type: Integer
+```
+
+### Homogeneous array stays ArrayType
+
+```ruby
+nums = [1, 2, 3]
+[n]ums  # Guessed Type: Array[Integer]
 ```
 
 ## Container mutation edge cases

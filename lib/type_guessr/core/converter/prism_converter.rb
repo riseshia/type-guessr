@@ -1554,13 +1554,14 @@ module TypeGuessr
           # Deduplicate types
           unique_types = element_types.uniq
 
-          element_type = if unique_types.size == 1
-                           unique_types.first
-                         else
-                           Types::Union.new(unique_types)
-                         end
-
-          Types::ArrayType.new(element_type)
+          if unique_types.size == 1
+            Types::ArrayType.new(unique_types.first)
+          elsif element_types.any? { |t| t.is_a?(Types::Unknown) }
+            # Splat or unknown elements → widen to ArrayType(Union)
+            Types::ArrayType.new(Types::Union.new(unique_types))
+          else
+            Types::TupleType.new(element_types)
+          end
         end
 
         private def hash_element_types_for(hash_node)

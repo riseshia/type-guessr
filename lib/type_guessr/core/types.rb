@@ -264,6 +264,59 @@ module TypeGuessr
         end
       end
 
+      # TupleType - array with per-position element types
+      # Preserves positional type information for mixed-type array literals
+      # Falls back to ArrayType when element count exceeds MAX_ELEMENTS
+      class TupleType < Type
+        attr_reader :element_types
+
+        MAX_ELEMENTS = 8
+
+        def self.new(element_types)
+          return ArrayType.new(Union.new(element_types)) if element_types.size > MAX_ELEMENTS
+
+          super
+        end
+
+        def initialize(element_types)
+          super()
+          @element_types = element_types
+        end
+
+        def eql?(other)
+          super && @element_types == other.element_types
+        end
+
+        def hash
+          [self.class, @element_types].hash
+        end
+
+        def to_s
+          "[#{@element_types.join(", ")}]"
+        end
+
+        def inspect
+          "#<TupleType:#{self}>"
+        end
+
+        def substitute(substitutions)
+          new_types = @element_types.map { |t| t.substitute(substitutions) }
+          return self if new_types.zip(@element_types).all? { |n, o| n.equal?(o) }
+
+          TupleType.new(new_types)
+        end
+
+        def rbs_class_name
+          "Array"
+        end
+
+        def type_variable_substitutions
+          unique = @element_types.uniq
+          elem = unique.size == 1 ? unique.first : Union.new(unique)
+          { Elem: elem }
+        end
+      end
+
       # HashType - hash with key and value types
       class HashType < Type
         attr_reader :key_type, :value_type

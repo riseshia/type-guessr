@@ -271,6 +271,97 @@ RSpec.describe TypeGuessr::Core::Types do
     end
   end
 
+  describe "TupleType" do
+    let(:integer_type) { described_class::ClassInstance.new("Integer") }
+    let(:string_type) { described_class::ClassInstance.new("String") }
+    let(:symbol_type) { described_class::ClassInstance.new("Symbol") }
+
+    it "creates a tuple type with element types" do
+      tuple = described_class::TupleType.new([integer_type, string_type])
+      expect(tuple.element_types).to eq([integer_type, string_type])
+    end
+
+    it "equals another TupleType with the same element types" do
+      tuple1 = described_class::TupleType.new([integer_type, string_type])
+      tuple2 = described_class::TupleType.new([integer_type, string_type])
+      expect(tuple1).to eq(tuple2)
+    end
+
+    it "does not equal TupleType with different element types" do
+      tuple1 = described_class::TupleType.new([integer_type, string_type])
+      tuple2 = described_class::TupleType.new([string_type, integer_type])
+      expect(tuple1).not_to eq(tuple2)
+    end
+
+    it "does not equal ArrayType" do
+      tuple = described_class::TupleType.new([integer_type])
+      array = described_class::ArrayType.new(integer_type)
+      expect(tuple).not_to eq(array)
+    end
+
+    it "has a string representation" do
+      tuple = described_class::TupleType.new([integer_type, string_type, symbol_type])
+      expect(tuple.to_s).to eq("[Integer, String, Symbol]")
+    end
+
+    it "has a readable inspect output" do
+      tuple = described_class::TupleType.new([integer_type, string_type])
+      expect(tuple.inspect).to eq("#<TupleType:[Integer, String]>")
+    end
+
+    it "falls back to ArrayType when exceeding MAX_ELEMENTS" do
+      types = (1..9).map { |i| described_class::ClassInstance.new("Class#{i}") }
+      result = described_class::TupleType.new(types)
+      expect(result).to be_a(described_class::ArrayType)
+    end
+
+    it "stays TupleType at MAX_ELEMENTS boundary" do
+      types = (1..8).map { |i| described_class::ClassInstance.new("Class#{i}") }
+      result = described_class::TupleType.new(types)
+      expect(result).to be_a(described_class::TupleType)
+    end
+
+    it "returns 'Array' for rbs_class_name" do
+      tuple = described_class::TupleType.new([integer_type, string_type])
+      expect(tuple.rbs_class_name).to eq("Array")
+    end
+
+    describe "#type_variable_substitutions" do
+      it "returns single element type for Elem when all types are the same" do
+        tuple = described_class::TupleType.new([integer_type, integer_type])
+        subs = tuple.type_variable_substitutions
+        expect(subs[:Elem]).to eq(integer_type)
+      end
+
+      it "returns Union for Elem when element types differ" do
+        tuple = described_class::TupleType.new([integer_type, string_type])
+        subs = tuple.type_variable_substitutions
+        expect(subs[:Elem]).to be_a(described_class::Union)
+        expect(subs[:Elem].types).to contain_exactly(integer_type, string_type)
+      end
+    end
+
+    describe "#substitute" do
+      it "substitutes element types" do
+        type_var = described_class::TypeVariable.new(:T)
+        tuple = described_class::TupleType.new([type_var, string_type])
+
+        result = tuple.substitute({ T: integer_type })
+
+        expect(result).to be_a(described_class::TupleType)
+        expect(result.element_types).to eq([integer_type, string_type])
+      end
+
+      it "returns self when no types changed" do
+        tuple = described_class::TupleType.new([integer_type, string_type])
+
+        result = tuple.substitute({ T: symbol_type })
+
+        expect(result).to be(tuple)
+      end
+    end
+  end
+
   describe "TypeVariable" do
     it "stores the type variable name" do
       type_var = described_class::TypeVariable.new(:Elem)
@@ -542,6 +633,16 @@ RSpec.describe TypeGuessr::Core::Types do
       end
     end
 
+    describe "TupleType" do
+      it "returns 'Array'" do
+        tuple = described_class::TupleType.new([
+                                                 described_class::ClassInstance.new("Integer"),
+                                                 described_class::ClassInstance.new("String"),
+                                               ])
+        expect(tuple.rbs_class_name).to eq("Array")
+      end
+    end
+
     describe "HashType" do
       it "returns 'Hash'" do
         hash_type = described_class::HashType.new
@@ -601,6 +702,21 @@ RSpec.describe TypeGuessr::Core::Types do
       it "returns Unknown for Elem when element_type is Unknown" do
         array_type = described_class::ArrayType.new
         expect(array_type.type_variable_substitutions).to eq({ Elem: described_class::Unknown.instance })
+      end
+    end
+
+    describe "TupleType" do
+      it "returns single element type for Elem when all types are the same" do
+        tuple = described_class::TupleType.new([integer_type, integer_type])
+        subs = tuple.type_variable_substitutions
+        expect(subs[:Elem]).to eq(integer_type)
+      end
+
+      it "returns Union for Elem when element types differ" do
+        tuple = described_class::TupleType.new([integer_type, string_type])
+        subs = tuple.type_variable_substitutions
+        expect(subs[:Elem]).to be_a(described_class::Union)
+        expect(subs[:Elem].types).to contain_exactly(integer_type, string_type)
       end
     end
 
@@ -834,6 +950,26 @@ RSpec.describe TypeGuessr::Core::Types do
       end
     end
 
+    describe "TupleType" do
+      it "substitutes element types" do
+        type_var = described_class::TypeVariable.new(:T)
+        tuple = described_class::TupleType.new([type_var, string_type])
+
+        result = tuple.substitute({ T: integer_type })
+
+        expect(result).to be_a(described_class::TupleType)
+        expect(result.element_types).to eq([integer_type, string_type])
+      end
+
+      it "returns self when no types changed" do
+        tuple = described_class::TupleType.new([integer_type, string_type])
+
+        result = tuple.substitute({ T: symbol_type })
+
+        expect(result).to be(tuple)
+      end
+    end
+
     describe "HashType" do
       it "substitutes key and value types" do
         k_var = described_class::TypeVariable.new(:K)
@@ -966,6 +1102,13 @@ RSpec.describe TypeGuessr::Core::Types do
       element_type = described_class::ClassInstance.new("String")
       array_type = described_class::ArrayType.new(element_type)
       expect(array_type.inspect).to eq("#<ArrayType:String>")
+    end
+
+    it "returns readable output for TupleType" do
+      int_type = described_class::ClassInstance.new("Integer")
+      str_type = described_class::ClassInstance.new("String")
+      tuple = described_class::TupleType.new([int_type, str_type])
+      expect(tuple.inspect).to eq("#<TupleType:[Integer, String]>")
     end
 
     it "returns readable output for HashType" do
