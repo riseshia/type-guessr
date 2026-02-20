@@ -5,6 +5,25 @@ module RubyLsp
     # Adapter wrapping RubyIndexer for Core layer consumption
     # Provides a stable interface isolating RubyIndexer API changes
     class CodeIndexAdapter
+      # Public instance methods of Object (BasicObject + Kernel).
+      # Every class inherits these, so they have zero discriminating power
+      # for duck-type candidate search and should be excluded.
+      OBJECT_METHOD_NAMES = %w[
+        ! != !~ == === <=>
+        __id__ __send__
+        class clone define_singleton_method display dup
+        enum_for eql? equal? extend
+        freeze frozen? hash inspect
+        instance_of? instance_variable_defined?
+        instance_variable_get instance_variable_set instance_variables
+        is_a? itself kind_of?
+        method methods nil? object_id
+        private_methods protected_methods public_method public_methods public_send
+        remove_instance_variable respond_to? respond_to_missing?
+        send singleton_class singleton_method singleton_methods
+        tap then to_enum to_s yield_self
+      ].to_set.freeze
+
       def initialize(index)
         @index = index
       end
@@ -16,6 +35,10 @@ module RubyLsp
       def find_classes_defining_methods(called_methods)
         return [] if called_methods.empty?
         return [] unless @index
+
+        # Exclude Object methods — all classes have them, zero discriminating power
+        called_methods = called_methods.reject { |cm| OBJECT_METHOD_NAMES.include?(cm.name.to_s) }
+        return [] if called_methods.empty?
 
         method_sets = called_methods.map do |cm|
           entries = @index.fuzzy_search(cm.name.to_s) do |entry|
