@@ -688,8 +688,7 @@ module TypeGuessr
           # Early return: no method call info available for inference
           return Types::Unknown.instance if called_methods.empty?
 
-          method_names = called_methods.map(&:name)
-          classes = @code_index.find_classes_defining_methods(method_names)
+          classes = @code_index.find_classes_defining_methods(called_methods)
           classes_to_type(classes)
         end
 

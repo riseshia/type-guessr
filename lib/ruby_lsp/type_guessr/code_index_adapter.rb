@@ -10,16 +10,20 @@ module RubyLsp
       end
 
       # Find classes that define ALL given methods (intersection)
-      # @param method_names [Array<Symbol>] Method names to search
+      # Each element responds to .name and .positional_count (duck typed)
+      # @param called_methods [Array<#name, #positional_count>] Methods to search
       # @return [Array<String>] Class names defining all methods
-      def find_classes_defining_methods(method_names)
-        return [] if method_names.empty?
+      def find_classes_defining_methods(called_methods)
+        return [] if called_methods.empty?
         return [] unless @index
 
-        method_sets = method_names.map do |method_name|
-          entries = @index.fuzzy_search(method_name.to_s) do |entry|
-            entry.is_a?(RubyIndexer::Entry::Member) && entry.name == method_name.to_s
+        method_sets = called_methods.map do |cm|
+          entries = @index.fuzzy_search(cm.name.to_s) do |entry|
+            entry.is_a?(RubyIndexer::Entry::Member) && entry.name == cm.name.to_s
           end
+
+          entries = filter_by_arity(entries, cm.positional_count, cm.keywords) if cm.positional_count
+
           entries.filter_map do |entry|
             entry.owner.name if entry.respond_to?(:owner) && entry.owner
           end.uniq
@@ -99,6 +103,46 @@ module RubyLsp
         entries.first.owner&.name
       rescue RubyIndexer::Index::NonExistingNamespaceError
         nil
+      end
+
+      private def filter_by_arity(entries, count, keywords)
+        entries.select { |entry| accepts_arity?(entry, count, keywords) }
+      end
+
+      private def accepts_arity?(entry, count, keywords)
+        sigs = entry.signatures
+        # Accessor (reader) has no signatures → accepts 0 arguments only
+        return count.zero? && keywords.empty? if sigs.empty?
+
+        sigs.any? do |sig|
+          required = 0
+          optional = 0
+          has_rest = false
+          has_keyword_params = false
+
+          sig.parameters.each do |p|
+            case p
+            when RubyIndexer::Entry::RequiredParameter then required += 1
+            when RubyIndexer::Entry::OptionalParameter then optional += 1
+            when RubyIndexer::Entry::RestParameter then has_rest = true
+            when RubyIndexer::Entry::KeywordParameter,
+                 RubyIndexer::Entry::OptionalKeywordParameter,
+                 RubyIndexer::Entry::KeywordRestParameter
+              has_keyword_params = true
+            end
+          end
+
+          # When call has keywords but method has no keyword params,
+          # keywords are implicitly converted to a Hash positional argument
+          effective_count = count
+          effective_count += 1 if keywords.any? && !has_keyword_params
+
+          if has_rest
+            effective_count >= required
+          else
+            effective_count.between?(required, required + optional)
+          end
+        end
       end
     end
   end

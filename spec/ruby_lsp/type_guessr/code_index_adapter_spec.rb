@@ -100,6 +100,11 @@ RSpec.describe RubyLsp::TypeGuessr::CodeIndexAdapter do
   end
 
   describe "#find_classes_defining_methods" do
+    # Helper to create CalledMethod with defaults
+    def cm(name, positional_count: nil, keywords: [])
+      TypeGuessr::Core::IR::CalledMethod.new(name: name, positional_count: positional_count, keywords: keywords)
+    end
+
     it "finds classes defining methods via def" do
       source = <<~RUBY
         class Recipe
@@ -111,7 +116,7 @@ RSpec.describe RubyLsp::TypeGuessr::CodeIndexAdapter do
       with_server_and_addon(source) do |server, _uri|
         adapter = described_class.new(server.global_state.index)
 
-        result = adapter.find_classes_defining_methods([:comments])
+        result = adapter.find_classes_defining_methods([cm(:comments)])
         expect(result).to include("Recipe")
       end
     end
@@ -126,7 +131,7 @@ RSpec.describe RubyLsp::TypeGuessr::CodeIndexAdapter do
       with_server_and_addon(source) do |server, _uri|
         adapter = described_class.new(server.global_state.index)
 
-        result = adapter.find_classes_defining_methods(%i[name params])
+        result = adapter.find_classes_defining_methods([cm(:name), cm(:params)])
         expect(result).to include("DefNode")
       end
     end
@@ -146,17 +151,101 @@ RSpec.describe RubyLsp::TypeGuessr::CodeIndexAdapter do
       with_server_and_addon(source) do |server, _uri|
         adapter = described_class.new(server.global_state.index)
 
-        result = adapter.find_classes_defining_methods(%i[foo bar])
+        result = adapter.find_classes_defining_methods([cm(:foo), cm(:bar)])
         expect(result).to include("A")
         expect(result).not_to include("B")
       end
     end
 
-    it "returns empty array for empty method names" do
+    it "returns empty array for empty called_methods" do
       adapter = described_class.new(nil)
 
       result = adapter.find_classes_defining_methods([])
       expect(result).to eq([])
+    end
+
+    it "filters by positional_count to narrow candidates" do
+      source = <<~RUBY
+        class Narrow
+          def process(a, b); end
+        end
+
+        class Wide
+          def process(a); end
+        end
+      RUBY
+
+      with_server_and_addon(source) do |server, _uri|
+        adapter = described_class.new(server.global_state.index)
+
+        # process(a, b) → positional_count=2 should match Narrow but not Wide
+        result = adapter.find_classes_defining_methods([cm(:process, positional_count: 2)])
+        expect(result).to include("Narrow")
+        expect(result).not_to include("Wide")
+      end
+    end
+
+    it "skips positional_count filtering when nil (splat usage)" do
+      source = <<~RUBY
+        class Narrow
+          def process(a, b); end
+        end
+
+        class Wide
+          def process(a); end
+        end
+      RUBY
+
+      with_server_and_addon(source) do |server, _uri|
+        adapter = described_class.new(server.global_state.index)
+
+        # nil positional_count → match by name only
+        result = adapter.find_classes_defining_methods([cm(:process, positional_count: nil)])
+        expect(result).to include("Narrow")
+        expect(result).to include("Wide")
+      end
+    end
+
+    it "matches rest parameter accepting extra arguments" do
+      source = <<~RUBY
+        class Flexible
+          def process(a, *rest); end
+        end
+
+        class Strict
+          def process(a); end
+        end
+      RUBY
+
+      with_server_and_addon(source) do |server, _uri|
+        adapter = described_class.new(server.global_state.index)
+
+        # process(a, b, c) → positional_count=3 should match Flexible but not Strict
+        result = adapter.find_classes_defining_methods([cm(:process, positional_count: 3)])
+        expect(result).to include("Flexible")
+        expect(result).not_to include("Strict")
+      end
+    end
+
+    it "matches attr_reader with positional_count 0" do
+      source = <<~RUBY
+        class Node
+          attr_reader :name
+        end
+
+        class Other
+          def name(arg); end
+        end
+      RUBY
+
+      with_server_and_addon(source) do |server, _uri|
+        adapter = described_class.new(server.global_state.index)
+
+        # obj.name → positional_count=0 should match attr_reader (Node) but not Other
+        result = adapter.find_classes_defining_methods([cm(:name, positional_count: 0)])
+        expect(result).to include("Node")
+        expect(result).not_to include("Other")
+      end
     end
   end
 

@@ -183,11 +183,15 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
       end
 
       it "returns Unknown when called methods cannot be resolved" do
+        called = [
+          TypeGuessr::Core::IR::CalledMethod.new(name: :comments, positional_count: nil, keywords: []),
+          TypeGuessr::Core::IR::CalledMethod.new(name: :title, positional_count: nil, keywords: []),
+        ]
         param = TypeGuessr::Core::IR::ParamNode.new(
           :recipe,
           :required,
           nil,
-          %i[comments title],
+          called,
           loc
         )
 
@@ -369,7 +373,8 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
       end
 
       it "falls back to called_methods when receiver type is Unknown" do
-        allow(code_index).to receive(:find_classes_defining_methods).with(["name"]).and_return(["User"])
+        called = [TypeGuessr::Core::IR::CalledMethod.new(name: :name, positional_count: nil, keywords: [])]
+        allow(code_index).to receive(:find_classes_defining_methods).with(called).and_return(["User"])
         allow(code_index).to receive(:ancestors_of).with("User").and_return(%w[User Object])
 
         # Receiver is Unknown (e.g., variable with no type info)
@@ -392,7 +397,7 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
         slot = TypeGuessr::Core::IR::BlockParamSlot.new(
           0,
           call,
-          %i[name],
+          called,
           loc
         )
 
@@ -404,7 +409,8 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
       end
 
       it "falls back to called_methods when RBS has no block param info" do
-        allow(code_index).to receive(:find_classes_defining_methods).with(["title"]).and_return(["Post"])
+        called = [TypeGuessr::Core::IR::CalledMethod.new(name: :title, positional_count: nil, keywords: [])]
+        allow(code_index).to receive(:find_classes_defining_methods).with(called).and_return(["Post"])
         allow(code_index).to receive(:ancestors_of).with("Post").and_return(%w[Post Object])
 
         # Receiver has a known type but the method has no RBS block param info
@@ -428,7 +434,7 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
         slot = TypeGuessr::Core::IR::BlockParamSlot.new(
           0,
           call,
-          %i[title],
+          called,
           loc
         )
 
@@ -457,10 +463,11 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
           [],
           loc
         )
+        called = [TypeGuessr::Core::IR::CalledMethod.new(name: :nonexistent_method, positional_count: nil, keywords: [])]
         slot = TypeGuessr::Core::IR::BlockParamSlot.new(
           0,
           call,
-          %i[nonexistent_method],
+          called,
           loc
         )
 
@@ -694,7 +701,8 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
 
       it "infers receiver type from method uniqueness when receiver is Unknown" do
         # Set up code_index to simulate RubyIndexer resolving :depot to Store
-        allow(code_index).to receive(:find_classes_defining_methods).with([:depot]).and_return(["Store"])
+        depot_cm = [TypeGuessr::Core::IR::CalledMethod.new(name: :depot, positional_count: nil, keywords: [])]
+        allow(code_index).to receive(:find_classes_defining_methods).with(depot_cm).and_return(["Store"])
 
         # Register Store#depot that returns an Integer
         depot_return = TypeGuessr::Core::IR::LiteralNode.new(
