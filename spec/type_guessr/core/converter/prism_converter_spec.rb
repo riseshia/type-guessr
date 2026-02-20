@@ -2121,6 +2121,64 @@ RSpec.describe TypeGuessr::Core::Converter::PrismConverter do
     end
   end
 
+  describe "MultiWriteNode (multiple assignment)" do
+    it "converts multiple assignment and registers variables" do
+      source = "a, b = [1, 2]"
+      parsed = Prism.parse(source)
+      context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+      converter.convert(parsed.value.statements.body.first, context)
+
+      expect(context.lookup_variable(:a)).not_to be_nil
+      expect(context.lookup_variable(:b)).not_to be_nil
+    end
+
+    it "creates synthetic [] call nodes for each target" do
+      source = "a, b = [1, 2]"
+      parsed = Prism.parse(source)
+      context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+      converter.convert(parsed.value.statements.body.first, context)
+
+      a_node = context.lookup_variable(:a)
+      expect(a_node).to be_a(TypeGuessr::Core::IR::LocalWriteNode)
+      expect(a_node.value).to be_a(TypeGuessr::Core::IR::CallNode)
+      expect(a_node.value.method).to eq(:[])
+      expect(a_node.value.args.first.literal_value).to eq(0)
+
+      b_node = context.lookup_variable(:b)
+      expect(b_node.value.args.first.literal_value).to eq(1)
+    end
+
+    it "converts multiple assignment with splat" do
+      source = "first, *rest = array"
+      parsed = Prism.parse(source)
+      context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+      converter.convert(parsed.value.statements.body.first, context)
+
+      expect(context.lookup_variable(:first)).not_to be_nil
+      first_node = context.lookup_variable(:first)
+      expect(first_node.value).to be_a(TypeGuessr::Core::IR::CallNode)
+      expect(first_node.value.method).to eq(:[])
+
+      rest_node = context.lookup_variable(:rest)
+      expect(rest_node).not_to be_nil
+      expect(rest_node.value).to be_a(TypeGuessr::Core::IR::LiteralNode)
+      expect(rest_node.value.type).to be_a(TypeGuessr::Core::Types::ArrayType)
+    end
+
+    it "handles rights after splat with negative indices" do
+      source = "first, *middle, last = array"
+      parsed = Prism.parse(source)
+      context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+      converter.convert(parsed.value.statements.body.first, context)
+
+      first_node = context.lookup_variable(:first)
+      expect(first_node.value.args.first.literal_value).to eq(0)
+
+      last_node = context.lookup_variable(:last)
+      expect(last_node.value.args.first.literal_value).to eq(-1)
+    end
+  end
+
   describe "unhandled node types" do
     before { pending "Not yet implemented - these node types need PrismConverter support" }
 
@@ -2175,28 +2233,6 @@ RSpec.describe TypeGuessr::Core::Converter::PrismConverter do
 
         eql_method = class_node.methods.first
         expect(eql_method.return_node).to be_a(TypeGuessr::Core::IR::MergeNode)
-      end
-    end
-
-    describe "MultiWriteNode (multiple assignment)" do
-      it "converts multiple assignment and registers variables" do
-        source = "a, b = [1, 2]"
-        parsed = Prism.parse(source)
-        context = TypeGuessr::Core::Converter::PrismConverter::Context.new
-        converter.convert(parsed.value.statements.body.first, context)
-
-        expect(context.lookup_variable(:a)).not_to be_nil
-        expect(context.lookup_variable(:b)).not_to be_nil
-      end
-
-      it "converts multiple assignment with splat" do
-        source = "first, *rest = array"
-        parsed = Prism.parse(source)
-        context = TypeGuessr::Core::Converter::PrismConverter::Context.new
-        converter.convert(parsed.value.statements.body.first, context)
-
-        expect(context.lookup_variable(:first)).not_to be_nil
-        expect(context.lookup_variable(:rest)).not_to be_nil
       end
     end
 

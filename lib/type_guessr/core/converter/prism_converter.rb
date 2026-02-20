@@ -265,6 +265,9 @@ module TypeGuessr
 
                  when Prism::IndexOrWriteNode
                    convert_index_or_write(prism_node, context)
+
+                 when Prism::MultiWriteNode
+                   convert_multi_write(prism_node, context)
                  end
 
           register_node(node, context) if node
@@ -1157,6 +1160,59 @@ module TypeGuessr
           read_call = IR::CallNode.new(:[], receiver_node, args, [], nil, false, [], convert_loc(prism_node.opening_loc))
 
           IR::OrNode.new(read_call, value_node, [], convert_loc(prism_node.location))
+        end
+
+        # Convert multiple assignment (a, b, c = expr)
+        # Creates synthetic value[index] calls for each target variable
+        private def convert_multi_write(prism_node, context)
+          value_node = convert(prism_node.value, context)
+
+          # lefts: variables before splat → value[0], value[1], ...
+          prism_node.lefts.each_with_index do |target, index|
+            assign_multi_write_target(target, value_node, index, context)
+          end
+
+          # rest: splat variable → ArrayType(Unknown)
+          if prism_node.rest.is_a?(Prism::SplatNode) && prism_node.rest.expression
+            splat_target = prism_node.rest.expression
+            splat_value = IR::LiteralNode.new(
+              Types::ArrayType.new, nil, nil, [], convert_loc(splat_target.location)
+            )
+            register_multi_write_variable(splat_target, splat_value, context)
+          end
+
+          # rights: variables after splat → value[-n], value[-(n-1)], ...
+          prism_node.rights.each_with_index do |target, index|
+            negative_index = -(prism_node.rights.size - index)
+            assign_multi_write_target(target, value_node, negative_index, context)
+          end
+
+          value_node
+        end
+
+        # Create synthetic value[index] call and register the target variable
+        private def assign_multi_write_target(target, value_node, index, context)
+          loc = convert_loc(target.location)
+          index_literal = IR::LiteralNode.new(
+            Types::ClassInstance.for("Integer"), index, nil, [], loc
+          )
+          call_node = IR::CallNode.new(:[], value_node, [index_literal], [], nil, false, [], loc)
+          register_multi_write_variable(target, call_node, context)
+        end
+
+        # Register a multi-write target variable (local or instance variable)
+        private def register_multi_write_variable(target, value_node, context)
+          loc = convert_loc(target.location)
+          case target
+          when Prism::LocalVariableTargetNode
+            write_node = IR::LocalWriteNode.new(target.name, value_node, [], loc)
+            context.register_variable(target.name, write_node)
+          when Prism::InstanceVariableTargetNode
+            write_node = IR::InstanceVariableWriteNode.new(
+              target.name, context.current_class_name, value_node, [], loc
+            )
+            context.register_instance_variable(target.name, write_node)
+          end
         end
 
         # Extract all body nodes from a BeginNode (for DefNode bodies with rescue/ensure)
