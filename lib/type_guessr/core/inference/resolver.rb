@@ -334,8 +334,10 @@ module TypeGuessr
                 )
               end
 
-              # Substitute self with receiver type
-              return_type = return_type.substitute({ self: receiver_type })
+              # Substitute self and block return type with receiver type
+              substitutions = { self: receiver_type }
+              add_block_return_substitution(substitutions, node)
+              return_type = return_type.substitute(substitutions)
 
               # Early return: ClassInstance RBS lookup (may be Unknown if not found)
               return Result.new(
@@ -347,16 +349,7 @@ module TypeGuessr
               # Handle Array methods with element type substitution
               substitutions = build_substitutions(receiver_type)
 
-              # Check for block presence and infer its return type for U substitution
-              if node.has_block
-                if node.block_body
-                  block_result = infer(node.block_body)
-                  substitutions[:U] = block_result.type unless block_result.type.is_a?(Types::Unknown)
-                else
-                  # Empty block returns nil
-                  substitutions[:U] = Types::ClassInstance.for("NilClass")
-                end
-              end
+              add_block_return_substitution(substitutions, node)
 
               # Get raw return type, then substitute type variables
               raw_return_type = @signature_registry.get_method_return_type("Array", node.method.to_s)
@@ -377,6 +370,7 @@ module TypeGuessr
 
               # Fall back to Hash RBS for other methods
               substitutions = build_substitutions(receiver_type)
+              add_block_return_substitution(substitutions, node)
               raw_return_type = @signature_registry.get_method_return_type("Hash", node.method.to_s)
               return_type = raw_return_type.substitute(substitutions)
               # Early return: HashShape RBS lookup for non-[] methods
@@ -388,6 +382,7 @@ module TypeGuessr
             when Types::HashType
               # Handle generic HashType
               substitutions = build_substitutions(receiver_type)
+              add_block_return_substitution(substitutions, node)
               raw_return_type = @signature_registry.get_method_return_type("Hash", node.method.to_s)
               return_type = raw_return_type.substitute(substitutions)
               # Early return: HashType RBS lookup with type variable substitution
@@ -700,6 +695,22 @@ module TypeGuessr
           return result if simplified_type.equal?(result.type)
 
           Result.new(simplified_type, result.reason, result.source)
+        end
+
+        # Add block return type substitution (:U) to substitutions hash
+        # @param substitutions [Hash{Symbol => Type}] Substitutions hash to modify
+        # @param node [IR::CallNode] The call node with block info
+        # @return [void]
+        private def add_block_return_substitution(substitutions, node)
+          return unless node.has_block
+
+          if node.block_body
+            block_result = infer(node.block_body)
+            substitutions[:U] = block_result.type unless block_result.type.is_a?(Types::Unknown)
+          else
+            # Empty block returns nil
+            substitutions[:U] = Types::ClassInstance.for("NilClass")
+          end
         end
 
         # Build substitutions hash with type variables and self
