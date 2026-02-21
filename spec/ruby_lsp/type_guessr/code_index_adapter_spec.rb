@@ -227,6 +227,26 @@ RSpec.describe RubyLsp::TypeGuessr::CodeIndexAdapter do
       end
     end
 
+    it "finds subclass when method is inherited from parent" do
+      source = <<~RUBY
+        class Parent
+          def location; end
+        end
+
+        class Child < Parent
+          def arguments; end
+        end
+      RUBY
+
+      with_server_and_addon(source) do |server, _uri|
+        adapter = described_class.new(server.global_state.index)
+
+        result = adapter.find_classes_defining_methods([cm(:arguments), cm(:location)])
+        expect(result).to include("Child")
+        expect(result).not_to include("Parent")
+      end
+    end
+
     it "matches attr_reader with positional_count 0" do
       source = <<~RUBY
         class Node

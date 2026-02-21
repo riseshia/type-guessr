@@ -110,7 +110,7 @@ RSpec.describe "Hover Integration" do
       end
 
       it "infers Recipe2 from method calls with inherited methods",
-         pending: "Inheritance not supported in RubyIndexer duck typing (requires all methods directly defined)" do
+         pending: "Pivot method defined in parent → fuzzy_search misses subclasses (needs reverse ancestor index)" do
         expect_hover_type(line: 21, column: 4, expected: "Recipe2")
       end
     end

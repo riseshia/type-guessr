@@ -40,21 +40,38 @@ module RubyLsp
         called_methods = called_methods.reject { |cm| OBJECT_METHOD_NAMES.include?(cm.name.to_s) }
         return [] if called_methods.empty?
 
-        method_sets = called_methods.map do |cm|
-          entries = @index.fuzzy_search(cm.name.to_s) do |entry|
-            entry.is_a?(RubyIndexer::Entry::Member) && entry.name == cm.name.to_s
-          end
+        # Pivot approach: 1 fuzzy_search + (N-1) resolve_method calls
+        # Pick the longest method name as pivot (likely most specific → fewest candidates)
+        pivot = called_methods.max_by { |cm| cm.name.to_s.length }
+        rest = called_methods - [pivot]
 
-          entries = filter_by_arity(entries, cm.positional_count, cm.keywords) if cm.positional_count
-
-          entries.filter_map do |entry|
-            entry.owner.name if entry.respond_to?(:owner) && entry.owner
-          end.uniq
+        # One fuzzy_search on pivot → candidate owners
+        entries = @index.fuzzy_search(pivot.name.to_s) do |entry|
+          entry.is_a?(RubyIndexer::Entry::Member) && entry.name == pivot.name.to_s
         end
 
-        return [] if method_sets.empty? || method_sets.any?(&:empty?)
+        entries = filter_by_arity(entries, pivot.positional_count, pivot.keywords) if pivot.positional_count
 
-        method_sets.reduce(:&) || []
+        candidates = entries.filter_map do |entry|
+          entry.owner.name if entry.respond_to?(:owner) && entry.owner
+        end.uniq
+
+        return [] if candidates.empty?
+        return candidates if rest.empty?
+
+        # Verify each candidate has ALL remaining methods via resolve_method
+        # resolve_method walks the ancestor chain, so inherited methods are found
+        candidates.select do |class_name|
+          rest.all? do |cm|
+            method_entries = @index.resolve_method(cm.name.to_s, class_name)
+            next false if method_entries.nil? || method_entries.empty?
+            next true unless cm.positional_count
+
+            method_entries.any? { |e| accepts_arity?(e, cm.positional_count, cm.keywords) }
+          rescue RubyIndexer::Index::NonExistingNamespaceError
+            false
+          end
+        end
       end
 
       # Get linearized ancestor chain for a class
