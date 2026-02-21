@@ -412,6 +412,52 @@ RSpec.describe RubyLsp::TypeGuessr::CodeIndexAdapter do
     end
   end
 
+  describe "#member_entries_for_file" do
+    it "returns member entries for a file after build_member_index!" do
+      source = <<~RUBY
+        class Recipe
+          def comments; end
+          def title; end
+        end
+      RUBY
+
+      with_server_and_addon(source) do |server, uri|
+        adapter = described_class.new(server.global_state.index)
+        adapter.build_member_index!
+
+        file_path = uri.to_standardized_path
+        entries = adapter.member_entries_for_file(file_path)
+
+        method_names = entries.map(&:name)
+        expect(method_names).to include("comments")
+        expect(method_names).to include("title")
+      end
+    end
+
+    it "returns empty array when member_index not built" do
+      adapter = described_class.new(nil)
+
+      result = adapter.member_entries_for_file("/some/path.rb")
+      expect(result).to eq([])
+    end
+
+    it "returns empty array for file with no members" do
+      source = <<~RUBY
+        class Recipe
+          def comments; end
+        end
+      RUBY
+
+      with_server_and_addon(source) do |server, _uri|
+        adapter = described_class.new(server.global_state.index)
+        adapter.build_member_index!
+
+        result = adapter.member_entries_for_file("/nonexistent/path.rb")
+        expect(result).to eq([])
+      end
+    end
+  end
+
   describe "#instance_method_owner" do
     it "returns Object for tap method on custom class" do
       source = <<~RUBY

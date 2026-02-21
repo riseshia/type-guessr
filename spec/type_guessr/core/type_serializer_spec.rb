@@ -14,6 +14,7 @@ RSpec.describe TypeGuessr::Core::TypeSerializer do
       end
     end
 
+    it_behaves_like "round-trip", TypeGuessr::Core::Types::Unguessed.instance, "Unguessed"
     it_behaves_like "round-trip", TypeGuessr::Core::Types::Unknown.instance, "Unknown"
     it_behaves_like "round-trip", TypeGuessr::Core::Types::ClassInstance.for("String"), "ClassInstance"
     it_behaves_like "round-trip", TypeGuessr::Core::Types::SingletonType.new("File"), "SingletonType"

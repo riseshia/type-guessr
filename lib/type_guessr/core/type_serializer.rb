@@ -9,6 +9,8 @@ module TypeGuessr
     module TypeSerializer
       module_function def serialize(type)
         case type
+        when Types::Unguessed
+          { "_type" => "Unguessed" }
         when Types::Unknown
           { "_type" => "Unknown" }
         when Types::ClassInstance
@@ -46,6 +48,7 @@ module TypeGuessr
       # @raise [ArgumentError] if "_type" is unknown
       module_function def deserialize(hash)
         case hash["_type"]
+        when "Unguessed" then Types::Unguessed.instance
         when "Unknown"          then Types::Unknown.instance
         when "ClassInstance"    then Types::ClassInstance.for(hash["name"])
         when "SingletonType"    then Types::SingletonType.new(hash["name"])

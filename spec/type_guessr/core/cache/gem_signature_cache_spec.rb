@@ -54,7 +54,8 @@ RSpec.describe TypeGuessr::Core::Cache::GemSignatureCache do
 
         expect(result).to eq({
                                "instance_methods" => instance_methods,
-                               "class_methods" => class_methods
+                               "class_methods" => class_methods,
+                               "fully_inferred" => true
                              })
       end
     end
@@ -104,8 +105,56 @@ RSpec.describe TypeGuessr::Core::Cache::GemSignatureCache do
 
         expect(result).to eq({
                                "instance_methods" => instance_methods,
-                               "class_methods" => class_methods
+                               "class_methods" => class_methods,
+                               "fully_inferred" => true
                              })
+      end
+    end
+  end
+
+  describe "fully_inferred flag" do
+    it "defaults to true when not specified" do
+      Dir.mktmpdir do |dir|
+        cache = described_class.new(cache_dir: dir)
+        cache.save(gem_name, gem_version, transitive_deps,
+                   instance_methods: instance_methods, class_methods: class_methods)
+
+        result = cache.load(gem_name, gem_version, transitive_deps)
+
+        expect(result["fully_inferred"]).to be true
+      end
+    end
+
+    it "saves and loads fully_inferred: false" do
+      Dir.mktmpdir do |dir|
+        cache = described_class.new(cache_dir: dir)
+        cache.save(gem_name, gem_version, transitive_deps,
+                   instance_methods: instance_methods, class_methods: class_methods,
+                   fully_inferred: false)
+
+        result = cache.load(gem_name, gem_version, transitive_deps)
+
+        expect(result["fully_inferred"]).to be false
+      end
+    end
+
+    it "treats missing fully_inferred field as true for backward compatibility" do
+      Dir.mktmpdir do |dir|
+        cache = described_class.new(cache_dir: dir)
+
+        # Manually write a cache file without fully_inferred field (old format)
+        cache.save(gem_name, gem_version, transitive_deps,
+                   instance_methods: instance_methods, class_methods: class_methods)
+
+        # Strip fully_inferred from the file
+        json_files = Dir.glob(File.join(dir, "*.json"))
+        data = JSON.parse(File.read(json_files.first))
+        data.delete("fully_inferred")
+        File.write(json_files.first, JSON.generate(data))
+
+        result = cache.load(gem_name, gem_version, transitive_deps)
+
+        expect(result["fully_inferred"]).to be true
       end
     end
   end

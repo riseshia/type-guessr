@@ -41,7 +41,8 @@ module TypeGuessr
 
           {
             "instance_methods" => data["instance_methods"] || {},
-            "class_methods" => data["class_methods"] || {}
+            "class_methods" => data["class_methods"] || {},
+            "fully_inferred" => data.fetch("fully_inferred", true)
           }
         rescue JSON::ParserError, Errno::ENOENT
           nil
@@ -53,12 +54,14 @@ module TypeGuessr
         # @param transitive_deps [Hash{String => String}]
         # @param instance_methods [Hash] { class_name => { method_name => serialized_entry } }
         # @param class_methods [Hash] { class_name => { method_name => serialized_entry } }
-        def save(gem_name, gem_version, transitive_deps, instance_methods:, class_methods:)
+        # @param fully_inferred [Boolean] Whether types are fully inferred (false = Unguessed placeholders)
+        def save(gem_name, gem_version, transitive_deps, instance_methods:, class_methods:, fully_inferred: true)
           path = cache_path(gem_name, gem_version, transitive_deps)
           FileUtils.mkdir_p(File.dirname(path))
 
           data = {
             "version" => CACHE_FORMAT_VERSION,
+            "fully_inferred" => fully_inferred,
             "instance_methods" => instance_methods,
             "class_methods" => class_methods
           }

@@ -76,6 +76,15 @@ module RubyLsp
         @member_index_files[file_path] = new_entries unless new_entries.empty?
       end
 
+      # Get all member entries indexed for a specific file
+      # @param file_path [String] Absolute file path
+      # @return [Array<RubyIndexer::Entry::Member>] Member entries for the file
+      def member_entries_for_file(file_path)
+        return [] unless @member_index_files
+
+        @member_index_files[file_path] || []
+      end
+
       # Find classes that define ALL given methods (intersection)
       # Each element responds to .name and .positional_count (duck typed)
       # @param called_methods [Array<#name, #positional_count>] Methods to search

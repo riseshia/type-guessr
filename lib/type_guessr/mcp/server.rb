@@ -163,7 +163,7 @@ module TypeGuessr
         index_all_files(project_files)
       end
 
-      # Process a single gem: cache hit → load, cache miss → infer → save
+      # Process a single gem: cache hit → load, cache miss → save unguessed cache
       private def process_gem(gem_name, gem_info, cache)
         version = gem_info[:version]
         deps = gem_info[:transitive_deps]
@@ -175,12 +175,13 @@ module TypeGuessr
           if data
             signature_registry.load_gem_cache(data["instance_methods"], kind: :instance)
             signature_registry.load_gem_cache(data["class_methods"], kind: :class)
-            warn "[type-guessr] Loaded cached: #{gem_name}-#{version}"
+            fully_inferred = data.fetch("fully_inferred", true)
+            warn "[type-guessr] Loaded cached: #{gem_name}-#{version} (fully_inferred=#{fully_inferred})"
           else
             warn "[type-guessr] Cache corrupt for #{gem_name}-#{version}, skipping"
           end
         else
-          infer_and_cache_gem(gem_name, gem_info, cache, signature_registry)
+          save_unguessed_cache(gem_name, gem_info, cache, signature_registry)
         end
       end
 
@@ -259,6 +260,78 @@ module TypeGuessr
              "#{signatures[:instance_methods].size} classes) " \
              "[parse=#{(t1 - t0).round(2)}s infer=#{(t2 - t1).round(2)}s " \
              "save=#{(t3 - t2).round(2)}s load=#{(t4 - t3).round(2)}s]"
+      end
+
+      # Generate an Unguessed cache from member_index entries (no parse/infer needed).
+      private def save_unguessed_cache(gem_name, gem_info, cache, signature_registry)
+        version = gem_info[:version]
+        files = gem_info[:files]
+        deps = gem_info[:transitive_deps]
+        code_index = @runtime.instance_variable_get(:@code_index)
+
+        instance_methods = {}
+        class_methods = {}
+
+        files.each do |file_path|
+          code_index.member_entries_for_file(file_path).each do |entry|
+            owner_name = entry.owner.name
+
+            if owner_name.match?(/::<Class:[^>]+>\z/)
+              class_name = extract_class_from_singleton(owner_name)
+              target = class_methods
+            else
+              class_name = owner_name
+              target = instance_methods
+            end
+
+            target[class_name] ||= {}
+            target[class_name][entry.name] = {
+              "return_type" => { "_type" => "Unguessed" },
+              "params" => build_params_from_entry(entry)
+            }
+          end
+        end
+
+        cache.save(gem_name, version, deps,
+                   instance_methods: instance_methods,
+                   class_methods: class_methods,
+                   fully_inferred: false)
+
+        signature_registry.load_gem_cache(instance_methods, kind: :instance)
+        signature_registry.load_gem_cache(class_methods, kind: :class)
+
+        warn "[type-guessr] Saved unguessed cache for #{gem_name}-#{version} " \
+             "(#{instance_methods.size} instance classes, #{class_methods.size} class method classes)"
+      end
+
+      # Extract simple class name from singleton format
+      # "File::<Class:File>" -> "File"
+      private def extract_class_from_singleton(owner_class)
+        if owner_class.match?(/::<Class:[^>]+>\z/)
+          owner_class.sub(/::<Class:[^>]+>\z/, "")
+        else
+          owner_class
+        end
+      end
+
+      # Build serialized params array from a RubyIndexer::Entry::Member
+      private def build_params_from_entry(entry)
+        sigs = entry.signatures
+        return [] if sigs.empty?
+
+        sigs.first.parameters.filter_map do |p|
+          kind = case p
+                 when RubyIndexer::Entry::RequiredParameter then "required"
+                 when RubyIndexer::Entry::OptionalParameter then "optional"
+                 when RubyIndexer::Entry::RestParameter then "rest"
+                 when RubyIndexer::Entry::KeywordParameter then "keyword_required"
+                 when RubyIndexer::Entry::OptionalKeywordParameter then "keyword_optional"
+                 when RubyIndexer::Entry::KeywordRestParameter then "keyword_rest"
+                 when RubyIndexer::Entry::BlockParameter then "block"
+                 else next
+                 end
+          { "name" => p.name.to_s, "kind" => kind, "type" => { "_type" => "Unguessed" } }
+        end
       end
 
       # Index files into the main runtime (project files only)

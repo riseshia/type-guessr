@@ -29,6 +29,31 @@ RSpec.describe TypeGuessr::Core::Types do
     end
   end
 
+  describe "Unguessed" do
+    it "is a singleton" do
+      unguessed1 = TypeGuessr::Core::Types::Unguessed.instance
+      unguessed2 = TypeGuessr::Core::Types::Unguessed.instance
+      expect(unguessed1).to be(unguessed2)
+    end
+
+    it "equals other Unguessed instances" do
+      unguessed1 = TypeGuessr::Core::Types::Unguessed.instance
+      unguessed2 = TypeGuessr::Core::Types::Unguessed.instance
+      expect(unguessed1).to eq(unguessed2)
+    end
+
+    it "does not equal Unknown" do
+      unguessed = TypeGuessr::Core::Types::Unguessed.instance
+      unknown = TypeGuessr::Core::Types::Unknown.instance
+      expect(unguessed).not_to eq(unknown)
+    end
+
+    it "has a string representation" do
+      unguessed = TypeGuessr::Core::Types::Unguessed.instance
+      expect(unguessed.to_s).to eq("unguessed")
+    end
+  end
+
   describe "ClassInstance" do
     it "stores the class name" do
       type = TypeGuessr::Core::Types::ClassInstance.new("String")
@@ -1079,6 +1104,11 @@ RSpec.describe TypeGuessr::Core::Types do
     it "returns readable output for Unknown" do
       unknown = described_class::Unknown.instance
       expect(unknown.inspect).to eq("#<Unknown>")
+    end
+
+    it "returns readable output for Unguessed" do
+      unguessed = described_class::Unguessed.instance
+      expect(unguessed.inspect).to eq("#<Unguessed>")
     end
 
     it "returns readable output for ClassInstance" do

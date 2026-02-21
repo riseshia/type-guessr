@@ -56,6 +56,17 @@ module TypeGuessr
         end
       end
 
+      # Unguessed type - type exists but has not been inferred yet
+      # Used for lazy gem inference: method signatures are cached with
+      # Unguessed return/param types until background inference completes.
+      class Unguessed < Type
+        include Singleton
+
+        def to_s
+          "unguessed"
+        end
+      end
+
       # ClassInstance - instance of a class
       class ClassInstance < Type
         CACHE = {} # rubocop:disable Style/MutableConstant
