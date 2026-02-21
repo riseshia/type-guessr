@@ -127,6 +127,9 @@ module TypeGuessr
         # Preload RBS signatures first (needed for gem inference)
         @runtime.preload_signatures!
 
+        # Build member_index BEFORE gem inference (duck type resolution needs it)
+        @runtime.build_member_index!
+
         # Try cache-first flow if Gemfile.lock exists
         lockfile_path = File.join(@project_path, "Gemfile.lock")
         if File.exist?(lockfile_path)
@@ -136,7 +139,6 @@ module TypeGuessr
         end
 
         @runtime.finalize_index!
-        @runtime.build_member_index!
         warn "[type-guessr] Indexed #{total} files"
       end
 
@@ -188,7 +190,9 @@ module TypeGuessr
         deps = gem_info[:transitive_deps]
         code_index = @runtime.instance_variable_get(:@code_index)
 
-        # Temporary registries (GC'd after this method returns)
+        # Phase A: Parse + IR conversion
+        t0 = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+
         temp_location_index = Core::Index::LocationIndex.new
         temp_method_registry = Core::Registry::MethodRegistry.new(code_index: code_index)
         temp_ivar_registry = Core::Registry::InstanceVariableRegistry.new(code_index: code_index)
@@ -214,6 +218,9 @@ module TypeGuessr
         end
         temp_location_index.finalize!
 
+        t1 = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+
+        # Phase B: Inference (extract signatures)
         type_simplifier = Core::TypeSimplifier.new(code_index: code_index)
         temp_resolver = Core::Inference::Resolver.new(
           signature_registry,
@@ -232,12 +239,25 @@ module TypeGuessr
         )
         signatures = extractor.extract(files)
 
+        t2 = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+
+        # Phase C: Disk save
         cache.save(gem_name, version, deps,
                    instance_methods: signatures[:instance_methods],
                    class_methods: signatures[:class_methods])
+
+        t3 = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+
+        # Phase D: Registry load
         signature_registry.load_gem_cache(signatures[:instance_methods], kind: :instance)
         signature_registry.load_gem_cache(signatures[:class_methods], kind: :class)
-        warn "[type-guessr] Inferred and cached: #{gem_name}-#{version}"
+
+        t4 = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+
+        warn "[type-guessr] Cached #{gem_name}-#{version} (#{files.size} files, " \
+             "#{signatures[:instance_methods].size} classes) " \
+             "[parse=#{(t1 - t0).round(2)}s infer=#{(t2 - t1).round(2)}s " \
+             "save=#{(t3 - t2).round(2)}s load=#{(t4 - t3).round(2)}s]"
       end
 
       # Index files into the main runtime (project files only)

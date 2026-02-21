@@ -216,6 +216,10 @@ module RubyLsp
           # Preload RBS signatures first (needed for gem inference)
           @signature_registry.preload
 
+          # Build member_index BEFORE gem inference (duck type resolution needs it)
+          @code_index.build_member_index!
+          log_message("Member index built.")
+
           # Get all indexable files (project + gems)
           indexable_uris = index.configuration.indexable_uris
           file_paths = indexable_uris.filter_map(&:to_standardized_path)
@@ -229,9 +233,6 @@ module RubyLsp
           else
             index_all_files(file_paths)
           end
-
-          @code_index.build_member_index!
-          log_message("Member index built.")
           @indexing_completed = true
         rescue StandardError => e
           log_message("Error during file indexing: #{e.message}\n#{e.backtrace.first(10).join("\n")}")
@@ -369,13 +370,14 @@ module RubyLsp
         files = gem_info[:files]
         deps = gem_info[:transitive_deps]
 
-        # Create temporary registries (scoped to this gem, GC'd after)
+        # Phase A: Parse + IR conversion
+        t0 = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+
         temp_location_index = ::TypeGuessr::Core::Index::LocationIndex.new
         temp_method_registry = ::TypeGuessr::Core::Registry::MethodRegistry.new(code_index: @code_index)
         temp_ivar_registry = ::TypeGuessr::Core::Registry::InstanceVariableRegistry.new(code_index: @code_index)
         temp_cvar_registry = ::TypeGuessr::Core::Registry::ClassVariableRegistry.new
 
-        # Index gem files into temporary registries
         converter = ::TypeGuessr::Core::Converter::PrismConverter.new
         files.each do |file_path|
           parse_and_index_file(file_path, converter, temp_location_index,
@@ -383,7 +385,9 @@ module RubyLsp
         end
         temp_location_index.finalize!
 
-        # Create temporary resolver (uses temp registries + shared SignatureRegistry)
+        t1 = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+
+        # Phase B: Inference (extract signatures)
         type_simplifier = ::TypeGuessr::Core::TypeSimplifier.new(code_index: @code_index)
         temp_resolver = ::TypeGuessr::Core::Inference::Resolver.new(
           @signature_registry,
@@ -395,7 +399,6 @@ module RubyLsp
         )
         temp_builder = ::TypeGuessr::Core::SignatureBuilder.new(temp_resolver)
 
-        # Extract, cache, and register signatures
         extractor = ::TypeGuessr::Core::Cache::GemSignatureExtractor.new(
           signature_builder: temp_builder,
           method_registry: temp_method_registry,
@@ -403,16 +406,27 @@ module RubyLsp
         )
         signatures = extractor.extract(files)
 
+        t2 = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+
+        # Phase C: Disk save
         cache.save(gem_name, version, deps,
                    instance_methods: signatures[:instance_methods],
                    class_methods: signatures[:class_methods])
 
+        t3 = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+
+        # Phase D: Registry load
         @signature_registry.load_gem_cache(signatures[:instance_methods], kind: :instance)
         @signature_registry.load_gem_cache(signatures[:class_methods], kind: :class)
 
-        log_message("Inferred and cached #{gem_name}-#{version} " \
-                    "(#{signatures[:instance_methods].size} classes).")
-        # temp_* objects go out of scope → GC reclaims IR memory
+        t4 = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+
+        log_message(
+          "Cached #{gem_name}-#{version} (#{files.size} files, " \
+          "#{signatures[:instance_methods].size} classes) " \
+          "[parse=#{(t1 - t0).round(2)}s infer=#{(t2 - t1).round(2)}s " \
+          "save=#{(t3 - t2).round(2)}s load=#{(t4 - t3).round(2)}s]"
+        )
       end
 
       # Fallback: index all files into main registries (no cache)
