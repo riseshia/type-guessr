@@ -75,7 +75,7 @@ module TypeGuessr
       end
 
       private def build_ruby_index
-        Dir.chdir(@project_path) do
+        @ruby_index = Dir.chdir(@project_path) do
           config = RubyIndexer::Configuration.new
           index = RubyIndexer::Index.new
           uris = config.indexable_uris
@@ -360,17 +360,21 @@ module TypeGuessr
       private def handle_file_changes(modified, added, removed)
         (modified + added).each do |file_path|
           source = File.read(file_path)
+          uri = URI::Generic.from_path(path: file_path)
           parsed = Prism.parse(source)
+          @ruby_index.handle_change(uri, source)
           @runtime.index_parsed_file(file_path, parsed)
-          @runtime.refresh_member_index!(URI::Generic.from_path(path: file_path))
+          @runtime.refresh_member_index!(uri)
           warn "[type-guessr] Re-indexed: #{file_path}"
         rescue StandardError => e
           warn "[type-guessr] Error re-indexing #{file_path}: #{e.message}"
         end
 
         removed.each do |file_path|
+          uri = URI::Generic.from_path(path: file_path)
+          @ruby_index.delete(uri)
           @runtime.remove_indexed_file(file_path)
-          @runtime.refresh_member_index!(URI::Generic.from_path(path: file_path))
+          @runtime.refresh_member_index!(uri)
           warn "[type-guessr] Removed from index: #{file_path}"
         end
       end
