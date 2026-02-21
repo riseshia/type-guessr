@@ -1,4 +1,40 @@
 {
+  "permissions": {
+    "allow": [
+      "Bash(bundle exec rspec:*)",
+      "Bash(bundle exec rubocop:*)",
+      "Bash(bundle exec ruby:*)",
+      "Bash(bundle info:*)",
+      "Bash(bundle install:*)",
+      "Bash(bundle show:*)",
+      "Bash(bin/gen-doc:*)",
+      "Bash(bin/hover-repl:*)",
+      "Bash(bin/benchmark:*)",
+      "Bash(bin/profile:*)",
+      "Bash(bin/coverage:*)",
+      "Bash(gem which:*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git branch:*)",
+      "Bash(git stash:*)",
+      "Bash(ls:*)",
+      "Bash(wc:*)",
+      "Bash(ruby:*)",
+      "Skill(commit)",
+      "Skill(draft-pr)",
+      "Skill(benchmark)",
+      "Skill(coverage)",
+      "Skill(profile)",
+      "Skill(self-eval)",
+      "Read",
+      "Edit",
+      "Write",
+      "mcp__type-guessr__infer_type",
+      "mcp__type-guessr__get_method_signature",
+      "mcp__type-guessr__search_methods"
+    ]
+  },
   "enabledPlugins": {
     "code-simplifier@claude-plugins-official": true
   },
