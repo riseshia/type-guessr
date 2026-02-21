@@ -218,10 +218,13 @@ module RubyLsp
           sleep(0.1) until index.initial_indexing_completed
           log_message("Ruby LSP indexing completed.")
 
-          # Preload RBS signatures first (needed for gem inference)
+          # Preload RBS signatures while waiting for other addons to finish
           @signature_registry.preload
 
-          # Build member_index BEFORE gem inference (duck type resolution needs it)
+          # Wait for other addons (ruby-lsp-rails, etc.) to finish registering entries
+          wait_for_index_stabilization(index)
+
+          # Build member_index AFTER all entries are registered
           @code_index.build_member_index!
           log_message("Member index built.")
 
@@ -608,6 +611,29 @@ module RubyLsp
         else
           owner_class
         end
+      end
+
+      # Poll index entry count until it stops growing for stable_threshold consecutive checks.
+      # Other addons (ruby-lsp-rails, etc.) may register entries after initial_indexing_completed.
+      private def wait_for_index_stabilization(index, interval: 1, stable_threshold: 3)
+        previous_count = index.length
+        stable_ticks = 0
+
+        loop do
+          sleep(interval)
+          current_count = index.length
+
+          if current_count == previous_count
+            stable_ticks += 1
+            break if stable_ticks >= stable_threshold
+          else
+            log_message("Index still growing: #{current_count} entries (+#{current_count - previous_count})")
+            stable_ticks = 0
+            previous_count = current_count
+          end
+        end
+
+        log_message("Index stabilized at #{previous_count} entries.")
       end
 
       private def log_message(message)
