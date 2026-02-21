@@ -257,7 +257,7 @@ RSpec.describe TypeGuessr::Core::Registry::SignatureRegistry do
     let(:params) do
       [
         TypeGuessr::Core::Types::ParamSignature.new(
-          name: :name, kind: :req, type: TypeGuessr::Core::Types::ClassInstance.new("String")
+          name: :name, kind: :required, type: TypeGuessr::Core::Types::ClassInstance.new("String")
         ),
       ]
     end
@@ -290,6 +290,32 @@ RSpec.describe TypeGuessr::Core::Registry::SignatureRegistry do
         entry = described_class.new(return_type)
 
         expect(entry.signatures).to eq([])
+      end
+    end
+
+    describe "#signature_strings" do
+      it "returns formatted signature with params" do
+        entry = described_class.new(return_type, params)
+
+        expect(entry.signature_strings).to eq(["(String name) -> String"])
+      end
+
+      it "returns formatted signature without params" do
+        entry = described_class.new(return_type)
+
+        expect(entry.signature_strings).to eq(["() -> String"])
+      end
+
+      it "returns formatted signature with Unguessed types" do
+        unguessed = TypeGuessr::Core::Types::Unguessed.instance
+        unguessed_params = [
+          TypeGuessr::Core::Types::ParamSignature.new(
+            name: :x, kind: :required, type: unguessed
+          ),
+        ]
+        entry = described_class.new(unguessed, unguessed_params)
+
+        expect(entry.signature_strings).to eq(["(unguessed x) -> unguessed"])
       end
     end
 
@@ -478,6 +504,16 @@ RSpec.describe TypeGuessr::Core::Registry::SignatureRegistry do
 
         expect(signatures).to be_an(Array)
         expect(signatures.first).to be_a(RBS::MethodType)
+      end
+    end
+
+    describe "#signature_strings" do
+      it "returns formatted RBS method type strings" do
+        strings = string_upcase_entry.signature_strings
+
+        expect(strings).to be_an(Array)
+        expect(strings).not_to be_empty
+        expect(strings.first).to be_a(String)
       end
     end
   end

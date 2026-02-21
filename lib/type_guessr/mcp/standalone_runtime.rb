@@ -127,11 +127,21 @@ module TypeGuessr
         def_node = @mutex.synchronize { @method_registry.lookup(class_name, method_name) }
 
         unless def_node
-          sigs = @signature_registry.get_method_signatures(class_name, method_name)
-          if sigs.any?
+          entry = @signature_registry.lookup(class_name, method_name)
+
+          if entry.is_a?(Core::Registry::SignatureRegistry::MethodEntry)
             return {
               source: "rbs",
-              signatures: sigs.map { |s| s.method_type.to_s }
+              signatures: entry.signature_strings
+            }
+          end
+
+          if entry.is_a?(Core::Registry::SignatureRegistry::GemMethodEntry)
+            return {
+              source: "gem_cache",
+              signatures: entry.signature_strings,
+              class_name: class_name,
+              method_name: method_name
             }
           end
 

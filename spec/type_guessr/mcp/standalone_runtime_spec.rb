@@ -149,6 +149,28 @@ RSpec.describe TypeGuessr::MCP::StandaloneRuntime do
       end
     end
 
+    it "returns gem cache method signature" do
+      source = "x = 1"
+
+      build_runtime_with_source(source) do |runtime, _file_path|
+        # Register a gem method directly
+        return_type = TypeGuessr::Core::Types::ClassInstance.new("String")
+        params = [
+          TypeGuessr::Core::Types::ParamSignature.new(
+            name: :key, kind: :required, type: TypeGuessr::Core::Types::ClassInstance.new("Symbol")
+          ),
+        ]
+        registry = TypeGuessr::Core::Registry::SignatureRegistry.instance
+        registry.register_gem_method("MyGem::Config", "fetch", return_type, params)
+
+        result = runtime.method_signature("MyGem::Config", "fetch")
+
+        expect(result).not_to have_key(:error)
+        expect(result[:source]).to eq("gem_cache")
+        expect(result[:signatures]).to include("(Symbol key) -> String")
+      end
+    end
+
     it "returns error for unknown method" do
       source = "x = 1"
 

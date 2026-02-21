@@ -47,6 +47,12 @@ module TypeGuessr
             @method_types
           end
 
+          # Get formatted signature strings for display
+          # @return [Array<String>] human-readable method signatures
+          def signature_strings
+            @method_types.map(&:to_s)
+          end
+
           private def compute_block_param_types
             # Find the signature with a block
             sig_with_block = @method_types.find(&:block)
@@ -168,6 +174,13 @@ module TypeGuessr
 
           def signatures
             []
+          end
+
+          # Get formatted signature strings for display
+          # @return [Array<String>] human-readable method signatures
+          def signature_strings
+            param_str = @params.map(&:to_s).join(", ")
+            ["(#{param_str}) -> #{@return_type}"]
           end
         end
 
