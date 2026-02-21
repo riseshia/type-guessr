@@ -120,6 +120,11 @@ module RubyLsp
         index_file_with_prism_result(file_path, parsed)
       end
 
+      # Build member_index for duck type resolution (exposed for testing)
+      def build_member_index!
+        @code_index.build_member_index!
+      end
+
       # Remove indexed data for a file
       # @param file_path [String] File path to remove
       def remove_indexed_file(file_path)

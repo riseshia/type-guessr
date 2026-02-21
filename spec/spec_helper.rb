@@ -85,6 +85,7 @@ module TypeGuessrTestHelper
 
     addon.runtime_adapter&.index_source(uri.to_s, source)
     server.global_state.index.handle_change(uri, source)
+    addon.runtime_adapter&.build_member_index!
 
     begin
       block.call(server, uri)
