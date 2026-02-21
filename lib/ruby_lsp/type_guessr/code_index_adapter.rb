@@ -26,6 +26,49 @@ module RubyLsp
 
       def initialize(index)
         @index = index
+        @member_index = nil       # { method_name => [Entry] }
+        @member_index_files = nil # { file_path => [Entry] } for removal
+      end
+
+      # Build reverse index: method_name → [Entry::Member]
+      # One-time full scan via fuzzy_search(nil), called after initial indexing.
+      def build_member_index!
+        return unless @index
+
+        mi = Hash.new { |h, k| h[k] = [] }
+        fi = Hash.new { |h, k| h[k] = [] }
+
+        members = @index.fuzzy_search(nil) do |entry|
+          entry.is_a?(RubyIndexer::Entry::Member) && entry.owner
+        end
+
+        members.each do |entry|
+          mi[entry.name] << entry
+          fp = entry.file_path
+          fi[fp] << entry if fp
+        end
+
+        @member_index = mi
+        @member_index_files = fi
+      end
+
+      # Incrementally update member_index for a single file.
+      # Must be called AFTER RubyIndexer has re-indexed the file.
+      # @param file_uri [URI::Generic] File URI (same format as RubyIndexer entries)
+      def refresh_member_index!(file_uri)
+        return unless @member_index
+
+        file_path = file_uri.respond_to?(:full_path) ? file_uri.full_path : file_uri.path
+
+        # Remove old entries
+        old_entries = @member_index_files.delete(file_path) || []
+        old_entries.each { |entry| @member_index[entry.name]&.delete(entry) }
+
+        # Add new entries from RubyIndexer
+        new_entries = @index.entries_for(file_uri, RubyIndexer::Entry::Member) || []
+        new_entries = new_entries.select(&:owner)
+        new_entries.each { |entry| @member_index[entry.name] << entry }
+        @member_index_files[file_path] = new_entries unless new_entries.empty?
       end
 
       # Find classes that define ALL given methods (intersection)
@@ -40,15 +83,19 @@ module RubyLsp
         called_methods = called_methods.reject { |cm| OBJECT_METHOD_NAMES.include?(cm.name.to_s) }
         return [] if called_methods.empty?
 
-        # Pivot approach: 1 fuzzy_search + (N-1) resolve_method calls
+        # Pivot approach: 1 lookup + (N-1) resolve_method calls
         # Pick the longest method name as pivot (likely most specific → fewest candidates)
         pivot = called_methods.max_by { |cm| cm.name.to_s.length }
         rest = called_methods - [pivot]
 
-        # One fuzzy_search on pivot → candidate owners
-        entries = @index.fuzzy_search(pivot.name.to_s) do |entry|
-          entry.is_a?(RubyIndexer::Entry::Member) && entry.name == pivot.name.to_s
-        end
+        # O(1) member_index lookup when available, fuzzy_search fallback otherwise
+        entries = if @member_index
+                    @member_index[pivot.name.to_s] || []
+                  else
+                    @index.fuzzy_search(pivot.name.to_s) do |entry|
+                      entry.is_a?(RubyIndexer::Entry::Member) && entry.name == pivot.name.to_s
+                    end
+                  end
 
         entries = filter_by_arity(entries, pivot.positional_count, pivot.keywords) if pivot.positional_count
 

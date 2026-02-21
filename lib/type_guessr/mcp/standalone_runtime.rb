@@ -66,6 +66,17 @@ module TypeGuessr
         end
       end
 
+      # Delegate member_index build to code_index
+      def build_member_index!
+        @code_index.build_member_index!
+      end
+
+      # Delegate member_index refresh to code_index
+      # @param file_uri [URI::Generic] File URI
+      def refresh_member_index!(file_uri)
+        @code_index.refresh_member_index!(file_uri)
+      end
+
       # Finalize location index after all files are indexed
       def finalize_index!
         @mutex.synchronize { @location_index.finalize! }

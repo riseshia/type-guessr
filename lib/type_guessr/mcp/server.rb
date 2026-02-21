@@ -136,6 +136,7 @@ module TypeGuessr
 
         @runtime.finalize_index!
         @runtime.preload_signatures!
+        @runtime.build_member_index!
         warn "[type-guessr] Indexed #{processed}/#{total} files"
       end
 
@@ -153,6 +154,7 @@ module TypeGuessr
           source = File.read(file_path)
           parsed = Prism.parse(source)
           @runtime.index_parsed_file(file_path, parsed)
+          @runtime.refresh_member_index!(URI::Generic.from_path(path: file_path))
           warn "[type-guessr] Re-indexed: #{file_path}"
         rescue StandardError => e
           warn "[type-guessr] Error re-indexing #{file_path}: #{e.message}"
@@ -160,6 +162,7 @@ module TypeGuessr
 
         removed.each do |file_path|
           @runtime.remove_indexed_file(file_path)
+          @runtime.refresh_member_index!(URI::Generic.from_path(path: file_path))
           warn "[type-guessr] Removed from index: #{file_path}"
         end
       end

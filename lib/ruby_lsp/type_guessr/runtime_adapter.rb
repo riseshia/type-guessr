@@ -123,6 +123,7 @@ module RubyLsp
         @mutex.synchronize do
           @location_index.remove_file(file_path)
           @resolver.clear_cache
+          @code_index.refresh_member_index!(URI::Generic.from_path(path: file_path))
         end
       end
 
@@ -235,6 +236,8 @@ module RubyLsp
 
           log_message("File indexing completed. Processed #{total} files.")
           @signature_registry.preload
+          @code_index.build_member_index!
+          log_message("Member index built.")
           @indexing_completed = true
         rescue StandardError => e
           log_message("Error during file indexing: #{e.message}\n#{e.backtrace.first(10).join("\n")}")
@@ -341,6 +344,9 @@ module RubyLsp
 
           # Finalize the index for efficient lookups
           @location_index.finalize!
+
+          # Update member_index (RubyIndexer is already updated by ruby-lsp)
+          @code_index.refresh_member_index!(URI::Generic.from_path(path: file_path))
         end
       end
 

@@ -269,6 +269,149 @@ RSpec.describe RubyLsp::TypeGuessr::CodeIndexAdapter do
     end
   end
 
+  describe "#build_member_index! and member_index lookup" do
+    # Helper to create CalledMethod with defaults
+    def cm(name, positional_count: nil, keywords: [])
+      TypeGuessr::Core::IR::CalledMethod.new(name: name, positional_count: positional_count, keywords: keywords)
+    end
+
+    it "uses member_index for find_classes_defining_methods after build" do
+      source = <<~RUBY
+        class Recipe
+          def comments; end
+        end
+      RUBY
+
+      with_server_and_addon(source) do |server, _uri|
+        adapter = described_class.new(server.global_state.index)
+        adapter.build_member_index!
+
+        result = adapter.find_classes_defining_methods([cm(:comments)])
+        expect(result).to include("Recipe")
+      end
+    end
+
+    it "all existing find_classes_defining_methods tests pass with member_index" do
+      source = <<~RUBY
+        class A
+          def foo; end
+          def bar; end
+        end
+
+        class B
+          def foo; end
+        end
+      RUBY
+
+      with_server_and_addon(source) do |server, _uri|
+        adapter = described_class.new(server.global_state.index)
+        adapter.build_member_index!
+
+        result = adapter.find_classes_defining_methods([cm(:foo), cm(:bar)])
+        expect(result).to include("A")
+        expect(result).not_to include("B")
+      end
+    end
+
+    it "falls back to fuzzy_search when member_index not built" do
+      source = <<~RUBY
+        class Recipe
+          def comments; end
+        end
+      RUBY
+
+      with_server_and_addon(source) do |server, _uri|
+        adapter = described_class.new(server.global_state.index)
+        # Do NOT call build_member_index!
+
+        result = adapter.find_classes_defining_methods([cm(:comments)])
+        expect(result).to include("Recipe")
+      end
+    end
+  end
+
+  describe "#refresh_member_index!" do
+    # Helper to create CalledMethod with defaults
+    def cm(name, positional_count: nil, keywords: [])
+      TypeGuessr::Core::IR::CalledMethod.new(name: name, positional_count: positional_count, keywords: keywords)
+    end
+
+    it "reflects added methods after file re-index" do
+      source = <<~RUBY
+        class Recipe
+          def comments; end
+        end
+      RUBY
+
+      with_server_and_addon(source) do |server, _uri|
+        adapter = described_class.new(server.global_state.index)
+        adapter.build_member_index!
+
+        # Verify initial state
+        result = adapter.find_classes_defining_methods([cm(:comments)])
+        expect(result).to include("Recipe")
+
+        # Add a new class with a new method
+        updated_source = <<~RUBY
+          class Recipe
+            def comments; end
+          end
+
+          class Blog
+            def posts; end
+          end
+        RUBY
+
+        uri = URI("file://#{Dir.pwd}/source.rb")
+        server.global_state.index.handle_change(uri, updated_source)
+        adapter.refresh_member_index!(uri)
+
+        result = adapter.find_classes_defining_methods([cm(:posts)])
+        expect(result).to include("Blog")
+      end
+    end
+
+    it "reflects removed methods after file re-index" do
+      source = <<~RUBY
+        class Recipe
+          def comments; end
+        end
+
+        class Blog
+          def posts; end
+        end
+      RUBY
+
+      with_server_and_addon(source) do |server, _uri|
+        adapter = described_class.new(server.global_state.index)
+        adapter.build_member_index!
+
+        # Verify both exist
+        expect(adapter.find_classes_defining_methods([cm(:posts)])).to include("Blog")
+
+        # Remove Blog from source
+        updated_source = <<~RUBY
+          class Recipe
+            def comments; end
+          end
+        RUBY
+
+        uri = URI("file://#{Dir.pwd}/source.rb")
+        server.global_state.index.handle_change(uri, updated_source)
+        adapter.refresh_member_index!(uri)
+
+        result = adapter.find_classes_defining_methods([cm(:posts)])
+        expect(result).not_to include("Blog")
+      end
+    end
+
+    it "skips when member_index not built" do
+      adapter = described_class.new(nil)
+      # Should not raise
+      expect { adapter.refresh_member_index!(URI("file:///fake.rb")) }.not_to raise_error
+    end
+  end
+
   describe "#instance_method_owner" do
     it "returns Object for tap method on custom class" do
       source = <<~RUBY
