@@ -343,6 +343,7 @@ module RubyLsp
       private def process_gem(gem_name, gem_info, cache)
         version = gem_info[:version]
         deps = gem_info[:transitive_deps]
+        log_message("Processing #{gem_name}-#{version} (#{gem_info[:files].size} files)...")
 
         if cache.cached?(gem_name, version, deps)
           load_gem_from_cache(gem_name, version, deps, cache)

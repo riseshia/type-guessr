@@ -168,6 +168,7 @@ module TypeGuessr
         version = gem_info[:version]
         deps = gem_info[:transitive_deps]
         signature_registry = @runtime.instance_variable_get(:@signature_registry)
+        warn "[type-guessr] Processing #{gem_name}-#{version} (#{gem_info[:files].size} files)..."
 
         if cache.cached?(gem_name, version, deps)
           data = cache.load(gem_name, version, deps)
