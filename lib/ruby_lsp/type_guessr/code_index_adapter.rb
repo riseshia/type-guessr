@@ -31,21 +31,26 @@ module RubyLsp
       end
 
       # Build reverse index: method_name → [Entry::Member]
-      # One-time full scan via fuzzy_search(nil), called after initial indexing.
+      # One-time full scan of index entries, called after initial indexing.
+      # Uses keys snapshot + point lookups to avoid Hash iteration conflict
+      # with concurrent Index#add on the main LSP thread.
       def build_member_index!
         return unless @index
 
         mi = Hash.new { |h, k| h[k] = [] }
         fi = Hash.new { |h, k| h[k] = [] }
 
-        members = @index.fuzzy_search(nil) do |entry|
-          entry.is_a?(RubyIndexer::Entry::Member) && entry.owner
-        end
+        entries_hash = @index.instance_variable_get(:@entries)
+        keys = entries_hash.keys # atomic snapshot under GIL
 
-        members.each do |entry|
-          mi[entry.name] << entry
-          fp = entry.file_path
-          fi[fp] << entry if fp
+        keys.each do |name|
+          (entries_hash[name] || []).each do |entry|
+            next unless entry.is_a?(RubyIndexer::Entry::Member) && entry.owner
+
+            mi[entry.name] << entry
+            fp = entry.file_path
+            fi[fp] << entry if fp
+          end
         end
 
         @member_index = mi
