@@ -11,6 +11,9 @@ require_relative "../../type_guessr/core/inference/resolver"
 require_relative "../../type_guessr/core/signature_builder"
 require_relative "../../type_guessr/core/type_simplifier"
 require_relative "../../type_guessr/core/node_context_helper"
+require_relative "../../type_guessr/core/cache/gem_signature_cache"
+require_relative "../../type_guessr/core/cache/gem_dependency_resolver"
+require_relative "../../type_guessr/core/cache/gem_signature_extractor"
 require_relative "code_index_adapter"
 require_relative "type_inferrer"
 
@@ -208,34 +211,25 @@ module RubyLsp
           # Wait for Ruby LSP's initial indexing to complete
           log_message("Waiting for Ruby LSP initial indexing to complete...")
           sleep(0.1) until index.initial_indexing_completed
-          log_message("Ruby LSP indexing completed. Starting TypeGuessr file indexing.")
+          log_message("Ruby LSP indexing completed.")
+
+          # Preload RBS signatures first (needed for gem inference)
+          @signature_registry.preload
 
           # Get all indexable files (project + gems)
           indexable_uris = index.configuration.indexable_uris
-          total = indexable_uris.size
+          file_paths = indexable_uris.filter_map(&:to_standardized_path)
+          total = file_paths.size
           log_message("Found #{total} files to process.")
 
-          # Index each file with progress reporting
-          processed = 0
-          last_report = 0
-          report_interval = [total / 10, 50].max
-
-          indexable_uris.each do |uri|
-            traverse_file(uri)
-            processed += 1
-
-            next unless processed - last_report >= report_interval
-
-            percent = (processed * 100.0 / total).round(1)
-            log_message("Indexing progress: #{processed}/#{total} (#{percent}%)")
-            last_report = processed
+          # Try cache-first flow if Gemfile.lock exists
+          lockfile_path = find_lockfile
+          if lockfile_path
+            index_with_gem_cache(file_paths, lockfile_path)
+          else
+            index_all_files(file_paths)
           end
 
-          # Finalize the index ONCE after all files are processed
-          @mutex.synchronize { @location_index.finalize! }
-
-          log_message("File indexing completed. Processed #{total} files.")
-          @signature_registry.preload
           @code_index.build_member_index!
           log_message("Member index built.")
           @indexing_completed = true
@@ -321,6 +315,171 @@ module RubyLsp
         end
       end
 
+      # Cache-first indexing: process gems with cache, then project files
+      private def index_with_gem_cache(file_paths, lockfile_path)
+        resolver_class = ::TypeGuessr::Core::Cache::GemDependencyResolver
+        dep_resolver = resolver_class.new(lockfile_path)
+        partitioned = dep_resolver.partition(file_paths)
+        gems = partitioned[:gems]
+        project_files = partitioned[:project_files]
+
+        log_message("Partitioned: #{gems.size} gems, #{project_files.size} project files.")
+
+        cache = ::TypeGuessr::Core::Cache::GemSignatureCache.new
+        ordered = dep_resolver.topological_order(gems.keys)
+
+        # Process each gem in dependency order
+        ordered.each do |gem_name|
+          gem_info = gems[gem_name]
+          process_gem(gem_name, gem_info, cache)
+        end
+
+        # Index project files into main registries
+        index_all_files(project_files)
+      end
+
+      # Process a single gem: cache hit → load, cache miss → infer → save
+      private def process_gem(gem_name, gem_info, cache)
+        version = gem_info[:version]
+        deps = gem_info[:transitive_deps]
+
+        if cache.cached?(gem_name, version, deps)
+          load_gem_from_cache(gem_name, version, deps, cache)
+        else
+          infer_and_cache_gem(gem_name, gem_info, cache)
+        end
+      end
+
+      # Load gem signatures from disk cache into SignatureRegistry
+      private def load_gem_from_cache(gem_name, version, deps, cache)
+        data = cache.load(gem_name, version, deps)
+        unless data
+          log_message("Cache corrupt for #{gem_name}-#{version}, skipping.")
+          return
+        end
+
+        @signature_registry.load_gem_cache(data["instance_methods"], kind: :instance)
+        @signature_registry.load_gem_cache(data["class_methods"], kind: :class)
+        log_message("Loaded cached signatures for #{gem_name}-#{version}.")
+      end
+
+      # Infer gem method signatures using temporary registries, then cache
+      private def infer_and_cache_gem(gem_name, gem_info, cache)
+        version = gem_info[:version]
+        files = gem_info[:files]
+        deps = gem_info[:transitive_deps]
+
+        # Create temporary registries (scoped to this gem, GC'd after)
+        temp_location_index = ::TypeGuessr::Core::Index::LocationIndex.new
+        temp_method_registry = ::TypeGuessr::Core::Registry::MethodRegistry.new(code_index: @code_index)
+        temp_ivar_registry = ::TypeGuessr::Core::Registry::InstanceVariableRegistry.new(code_index: @code_index)
+        temp_cvar_registry = ::TypeGuessr::Core::Registry::ClassVariableRegistry.new
+
+        # Index gem files into temporary registries
+        converter = ::TypeGuessr::Core::Converter::PrismConverter.new
+        files.each do |file_path|
+          parse_and_index_file(file_path, converter, temp_location_index,
+                               temp_method_registry, temp_ivar_registry, temp_cvar_registry)
+        end
+        temp_location_index.finalize!
+
+        # Create temporary resolver (uses temp registries + shared SignatureRegistry)
+        type_simplifier = ::TypeGuessr::Core::TypeSimplifier.new(code_index: @code_index)
+        temp_resolver = ::TypeGuessr::Core::Inference::Resolver.new(
+          @signature_registry,
+          code_index: @code_index,
+          method_registry: temp_method_registry,
+          ivar_registry: temp_ivar_registry,
+          cvar_registry: temp_cvar_registry,
+          type_simplifier: type_simplifier
+        )
+        temp_builder = ::TypeGuessr::Core::SignatureBuilder.new(temp_resolver)
+
+        # Extract, cache, and register signatures
+        extractor = ::TypeGuessr::Core::Cache::GemSignatureExtractor.new(
+          signature_builder: temp_builder,
+          method_registry: temp_method_registry,
+          location_index: temp_location_index
+        )
+        signatures = extractor.extract(files)
+
+        cache.save(gem_name, version, deps,
+                   instance_methods: signatures[:instance_methods],
+                   class_methods: signatures[:class_methods])
+
+        @signature_registry.load_gem_cache(signatures[:instance_methods], kind: :instance)
+        @signature_registry.load_gem_cache(signatures[:class_methods], kind: :class)
+
+        log_message("Inferred and cached #{gem_name}-#{version} " \
+                    "(#{signatures[:instance_methods].size} classes).")
+        # temp_* objects go out of scope → GC reclaims IR memory
+      end
+
+      # Fallback: index all files into main registries (no cache)
+      private def index_all_files(file_paths)
+        file_paths.each do |file_path|
+          next unless File.exist?(file_path)
+
+          source = File.read(file_path)
+          parsed = Prism.parse(source)
+          next unless parsed.value
+
+          @mutex.synchronize do
+            @location_index.remove_file(file_path)
+
+            context = ::TypeGuessr::Core::Converter::PrismConverter::Context.new(
+              file_path: file_path,
+              location_index: @location_index,
+              method_registry: @method_registry,
+              ivar_registry: @ivar_registry,
+              cvar_registry: @cvar_registry
+            )
+
+            parsed.value.statements&.body&.each do |stmt|
+              @converter.convert(stmt, context)
+            end
+          end
+        rescue StandardError => e
+          log_message("Error indexing #{file_path}: #{e.class}: #{e.message}")
+        end
+
+        @mutex.synchronize { @location_index.finalize! }
+        log_message("Indexed #{file_paths.size} files.")
+      end
+
+      # Parse and index a file into given registries (no mutex, used for temp gem registries)
+      private def parse_and_index_file(file_path, converter, location_index,
+                                       method_registry, ivar_registry, cvar_registry)
+        return unless File.exist?(file_path)
+
+        source = File.read(file_path)
+        parsed = Prism.parse(source)
+        return unless parsed.value
+
+        context = ::TypeGuessr::Core::Converter::PrismConverter::Context.new(
+          file_path: file_path,
+          location_index: location_index,
+          method_registry: method_registry,
+          ivar_registry: ivar_registry,
+          cvar_registry: cvar_registry
+        )
+
+        parsed.value.statements&.body&.each do |stmt|
+          converter.convert(stmt, context)
+        end
+      rescue StandardError => e
+        log_message("Error indexing gem file #{file_path}: #{e.class}: #{e.message}")
+      end
+
+      # Find Gemfile.lock in the workspace
+      private def find_lockfile
+        workspace_path = @global_state.workspace_path
+        return nil unless workspace_path
+
+        lockfile = File.join(workspace_path, "Gemfile.lock")
+        File.exist?(lockfile) ? lockfile : nil
+      end
+
       private def index_file_with_prism_result(file_path, prism_result)
         return unless prism_result.value
 
@@ -362,39 +521,6 @@ module RubyLsp
         else
           owner_class
         end
-      end
-
-      # Traverse and index a single file
-      private def traverse_file(uri)
-        file_path = uri.to_standardized_path
-        return unless file_path && File.exist?(file_path)
-
-        # Parse outside mutex (CPU-bound, no shared state)
-        source = File.read(file_path)
-        parsed = Prism.parse(source)
-        return unless parsed.value
-
-        # Only hold mutex while modifying shared state
-        @mutex.synchronize do
-          @location_index.remove_file(file_path)
-
-          # Create context with index/registry injection - nodes are registered during conversion
-          context = ::TypeGuessr::Core::Converter::PrismConverter::Context.new(
-            file_path: file_path,
-            location_index: @location_index,
-            method_registry: @method_registry,
-            ivar_registry: @ivar_registry,
-            cvar_registry: @cvar_registry
-          )
-
-          parsed.value.statements&.body&.each do |stmt|
-            @converter.convert(stmt, context)
-          end
-        end
-        # NOTE: finalize! is called once after ALL files are indexed in start_indexing
-      rescue StandardError => e
-        bt = e.backtrace&.first(5)&.join("\n") || "(no backtrace)"
-        log_message("Error indexing #{uri}: #{e.class}: #{e.message}\n#{bt}")
       end
 
       private def log_message(message)

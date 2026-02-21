@@ -55,6 +55,18 @@ module TypeGuessr
           (@methods[class_name] || {}).freeze
         end
 
+        # Iterate over all registered methods
+        # @yield [class_name, method_name, def_node]
+        def each_entry(&block)
+          return enum_for(:each_entry) unless block
+
+          @methods.each do |class_name, methods_hash|
+            methods_hash.each do |method_name, def_node|
+              block.call(class_name, method_name, def_node)
+            end
+          end
+        end
+
         # Search for methods matching a pattern
         # @param pattern [String] Search pattern (partial match on "ClassName#method_name")
         # @return [Array<Array>] Array of [class_name, method_name, def_node]

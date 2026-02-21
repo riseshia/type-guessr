@@ -139,6 +139,39 @@ RSpec.describe TypeGuessr::Core::Registry::MethodRegistry do
     end
   end
 
+  describe "#each_entry" do
+    it "yields all registered methods" do
+      method1 = create_def_node("method1")
+      method2 = create_def_node("method2")
+      method3 = create_def_node("create")
+      registry.register("User", "method1", method1)
+      registry.register("User", "method2", method2)
+      registry.register("Post", "create", method3)
+
+      entries = []
+      registry.each_entry { |cn, mn, dn| entries << [cn, mn, dn] }
+
+      expect(entries).to contain_exactly(
+        ["User", "method1", method1],
+        ["User", "method2", method2],
+        ["Post", "create", method3]
+      )
+    end
+
+    it "returns an enumerator when no block given" do
+      registry.register("User", "find", create_def_node("find"))
+
+      enum = registry.each_entry
+
+      expect(enum).to be_a(Enumerator)
+      expect(enum.to_a.size).to eq(1)
+    end
+
+    it "returns empty enumerator when registry is empty" do
+      expect(registry.each_entry.to_a).to be_empty
+    end
+  end
+
   describe "#clear" do
     it "removes all registered methods" do
       registry.register("MyClass", "method1", create_def_node("method1"))

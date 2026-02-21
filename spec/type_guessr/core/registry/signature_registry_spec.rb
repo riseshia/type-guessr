@@ -252,6 +252,196 @@ RSpec.describe TypeGuessr::Core::Registry::SignatureRegistry do
     end
   end
 
+  describe described_class::GemMethodEntry do
+    let(:return_type) { TypeGuessr::Core::Types::ClassInstance.new("String") }
+    let(:params) do
+      [
+        TypeGuessr::Core::Types::ParamSignature.new(
+          name: :name, kind: :req, type: TypeGuessr::Core::Types::ClassInstance.new("String")
+        ),
+      ]
+    end
+
+    describe "#return_type" do
+      it "returns the stored return type" do
+        entry = described_class.new(return_type)
+
+        expect(entry.return_type).to eq(return_type)
+      end
+
+      it "ignores arg_types parameter" do
+        entry = described_class.new(return_type)
+        int_type = TypeGuessr::Core::Types::ClassInstance.new("Integer")
+
+        expect(entry.return_type([int_type])).to eq(return_type)
+      end
+    end
+
+    describe "#block_param_types" do
+      it "always returns empty array" do
+        entry = described_class.new(return_type)
+
+        expect(entry.block_param_types).to eq([])
+      end
+    end
+
+    describe "#signatures" do
+      it "always returns empty array" do
+        entry = described_class.new(return_type)
+
+        expect(entry.signatures).to eq([])
+      end
+    end
+
+    describe "#params" do
+      it "returns the stored params" do
+        entry = described_class.new(return_type, params)
+
+        expect(entry.params).to eq(params)
+      end
+
+      it "defaults to empty array" do
+        entry = described_class.new(return_type)
+
+        expect(entry.params).to eq([])
+      end
+    end
+  end
+
+  describe "#register_gem_method" do
+    it "registers a gem instance method" do
+      return_type = TypeGuessr::Core::Types::ClassInstance.new("MyGemClass")
+      registry.register_gem_method("MyGemClass", "my_method", return_type)
+
+      entry = registry.lookup("MyGemClass", "my_method")
+
+      expect(entry).to be_a(described_class::GemMethodEntry)
+      expect(entry.return_type).to eq(return_type)
+    end
+
+    it "does not overwrite existing RBS entry" do
+      # String#upcase is already loaded via RBS preload
+      return_type = TypeGuessr::Core::Types::ClassInstance.new("Integer")
+      registry.register_gem_method("String", "upcase", return_type)
+
+      entry = registry.lookup("String", "upcase")
+
+      expect(entry).to be_a(described_class::MethodEntry)
+    end
+
+    it "registers with params" do
+      return_type = TypeGuessr::Core::Types::ClassInstance.new("Boolean")
+      params = [
+        TypeGuessr::Core::Types::ParamSignature.new(
+          name: :key, kind: :req, type: TypeGuessr::Core::Types::ClassInstance.new("String")
+        ),
+      ]
+      registry.register_gem_method("MyGemClass", "check", return_type, params)
+
+      entry = registry.lookup("MyGemClass", "check")
+
+      expect(entry.params.size).to eq(1)
+      expect(entry.params.first.name).to eq(:key)
+    end
+  end
+
+  describe "#register_gem_class_method" do
+    it "registers a gem class method" do
+      return_type = TypeGuessr::Core::Types::ClassInstance.new("MyGemClass")
+      registry.register_gem_class_method("MyGemClass", "create", return_type)
+
+      entry = registry.lookup_class_method("MyGemClass", "create")
+
+      expect(entry).to be_a(described_class::GemMethodEntry)
+      expect(entry.return_type).to eq(return_type)
+    end
+
+    it "does not overwrite existing RBS entry" do
+      # File.read is already loaded via RBS preload
+      return_type = TypeGuessr::Core::Types::ClassInstance.new("Integer")
+      registry.register_gem_class_method("File", "read", return_type)
+
+      entry = registry.lookup_class_method("File", "read")
+
+      expect(entry).to be_a(described_class::MethodEntry)
+    end
+  end
+
+  describe "#load_gem_cache" do
+    it "bulk loads instance methods from cache data" do
+      cache_data = {
+        "GemFoo" => {
+          "bar" => {
+            "return_type" => { "_type" => "ClassInstance", "name" => "String" },
+            "params" => [
+              { "name" => "x", "kind" => "req", "type" => { "_type" => "ClassInstance", "name" => "Integer" } },
+            ]
+          }
+        }
+      }
+
+      registry.load_gem_cache(cache_data, kind: :instance)
+
+      entry = registry.lookup("GemFoo", "bar")
+
+      expect(entry).to be_a(described_class::GemMethodEntry)
+      expect(entry.return_type).to eq(TypeGuessr::Core::Types::ClassInstance.new("String"))
+      expect(entry.params.size).to eq(1)
+      expect(entry.params.first.name).to eq(:x)
+      expect(entry.params.first.kind).to eq(:req)
+    end
+
+    it "bulk loads class methods from cache data" do
+      cache_data = {
+        "GemFoo" => {
+          "create" => {
+            "return_type" => { "_type" => "ClassInstance", "name" => "GemFoo" },
+            "params" => []
+          }
+        }
+      }
+
+      registry.load_gem_cache(cache_data, kind: :class)
+
+      entry = registry.lookup_class_method("GemFoo", "create")
+
+      expect(entry).to be_a(described_class::GemMethodEntry)
+      expect(entry.return_type).to eq(TypeGuessr::Core::Types::ClassInstance.new("GemFoo"))
+    end
+
+    it "does not overwrite existing RBS entries" do
+      cache_data = {
+        "String" => {
+          "upcase" => {
+            "return_type" => { "_type" => "ClassInstance", "name" => "Integer" }
+          }
+        }
+      }
+
+      registry.load_gem_cache(cache_data, kind: :instance)
+
+      entry = registry.lookup("String", "upcase")
+
+      expect(entry).to be_a(described_class::MethodEntry)
+    end
+
+    it "handles entries without params key" do
+      cache_data = {
+        "GemBar" => {
+          "baz" => {
+            "return_type" => { "_type" => "ClassInstance", "name" => "NilClass" }
+          }
+        }
+      }
+
+      registry.load_gem_cache(cache_data, kind: :instance)
+
+      entry = registry.lookup("GemBar", "baz")
+
+      expect(entry.params).to eq([])
+    end
+  end
+
   describe described_class::MethodEntry do
     # Get entry via lookup instead of direct instantiation
     let(:string_upcase_entry) { registry.lookup("String", "upcase") }

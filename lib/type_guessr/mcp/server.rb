@@ -25,7 +25,11 @@ require_relative "../core/registry/instance_variable_registry"
 require_relative "../core/registry/class_variable_registry"
 require_relative "../core/signature_builder"
 require_relative "../core/type_simplifier"
+require_relative "../core/type_serializer"
 require_relative "../core/logger"
+require_relative "../core/cache/gem_signature_cache"
+require_relative "../core/cache/gem_dependency_resolver"
+require_relative "../core/cache/gem_signature_extractor"
 
 # Load CodeIndexAdapter, StandaloneRuntime, and FileWatcher
 require_relative "../../ruby_lsp/type_guessr/code_index_adapter"
@@ -115,29 +119,139 @@ module TypeGuessr
       private def index_project_files
         config = Dir.chdir(@project_path) { RubyIndexer::Configuration.new }
         uris = Dir.chdir(@project_path) { config.indexable_uris }
-        total = uris.size
-        processed = 0
+        file_paths = uris.filter_map do |uri|
+          uri.respond_to?(:to_standardized_path) ? uri.to_standardized_path : uri.path
+        end
+        total = file_paths.size
 
-        warn "[type-guessr] Indexing #{total} files with TypeGuessr..."
+        # Preload RBS signatures first (needed for gem inference)
+        @runtime.preload_signatures!
 
-        uris.each do |uri|
-          file_path = uri.respond_to?(:to_standardized_path) ? uri.to_standardized_path : uri.path
-          next unless file_path && File.exist?(file_path)
-
-          source = File.read(file_path)
-          parsed = Prism.parse(source)
-          next unless parsed.value
-
-          @runtime.index_parsed_file(file_path, parsed)
-          processed += 1
-        rescue StandardError => e
-          warn "[type-guessr] Error indexing #{file_path}: #{e.message}"
+        # Try cache-first flow if Gemfile.lock exists
+        lockfile_path = File.join(@project_path, "Gemfile.lock")
+        if File.exist?(lockfile_path)
+          index_with_gem_cache(file_paths, lockfile_path)
+        else
+          index_all_files(file_paths)
         end
 
         @runtime.finalize_index!
-        @runtime.preload_signatures!
         @runtime.build_member_index!
-        warn "[type-guessr] Indexed #{processed}/#{total} files"
+        warn "[type-guessr] Indexed #{total} files"
+      end
+
+      # Cache-first indexing: process gems with cache, then project files
+      private def index_with_gem_cache(file_paths, lockfile_path)
+        dep_resolver = Core::Cache::GemDependencyResolver.new(lockfile_path)
+        partitioned = dep_resolver.partition(file_paths)
+        gems = partitioned[:gems]
+        project_files = partitioned[:project_files]
+
+        warn "[type-guessr] Partitioned: #{gems.size} gems, #{project_files.size} project files"
+
+        cache = Core::Cache::GemSignatureCache.new
+        ordered = dep_resolver.topological_order(gems.keys)
+
+        ordered.each do |gem_name|
+          gem_info = gems[gem_name]
+          process_gem(gem_name, gem_info, cache)
+        end
+
+        # Index project files only
+        index_all_files(project_files)
+      end
+
+      # Process a single gem: cache hit → load, cache miss → infer → save
+      private def process_gem(gem_name, gem_info, cache)
+        version = gem_info[:version]
+        deps = gem_info[:transitive_deps]
+        signature_registry = @runtime.instance_variable_get(:@signature_registry)
+
+        if cache.cached?(gem_name, version, deps)
+          data = cache.load(gem_name, version, deps)
+          if data
+            signature_registry.load_gem_cache(data["instance_methods"], kind: :instance)
+            signature_registry.load_gem_cache(data["class_methods"], kind: :class)
+            warn "[type-guessr] Loaded cached: #{gem_name}-#{version}"
+          else
+            warn "[type-guessr] Cache corrupt for #{gem_name}-#{version}, skipping"
+          end
+        else
+          infer_and_cache_gem(gem_name, gem_info, cache, signature_registry)
+        end
+      end
+
+      # Infer gem signatures using temporary registries
+      private def infer_and_cache_gem(gem_name, gem_info, cache, signature_registry)
+        version = gem_info[:version]
+        files = gem_info[:files]
+        deps = gem_info[:transitive_deps]
+        code_index = @runtime.instance_variable_get(:@code_index)
+
+        # Temporary registries (GC'd after this method returns)
+        temp_location_index = Core::Index::LocationIndex.new
+        temp_method_registry = Core::Registry::MethodRegistry.new(code_index: code_index)
+        temp_ivar_registry = Core::Registry::InstanceVariableRegistry.new(code_index: code_index)
+        temp_cvar_registry = Core::Registry::ClassVariableRegistry.new
+        converter = Core::Converter::PrismConverter.new
+
+        files.each do |file_path|
+          next unless File.exist?(file_path)
+
+          parsed = Prism.parse(File.read(file_path))
+          next unless parsed.value
+
+          context = Core::Converter::PrismConverter::Context.new(
+            file_path: file_path,
+            location_index: temp_location_index,
+            method_registry: temp_method_registry,
+            ivar_registry: temp_ivar_registry,
+            cvar_registry: temp_cvar_registry
+          )
+          parsed.value.statements&.body&.each { |stmt| converter.convert(stmt, context) }
+        rescue StandardError => e
+          warn "[type-guessr] Error indexing gem file #{file_path}: #{e.message}"
+        end
+        temp_location_index.finalize!
+
+        type_simplifier = Core::TypeSimplifier.new(code_index: code_index)
+        temp_resolver = Core::Inference::Resolver.new(
+          signature_registry,
+          code_index: code_index,
+          method_registry: temp_method_registry,
+          ivar_registry: temp_ivar_registry,
+          cvar_registry: temp_cvar_registry,
+          type_simplifier: type_simplifier
+        )
+        temp_builder = Core::SignatureBuilder.new(temp_resolver)
+
+        extractor = Core::Cache::GemSignatureExtractor.new(
+          signature_builder: temp_builder,
+          method_registry: temp_method_registry,
+          location_index: temp_location_index
+        )
+        signatures = extractor.extract(files)
+
+        cache.save(gem_name, version, deps,
+                   instance_methods: signatures[:instance_methods],
+                   class_methods: signatures[:class_methods])
+        signature_registry.load_gem_cache(signatures[:instance_methods], kind: :instance)
+        signature_registry.load_gem_cache(signatures[:class_methods], kind: :class)
+        warn "[type-guessr] Inferred and cached: #{gem_name}-#{version}"
+      end
+
+      # Index files into the main runtime (project files only)
+      private def index_all_files(file_paths)
+        file_paths.each do |file_path|
+          next unless File.exist?(file_path)
+
+          parsed = Prism.parse(File.read(file_path))
+          next unless parsed.value
+
+          @runtime.index_parsed_file(file_path, parsed)
+        rescue StandardError => e
+          warn "[type-guessr] Error indexing #{file_path}: #{e.message}"
+        end
       end
 
       private def start_file_watcher

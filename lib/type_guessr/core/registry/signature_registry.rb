@@ -5,6 +5,7 @@ require "rbs"
 require_relative "../types"
 require_relative "../logger"
 require_relative "../converter/rbs_converter"
+require_relative "../type_serializer"
 
 module TypeGuessr
   module Core
@@ -147,6 +148,29 @@ module TypeGuessr
           end
         end
 
+        # Represents a cached gem method entry (pre-inferred, no RBS)
+        # Implements the same interface as MethodEntry for transparent lookup
+        class GemMethodEntry
+          attr_reader :params
+
+          def initialize(return_type, params = [])
+            @return_type = return_type
+            @params = params
+          end
+
+          def return_type(_arg_types = [])
+            @return_type
+          end
+
+          def block_param_types
+            []
+          end
+
+          def signatures
+            []
+          end
+        end
+
         def initialize
           @instance_methods = {} # { "String" => { "upcase" => MethodEntry } }
           @class_methods = {}    # { "File" => { "read" => MethodEntry } }
@@ -241,6 +265,48 @@ module TypeGuessr
           return [] unless entry
 
           entry.signatures.map { |mt| Signature.new(mt) }
+        end
+
+        # Register a single gem instance method
+        # Skips if RBS entry already exists (RBS takes priority)
+        def register_gem_method(class_name, method_name, return_type, params = [])
+          @instance_methods[class_name] ||= {}
+          return if @instance_methods[class_name].key?(method_name)
+
+          @instance_methods[class_name][method_name] = GemMethodEntry.new(return_type, params)
+        end
+
+        # Register a single gem class method
+        # Skips if RBS entry already exists (RBS takes priority)
+        def register_gem_class_method(class_name, method_name, return_type, params = [])
+          @class_methods[class_name] ||= {}
+          return if @class_methods[class_name].key?(method_name)
+
+          @class_methods[class_name][method_name] = GemMethodEntry.new(return_type, params)
+        end
+
+        # Bulk load gem cache data into the registry
+        # @param cache_data [Hash] { class_name => { method_name => { "return_type" => ..., "params" => [...] } } }
+        # @param kind [Symbol] :instance or :class
+        def load_gem_cache(cache_data, kind: :instance)
+          target = kind == :class ? @class_methods : @instance_methods
+
+          cache_data.each do |class_name, methods|
+            target[class_name] ||= {}
+            methods.each do |method_name, entry_data|
+              next if target[class_name].key?(method_name) # RBS priority
+
+              return_type = TypeSerializer.deserialize(entry_data["return_type"])
+              params = (entry_data["params"] || []).map do |p|
+                Types::ParamSignature.new(
+                  name: p["name"].to_sym,
+                  kind: p["kind"].to_sym,
+                  type: TypeSerializer.deserialize(p["type"])
+                )
+              end
+              target[class_name][method_name] = GemMethodEntry.new(return_type, params)
+            end
+          end
         end
 
         # Wrapper for RBS method type (for compatibility with existing code)
