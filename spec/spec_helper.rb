@@ -83,7 +83,7 @@ module TypeGuessrTestHelper
     addon.activate(server.global_state, server.instance_variable_get(:@outgoing_queue))
     RubyLsp::Addon.addons << addon
 
-    addon.runtime_adapter.index_source(uri.to_s, source)
+    addon.runtime_adapter&.index_source(uri.to_s, source)
     server.global_state.index.handle_change(uri, source)
 
     begin

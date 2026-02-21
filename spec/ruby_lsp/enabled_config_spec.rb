@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "spec_helper"
+require "ruby_lsp/internal"
 require "tmpdir"
 
 RSpec.describe RubyLsp::TypeGuessr::Config do
@@ -64,6 +65,19 @@ RSpec.describe RubyLsp::TypeGuessr::Config do
       described_class.reset!
       expect(described_class.debug_server_port).to eq(8080)
     end
+  end
+
+  it "skips initialization in activate when enabled is false" do
+    File.write(".type-guessr.yml", "enabled: false\n")
+    described_class.reset!
+
+    server = FullIndexHelper.server
+    addon = RubyLsp::TypeGuessr::Addon.new
+    addon.activate(server.global_state, server.instance_variable_get(:@outgoing_queue))
+
+    expect(addon.runtime_adapter).to be_nil
+  ensure
+    addon&.deactivate
   end
 
   it "disables addon features when enabled is false" do

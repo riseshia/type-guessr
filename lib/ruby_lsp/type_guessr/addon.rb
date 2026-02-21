@@ -19,6 +19,14 @@ module RubyLsp
       end
 
       def activate(global_state, message_queue)
+        unless Config.enabled?
+          message_queue << RubyLsp::Notification.window_log_message(
+            "[TypeGuessr] Disabled via config",
+            type: RubyLsp::Constant::MessageType::LOG
+          )
+          return
+        end
+
         @global_state = global_state
         @message_queue = message_queue
         @runtime_adapter = RuntimeAdapter.new(global_state, message_queue)
@@ -49,14 +57,14 @@ module RubyLsp
       end
 
       def create_hover_listener(response_builder, node_context, dispatcher)
-        return unless Config.enabled?
+        return unless @runtime_adapter
 
         Hover.new(@runtime_adapter, response_builder, node_context, dispatcher, @global_state)
       end
 
       # Handle file changes
       def workspace_did_change_watched_files(changes)
-        return unless Config.enabled?
+        return unless @runtime_adapter
 
         changes.each do |change|
           uri = URI(change[:uri])
