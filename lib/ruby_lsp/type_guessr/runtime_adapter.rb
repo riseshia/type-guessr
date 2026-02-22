@@ -241,6 +241,9 @@ module RubyLsp
           else
             index_all_files(file_paths)
           end
+          # Connect on-demand inference callback for Unguessed gem methods
+          @signature_registry.on_demand_inferrer = method(:infer_gem_file_on_demand)
+
           @indexing_completed = true
         rescue StandardError => e
           log_message("Error during file indexing: #{e.message}\n#{e.backtrace.first(10).join("\n")}")
@@ -621,6 +624,56 @@ module RubyLsp
           owner_class.sub(/::<Class:[^>]+>\z/, "")
         else
           owner_class
+        end
+      end
+
+      # On-demand inference for a single gem file.
+      # Triggered when SignatureRegistry encounters an Unguessed return type.
+      # Parses and infers the file containing the method definition,
+      # then replaces Unguessed entries with actual inferred types.
+      private def infer_gem_file_on_demand(class_name, method_name, kind)
+        return if @inferring_on_demand # re-entrancy guard
+
+        singleton = kind == :class
+        file_path = @code_index.method_definition_file_path(class_name, method_name, singleton: singleton)
+        return unless file_path
+
+        @inferring_on_demand = true
+        begin
+          temp_location_index = ::TypeGuessr::Core::Index::LocationIndex.new
+          temp_method_registry = ::TypeGuessr::Core::Registry::MethodRegistry.new(code_index: @code_index)
+          temp_ivar_registry = ::TypeGuessr::Core::Registry::InstanceVariableRegistry.new(code_index: @code_index)
+          temp_cvar_registry = ::TypeGuessr::Core::Registry::ClassVariableRegistry.new
+
+          converter = ::TypeGuessr::Core::Converter::PrismConverter.new
+          parse_and_index_file(file_path, converter, temp_location_index,
+                               temp_method_registry, temp_ivar_registry, temp_cvar_registry)
+          temp_location_index.finalize!
+
+          type_simplifier = ::TypeGuessr::Core::TypeSimplifier.new(code_index: @code_index)
+          temp_resolver = ::TypeGuessr::Core::Inference::Resolver.new(
+            @signature_registry,
+            code_index: @code_index,
+            method_registry: temp_method_registry,
+            ivar_registry: temp_ivar_registry,
+            cvar_registry: temp_cvar_registry,
+            type_simplifier: type_simplifier
+          )
+          temp_builder = ::TypeGuessr::Core::SignatureBuilder.new(temp_resolver)
+          extractor = ::TypeGuessr::Core::Cache::GemSignatureExtractor.new(
+            signature_builder: temp_builder,
+            method_registry: temp_method_registry,
+            location_index: temp_location_index
+          )
+
+          signatures = extractor.extract([file_path])
+
+          @signature_registry.replace_unguessed_entries(signatures[:instance_methods], kind: :instance)
+          @signature_registry.replace_unguessed_entries(signatures[:class_methods], kind: :class)
+        rescue StandardError => e
+          log_message("On-demand inference failed for #{class_name}##{method_name}: #{e.message}")
+        ensure
+          @inferring_on_demand = false
         end
       end
 

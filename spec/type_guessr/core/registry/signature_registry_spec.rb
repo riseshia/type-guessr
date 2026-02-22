@@ -468,6 +468,128 @@ RSpec.describe TypeGuessr::Core::Registry::SignatureRegistry do
     end
   end
 
+  describe "on-demand inference" do
+    after { registry.on_demand_inferrer = nil }
+
+    describe "#get_method_return_type with Unguessed entry" do
+      it "triggers on_demand_inferrer when return type is Unguessed" do
+        registry.register_gem_method("OnDemandFoo", "bar", TypeGuessr::Core::Types::Unguessed.instance)
+        called_with = nil
+        registry.on_demand_inferrer = ->(cn, mn, kind) { called_with = [cn, mn, kind] }
+
+        registry.get_method_return_type("OnDemandFoo", "bar")
+
+        expect(called_with).to eq(["OnDemandFoo", "bar", :instance])
+      end
+
+      it "returns inferred type after on-demand callback replaces entry" do
+        registry.register_gem_method("OnDemandFoo2", "bar", TypeGuessr::Core::Types::Unguessed.instance)
+        registry.on_demand_inferrer = lambda { |_cn, _mn, _kind|
+          registry.replace_unguessed_entries(
+            { "OnDemandFoo2" => { "bar" => {
+              "return_type" => { "_type" => "ClassInstance", "name" => "String" },
+              "params" => []
+            } } },
+            kind: :instance
+          )
+        }
+
+        result = registry.get_method_return_type("OnDemandFoo2", "bar")
+
+        expect(result).to eq(TypeGuessr::Core::Types::ClassInstance.for("String"))
+      end
+
+      it "returns Unknown when no on_demand_inferrer is set" do
+        registry.register_gem_method("OnDemandFoo3", "bar", TypeGuessr::Core::Types::Unguessed.instance)
+
+        result = registry.get_method_return_type("OnDemandFoo3", "bar")
+
+        expect(result).to eq(TypeGuessr::Core::Types::Unknown.instance)
+      end
+    end
+
+    describe "#get_class_method_return_type with Unguessed entry" do
+      it "triggers on_demand_inferrer for class methods" do
+        registry.register_gem_class_method("OnDemandBar", "create", TypeGuessr::Core::Types::Unguessed.instance)
+        called_with = nil
+        registry.on_demand_inferrer = ->(cn, mn, kind) { called_with = [cn, mn, kind] }
+
+        registry.get_class_method_return_type("OnDemandBar", "create")
+
+        expect(called_with).to eq(["OnDemandBar", "create", :class])
+      end
+
+      it "returns inferred type after on-demand callback replaces class method entry" do
+        registry.register_gem_class_method("OnDemandBar2", "create", TypeGuessr::Core::Types::Unguessed.instance)
+        registry.on_demand_inferrer = lambda { |_cn, _mn, _kind|
+          registry.replace_unguessed_entries(
+            { "OnDemandBar2" => { "create" => {
+              "return_type" => { "_type" => "ClassInstance", "name" => "OnDemandBar2" },
+              "params" => []
+            } } },
+            kind: :class
+          )
+        }
+
+        result = registry.get_class_method_return_type("OnDemandBar2", "create")
+
+        expect(result).to eq(TypeGuessr::Core::Types::ClassInstance.for("OnDemandBar2"))
+      end
+    end
+
+    describe "#replace_unguessed_entries" do
+      it "replaces Unguessed GemMethodEntry with inferred type" do
+        registry.register_gem_method("ReplaceTest", "foo", TypeGuessr::Core::Types::Unguessed.instance)
+
+        registry.replace_unguessed_entries(
+          { "ReplaceTest" => { "foo" => {
+            "return_type" => { "_type" => "ClassInstance", "name" => "Integer" },
+            "params" => [{ "name" => "x", "kind" => "required", "type" => { "_type" => "ClassInstance", "name" => "String" } }]
+          } } },
+          kind: :instance
+        )
+
+        entry = registry.lookup("ReplaceTest", "foo")
+
+        expect(entry.return_type).to eq(TypeGuessr::Core::Types::ClassInstance.for("Integer"))
+        expect(entry.params.size).to eq(1)
+        expect(entry.params.first.name).to eq(:x)
+      end
+
+      it "does not replace non-Unguessed GemMethodEntry" do
+        registry.register_gem_method("ReplaceTest2", "foo",
+                                     TypeGuessr::Core::Types::ClassInstance.for("String"))
+
+        registry.replace_unguessed_entries(
+          { "ReplaceTest2" => { "foo" => {
+            "return_type" => { "_type" => "ClassInstance", "name" => "Integer" },
+            "params" => []
+          } } },
+          kind: :instance
+        )
+
+        entry = registry.lookup("ReplaceTest2", "foo")
+
+        expect(entry.return_type).to eq(TypeGuessr::Core::Types::ClassInstance.for("String"))
+      end
+
+      it "does not replace RBS MethodEntry" do
+        # String#upcase is an RBS entry
+        registry.replace_unguessed_entries(
+          { "String" => { "upcase" => {
+            "return_type" => { "_type" => "ClassInstance", "name" => "Integer" },
+            "params" => []
+          } } },
+          kind: :instance
+        )
+
+        entry = registry.lookup("String", "upcase")
+
+        expect(entry).to be_a(described_class::MethodEntry)
+      end
+    end
+  end
+
   describe described_class::MethodEntry do
     # Get entry via lookup instead of direct instantiation
     let(:string_upcase_entry) { registry.lookup("String", "upcase") }

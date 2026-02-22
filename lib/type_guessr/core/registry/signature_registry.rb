@@ -184,11 +184,14 @@ module TypeGuessr
           end
         end
 
+        attr_writer :on_demand_inferrer # ->(class_name, method_name, kind) { ... }
+
         def initialize
           @instance_methods = {} # { "String" => { "upcase" => MethodEntry } }
           @class_methods = {}    # { "File" => { "read" => MethodEntry } }
           @converter = Converter::RBSConverter.new
           @preloaded = false
+          @on_demand_inferrer = nil
         end
 
         # Preload stdlib RBS signatures
@@ -224,6 +227,7 @@ module TypeGuessr
         end
 
         # Get method return type (convenience method matching old SignatureProvider API)
+        # Triggers on-demand inference if the entry has Unguessed return type.
         # @param class_name [String] the class name
         # @param method_name [String] the method name
         # @param arg_types [Array<Types::Type>] argument types for overload matching
@@ -232,10 +236,20 @@ module TypeGuessr
           entry = lookup(class_name, method_name)
           return Types::Unknown.instance unless entry
 
-          entry.return_type(arg_types)
+          result = entry.return_type(arg_types)
+          if result.is_a?(Types::Unguessed)
+            try_on_demand_inference(class_name, method_name, :instance)
+            entry = lookup(class_name, method_name)
+            return Types::Unknown.instance unless entry
+
+            result = entry.return_type(arg_types)
+            return Types::Unknown.instance if result.is_a?(Types::Unguessed)
+          end
+          result
         end
 
         # Get class method return type (convenience method matching old SignatureProvider API)
+        # Triggers on-demand inference if the entry has Unguessed return type.
         # @param class_name [String] the class name
         # @param method_name [String] the method name
         # @param arg_types [Array<Types::Type>] argument types for overload matching
@@ -244,7 +258,16 @@ module TypeGuessr
           entry = lookup_class_method(class_name, method_name)
           return Types::Unknown.instance unless entry
 
-          entry.return_type(arg_types)
+          result = entry.return_type(arg_types)
+          if result.is_a?(Types::Unguessed)
+            try_on_demand_inference(class_name, method_name, :class)
+            entry = lookup_class_method(class_name, method_name)
+            return Types::Unknown.instance unless entry
+
+            result = entry.return_type(arg_types)
+            return Types::Unknown.instance if result.is_a?(Types::Unguessed)
+          end
+          result
         end
 
         # Get block parameter types for a method
@@ -322,6 +345,34 @@ module TypeGuessr
           end
         end
 
+        # Replace Unguessed GemMethodEntry entries with inferred results.
+        # Only replaces entries that are GemMethodEntry with Unguessed return type.
+        # @param cache_data [Hash] { class_name => { method_name => { "return_type" => ..., "params" => [...] } } }
+        # @param kind [Symbol] :instance or :class
+        def replace_unguessed_entries(cache_data, kind: :instance)
+          target = kind == :class ? @class_methods : @instance_methods
+
+          cache_data.each do |class_name, methods|
+            next unless target[class_name]
+
+            methods.each do |method_name, entry_data|
+              existing = target[class_name][method_name]
+              next unless existing.is_a?(GemMethodEntry)
+              next unless existing.return_type.is_a?(Types::Unguessed)
+
+              return_type = TypeSerializer.deserialize(entry_data["return_type"])
+              params = (entry_data["params"] || []).map do |p|
+                Types::ParamSignature.new(
+                  name: p["name"].to_sym,
+                  kind: p["kind"].to_sym,
+                  type: TypeSerializer.deserialize(p["type"])
+                )
+              end
+              target[class_name][method_name] = GemMethodEntry.new(return_type, params)
+            end
+          end
+        end
+
         # Wrapper for RBS method type (for compatibility with existing code)
         class Signature
           attr_reader :method_type
@@ -329,6 +380,12 @@ module TypeGuessr
           def initialize(method_type)
             @method_type = method_type
           end
+        end
+
+        private def try_on_demand_inference(class_name, method_name, kind)
+          return unless @on_demand_inferrer
+
+          @on_demand_inferrer.call(class_name, method_name, kind)
         end
 
         private def load_stdlib_rbs

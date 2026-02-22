@@ -206,6 +206,26 @@ module RubyLsp
         nil
       end
 
+      # Look up file path where a method is defined
+      # @param class_name [String] Class name
+      # @param method_name [String] Method name
+      # @param singleton [Boolean] true for class methods
+      # @return [String, nil] File path or nil if not found
+      def method_definition_file_path(class_name, method_name, singleton: false)
+        return nil unless @index
+
+        target = if singleton
+                   uq = ::TypeGuessr::Core::IR.extract_last_name(class_name)
+                   "#{class_name}::<Class:#{uq}>"
+                 else
+                   class_name
+                 end
+        entries = @index.resolve_method(method_name, target)
+        entries&.first&.file_path
+      rescue RubyIndexer::Index::NonExistingNamespaceError
+        nil
+      end
+
       # Look up owner of an instance method
       # @param class_name [String] Class name
       # @param method_name [String] Method name
