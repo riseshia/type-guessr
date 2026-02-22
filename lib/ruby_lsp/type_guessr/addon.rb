@@ -36,7 +36,7 @@ module RubyLsp
         extend_hover_targets
 
         # Start background indexing (includes RBS preload)
-        @runtime_adapter.start_indexing
+        @runtime_adapter.start_indexing if Config.background_indexing?
 
         # Swap TypeInferrer for enhanced Go to Definition
         @runtime_adapter.swap_type_inferrer
