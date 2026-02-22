@@ -351,12 +351,22 @@ module RubyLsp
       private def process_gem(gem_name, gem_info, cache)
         version = gem_info[:version]
         deps = gem_info[:transitive_deps]
-        log_message("Processing #{gem_name}-#{version} (#{gem_info[:files].size} files)...")
+        file_count = gem_info[:files].size
+        lazy_only = file_count > Config.max_gem_files
+
+        if lazy_only
+          log_message(
+            "Skipping background inference for #{gem_name}-#{version} " \
+            "(#{file_count} files > #{Config.max_gem_files})"
+          )
+        else
+          log_message("Processing #{gem_name}-#{version} (#{file_count} files)...")
+        end
 
         if cache.cached?(gem_name, version, deps)
           load_gem_from_cache(gem_name, version, deps, cache)
         else
-          save_unguessed_cache(gem_name, gem_info, cache)
+          save_unguessed_cache(gem_name, gem_info, cache, lazy_only: lazy_only)
         end
       end
 
@@ -443,7 +453,7 @@ module RubyLsp
 
       # Generate an Unguessed cache from member_index entries (no parse/infer needed).
       # Method names and parameter structure come from RubyIndexer; types are set to Unguessed.
-      private def save_unguessed_cache(gem_name, gem_info, cache)
+      private def save_unguessed_cache(gem_name, gem_info, cache, lazy_only: false)
         version = gem_info[:version]
         files = gem_info[:files]
         deps = gem_info[:transitive_deps]
@@ -474,7 +484,8 @@ module RubyLsp
         cache.save(gem_name, version, deps,
                    instance_methods: instance_methods,
                    class_methods: class_methods,
-                   fully_inferred: false)
+                   fully_inferred: false,
+                   lazy_only: lazy_only)
 
         @signature_registry.load_gem_cache(instance_methods, kind: :instance)
         @signature_registry.load_gem_cache(class_methods, kind: :class)

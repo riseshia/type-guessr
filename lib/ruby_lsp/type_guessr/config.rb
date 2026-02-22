@@ -39,6 +39,10 @@ module RubyLsp
         load_config.fetch("debug_server_port", 7010)
       end
 
+      module_function def max_gem_files
+        load_config.fetch("max_gem_files", 500)
+      end
+
       module_function def load_config
         return @cached_config if @cached_config
 

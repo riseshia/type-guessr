@@ -55,7 +55,8 @@ RSpec.describe TypeGuessr::Core::Cache::GemSignatureCache do
         expect(result).to eq({
                                "instance_methods" => instance_methods,
                                "class_methods" => class_methods,
-                               "fully_inferred" => true
+                               "fully_inferred" => true,
+                               "lazy_only" => false
                              })
       end
     end
@@ -106,7 +107,8 @@ RSpec.describe TypeGuessr::Core::Cache::GemSignatureCache do
         expect(result).to eq({
                                "instance_methods" => instance_methods,
                                "class_methods" => class_methods,
-                               "fully_inferred" => true
+                               "fully_inferred" => true,
+                               "lazy_only" => false
                              })
       end
     end
@@ -138,23 +140,47 @@ RSpec.describe TypeGuessr::Core::Cache::GemSignatureCache do
       end
     end
 
-    it "treats missing fully_inferred field as true for backward compatibility" do
+    it "saves and loads lazy_only: true" do
       Dir.mktmpdir do |dir|
         cache = described_class.new(cache_dir: dir)
+        cache.save(gem_name, gem_version, transitive_deps,
+                   instance_methods: instance_methods, class_methods: class_methods,
+                   fully_inferred: false, lazy_only: true)
 
-        # Manually write a cache file without fully_inferred field (old format)
+        result = cache.load(gem_name, gem_version, transitive_deps)
+
+        expect(result["lazy_only"]).to be true
+      end
+    end
+
+    it "defaults lazy_only to false when not specified" do
+      Dir.mktmpdir do |dir|
+        cache = described_class.new(cache_dir: dir)
         cache.save(gem_name, gem_version, transitive_deps,
                    instance_methods: instance_methods, class_methods: class_methods)
 
-        # Strip fully_inferred from the file
+        result = cache.load(gem_name, gem_version, transitive_deps)
+
+        expect(result["lazy_only"]).to be false
+      end
+    end
+
+    it "treats missing lazy_only field as false for backward compatibility" do
+      Dir.mktmpdir do |dir|
+        cache = described_class.new(cache_dir: dir)
+
+        # Save a cache file, then strip lazy_only to simulate old format
+        cache.save(gem_name, gem_version, transitive_deps,
+                   instance_methods: instance_methods, class_methods: class_methods)
+
         json_files = Dir.glob(File.join(dir, "*.json"))
         data = JSON.parse(File.read(json_files.first))
-        data.delete("fully_inferred")
+        data.delete("lazy_only")
         File.write(json_files.first, JSON.generate(data))
 
         result = cache.load(gem_name, gem_version, transitive_deps)
 
-        expect(result["fully_inferred"]).to be true
+        expect(result["lazy_only"]).to be false
       end
     end
   end

@@ -67,6 +67,18 @@ RSpec.describe RubyLsp::TypeGuessr::Config do
     end
   end
 
+  describe ".max_gem_files" do
+    it "defaults to 500 when not specified" do
+      expect(described_class.max_gem_files).to eq(500)
+    end
+
+    it "uses max_gem_files from config when set" do
+      File.write(".type-guessr.yml", "max_gem_files: 1000\n")
+      described_class.reset!
+      expect(described_class.max_gem_files).to eq(1000)
+    end
+  end
+
   it "skips initialization in activate when enabled is false" do
     File.write(".type-guessr.yml", "enabled: false\n")
     described_class.reset!
