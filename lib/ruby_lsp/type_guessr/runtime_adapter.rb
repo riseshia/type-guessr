@@ -236,8 +236,9 @@ module RubyLsp
 
           # Try cache-first flow if Gemfile.lock exists
           lockfile_path = find_lockfile
+          result = nil
           if lockfile_path
-            index_with_gem_cache(file_paths, lockfile_path)
+            result = index_with_gem_cache(file_paths, lockfile_path)
           else
             index_all_files(file_paths)
           end
@@ -245,6 +246,9 @@ module RubyLsp
           @signature_registry.on_demand_inferrer = method(:infer_gem_file_on_demand)
 
           @indexing_completed = true
+
+          # Background inference: fully infer gems that have Unguessed entries
+          background_infer_gems(result[:unguessed_gems], result[:cache]) if result && result[:unguessed_gems].any?
         rescue StandardError => e
           log_message("Error during file indexing: #{e.message}\n#{e.backtrace.first(10).join("\n")}")
           @indexing_completed = true
@@ -328,6 +332,7 @@ module RubyLsp
       end
 
       # Cache-first indexing: process gems with cache, then project files
+      # @return [Hash] { cache:, unguessed_gems: [...] }
       private def index_with_gem_cache(file_paths, lockfile_path)
         resolver_class = ::TypeGuessr::Core::Cache::GemDependencyResolver
         dep_resolver = resolver_class.new(lockfile_path)
@@ -340,17 +345,22 @@ module RubyLsp
         cache = ::TypeGuessr::Core::Cache::GemSignatureCache.new
         ordered = dep_resolver.topological_order(gems.keys)
 
-        # Process each gem in dependency order
+        # Process each gem in dependency order, collecting those needing background inference
+        unguessed_gems = []
         ordered.each do |gem_name|
           gem_info = gems[gem_name]
-          process_gem(gem_name, gem_info, cache)
+          needs_inference = process_gem(gem_name, gem_info, cache)
+          unguessed_gems << { name: gem_name, info: gem_info } if needs_inference
         end
 
         # Index project files into main registries
         index_all_files(project_files)
+
+        { cache: cache, unguessed_gems: unguessed_gems }
       end
 
       # Process a single gem: cache hit → load, cache miss → save unguessed cache
+      # @return [Boolean] Whether background inference is needed for this gem
       private def process_gem(gem_name, gem_info, cache)
         version = gem_info[:version]
         deps = gem_info[:transitive_deps]
@@ -367,9 +377,11 @@ module RubyLsp
         end
 
         if cache.cached?(gem_name, version, deps)
-          load_gem_from_cache(gem_name, version, deps, cache)
+          fully_inferred = load_gem_from_cache(gem_name, version, deps, cache)
+          !fully_inferred && !lazy_only
         else
           save_unguessed_cache(gem_name, gem_info, cache, lazy_only: lazy_only)
+          !lazy_only
         end
       end
 
@@ -390,6 +402,7 @@ module RubyLsp
       end
 
       # Infer gem method signatures using temporary registries, then cache
+      # @return [Hash, nil] { instance_methods:, class_methods: } or nil on error
       private def infer_and_cache_gem(gem_name, gem_info, cache)
         version = gem_info[:version]
         files = gem_info[:files]
@@ -452,6 +465,8 @@ module RubyLsp
           "[parse=#{(t1 - t0).round(2)}s infer=#{(t2 - t1).round(2)}s " \
           "save=#{(t3 - t2).round(2)}s load=#{(t4 - t3).round(2)}s]"
         )
+
+        signatures
       end
 
       # Generate an Unguessed cache from member_index entries (no parse/infer needed).
@@ -625,6 +640,25 @@ module RubyLsp
         else
           owner_class
         end
+      end
+
+      # Background inference: fully infer gems with Unguessed entries after indexing.
+      # Runs in the same indexing thread after @indexing_completed = true.
+      # Replaces in-memory Unguessed entries and updates disk cache to fully_inferred.
+      private def background_infer_gems(unguessed_gems, cache)
+        log_message("Starting background inference for #{unguessed_gems.size} gems...")
+
+        unguessed_gems.each do |entry|
+          signatures = infer_and_cache_gem(entry[:name], entry[:info], cache)
+          next unless signatures
+
+          @signature_registry.replace_unguessed_entries(signatures[:instance_methods], kind: :instance)
+          @signature_registry.replace_unguessed_entries(signatures[:class_methods], kind: :class)
+        rescue StandardError => e
+          log_message("Background inference failed for #{entry[:name]}: #{e.message}")
+        end
+
+        log_message("Background inference completed.")
       end
 
       # On-demand inference for a single gem file.
