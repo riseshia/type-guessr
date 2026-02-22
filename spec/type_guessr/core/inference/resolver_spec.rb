@@ -968,6 +968,47 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
       end
     end
 
+    context "with depth limit exceeded" do
+      it "returns Unknown when inference depth exceeds MAX_DEPTH" do
+        # Build a chain of LocalWriteNodes deeper than MAX_DEPTH
+        # Each write depends on the previous one: write_N -> write_N-1 -> ... -> write_0
+        depth = described_class::MAX_DEPTH + 5
+        bottom = TypeGuessr::Core::IR::LiteralNode.new(
+          TypeGuessr::Core::Types::ClassInstance.new("String"),
+          nil, nil, [], loc
+        )
+
+        current = TypeGuessr::Core::IR::LocalWriteNode.new(:v0, bottom, [], loc)
+        (1...depth).each do |i|
+          current = TypeGuessr::Core::IR::LocalWriteNode.new(
+            :"v#{i}", current, [], loc
+          )
+        end
+
+        result = resolver.infer(current)
+        expect(result.type).to be(TypeGuessr::Core::Types::Unknown.instance)
+        expect(result.reason).to include("max depth exceeded")
+      end
+
+      it "infers normally when depth is within MAX_DEPTH" do
+        # Build a chain just within the limit
+        bottom = TypeGuessr::Core::IR::LiteralNode.new(
+          TypeGuessr::Core::Types::ClassInstance.new("String"),
+          nil, nil, [], loc
+        )
+
+        current = TypeGuessr::Core::IR::LocalWriteNode.new(:v0, bottom, [], loc)
+        10.times do |i|
+          current = TypeGuessr::Core::IR::LocalWriteNode.new(
+            :"v#{i + 1}", current, [], loc
+          )
+        end
+
+        result = resolver.infer(current)
+        expect(result.type).to eq(TypeGuessr::Core::Types::ClassInstance.new("String"))
+      end
+    end
+
     context "caching" do
       it "caches inference results" do
         node = TypeGuessr::Core::IR::LiteralNode.new(

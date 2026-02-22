@@ -18,6 +18,11 @@ module TypeGuessr
         # Sentinel value to detect circular references during inference
         INFERRING = Object.new.freeze
 
+        # Maximum recursion depth for type inference.
+        # Measured max across project+gem code: 43 (rubygems default_gem_spec chain).
+        # Set to 50 to cover all observed cases with margin.
+        MAX_DEPTH = 50
+
         # Method registry for storing and looking up project method definitions
         # @return [Registry::MethodRegistry]
         attr_reader :method_registry
@@ -45,6 +50,7 @@ module TypeGuessr
           @cvar_registry = cvar_registry
           @cache = {}.compare_by_identity
           @type_simplifier = type_simplifier
+          @depth = 0
         end
 
         # Infer the type of an IR node
@@ -64,10 +70,15 @@ module TypeGuessr
           # Early return: cache hit - return previously computed result
           return cached if cached
 
+          # Early return: depth limit exceeded
+          return Result.new(Types::Unknown.instance, "max depth exceeded", :unknown) if @depth >= MAX_DEPTH
+
           # Mark as in-progress to detect cycles
           @cache[node] = INFERRING
 
+          @depth += 1
           result = infer_node(node)
+          @depth -= 1
 
           # Apply type simplification if available
           result = simplify_result(result) if @type_simplifier
