@@ -2417,4 +2417,63 @@ RSpec.describe TypeGuessr::Core::Converter::PrismConverter do
       end
     end
   end
+
+  describe "visibility modifier with inline def" do
+    it "includes private def in ClassModuleNode methods" do
+      source = <<~RUBY
+        class Foo
+          private def bar
+            42
+          end
+        end
+      RUBY
+      parsed = Prism.parse(source)
+      context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+      class_node = converter.convert(parsed.value.statements.body.first, context)
+
+      method_names = class_node.methods.select { |m| m.is_a?(TypeGuessr::Core::IR::DefNode) }.map(&:name)
+      expect(method_names).to include(:bar)
+    end
+
+    it "registers private def in method_registry" do
+      source = <<~RUBY
+        class Foo
+          private def bar
+            42
+          end
+
+          def baz
+            "hello"
+          end
+        end
+      RUBY
+      parsed = Prism.parse(source)
+      method_registry = TypeGuessr::Core::Registry::MethodRegistry.new
+      context = TypeGuessr::Core::Converter::PrismConverter::Context.new(
+        file_path: "test.rb",
+        location_index: TypeGuessr::Core::Index::LocationIndex.new,
+        method_registry: method_registry
+      )
+      converter.convert(parsed.value.statements.body.first, context)
+
+      expect(method_registry.lookup("Foo", "bar")).to be_a(TypeGuessr::Core::IR::DefNode)
+      expect(method_registry.lookup("Foo", "baz")).to be_a(TypeGuessr::Core::IR::DefNode)
+    end
+
+    it "includes protected def in ClassModuleNode methods" do
+      source = <<~RUBY
+        class Foo
+          protected def bar
+            42
+          end
+        end
+      RUBY
+      parsed = Prism.parse(source)
+      context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+      class_node = converter.convert(parsed.value.statements.body.first, context)
+
+      method_names = class_node.methods.select { |m| m.is_a?(TypeGuessr::Core::IR::DefNode) }.map(&:name)
+      expect(method_names).to include(:bar)
+    end
+  end
 end

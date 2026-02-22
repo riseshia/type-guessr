@@ -198,7 +198,12 @@ module TypeGuessr
                    convert_instance_variable_operator_write(prism_node, context)
 
                  when Prism::CallNode
-                   convert_call(prism_node, context)
+                   # Unwrap visibility modifier: `private def foo` → treat as `def foo`
+                   if visibility_modifier_with_def?(prism_node)
+                     convert_def(prism_node.arguments.arguments.first, context)
+                   else
+                     convert_call(prism_node, context)
+                   end
 
                  when Prism::IfNode
                    convert_if(prism_node, context)
@@ -1800,6 +1805,14 @@ module TypeGuessr
 
           parent_name = IR.extract_last_name(scope) || "Object"
           scope.empty? ? "<Class:Object>" : "#{scope}::<Class:#{parent_name}>"
+        end
+
+        # Check if a CallNode is a visibility modifier wrapping a def (e.g., `private def foo`)
+        private def visibility_modifier_with_def?(prism_node)
+          %i[private protected public].include?(prism_node.name) &&
+            prism_node.receiver.nil? &&
+            prism_node.arguments&.arguments&.size == 1 &&
+            prism_node.arguments.arguments.first.is_a?(Prism::DefNode)
         end
       end
     end
