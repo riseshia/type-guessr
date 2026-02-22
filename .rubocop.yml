@@ -27,6 +27,10 @@ Style/AccessModifierDeclarations:
 Naming/FileName:
   Enabled: false
 
+# process_gem etc. return boolean as side-effect indicator, not as predicate
+Naming/PredicateMethod:
+  Enabled: false
+
 Layout/LineLength:
   Max: 160
 
