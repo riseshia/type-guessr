@@ -541,6 +541,9 @@ module TypeGuessr
           rhs_result = infer(node.rhs)
           lhs_type = lhs_result.type
 
+          # Unknown LHS → use RHS (no truthiness info available for Unknown)
+          return Result.new(rhs_result.type, "or: #{rhs_result.reason} (lhs unknown)", rhs_result.source) if lhs_type.is_a?(Types::Unknown)
+
           # Separate LHS into truthy and falsy parts
           truthy_lhs = remove_falsy_types(lhs_type)
           has_falsy = falsy_types?(lhs_type)

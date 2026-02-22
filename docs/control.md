@@ -203,6 +203,16 @@ def foo
 end
 ```
 
+### hash access with || fallback (variable key)
+
+```ruby
+def foo(key)
+  h = {}
+  keys = h[key] || []
+  [k]eys  # Guessed Type: Array[untyped]
+end
+```
+
 ### &&= compound assignment
 
 ```ruby

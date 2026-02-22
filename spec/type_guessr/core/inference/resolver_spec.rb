@@ -638,6 +638,23 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
         expect(type_names).to contain_exactly("String", "Integer")
       end
 
+      it "returns RHS type when LHS is Unknown" do
+        lhs = TypeGuessr::Core::IR::LiteralNode.new(
+          TypeGuessr::Core::Types::Unknown.instance,
+          nil, nil, [], loc
+        )
+        rhs = TypeGuessr::Core::IR::LiteralNode.new(
+          TypeGuessr::Core::Types::ClassInstance.new("Array"),
+          nil, nil, [], loc
+        )
+        or_node = TypeGuessr::Core::IR::OrNode.new(lhs, rhs, [], loc)
+
+        result = resolver.infer(or_node)
+        expect(result.type).to be_a(TypeGuessr::Core::Types::ClassInstance)
+        expect(result.type.name).to eq("Array")
+        expect(result.reason).to include("lhs unknown")
+      end
+
       it "returns RHS type when LHS is FalseClass" do
         lhs = TypeGuessr::Core::IR::LiteralNode.new(
           TypeGuessr::Core::Types::ClassInstance.new("FalseClass"),

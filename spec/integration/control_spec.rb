@@ -390,6 +390,22 @@ RSpec.describe "Control Flow Type Inference", :doc do
       end
     end
 
+    context "hash access with || fallback (variable key)" do
+      let(:source) do
+        <<~RUBY
+          def foo(key)
+            h = {}
+            keys = h[key] || []
+            keys
+          end
+        RUBY
+      end
+
+      it "→ Array (RHS used when LHS is unknown)" do
+        expect_hover_type(line: 4, column: 2, expected: "Array[untyped]")
+      end
+    end
+
     context "&&= compound assignment" do
       let(:source) do
         <<~RUBY
