@@ -28,15 +28,15 @@ RSpec.describe "Hover E2E", :e2e do
         expect(result).to include("Guessed Signature")
       end
 
-      it "infers type of raw variable from File.read (line 48)" do
+      it "infers type of raw variable from File.read (line 53)" do
         # raw = File.read(path)
-        result = server.query_hover("lib/ruby_lsp/type_guessr/config.rb", 48, 9)
+        result = server.query_hover("lib/ruby_lsp/type_guessr/config.rb", 53, 9)
         expect(result).to include_type("String")
       end
 
-      it "infers type of path variable (line 40)" do
+      it "infers type of path variable (line 45)" do
         # path = File.join(Dir.pwd, CONFIG_FILENAME)
-        result = server.query_hover("lib/ruby_lsp/type_guessr/config.rb", 40, 9)
+        result = server.query_hover("lib/ruby_lsp/type_guessr/config.rb", 45, 9)
         expect(result).to include_type("String")
       end
     end
@@ -71,14 +71,14 @@ RSpec.describe "Hover E2E", :e2e do
     # These tests verify that RBS signatures are correctly applied
 
     it "infers return type for File.read in config.rb" do
-      # raw = File.read(path) on line 48
-      result = server.query_hover("lib/ruby_lsp/type_guessr/config.rb", 48, 9)
+      # raw = File.read(path) on line 53
+      result = server.query_hover("lib/ruby_lsp/type_guessr/config.rb", 53, 9)
       expect(result).to include_type("String")
     end
 
     it "infers return type for File.join in config.rb" do
-      # path = File.join(...) on line 40
-      result = server.query_hover("lib/ruby_lsp/type_guessr/config.rb", 40, 9)
+      # path = File.join(...) on line 45
+      result = server.query_hover("lib/ruby_lsp/type_guessr/config.rb", 45, 9)
       expect(result).to include_type("String")
     end
   end
@@ -86,7 +86,7 @@ RSpec.describe "Hover E2E", :e2e do
   describe "type inference debug info" do
     it "shows TypeGuessr debug info when hovering on guessed type" do
       # On variables with guessed types, debug info should appear
-      result = server.query_hover("lib/ruby_lsp/type_guessr/config.rb", 48, 9)
+      result = server.query_hover("lib/ruby_lsp/type_guessr/config.rb", 53, 9)
       # Should include some TypeGuessr output (Guessed Type or Guessed Signature)
       expect(result).to(satisfy { |r| r.nil? || r.include?("Guessed") || r.include?("String") })
     end
@@ -95,8 +95,8 @@ RSpec.describe "Hover E2E", :e2e do
   describe "go to definition support" do
     it "returns definition location for method call" do
       # Test that definition requests work
-      result = server.query_definition("lib/ruby_lsp/type_guessr/config.rb", 40, 20)
-      # load_config is called at line 40; definition should point to line 39
+      result = server.query_definition("lib/ruby_lsp/type_guessr/config.rb", 45, 20)
+      # File.join is called at line 45
       # Result can be nil if definition not found, but should not error
       expect(result).to(satisfy { |r| r.nil? || r.is_a?(Array) || r.is_a?(Hash) })
     end
