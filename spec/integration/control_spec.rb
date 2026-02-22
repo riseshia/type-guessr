@@ -439,6 +439,69 @@ RSpec.describe "Control Flow Type Inference", :doc do
     end
   end
 
+  describe "Guard Clause Type Narrowing" do
+    context "return unless local_var narrows type" do
+      let(:source) do
+        <<~RUBY
+          def foo(x)
+            x = nil
+            x = "hello" if true
+            return unless x
+            x
+          end
+        RUBY
+      end
+
+      it "→ String (NilClass removed after guard)" do
+        expect_hover_type(line: 5, column: 2, expected: "String")
+        expect_hover_type_excludes(line: 5, column: 2, types: ["NilClass"])
+      end
+    end
+
+    context "return nil unless @ivar narrows instance variable" do
+      let(:source) do
+        <<~RUBY
+          class Foo
+            def initialize(flag)
+              @data = if flag
+                        [1, 2, 3]
+                      else
+                        nil
+                      end
+            end
+
+            def process
+              return nil unless @data
+              @data
+            end
+          end
+        RUBY
+      end
+
+      it "→ Array (NilClass removed after guard)" do
+        expect_hover_type(line: 12, column: 4, expected: "Array[Integer]")
+      end
+    end
+
+    context "raise unless local_var narrows type" do
+      let(:source) do
+        <<~RUBY
+          def bar(x)
+            x = nil
+            x = 42 if true
+            raise "error" unless x
+            x
+          end
+        RUBY
+      end
+
+      it "→ Integer (NilClass removed after guard)" do
+        expect_hover_type(line: 5, column: 2, expected: "Integer")
+        expect_hover_type_excludes(line: 5, column: 2, types: ["NilClass"])
+      end
+    end
+  end
+
   describe "Explicit Return Handling" do
     context "early return with guard clause" do
       let(:source) do

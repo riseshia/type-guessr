@@ -233,6 +233,49 @@ def foo(x)
 end
 ```
 
+## Guard Clause Type Narrowing
+
+### return unless local_var narrows type
+
+```ruby
+def foo(x)
+  x = nil
+  x = "hello" if true
+  return unless x
+  [x]  # Guessed Type: String
+end
+```
+
+### return nil unless @ivar narrows instance variable
+
+```ruby
+class Foo
+  def initialize(flag)
+    @data = if flag
+              [1, 2, 3]
+            else
+              nil
+            end
+  end
+
+  def process
+    return nil unless @data
+    [@]data  # Guessed Type: Array[Integer]
+  end
+end
+```
+
+### raise unless local_var narrows type
+
+```ruby
+def bar(x)
+  x = nil
+  x = 42 if true
+  raise "error" unless x
+  [x]  # Guessed Type: Integer
+end
+```
+
 ## Explicit Return Handling
 
 ### early return with guard clause

@@ -776,6 +776,46 @@ module TypeGuessr
         end
       end
 
+      # Type narrowing wrapper node
+      # Wraps a value node and signals that falsy types should be removed
+      # Used after guard clauses: `return unless x` → x is truthy after guard
+      # @param value [Node] The original node to narrow
+      # @param kind [Symbol] Narrowing kind (:truthy removes nil/false)
+      # @param called_methods [Array<CalledMethod>] Methods called on this node
+      # @param loc [Integer, nil] Byte offset from start of file (0-indexed)
+      class NarrowNode
+        include TreeInspect
+
+        attr_reader :value, :kind, :called_methods, :loc
+
+        def initialize(value, kind, called_methods, loc)
+          @value = value
+          @kind = kind
+          @called_methods = called_methods
+          @loc = loc
+        end
+
+        def dependencies
+          value ? [value] : []
+        end
+
+        def node_hash
+          NodeKeyGenerator.narrow(kind, loc)
+        end
+
+        def node_key(scope_id)
+          "#{scope_id}:#{node_hash}"
+        end
+
+        def tree_inspect_fields(indent)
+          [
+            tree_field(:value, value, indent),
+            tree_field(:kind, kind, indent),
+            tree_field(:called_methods, called_methods, indent, last: true),
+          ]
+        end
+      end
+
       # Explicit return statement node
       # @param value [Node, nil] Return value node (nil for bare `return`)
       # @param called_methods [Array<CalledMethod>] Methods called on this node (for method-based inference)

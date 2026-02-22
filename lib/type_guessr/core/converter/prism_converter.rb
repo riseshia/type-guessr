@@ -20,6 +20,7 @@ module TypeGuessr
             @parent = parent
             @variables = {} # name => node
             @instance_variables = {} # @name => node (only for class-level context)
+            @narrowed_ivars = {} # @name => narrowed node (method-level, does not pollute class-level)
             @constants = {} # name => dependency node (for constant alias tracking)
             @scope_type = nil # :class, :method, :block, :top_level
             @current_class = nil
@@ -55,8 +56,16 @@ module TypeGuessr
             end
           end
 
-          # Lookup an instance variable from the class level
+          # Narrow an instance variable's type within the current method scope
+          # Does not pollute the class-level ivar definition
+          def narrow_instance_variable(name, node)
+            @narrowed_ivars[name] = node
+          end
+
+          # Lookup an instance variable, checking narrowed ivars first
           def lookup_instance_variable(name)
+            return @narrowed_ivars[name] if @narrowed_ivars.key?(name)
+
             if @scope_type == :class
               @instance_variables[name]
             elsif @parent
@@ -1048,7 +1057,12 @@ module TypeGuessr
           else_context = context.fork(:else)
           else_node = (convert(prism_node.else_clause.statements, else_context) if prism_node.else_clause)
 
-          merge_modified_variables(context, unless_context, else_context, unless_node, else_node, prism_node.location)
+          result = merge_modified_variables(context, unless_context, else_context, unless_node, else_node, prism_node.location)
+
+          # Guard clause narrowing: `return/raise unless x` → x is truthy after
+          narrow_guard_variable(prism_node.predicate, :truthy, context, prism_node.location) if guard_clause?(unless_node)
+
+          result
         end
 
         private def convert_case(prism_node, context)
@@ -1536,6 +1550,31 @@ module TypeGuessr
           return false unless node.is_a?(IR::CallNode)
 
           node.receiver.nil? && %i[raise fail exit abort].include?(node.method)
+        end
+
+        # Check if a node represents a guard clause body (exits the method)
+        # Includes both non-returning expressions (raise/fail) and explicit returns
+        private def guard_clause?(node)
+          node.is_a?(IR::ReturnNode) || non_returning?(node)
+        end
+
+        # After a guard clause (`return/raise unless x`), narrow the guarded variable
+        # to remove falsy types (NilClass, FalseClass)
+        private def narrow_guard_variable(predicate, kind, context, location)
+          case predicate
+          when Prism::LocalVariableReadNode
+            write_node = context.lookup_variable(predicate.name)
+            return unless write_node
+
+            narrow = IR::NarrowNode.new(write_node, kind, write_node.called_methods, convert_loc(location))
+            context.register_variable(predicate.name, narrow)
+          when Prism::InstanceVariableReadNode
+            write_node = context.lookup_instance_variable(predicate.name)
+            return unless write_node
+
+            narrow = IR::NarrowNode.new(write_node, kind, write_node.called_methods, convert_loc(location))
+            context.narrow_instance_variable(predicate.name, narrow)
+          end
         end
 
         private def convert_class_or_module(prism_node, context)

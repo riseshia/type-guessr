@@ -138,6 +138,8 @@ module TypeGuessr
             infer_def(node)
           when IR::SelfNode
             infer_self(node)
+          when IR::NarrowNode
+            infer_narrow(node)
           when IR::ReturnNode
             infer_return(node)
           else
@@ -617,6 +619,15 @@ module TypeGuessr
                    Types::ClassInstance.for(node.class_name)
                  end
           Result.new(type, "self in #{node.class_name}", :inference)
+        end
+
+        private def infer_narrow(node)
+          inner_result = infer(node.value)
+          narrowed_type = case node.kind
+                          when :truthy then remove_falsy_types(inner_result.type)
+                          else inner_result.type
+                          end
+          Result.new(narrowed_type, "narrowed(#{inner_result.reason})", inner_result.source)
         end
 
         private def infer_return(node)

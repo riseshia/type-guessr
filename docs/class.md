@@ -278,7 +278,7 @@ env
 ```ruby
 loader = RBS::EnvironmentLoader.new
 env = RBS::Environment.from_loader(loader)
-resolved = env.[r]esolve_type_names  # Signature: (?only: untyped) -> untyped
+resolved = env.[r]esolve_type_names  # Signature: ) -> untyped
 resolved
 ```
 

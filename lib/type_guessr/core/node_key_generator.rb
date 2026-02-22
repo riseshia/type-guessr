@@ -24,6 +24,7 @@ module TypeGuessr
       module_function def or_node(offset) = "or:#{offset}"
       module_function def literal(type_name, offset) = "lit:#{type_name}:#{offset}"
       module_function def constant(name, offset) = "const:#{name}:#{offset}"
+      module_function def narrow(kind, offset) = "narrow:#{kind}:#{offset}"
       module_function def class_module(name, offset) = "class:#{name}:#{offset}"
     end
   end
