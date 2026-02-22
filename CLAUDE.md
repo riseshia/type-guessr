@@ -1,5 +1,33 @@
 # TypeGuessr - Project Context
 
+## Behavioral Rules
+
+### Measure, Don't Estimate
+- When numbers are needed (performance, memory, file counts), run actual measurements locally
+- Prefer local execution over internet searches for empirical data
+- Measurements without code_index are meaningless — code_index is required for all inference-related benchmarks
+
+### Prioritization
+- CI/test failures > fixing existing features > new features
+- After context resumption, re-read brain.md and confirm the current task before starting work
+- Only work on what the user requested. Do not start related tasks without asking
+
+### Action Over Explanation
+- When the user points out a problem, propose a fix immediately — the user already knows the problem
+- Do not dismiss test failures as "pre-existing" without first investigating whether your changes could be the cause
+- Propose fixing existing implementations before suggesting to scrap them
+- Execute promised actions (todo.md updates, file additions) immediately — do not defer
+
+### Context Management
+- In long sessions, persist important intermediate results to files (they survive compaction)
+- When presenting sub-agent results, assume the user has NOT read the raw output
+- After context compaction, re-read brain.md and todo.md to recover state
+
+### Critical Invariants
+- NEVER pass code_index as nil — inheritance chains, duck typing, and type simplification all depend on it
+- NEVER deploy performance-sensitive features without benchmarking on representative workloads first
+- NEVER introduce concurrent access to shared data structures without considering thread-safety
+
 ## Project Overview
 
 TypeGuessr is a Ruby LSP addon that provides **heuristic type inference** without requiring explicit type annotations. The goal is to achieve a "useful enough" development experience by prioritizing practical type hints over perfect accuracy.
@@ -24,233 +52,6 @@ end                # infer recipe type as Recipe instance
 - **Main Dependency:** ruby-lsp ~> 0.22
 - **Author:** riseshia
 - **Repository:** https://github.com/riseshia/type-guessr
-
-## Project Structure
-
-```
-type-guessr/
-├── .github/
-│   └── workflows/                               # GitHub Actions CI configuration
-├── bin/
-│   ├── benchmark                                # Performance benchmarking tool
-│   ├── console
-│   ├── gen-doc                                  # Documentation generator
-│   ├── hover-repl                               # Interactive hover testing
-│   ├── profile                                  # Profiling tool
-│   └── setup
-├── exe/
-│   └── type-guessr                              # CLI executable (mcp, version, help)
-├── lib/
-│   ├── type-guessr.rb                           # Main entry point
-│   ├── ruby_lsp/
-│   │   └── type_guessr/
-│   │       ├── addon.rb                         # LSP addon registration
-│   │       ├── code_index_adapter.rb            # RubyIndexer wrapper (ancestors, constants)
-│   │       ├── config.rb                        # Configuration management
-│   │       ├── constants.rb                     # Constant definitions
-│   │       ├── debug_server.rb                  # Debug web server
-│   │       ├── graph_builder.rb                 # Node graph construction
-│   │       ├── hover.rb                         # Hover provider
-│   │       ├── runtime_adapter.rb               # Runtime management
-│   │       └── type_inferrer.rb                 # Type inference coordinator
-│   └── type_guessr/
-│       ├── version.rb                           # Version constant
-│       ├── mcp/
-│       │   ├── server.rb                        # MCP server (stdio transport)
-│       │   └── standalone_runtime.rb            # Standalone inference runtime
-│       └── core/
-│           ├── converter/
-│           │   ├── prism_converter.rb           # Prism AST → Node graph
-│           │   └── rbs_converter.rb             # RBS → Internal types
-│           ├── index/
-│           │   └── location_index.rb            # Node lookup index
-│           ├── inference/
-│           │   ├── resolver.rb                  # Type resolution
-│           │   └── result.rb                    # Inference result
-│           ├── ir/
-│           │   └── nodes.rb                     # Node definitions
-│           ├── registry/
-│           │   ├── class_variable_registry.rb   # Class variable storage
-│           │   ├── instance_variable_registry.rb # Instance variable storage (with inheritance)
-│           │   ├── method_registry.rb           # Project method storage
-│           │   └── signature_registry.rb        # Stdlib RBS signatures
-│           ├── logger.rb                        # Logger utility
-│           ├── node_context_helper.rb           # NodeContext → node key bridge
-│           ├── node_key_generator.rb            # Unique node key generation
-│           ├── signature_builder.rb             # Method signature generation
-│           ├── type_simplifier.rb               # Type simplification
-│           └── types.rb                         # Type system
-├── spec/
-│   ├── spec_helper.rb
-│   ├── integration/
-│   │   ├── class_spec.rb                        # Class-related inference tests
-│   │   ├── container_spec.rb                    # Array/Hash inference tests
-│   │   ├── control_spec.rb                      # Control flow inference tests
-│   │   ├── gem_method_spec.rb                   # Gem method inference tests
-│   │   ├── hover_spec.rb                        # Integration tests for hover
-│   │   ├── literal_spec.rb                      # Literal type inference tests
-│   │   └── variable_spec.rb                     # Variable inference tests
-│   ├── ruby_lsp/
-│   │   ├── addon_loading_spec.rb
-│   │   ├── enabled_config_spec.rb
-│   │   ├── guesser_spec.rb
-│   │   ├── type_inferrer_spec.rb
-│   │   └── type_guessr/
-│   │       └── graph_builder_spec.rb
-│   ├── support/
-│   │   └── doc_collector.rb                     # Documentation collection helper
-│   └── type_guessr/
-│       ├── mcp/
-│       │   └── standalone_runtime_spec.rb       # MCP standalone runtime tests
-│       └── core/
-│           ├── converter/
-│           │   ├── prism_converter_spec.rb
-│           │   └── rbs_converter_spec.rb
-│           ├── index/
-│           │   └── location_index_spec.rb
-│           ├── inference/
-│           │   ├── resolver_spec.rb
-│           │   └── result_spec.rb
-│           ├── ir/
-│           │   └── nodes_spec.rb
-│           ├── registry/
-│           │   ├── method_registry_spec.rb
-│           │   ├── signature_registry_spec.rb
-│           │   └── variable_registry_spec.rb
-│           ├── logger_spec.rb
-│           ├── signature_builder_spec.rb
-│           ├── type_simplifier_spec.rb
-│           └── types_spec.rb
-├── docs/
-│   ├── adr/                                     # Architecture Decision Records
-│   ├── architecture.md                          # Architecture documentation
-│   ├── benchmark-report.md                      # Performance benchmark results
-│   ├── class.md                                 # Class inference rules (generated)
-│   ├── container.md                             # Container inference rules (generated)
-│   ├── control.md                               # Control flow rules (generated)
-│   ├── literal.md                               # Literal inference rules (generated)
-│   └── variable.md                              # Variable inference rules (generated)
-├── .rspec                                       # RSpec configuration
-├── .rubocop.yml                                 # RuboCop configuration
-├── Gemfile
-├── README.md
-└── type-guessr.gemspec                          # Gem specification
-```
-
-## Core Components
-
-### Architecture Overview
-
-The project is organized into two main layers:
-- **Core (`TypeGuessr::Core`)**: Framework-agnostic type inference logic
-- **Integration (`lib/ruby_lsp/type_guessr/`)**: Ruby LSP-specific adapter layer
-
-### Core Layer (`lib/type_guessr/core/`)
-
-#### 1. Nodes (`ir/nodes.rb`)
-- Defines node types for the dependency graph
-- Each node points to nodes it depends on for type inference
-- Types: `LiteralNode`, `LocalWriteNode`, `LocalReadNode`, `CallNode`, `DefNode`, `MergeNode`, `OrNode`, `ReturnNode`, etc.
-
-#### 2. PrismConverter (`converter/prism_converter.rb`)
-- Converts Prism AST to node graph at indexing time
-- Tracks variable definitions via Context
-- Handles method calls and indexed assignments
-
-#### 3. RBSConverter (`converter/rbs_converter.rb`)
-- Converts RBS types to internal type system
-- Isolates RBS dependencies from core inference logic
-
-#### 4. LocationIndex (`index/location_index.rb`)
-- O(1) lookup from node key to node
-- Per-file storage for efficient file removal
-
-#### 5. Resolver (`inference/resolver.rb`)
-- Resolves nodes to types by traversing the dependency graph
-- Caches inference results per node
-- Uses injected MethodRegistry, InstanceVariableRegistry, and ClassVariableRegistry
-
-#### 6. Types (`types.rb`)
-- Type representations: `ClassInstance`, `ArrayType`, `TupleType`, `HashType`, `HashShape`, `Union`, `MethodSignature`, `Unknown`, etc.
-
-#### 7. SignatureRegistry (`registry/signature_registry.rb`)
-- Preloads stdlib RBS signatures at startup (~250ms, ~10MB)
-- O(1) hash lookup for method return types
-- Handles overload resolution and block parameter types
-
-#### 8. MethodRegistry (`registry/method_registry.rb`)
-- Stores project method definitions (DefNode)
-- Supports inheritance via code_index
-- Provides method lookup and search
-
-#### 9. InstanceVariableRegistry / ClassVariableRegistry (`registry/`)
-- Separate registries for instance variables and class variables
-- InstanceVariableRegistry supports inheritance via code_index
-
-#### 10. NodeKeyGenerator (`node_key_generator.rb`)
-- Single source of truth for node key format (e.g., `local_write:name:offset`)
-- Used by both PrismConverter (node creation) and Hover/TypeInferrer (node lookup)
-
-#### 11. NodeContextHelper (`node_context_helper.rb`)
-- Bridges ruby-lsp's NodeContext and TypeGuessr's node key format
-- Generates scope IDs and node hashes from Prism nodes
-
-#### 12. SignatureBuilder (`signature_builder.rb`)
-- Generates method signatures from inferred types
-- Formats parameter types and return types for display
-
-#### 13. TypeSimplifier (`type_simplifier.rb`)
-- Simplifies complex union types
-- Normalizes type representations for cleaner display
-
-### MCP Layer (`lib/type_guessr/mcp/`)
-
-#### 1. Server (`server.rb`)
-- Standalone MCP server exposing type inference via stdio transport
-- Indexes project on startup (RubyIndexer + TypeGuessr)
-- Provides tools: `infer_type`, `get_method_signature`, `search_methods`
-
-#### 2. StandaloneRuntime (`standalone_runtime.rb`)
-- Mirrors RuntimeAdapter's query interface without ruby-lsp's GlobalState
-- Thread-safe inference via mutex
-- Methods: `index_parsed_file`, `finalize_index!`, `preload_signatures!`, `infer_at`, `method_signature`, `search_methods`
-
-### Integration Layer (`lib/ruby_lsp/type_guessr/`)
-
-#### 1. Addon (`addon.rb`)
-- Registers the addon with Ruby LSP
-- Extends hover targets to support additional node types
-- Handles file change notifications
-
-#### 2. RuntimeAdapter (`runtime_adapter.rb`)
-- Manages the node graph and inference
-- Handles file indexing and re-indexing
-- Provides thread-safe access to inference results
-
-#### 3. Hover (`hover.rb`)
-- Provides type information on hover
-- Uses node key lookup for fast node retrieval
-- Formats hover content with type links
-
-#### 4. Config (`config.rb`)
-- Configuration management
-- Reads from `.type-guessr.yml` or environment variables
-
-#### 5. DebugServer (`debug_server.rb`)
-- HTTP server for inspecting index data
-- Only runs when debug mode is enabled
-
-#### 6. GraphBuilder (`graph_builder.rb`)
-- Constructs the node dependency graph from source files
-- Coordinates with PrismConverter for AST processing
-
-#### 7. TypeInferrer (`type_inferrer.rb`)
-- Coordinates type inference across the system
-- Bridges Ruby LSP's type inference with TypeGuessr's inference
-
-#### 8. CodeIndexAdapter (`code_index_adapter.rb`)
-- Wraps RubyIndexer for ancestor lookup, constant resolution, method owner detection
-- Provides `ancestors_of`, `resolve_constant_name`, `instance_method_owner`, etc.
 
 ## Development Workflow
 
