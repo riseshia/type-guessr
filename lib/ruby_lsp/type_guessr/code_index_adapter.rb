@@ -137,7 +137,7 @@ module RubyLsp
 
         # Verify each candidate has ALL methods via resolve_method
         # resolve_method walks the ancestor chain, so inherited methods are found
-        candidates.select do |class_name|
+        result = candidates.select do |class_name|
           methods_to_verify.all? do |cm|
             method_entries = @index.resolve_method(cm.name.to_s, class_name)
             next false if method_entries.nil? || method_entries.empty?
@@ -148,6 +148,12 @@ module RubyLsp
             false
           end
         end
+
+        # Prefer non-singleton classes for duck typing.
+        # Singleton classes (e.g., "Foo::<Class:Foo>") represent class objects,
+        # not instances — they match class methods, not instance methods.
+        non_singleton = result.grep_v(/::<Class:[^>]+>\z/)
+        non_singleton.empty? ? result : non_singleton
       end
 
       # Get linearized ancestor chain for a class

@@ -336,6 +336,27 @@ RSpec.describe RubyLsp::TypeGuessr::CodeIndexAdapter do
       end
     end
 
+    it "filters out singleton class candidates when non-singleton exists" do
+      source = <<~RUBY
+        class Foo
+          def self.bar; end
+        end
+
+        class Baz
+          def bar; end
+        end
+      RUBY
+
+      with_server_and_addon(source) do |server, _uri|
+        adapter = described_class.new(server.global_state.index)
+        adapter.build_member_index!
+
+        result = adapter.find_classes_defining_methods([cm(:bar)])
+        expect(result).to include("Baz")
+        expect(result).not_to include("Foo::<Class:Foo>")
+      end
+    end
+
     it "falls back to fuzzy_search when member_index not built" do
       source = <<~RUBY
         class Recipe
