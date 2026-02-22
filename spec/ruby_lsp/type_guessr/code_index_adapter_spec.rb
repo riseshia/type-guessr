@@ -313,6 +313,29 @@ RSpec.describe RubyLsp::TypeGuessr::CodeIndexAdapter do
       end
     end
 
+    it "finds subclass when inherited method is pivot after build" do
+      source = <<~RUBY
+        class Parent
+          def very_long_method_name; end
+        end
+
+        class Child < Parent
+          def short; end
+        end
+      RUBY
+
+      with_server_and_addon(source) do |server, _uri|
+        adapter = described_class.new(server.global_state.index)
+        adapter.build_member_index!
+
+        # "very_long_method_name" (21 chars) is pivot over "short" (5 chars)
+        # Pivot is inherited (defined in Parent), so Child must appear in candidates
+        result = adapter.find_classes_defining_methods([cm(:very_long_method_name), cm(:short)])
+        expect(result).to include("Child")
+        expect(result).not_to include("Parent")
+      end
+    end
+
     it "falls back to fuzzy_search when member_index not built" do
       source = <<~RUBY
         class Recipe

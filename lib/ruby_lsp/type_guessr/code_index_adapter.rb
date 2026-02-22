@@ -26,11 +26,13 @@ module RubyLsp
 
       def initialize(index)
         @index = index
-        @member_index = nil       # { method_name => [Entry] }
-        @member_index_files = nil # { file_path => [Entry] } for removal
+        @member_index = nil        # { method_name => [Entry] }
+        @member_index_files = nil  # { file_path => [Entry] } for removal
+        @method_classes = nil      # { method_name => Set[class_name] } including inherited
       end
 
       # Build reverse index: method_name → [Entry::Member]
+      # Also builds @method_classes: method_name → Set[class_name] including inherited methods.
       # One-time full scan of index entries, called after initial indexing.
       # Uses keys snapshot + point lookups to avoid Hash iteration conflict
       # with concurrent Index#add on the main LSP thread.
@@ -39,6 +41,8 @@ module RubyLsp
 
         mi = Hash.new { |h, k| h[k] = [] }
         fi = Hash.new { |h, k| h[k] = [] }
+        # owner_name → [method_name] for ancestor expansion
+        owner_methods = Hash.new { |h, k| h[k] = [] }
 
         entries_hash = @index.instance_variable_get(:@entries)
         keys = entries_hash.keys # atomic snapshot under GIL
@@ -50,11 +54,14 @@ module RubyLsp
             mi[entry.name] << entry
             fp = entry.file_path
             fi[fp] << entry if fp
+
+            owner_methods[entry.owner.name] << entry.name unless OBJECT_METHOD_NAMES.include?(entry.name)
           end
         end
 
         @member_index = mi
         @member_index_files = fi
+        @method_classes = build_method_classes(owner_methods)
       end
 
       # Incrementally update member_index for a single file.
@@ -74,6 +81,9 @@ module RubyLsp
         new_entries = new_entries.select(&:owner)
         new_entries.each { |entry| @member_index[entry.name] << entry }
         @member_index_files[file_path] = new_entries unless new_entries.empty?
+
+        # Rebuild method_classes from updated member_index
+        rebuild_method_classes! if @method_classes
       end
 
       # Get all member entries indexed for a specific file
@@ -102,28 +112,33 @@ module RubyLsp
         pivot = called_methods.max_by { |cm| cm.name.to_s.length }
         rest = called_methods - [pivot]
 
-        # O(1) member_index lookup when available, fuzzy_search fallback otherwise
-        entries = if @member_index
-                    @member_index[pivot.name.to_s] || []
-                  else
-                    @index.fuzzy_search(pivot.name.to_s) do |entry|
-                      entry.is_a?(RubyIndexer::Entry::Member) && entry.name == pivot.name.to_s
-                    end
-                  end
-
-        entries = filter_by_arity(entries, pivot.positional_count, pivot.keywords) if pivot.positional_count
-
-        candidates = entries.filter_map do |entry|
-          entry.owner.name if entry.respond_to?(:owner) && entry.owner
-        end.uniq
+        # Collect candidates: use @method_classes (includes inherited) when available
+        candidates = if @method_classes
+                       (@method_classes[pivot.name.to_s] || Set.new).to_a
+                     else
+                       entries = if @member_index
+                                   @member_index[pivot.name.to_s] || []
+                                 else
+                                   @index.fuzzy_search(pivot.name.to_s) do |entry|
+                                     entry.is_a?(RubyIndexer::Entry::Member) && entry.name == pivot.name.to_s
+                                   end
+                                 end
+                       entries = filter_by_arity(entries, pivot.positional_count, pivot.keywords) if pivot.positional_count
+                       entries.filter_map do |entry|
+                         entry.owner.name if entry.respond_to?(:owner) && entry.owner
+                       end.uniq
+                     end
 
         return [] if candidates.empty?
-        return candidates if rest.empty?
 
-        # Verify each candidate has ALL remaining methods via resolve_method
+        # When using method_classes, verify pivot arity too (entries-based path already filtered)
+        methods_to_verify = @method_classes ? called_methods : rest
+        return candidates if methods_to_verify.empty?
+
+        # Verify each candidate has ALL methods via resolve_method
         # resolve_method walks the ancestor chain, so inherited methods are found
         candidates.select do |class_name|
-          rest.all? do |cm|
+          methods_to_verify.all? do |cm|
             method_entries = @index.resolve_method(cm.name.to_s, class_name)
             next false if method_entries.nil? || method_entries.empty?
             next true unless cm.positional_count
@@ -204,6 +219,50 @@ module RubyLsp
         entries.first.owner&.name
       rescue RubyIndexer::Index::NonExistingNamespaceError
         nil
+      end
+
+      # Rebuild @method_classes from current @member_index state.
+      private def rebuild_method_classes!
+        owner_methods = {}
+        @member_index.each do |method_name, entries|
+          next if OBJECT_METHOD_NAMES.include?(method_name)
+
+          entries.each do |entry|
+            next unless entry.owner
+
+            (owner_methods[entry.owner.name] ||= []) << method_name
+          end
+        end
+        @method_classes = build_method_classes(owner_methods)
+      end
+
+      # Build method_name → Set[class_name] including inherited methods via ancestor chain.
+      # @param owner_methods [Hash{String => Array<String>}] owner_name → [method_names]
+      # @return [Hash{String => Set<String>}] method_name → Set[class_name]
+      private def build_method_classes(owner_methods)
+        mc = Hash.new { |h, k| h[k] = Set.new }
+
+        # Register direct definitions
+        owner_methods.each do |owner_name, method_names|
+          method_names.each { |mn| mc[mn] << owner_name }
+        end
+
+        # Expand with inherited: for each class, walk ancestors and register child under ancestor's methods
+        # Use .keys snapshot to avoid "can't add a new key during iteration"
+        owner_methods.keys.each do |class_name|
+          ancestors = @index.linearized_ancestors_of(class_name)
+          ancestors.drop(1).each do |ancestor_name|
+            next unless owner_methods.key?(ancestor_name)
+
+            owner_methods[ancestor_name].each do |method_name|
+              mc[method_name] << class_name
+            end
+          end
+        rescue RubyIndexer::Index::NonExistingNamespaceError
+          next
+        end
+
+        mc
       end
 
       private def filter_by_arity(entries, count, keywords)
