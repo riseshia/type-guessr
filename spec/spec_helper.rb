@@ -28,8 +28,7 @@ RSpec.configure do |config|
     allow(RubyLsp::TypeGuessr::Config).to receive_messages(
       debug?: false,
       debug_server_enabled?: false,
-      debug_server_port: 7010,
-      background_indexing?: false
+      debug_server_port: 7010
     )
   end
 

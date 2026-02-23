@@ -132,11 +132,18 @@ end
 # RSpec configuration for full index tests
 RSpec.configure do |config|
   config.before(:suite) do
+    # Disable background gem indexing for all tests — opt in where needed
+    RubyLsp::TypeGuessr::Config.instance_variable_set(
+      :@cached_config,
+      { "enabled" => true, "debug" => false, "background_indexing" => false }
+    )
+
     # Only initialize server when ruby_lsp/internal is loaded (integration tests)
     FullIndexHelper.server if defined?(RubyLsp::Server)
   end
 
   config.after(:suite) do
     FullIndexHelper.reset! if FullIndexHelper.initialized?
+    RubyLsp::TypeGuessr::Config.reset!
   end
 end
