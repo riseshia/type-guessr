@@ -65,6 +65,8 @@ module TypeGuessr
             return [] unless method_type.block
 
             block_func = method_type.block.type
+            return [] unless block_func.is_a?(RBS::Types::Function)
+
             block_func.required_positionals.flat_map do |param|
               # Handle Tuple types (e.g., [K, V] in Hash#each) by flattening
               if param.type.is_a?(RBS::Types::Tuple)
@@ -95,6 +97,8 @@ module TypeGuessr
           # Calculate match score for an overload
           private def calculate_overload_score(method_type, arg_types)
             func = method_type.type
+            return 0 unless func.is_a?(RBS::Types::Function)
+
             required = func.required_positionals
             optional = func.optional_positionals
             rest = func.rest_positionals
