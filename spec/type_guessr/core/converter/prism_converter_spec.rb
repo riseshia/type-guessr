@@ -1283,6 +1283,40 @@ RSpec.describe TypeGuessr::Core::Converter::PrismConverter do
         expect(arr_var.value.type.element_types).to eq([])
       end
 
+      it "widens TupleType to ArrayType on block mutation of outer variable" do
+        source = <<~RUBY
+          arr = [1]
+          3.times { arr << "str" }
+        RUBY
+        parsed = Prism.parse(source)
+        context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+
+        parsed.value.statements.body.each do |stmt|
+          converter.convert(stmt, context)
+        end
+
+        arr_var = context.lookup_variable(:arr)
+        expect(arr_var.value.type).to be_a(TypeGuessr::Core::Types::ArrayType)
+        expect(arr_var.value.type.element_type.to_s).to eq("Integer | String")
+      end
+
+      it "widens empty array to ArrayType on block mutation" do
+        source = <<~RUBY
+          arr = []
+          3.times { arr << 1 }
+        RUBY
+        parsed = Prism.parse(source)
+        context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+
+        parsed.value.statements.body.each do |stmt|
+          converter.convert(stmt, context)
+        end
+
+        arr_var = context.lookup_variable(:arr)
+        expect(arr_var.value.type).to be_a(TypeGuessr::Core::Types::ArrayType)
+        expect(arr_var.value.type.element_type.to_s).to eq("Integer")
+      end
+
       it "accumulates element_types with sequential << operations" do
         source = <<~RUBY
           arr = []

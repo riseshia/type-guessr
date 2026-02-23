@@ -581,6 +581,36 @@ RSpec.describe "Container Type Inference", :doc do
     end
   end
 
+  describe "Block container mutation" do
+    context "block mutates outer array with different type" do
+      let(:source) do
+        <<~RUBY
+          a = [1]
+          3.times { a << "str" }
+          a
+        RUBY
+      end
+
+      it "→ Array[Integer | String]" do
+        expect_hover_type(line: 3, column: 0, expected: "Array[Integer | String]")
+      end
+    end
+
+    context "block mutates empty outer array" do
+      let(:source) do
+        <<~RUBY
+          a = []
+          3.times { a << 1 }
+          a
+        RUBY
+      end
+
+      it "→ Array[Integer]" do
+        expect_hover_type(line: 3, column: 0, expected: "Array[Integer]")
+      end
+    end
+  end
+
   describe "Container mutation edge cases" do
     context "container mutation followed by reassignment" do
       let(:source) do

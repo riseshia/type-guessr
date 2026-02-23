@@ -127,6 +127,16 @@ module TypeGuessr
             end
           end
 
+          # Check if a variable is defined in this context (not inherited from parent)
+          def owns_variable?(name)
+            @variables.key?(name)
+          end
+
+          # Register a variable in the parent context (for block mutation propagation)
+          def register_variable_in_parent(name, node)
+            @parent&.register_variable(name, node)
+          end
+
           # Get variables that were defined/modified in this context (not from parent)
           def local_variables
             @variables.keys
@@ -882,6 +892,10 @@ module TypeGuessr
           merged_type = compute_merged_type(receiver_node, prism_node.name, args, prism_node)
           return receiver_node unless merged_type
 
+          # Block scope + outer variable → widen TupleType to ArrayType
+          is_outer_var = context.scope_type == :block && !context.owns_variable?(receiver_node.name)
+          merged_type = widen_tuple_to_array(merged_type) if is_outer_var
+
           # Create new LiteralNode with merged type
           value_node = IR::LiteralNode.new(merged_type, nil, nil, [], receiver_node.loc)
 
@@ -892,6 +906,9 @@ module TypeGuessr
 
           # Register for next line references
           context.register_variable(receiver_node.name, new_write)
+
+          # Propagate widened type to parent context (so it's visible after block)
+          context.register_variable_in_parent(receiver_node.name, new_write) if is_outer_var
 
           # Create new LocalReadNode pointing to new write_node
           new_read = IR::LocalReadNode.new(
@@ -989,6 +1006,15 @@ module TypeGuessr
             combined = union_types(original_type.element_type, value_type)
             Types::ArrayType.new(combined)
           end
+        end
+
+        # Widen TupleType to ArrayType (for block mutations where position info is meaningless)
+        private def widen_tuple_to_array(type)
+          return type unless type.is_a?(Types::TupleType)
+
+          unique = type.element_types.uniq
+          elem = unique.size == 1 ? unique.first : Types::Union.new(unique)
+          Types::ArrayType.new(elem)
         end
 
         # Extract IR param nodes from a Prism parameter node
