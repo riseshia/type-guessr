@@ -122,7 +122,8 @@ module CoverageRunner
       nc = result[:node_coverage]
       ss = result[:signature_score]
 
-      puts "Node Coverage: #{nc[:percentage]}% (#{nc[:typed]}/#{nc[:total]} nodes typed)"
+      puts "Node Coverage:      #{nc[:percentage]}% (#{nc[:typed]}/#{nc[:total]} nodes typed)"
+      puts "Inference Coverage: #{nc[:inferred_percentage]}% (#{nc[:inferred_typed]}/#{nc[:inferred_total]} excluding trivial nodes)"
       puts
 
       # Sort breakdown by total count descending
@@ -181,8 +182,12 @@ module CoverageRunner
         |--------|-------|
         | Files Analyzed | #{files.size} |
         | Node Coverage | #{nc[:percentage]}% (#{nc[:typed]}/#{nc[:total]}) |
+        | Inference Coverage | #{nc[:inferred_percentage]}% (#{nc[:inferred_typed]}/#{nc[:inferred_total]}) |
         | Signature Score | #{format("%.2f", ss[:average_score])} |
         | Project Methods | #{ss[:method_count]} |
+
+        > **Node Coverage** includes trivially-typed nodes (LiteralNode, SelfNode).
+        > **Inference Coverage** excludes them to reflect actual type inference capability.
 
         ## Node Coverage Breakdown
 

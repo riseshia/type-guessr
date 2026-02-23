@@ -57,6 +57,9 @@ module CoverageRunner
       nodes.count { |node| !typed?(node) }
     end
 
+    # Trivial node types whose type is known at construction time (no inference needed)
+    TRIVIAL_NODE_TYPES = [IR::LiteralNode, IR::SelfNode].freeze
+
     private def calculate_node_coverage
       nodes = collect_all_nodes
       # Exclude DefNode - it would double-count params and return
@@ -67,10 +70,19 @@ module CoverageRunner
       typed = count_typed_nodes(nodes)
       percentage = calculate_percentage(typed, total)
 
+      # Inference coverage: excludes trivially-typed nodes (LiteralNode, SelfNode)
+      inferred_nodes = nodes.reject { |n| TRIVIAL_NODE_TYPES.any? { |t| n.is_a?(t) } }
+      inferred_total = inferred_nodes.size
+      inferred_typed = count_typed_nodes(inferred_nodes)
+      inferred_percentage = calculate_percentage(inferred_typed, inferred_total)
+
       {
         total: total,
         typed: typed,
         percentage: percentage,
+        inferred_total: inferred_total,
+        inferred_typed: inferred_typed,
+        inferred_percentage: inferred_percentage,
         breakdown: breakdown
       }
     end
