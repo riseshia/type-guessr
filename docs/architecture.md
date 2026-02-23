@@ -16,12 +16,12 @@ TypeGuessr is a Ruby LSP addon that provides heuristic type inference without re
 │  │ - file    │  │ - type    │  │ - inference   │  │ - type coordination     │ │
 │  │   watch   │  │   display │  │ - mutex sync  │  │                         │ │
 │  └───────────┘  └───────────┘  └───────────────┘  └─────────────────────────┘ │
-│  ┌───────────┐  ┌───────────┐  ┌───────────────┐                              │
-│  │  Config   │  │DebugServer│  │ GraphBuilder  │                              │
-│  │           │  │           │  │               │                              │
-│  │ - yaml    │  │ - http    │  │ - node graph  │                              │
-│  │ - env     │  │ - inspect │  │ - prism coord │                              │
-│  └───────────┘  └───────────┘  └───────────────┘                              │
+│  ┌───────────┐  ┌───────────┐  ┌───────────────┐  ┌─────────────────────────┐ │
+│  │  Config   │  │DebugServer│  │ GraphBuilder  │  │    CodeIndexAdapter     │ │
+│  │           │  │           │  │               │  │                         │ │
+│  │ - yaml    │  │ - http    │  │ - node graph  │  │ - RubyIndexer wrapper   │ │
+│  │ - env     │  │ - inspect │  │ - prism coord │  │ - duck type search      │ │
+│  └───────────┘  └───────────┘  └───────────────┘  └─────────────────────────┘ │
 └───────────────────────────────────────────────────────────────────────────────┘
                                         │
                                         ▼
@@ -47,7 +47,8 @@ TypeGuessr is a Ruby LSP addon that provides heuristic type inference without re
 │  │ - MergeNode   │  │ - Singleton   │  │                                   │   │
 │  │ - OrNode      │  │ - MethodSig   │  │                                   │   │
 │  │ - SelfNode    │  │ - TypeVar     │  │                                   │   │
-│  │ - ReturnNode  │  │               │  │                                   │   │
+│  │ - ReturnNode  │  │ - Unguessed   │  │                                   │   │
+│  │ - NarrowNode  │  │               │  │                                   │   │
 │  └───────────────┘  └───────────────┘  └───────────────────────────────────┘   │
 │                                                                                │
 │  ┌───────────────┐  ┌───────────────┐  ┌───────────────┐  ┌───────────────┐   │
@@ -85,6 +86,7 @@ Nodes form a reverse dependency graph where each node points to the nodes it dep
 | `ClassModuleNode` | Class/module definitions | Contains method DefNodes |
 | `SelfNode` | Self reference | None (resolved from class context) |
 | `ReturnNode` | Explicit return statement | Points to return value node |
+| `NarrowNode` | Type narrowing after guard clauses | Points to value node (removes falsy types) |
 
 ### PrismConverter (`lib/type_guessr/core/converter/prism_converter.rb`)
 
@@ -175,6 +177,7 @@ Type representations:
 | `RangeType` | `Range[Integer]` | Range with element type |
 | `Union` | `Integer \| String` | Union of types |
 | `Unknown` | `untyped` | Unknown type (singleton) |
+| `Unguessed` | `unguessed` | Type exists but not yet inferred (lazy gem inference) |
 | `TypeVariable` | `Elem`, `K`, `V` | RBS type variables |
 | `SelfType` | `self` | RBS self type (substituted at resolution) |
 | `ForwardingArgs` | `...` | Forwarding parameter type |
@@ -231,6 +234,7 @@ Standalone MCP server that exposes type inference to AI tools (e.g., Claude Code
 
 - **Server** (`server.rb`): Indexes project on startup, defines MCP tools, starts stdio transport
 - **StandaloneRuntime** (`standalone_runtime.rb`): Mirrors RuntimeAdapter's query interface without ruby-lsp's GlobalState dependency
+- **FileWatcher** (`file_watcher.rb`): Polls project directory for .rb file changes using mtime-based detection
 
 ### MCP Tools
 
