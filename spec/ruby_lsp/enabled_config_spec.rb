@@ -20,7 +20,12 @@ RSpec.describe RubyLsp::TypeGuessr::Config do
     end
   ensure
     Dir.chdir(original_dir)
-    described_class.reset!
+    # Restore the test-suite config so subsequent tests don't read .type-guessr.yml
+    # (which lacks background_indexing, defaulting to true and spawning start_indexing threads)
+    described_class.instance_variable_set(
+      :@cached_config,
+      { "enabled" => true, "debug" => false, "background_indexing" => false }
+    )
   end
 
   before do

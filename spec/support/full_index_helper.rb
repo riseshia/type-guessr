@@ -66,7 +66,10 @@ module FullIndexHelper
     end
 
     private def create_fully_indexed_server
-      server = RubyLsp::Server.new(test_mode: false)
+      # Use test_mode: true to prevent the outgoing_dispatcher from writing JSON-RPC
+      # to stdout (which pollutes test output) and from competing with pop_response
+      # for messages in the outgoing_queue (which causes flaky test failures).
+      server = RubyLsp::Server.new(test_mode: true)
 
       # Send LSP initialize request to trigger full indexing
       server.process_message({
@@ -90,6 +93,12 @@ module FullIndexHelper
       # Without this, Ruby 4.0 raises "can't add a new key into hash during iteration" when tests
       # call handle_change while the background thread still holds an iteration on @entries.
       (Thread.list - threads_before).each { |t| t.join(30) }
+
+      # Drain initialization messages from the outgoing_queue so that pop_response
+      # in tests reads the correct (hover/completion) response, not a stale init message.
+      # In test_mode the outgoing_dispatcher is inactive, so these would otherwise pile up.
+      queue = server.instance_variable_get(:@outgoing_queue)
+      queue.pop until queue.empty?
 
       server
     end
