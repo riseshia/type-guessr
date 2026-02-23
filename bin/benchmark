@@ -21,7 +21,6 @@
 #   bin/benchmark --report                # Generate markdown report
 #   bin/benchmark --path=/path/to/rails   # Benchmark a different project
 
-require "English"
 require "bundler/setup"
 require "benchmark/ips"
 require "prism"
@@ -40,6 +39,7 @@ require_relative "../lib/type_guessr/core/registry/method_registry"
 require_relative "../lib/type_guessr/core/registry/instance_variable_registry"
 require_relative "../lib/type_guessr/core/registry/class_variable_registry"
 require_relative "../lib/type_guessr/core/type_simplifier"
+require_relative "lib/tool_setup"
 
 module BenchmarkRunner
   # Memory measurement helper
@@ -72,8 +72,12 @@ module BenchmarkRunner
 
     def run
       puts "Project path: #{@path || Dir.pwd}"
-      files = collect_indexable_files
-      puts "Found #{files.size} indexable files\n\n"
+      files = ToolSetup.collect_indexable_files(path: @path)
+      puts "Found #{files.size} indexable files"
+
+      puts "Building RubyIndexer for code_index..."
+      @code_index = ToolSetup.build_code_index(files)
+      puts "code_index ready.\n\n"
 
       case @target
       when :indexing
@@ -89,50 +93,7 @@ module BenchmarkRunner
       generate_report(files) if @report
     end
 
-    private
-
-    def collect_indexable_files
-      if @path
-        # Collect files in the target project's Bundler environment
-        collect_files_from_project(@path)
-      else
-        config = RubyIndexer::Configuration.new
-        config.indexable_uris.map { |uri| uri.full_path.to_s }
-      end
-    end
-
-    def collect_files_from_project(project_path)
-      # Run ruby in the target project directory to get file list with its Gemfile
-      script = <<~RUBY
-        require 'bundler/setup'
-        require 'ruby_indexer/ruby_indexer'
-        config = RubyIndexer::Configuration.new
-        config.indexable_uris.each { |uri| puts uri.full_path }
-      RUBY
-
-      # Clean bundler environment variables for subprocess
-      clean_env = ENV.to_h.reject { |k, _| k.start_with?("BUNDLE_", "RUBYGEMS_", "GEM_") }
-      clean_env["BUNDLE_GEMFILE"] = File.join(project_path, "Gemfile")
-
-      output = IO.popen(clean_env, ["ruby"], "r+", chdir: project_path, err: %i[child out]) do |io|
-        io.write(script)
-        io.close_write
-        io.read
-      end
-
-      unless $CHILD_STATUS.success?
-        warn "Warning: Failed to collect files from #{project_path}"
-        warn "Falling back to current directory scan"
-        Dir.chdir(project_path) do
-          config = RubyIndexer::Configuration.new
-          return config.indexable_uris.map { |uri| uri.full_path.to_s }
-        end
-      end
-
-      output.lines.map(&:chomp)
-    end
-
-    def benchmark_indexing(files)
+    private def benchmark_indexing(files)
       puts "=" * 60
       puts "INDEXING BENCHMARK"
       puts "=" * 60
@@ -145,6 +106,7 @@ module BenchmarkRunner
       memory_deltas = []
 
       3.times do |i|
+        infra = ToolSetup.build_infrastructure(@code_index)
         converter = TypeGuessr::Core::Converter::PrismConverter.new
         location_index = TypeGuessr::Core::Index::LocationIndex.new
 
@@ -159,11 +121,7 @@ module BenchmarkRunner
 
           location_index.remove_file(file_path)
 
-          # Create context with location_index injection - nodes are registered during conversion
-          context = TypeGuessr::Core::Converter::PrismConverter::Context.new(
-            file_path: file_path,
-            location_index: location_index
-          )
+          context = ToolSetup.build_context(infra, file_path: file_path, location_index: location_index)
 
           parsed.value.statements&.body&.each do |stmt|
             converter.convert(stmt, context)
@@ -220,6 +178,7 @@ module BenchmarkRunner
       puts "\n### Component Breakdown (IPS) ###\n\n"
 
       sample_files = files.sample([100, files.size].min)
+      infra = ToolSetup.build_infrastructure(@code_index)
 
       Benchmark.ips do |x|
         x.config(warmup: @warmup, time: @time)
@@ -242,7 +201,7 @@ module BenchmarkRunner
           n.times do
             next unless parsed.value
 
-            context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+            context = ToolSetup.build_context(infra, file_path: file, location_index: nil)
             parsed.value.statements&.body&.filter_map do |stmt|
               converter.convert(stmt, context)
             end
@@ -261,6 +220,7 @@ module BenchmarkRunner
       # First, index all files
       puts "\nPre-indexing files for inference benchmark..."
 
+      infra = ToolSetup.build_infrastructure(@code_index)
       converter = TypeGuessr::Core::Converter::PrismConverter.new
       location_index = TypeGuessr::Core::Index::LocationIndex.new
       indexed_nodes = []
@@ -272,11 +232,7 @@ module BenchmarkRunner
 
         location_index.remove_file(file_path)
 
-        # Create context with location_index injection - nodes are registered during conversion
-        context = TypeGuessr::Core::Converter::PrismConverter::Context.new(
-          file_path: file_path,
-          location_index: location_index
-        )
+        context = ToolSetup.build_context(infra, file_path: file_path, location_index: location_index)
 
         parsed.value.statements&.body&.each do |stmt|
           converter.convert(stmt, context)
@@ -299,8 +255,7 @@ module BenchmarkRunner
       puts "Indexed #{files.size} files, #{indexed_nodes.size} inferrable nodes"
       puts "Sampling #{sample_entries.size} nodes for inference benchmark"
 
-      # Build resolver
-      signature_registry = TypeGuessr::Core::Registry::SignatureRegistry.instance.preload
+      resolver = infra.resolver
 
       # File open measurement (first inference per file simulates "file open" scenario)
       puts "\n### File Open Metrics (first inference per file) ###\n\n"
@@ -310,20 +265,6 @@ module BenchmarkRunner
 
       file_open_latencies = []
       warm_latencies = []
-
-      # Create single resolver for realistic simulation
-      method_registry = TypeGuessr::Core::Registry::MethodRegistry.new
-      ivar_registry = TypeGuessr::Core::Registry::InstanceVariableRegistry.new
-      cvar_registry = TypeGuessr::Core::Registry::ClassVariableRegistry.new
-      type_simplifier = TypeGuessr::Core::TypeSimplifier.new
-      resolver = TypeGuessr::Core::Inference::Resolver.new(
-        signature_registry,
-        type_simplifier: type_simplifier,
-        code_index: nil,
-        method_registry: method_registry,
-        ivar_registry: ivar_registry,
-        cvar_registry: cvar_registry
-      )
 
       entries_by_file.each do |_file_path, entries|
         entries.each_with_index do |(node, _path), idx|

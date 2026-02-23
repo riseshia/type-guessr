@@ -42,6 +42,7 @@ require_relative "../lib/type_guessr/core/registry/method_registry"
 require_relative "../lib/type_guessr/core/registry/instance_variable_registry"
 require_relative "../lib/type_guessr/core/registry/class_variable_registry"
 require_relative "../lib/type_guessr/core/type_simplifier"
+require_relative "lib/tool_setup"
 
 module ProfileIndexing
   # Runs stackprof profiling on TypeGuessr
@@ -63,13 +64,12 @@ module ProfileIndexing
       @report = report
       @converter = TypeGuessr::Core::Converter::PrismConverter.new
       @location_index = TypeGuessr::Core::Index::LocationIndex.new
-      @resolver = build_resolver
       @results = {}
     end
 
     def run
       puts "Project path: #{@path || Dir.pwd}"
-      files = collect_indexable_files
+      files = ToolSetup.collect_indexable_files(path: @path)
       puts "Found #{files.size} indexable files (same as ruby-lsp)"
 
       if @limit && @limit < files.size
@@ -78,6 +78,11 @@ module ProfileIndexing
       end
 
       FileUtils.mkdir_p(File.dirname(@output))
+
+      puts "Building RubyIndexer for code_index..."
+      @code_index = ToolSetup.build_code_index(files)
+      @infra = ToolSetup.build_infrastructure(@code_index)
+      puts "code_index ready."
 
       case @target
       when :indexing
@@ -94,67 +99,8 @@ module ProfileIndexing
       generate_report if @report
     end
 
-    private
-
-    def default_output
+    private def default_output
       "tmp/stackprof-#{@target}.dump"
-    end
-
-    def build_resolver
-      signature_registry = TypeGuessr::Core::Registry::SignatureRegistry.instance.preload
-      method_registry = TypeGuessr::Core::Registry::MethodRegistry.new
-      ivar_registry = TypeGuessr::Core::Registry::InstanceVariableRegistry.new
-      cvar_registry = TypeGuessr::Core::Registry::ClassVariableRegistry.new
-      type_simplifier = TypeGuessr::Core::TypeSimplifier.new
-      TypeGuessr::Core::Inference::Resolver.new(
-        signature_registry,
-        type_simplifier: type_simplifier,
-        code_index: nil,
-        method_registry: method_registry,
-        ivar_registry: ivar_registry,
-        cvar_registry: cvar_registry
-      )
-    end
-
-    def collect_indexable_files
-      if @path
-        # Collect files in the target project's Bundler environment
-        collect_files_from_project(@path)
-      else
-        config = RubyIndexer::Configuration.new
-        config.indexable_uris.map { |uri| uri.full_path.to_s }
-      end
-    end
-
-    def collect_files_from_project(project_path)
-      # Run ruby in the target project directory to get file list with its Gemfile
-      script = <<~RUBY
-        require 'bundler/setup'
-        require 'ruby_indexer/ruby_indexer'
-        config = RubyIndexer::Configuration.new
-        config.indexable_uris.each { |uri| puts uri.full_path }
-      RUBY
-
-      # Clean bundler environment variables for subprocess
-      clean_env = ENV.to_h.reject { |k, _| k.start_with?("BUNDLE_", "RUBYGEMS_", "GEM_") }
-      clean_env["BUNDLE_GEMFILE"] = File.join(project_path, "Gemfile")
-
-      output = IO.popen(clean_env, ["ruby"], "r+", chdir: project_path, err: %i[child out]) do |io|
-        io.write(script)
-        io.close_write
-        io.read
-      end
-
-      unless $?.success?
-        warn "Warning: Failed to collect files from #{project_path}"
-        warn "Falling back to current directory scan"
-        Dir.chdir(project_path) do
-          config = RubyIndexer::Configuration.new
-          return config.indexable_uris.map { |uri| uri.full_path.to_s }
-        end
-      end
-
-      output.lines.map(&:chomp)
     end
 
     # Profile indexing only
@@ -273,6 +219,7 @@ module ProfileIndexing
     def reset_state
       @converter = TypeGuessr::Core::Converter::PrismConverter.new
       @location_index = TypeGuessr::Core::Index::LocationIndex.new
+      @infra = ToolSetup.build_infrastructure(@code_index)
     end
 
     def index_files(files)
@@ -300,11 +247,7 @@ module ProfileIndexing
 
       @location_index.remove_file(file_path)
 
-      # Create context with location_index injection - nodes are registered during conversion
-      context = TypeGuessr::Core::Converter::PrismConverter::Context.new(
-        file_path: file_path,
-        location_index: @location_index
-      )
+      context = ToolSetup.build_context(@infra, file_path: file_path, location_index: @location_index)
 
       parsed.value.statements&.body&.each do |stmt|
         @converter.convert(stmt, context)
@@ -340,8 +283,9 @@ module ProfileIndexing
     end
 
     def run_inference(sample_nodes)
+      resolver = @infra.resolver
       sample_nodes.each do |(node, _scope_id)|
-        @resolver.infer(node)
+        resolver.infer(node)
       rescue StandardError
         # Ignore inference errors during profiling
       end
@@ -602,13 +546,10 @@ module ProfileIndexing
     end
 
     def optimization_recommendations_section
-      indexing_frames = @results[:indexing] ? extract_top_frames(@results[:indexing]) : []
-      inference_frames = @results[:inference] ? extract_top_frames(@results[:inference]) : []
-
       <<~SECTION
         ## Optimization Recommendations
 
-        #{optimization_recommendations(indexing_frames, inference_frames)}
+        See `docs/benchmark-report.md` for detailed optimization recommendations.
       SECTION
     end
 
@@ -650,26 +591,6 @@ module ProfileIndexing
       }
     end
 
-    def executive_summary(result, gc_stats)
-      return "No profiling data available." unless result
-
-      find_line_pct = find_line_percent(extract_top_frames(result))
-
-      <<~SUMMARY
-        TypeGuessr performance profiling results show that **#{find_line_pct}% of CPU time is spent in `Prism::Source#find_line`**, which represents the biggest optimization opportunity. GC overhead is #{gc_stats[:percent]}%, indicating significant memory pressure from object allocations.
-
-        **Key findings:**
-        - `Prism::Source#find_line` is the #1 bottleneck (location conversion for every node)
-        - `IR::Loc.new` creates millions of location objects, contributing to GC pressure
-        - Inference accounts for only ~3% of total time; indexing dominates
-      SUMMARY
-    end
-
-    def find_line_percent(frames)
-      frame = frames.find { |f| f[:name]&.include?("find_line") }
-      frame ? format("%.1f", frame[:percent]) : "N/A"
-    end
-
     def bottleneck_detail(frame, rank, _result, phase = nil)
       name = frame[:name]
       pct = format("%.1f", frame[:percent])
@@ -684,64 +605,37 @@ module ProfileIndexing
       when /Prism\.parse/
         files = @location_index.stats[:files_count]
         avg = @location_index.stats[:total_nodes] / [files, 1].max
-        { where: "process_file", what: "소스→AST 변환 (#{files}파일, ~#{avg}노드/파일). 병렬화 가능" }
+        { where: "process_file", what: "Parse source to AST (#{files} files, ~#{avg} nodes/file)" }
       when /Prism::Source#find_line/
-        { where: "convert_loc", what: "바이트 오프셋→라인 번호. 노드마다 호출" }
+        { where: "convert_loc", what: "Byte offset to line number, called per node" }
       when /bsearch_index/
-        { where: "find_line 내부", what: "라인 번호 이진 탐색. 누적 비용 높음" }
+        { where: "find_line internal", what: "Binary search for line numbers" }
       when /PrismConverter#convert_loc/
-        { where: "모든 convert_*", what: "IR::Loc 생성. find_line+column 트리거" }
+        { where: "all convert_*", what: "IR::Loc creation, triggers find_line+column" }
       when /PrismConverter#convert_class/
-        { where: "convert 진입점", what: "클래스/모듈 변환. 내부 메서드 재귀 처리" }
+        { where: "convert entry point", what: "Class/module conversion with recursive methods" }
       when /PrismConverter#convert_def/
-        { where: "convert_class_or_module", what: "메서드 정의 변환. 파라미터+본문+반환값" }
+        { where: "convert_class_or_module", what: "Method definition: params+body+return" }
       when /PrismConverter#convert_call/
-        { where: "convert_*", what: "메서드 호출 변환. duck typing용 추적" }
+        { where: "convert_*", what: "Method call conversion for duck typing tracking" }
       when /PrismConverter#convert$/
-        { where: "process_file", what: "Prism AST→IR 노드 그래프 진입점" }
+        { where: "process_file", what: "Prism AST to IR node graph entry point" }
       when /LocationIndex#add/
-        { where: "index_node_recursively", what: "노드를 인덱스에 추가. hash+uniq 포함" }
+        { where: "index_node_recursively", what: "Add node to index (hash+uniq)" }
       when /Class#new|Data#initialize/
-        { where: "IR 노드 생성", what: "객체 할당 (Loc, LiteralNode, CallNode 등)" }
-      when /Array#uniq/
-        { where: "LocationIndex#add", what: "중복 노드 제거. Set으로 대체 권장" }
-      when /Data#hash|Array#hash/
-        { where: "LocationIndex", what: "노드 키 해시 계산 (조회/저장용)" }
-      when /Prism::Node#location/
-        { where: "convert_loc", what: "Prism 노드에서 위치 정보 추출" }
-      when /IO\.read/
-        { where: "process_file", what: "파일 I/O. Wall time에서 비중 높음" }
-      when /RBS::Parser/
-        { where: "ensure_environment_loaded", what: "RBS 파일 파싱. 첫 추론 시 지연 로드" }
-      when /RBS::DefinitionBuilder#build/
-        { where: "get_method_signatures", what: "클래스 메서드 정의 빌드. 캐시됨" }
-      when /RBS::DefinitionBuilder/
-        { where: "RBSProvider", what: "RBS 타입 정의 구축. 첫 조회 후 캐시" }
-      when /RBS::Environment/
-        { where: "DefinitionBuilder", what: "RBS 환경 (타입 해석, 선언 등록)" }
-      when /RBSProvider|SignatureProvider/
-        { where: "Resolver#infer_call", what: "RBS에서 메서드 시그니처 조회" }
-      when /Resolver#infer_call/
-        { where: "infer_node", what: "메서드 호출 타입 추론. RBS 조회 포함" }
-      when /Resolver#infer_local/
-        { where: "infer_node", what: "지역 변수 읽기/쓰기 타입 추론" }
-      when /Resolver#infer/
-        { where: "Hover#type_at", what: "노드→타입 추론. 의존성 그래프 순회" }
+        { where: "IR node creation", what: "Object allocation (Loc, LiteralNode, CallNode, etc.)" }
       when /\(marking\)/
-        { where: "Ruby GC", what: "마킹 단계. 살아있는 객체 탐색" }
+        { where: "Ruby GC", what: "Marking phase: scanning live objects" }
       when /\(sweeping\)/
-        { where: "Ruby GC", what: "스윕 단계. 죽은 객체 해제" }
-      when /garbage collection/
-        { where: "Ruby GC", what: "가비지 컬렉션. 객체 할당 줄이면 개선" }
+        { where: "Ruby GC", what: "Sweep phase: freeing dead objects" }
       else
         if phase == :inference
-          { where: "추론 파이프라인", what: "RBS/타입 추론 관련 작업" }
+          { where: "inference pipeline", what: "RBS/type inference work" }
         else
-          { where: "인덱싱 파이프라인", what: "AST 변환/노드 생성 작업" }
+          { where: "indexing pipeline", what: "AST conversion/node creation" }
         end
       end
     end
-    # rubocop:enable Metrics/MethodLength, Metrics/CyclomaticComplexity
 
     def top_bottlenecks_section(frames, result, phase = nil)
       return "No frame data available." if frames.empty?
@@ -759,152 +653,6 @@ module ProfileIndexing
       end
 
       header + rows.join("\n")
-    end
-
-    def memory_analysis_section(frames)
-      if @mode != :object
-        return <<~TEXT
-          Memory profiling was not performed in this run.
-
-          To analyze memory allocations, run:
-          ```bash
-          bin/profile --target=indexing --mode=object --interval=1
-          ```
-        TEXT
-      end
-
-      # For object mode, show allocation analysis
-      top_allocators = frames.first(8)
-
-      table = top_allocators.each_with_index.map do |frame, idx|
-        "| #{idx + 1} | `#{frame[:name]}` | #{frame[:samples]} | #{format("%.1f", frame[:percent])}% |"
-      end.join("\n")
-
-      <<~TEXT
-        ### Top Allocators
-
-        | Rank | Method | Allocations | % Total |
-        |------|--------|-------------|---------|
-        #{table}
-
-        ### Key Allocation Hotspots
-
-        #### `IR::Loc.new`
-        Location objects are created for every node. Consider:
-        - Lazy initialization (compute only when accessed)
-        - Array-based representation instead of Data class
-
-        #### `String#split` in node keys
-        Node key generation involves string operations. Consider:
-        - Tuple-based keys `[class, method, line, col]`
-        - Integer-based ID system
-
-        #### `IR::LiteralNode.new`
-        Unavoidable for Ruby code with many literals, but consider:
-        - Singleton patterns for `nil`, `true`, `false`
-        - Sharing identical literal nodes
-      TEXT
-    end
-
-    def optimization_recommendations(_indexing_frames, _inference_frames)
-      <<~TEXT
-        ### Indexing Optimizations
-
-        #### High Impact
-
-        1. **Parallel file processing**
-           - Current: Files parsed sequentially
-           - Solution: Use `Parallel` gem or `Ractor` for concurrent parsing
-           - Expected: 2-4x speedup on multi-core systems
-           - Complexity: Medium (thread safety required)
-           - Files: `runtime_adapter.rb`, `graph_builder.rb`
-
-        2. **Cache line offset table** (`Prism::Source#find_line` optimization)
-           - Current: Binary search (`bsearch_index`) for every node's line number
-           - Solution: Compute line offsets once per file, reuse for all nodes
-           - Expected: ~20% CPU reduction in `convert_loc`
-           - Complexity: Low
-           - Files: `prism_converter.rb`
-
-        3. **Minimize `Array#bsearch_index` calls**
-           - Current: Location conversion performed for every node during indexing
-           - Solution: Lazy location computation (only on hover)
-           - Expected: 10-15% indexing time reduction
-           - Complexity: Medium (requires `IR::Loc` redesign)
-           - Files: `ir/nodes.rb`, `prism_converter.rb`
-
-        #### Medium Impact
-
-        4. **Lightweight `IR::Loc`**
-           - Current: Data class creates location object for every node
-           - Solution:
-             - Lazy evaluation: compute line/column only when accessed
-             - Or use frozen Array `[start_line, start_col, end_line, end_col]`
-           - Expected: Reduced object allocation, less GC pressure
-           - Complexity: Low
-           - Files: `ir/nodes.rb`
-
-        5. **Replace `Array#uniq` with `Set` in LocationIndex**
-           - Current: Add to array, then dedupe with `uniq`
-           - Solution: Use `Set#add` for O(1) duplicate check
-           - Expected: Performance improvement for large files
-           - Complexity: Low
-           - Files: `index/location_index.rb`
-
-        6. **Minimize `Class#new` calls**
-           - Current: Type objects (`ClassInstance`, `ArrayType`, etc.) created every time
-           - Solution:
-             - Singleton common types (`String`, `Integer`, `nil`, etc.)
-             - Type interning pool
-           - Expected: 5-10% reduction in object allocation
-           - Complexity: Medium
-           - Files: `types.rb`
-
-        ### Inference Optimizations
-
-        1. **RBS background preloading**
-           - Current: RBS environment loaded on first inference (~140ms)
-           - Solution: Preload in background after indexing completes
-           - Expected: Faster first hover response
-           - Complexity: Low (`preload` method already exists)
-           - Files: `rbs_provider.rb`, `addon.rb`
-
-        2. **Verify method signature caching**
-           - Current: `DefinitionBuilder` cache in use
-           - Action: Measure cache hit rate, analyze misses
-           - Expected: Potential further RBS lookup speedup
-           - Complexity: Low (measurement only)
-           - Files: `rbs_provider.rb`
-
-        3. **Cache `String#split` in `build_type_name`**
-           - Current: Class name parsed on every call (`Foo::Bar` → namespace split)
-           - Solution: Cache parsing results in a hash
-           - Expected: ~1% CPU reduction
-           - Complexity: Low
-           - Files: `rbs_provider.rb`
-
-        ### Memory Optimizations
-
-        1. **Reduce GC pressure** (Target: < 10% GC overhead)
-           - Current: ~14% GC during indexing
-           - Solution:
-             - Pool common node types
-             - Use symbols instead of strings for keys
-             - Eliminate unnecessary intermediate array creation
-           - Expected: 5-10% overall processing time reduction
-           - Complexity: Medium
-           - Files: `prism_converter.rb`, `types.rb`, `ir/nodes.rb`
-
-        ### Recommended Priority
-
-        | Rank | Optimization | Impact | Complexity | ROI |
-        |------|--------------|--------|------------|-----|
-        | 1 | Line offset caching | High | Low | ⭐⭐⭐ |
-        | 2 | IR::Loc lightweight | Medium | Low | ⭐⭐⭐ |
-        | 3 | Type object singletons | Medium | Medium | ⭐⭐ |
-        | 4 | Parallel file processing | High | High | ⭐⭐ |
-        | 5 | LocationIndex Set replacement | Low | Low | ⭐⭐ |
-      TEXT
     end
 
     def dump_files_section

@@ -26,7 +26,6 @@
 #   bin/coverage --dump-untyped --limit=100   # Limit to 100 nodes
 
 require "bundler/setup"
-require "English"
 require "prism"
 require "optparse"
 require "fileutils"
@@ -44,6 +43,7 @@ require_relative "../lib/type_guessr/core/registry/signature_registry"
 require_relative "../lib/type_guessr/core/registry/instance_variable_registry"
 require_relative "../lib/type_guessr/core/registry/class_variable_registry"
 require_relative "../lib/type_guessr/core/type_simplifier"
+require_relative "lib/tool_setup"
 require_relative "lib/coverage_report"
 
 module CoverageRunner
@@ -62,16 +62,21 @@ module CoverageRunner
       log
       log "Project path: #{@path || Dir.pwd}"
 
-      files = collect_indexable_files
+      files = ToolSetup.collect_indexable_files(path: @path)
       log "Found #{files.size} indexable files"
       log
 
+      log "Building RubyIndexer for code_index..."
+      code_index = ToolSetup.build_code_index(files)
+      log "code_index ready."
+      log
+
       log "Indexing files..."
-      location_index, method_registry, resolver = build_index(files)
+      infra, location_index = build_index(files, code_index)
       log "Indexing complete."
       log
 
-      report = CoverageRunner::CoverageReport.new(location_index, resolver, method_registry)
+      report = CoverageRunner::CoverageReport.new(location_index, infra.resolver, infra.method_registry)
       result = report.generate
 
       if @json
@@ -88,163 +93,29 @@ module CoverageRunner
       puts message unless @json
     end
 
-    private def collect_indexable_files
-      if @path
-        collect_files_from_project(@path)
-      else
-        config = RubyIndexer::Configuration.new
-        config.indexable_uris.map { |uri| uri.full_path.to_s }
-      end
-    end
-
-    private def collect_files_from_project(project_path)
-      script = <<~RUBY
-        require 'bundler/setup'
-        require 'ruby_indexer/ruby_indexer'
-        config = RubyIndexer::Configuration.new
-        config.indexable_uris.each { |uri| puts uri.full_path }
-      RUBY
-
-      clean_env = ENV.to_h.reject { |k, _| k.start_with?("BUNDLE_", "RUBYGEMS_", "GEM_") }
-      clean_env["BUNDLE_GEMFILE"] = File.join(project_path, "Gemfile")
-
-      output = IO.popen(clean_env, ["ruby"], "r+", chdir: project_path, err: %i[child out]) do |io|
-        io.write(script)
-        io.close_write
-        io.read
-      end
-
-      unless $CHILD_STATUS.success?
-        warn "Warning: Failed to collect files from #{project_path}"
-        warn "Falling back to current directory scan"
-        Dir.chdir(project_path) do
-          config = RubyIndexer::Configuration.new
-          return config.indexable_uris.map { |uri| uri.full_path.to_s }
-        end
-      end
-
-      output.lines.map(&:chomp)
-    end
-
-    private def build_index(files)
+    private def build_index(files, code_index)
+      infra = ToolSetup.build_infrastructure(code_index)
       converter = TypeGuessr::Core::Converter::PrismConverter.new
       location_index = TypeGuessr::Core::Index::LocationIndex.new
-      method_registry = TypeGuessr::Core::Registry::MethodRegistry.new
-
-      signature_registry = TypeGuessr::Core::Registry::SignatureRegistry.instance.preload
-      ivar_registry = TypeGuessr::Core::Registry::InstanceVariableRegistry.new
-      cvar_registry = TypeGuessr::Core::Registry::ClassVariableRegistry.new
-      type_simplifier = TypeGuessr::Core::TypeSimplifier.new
-      resolver = TypeGuessr::Core::Inference::Resolver.new(
-        signature_registry,
-        type_simplifier: type_simplifier,
-        code_index: nil,
-        method_registry: method_registry,
-        ivar_registry: ivar_registry,
-        cvar_registry: cvar_registry
-      )
 
       files.each do |file_path|
         source = File.read(file_path)
         parsed = Prism.parse(source)
         next unless parsed.value
 
-        context = TypeGuessr::Core::Converter::PrismConverter::Context.new
-        nodes = parsed.value.statements&.body&.filter_map do |stmt|
+        location_index.remove_file(file_path)
+
+        context = ToolSetup.build_context(infra, file_path: file_path, location_index: location_index)
+
+        parsed.value.statements&.body&.each do |stmt|
           converter.convert(stmt, context)
         end
-
-        location_index.remove_file(file_path)
-        nodes&.each { |node| index_node_recursively(location_index, method_registry, file_path, node, "") }
       rescue StandardError => e
         log "Error indexing #{file_path}: #{e.message}"
       end
 
       location_index.finalize!
-      [location_index, method_registry, resolver]
-    end
-
-    private def index_node_recursively(location_index, method_registry, file_path, node, scope_id)
-      return unless node
-
-      case node
-      when TypeGuessr::Core::IR::ClassModuleNode
-        location_index.add(file_path, node, scope_id)
-        new_scope = scope_id.empty? ? node.name : "#{scope_id}::#{node.name}"
-        node.methods&.each do |method|
-          if method.is_a?(TypeGuessr::Core::IR::ClassModuleNode)
-            index_node_recursively(location_index, method_registry, file_path, method, new_scope)
-          else
-            index_node_recursively(location_index, method_registry, file_path, method, new_scope)
-            method_scope = singleton_scope_for(new_scope, singleton: method.singleton)
-            method_registry.register(method_scope, method.name.to_s, method)
-          end
-        end
-
-      when TypeGuessr::Core::IR::DefNode
-        method_scope = singleton_scope_for(scope_id, singleton: node.singleton)
-        location_index.add(file_path, node, method_scope)
-
-        new_scope = method_scope.empty? ? "##{node.name}" : "#{method_scope}##{node.name}"
-        method_registry.register("", node.name.to_s, node) if scope_id.empty?
-
-        node.params&.each { |param| index_node_recursively(location_index, method_registry, file_path, param, new_scope) }
-        node.body_nodes&.each { |body_node| index_node_recursively(location_index, method_registry, file_path, body_node, new_scope) }
-
-      when TypeGuessr::Core::IR::LocalWriteNode
-        location_index.add(file_path, node, scope_id)
-        index_node_recursively(location_index, method_registry, file_path, node.value, scope_id) if node.value
-
-      when TypeGuessr::Core::IR::InstanceVariableWriteNode
-        location_index.add(file_path, node, scope_id)
-        index_node_recursively(location_index, method_registry, file_path, node.value, scope_id) if node.value
-
-      when TypeGuessr::Core::IR::ClassVariableWriteNode
-        location_index.add(file_path, node, scope_id)
-        index_node_recursively(location_index, method_registry, file_path, node.value, scope_id) if node.value
-
-      when TypeGuessr::Core::IR::CallNode
-        location_index.add(file_path, node, scope_id)
-        index_node_recursively(location_index, method_registry, file_path, node.receiver, scope_id) if node.receiver
-        node.args&.each { |arg| index_node_recursively(location_index, method_registry, file_path, arg, scope_id) }
-        node.block_params&.each { |param| index_node_recursively(location_index, method_registry, file_path, param, scope_id) }
-        index_node_recursively(location_index, method_registry, file_path, node.block_body, scope_id) if node.block_body
-
-      when TypeGuessr::Core::IR::ParamNode
-        location_index.add(file_path, node, scope_id)
-        index_node_recursively(location_index, method_registry, file_path, node.default_value, scope_id) if node.default_value
-
-      when TypeGuessr::Core::IR::MergeNode
-        location_index.add(file_path, node, scope_id)
-        node.branches&.each { |branch| index_node_recursively(location_index, method_registry, file_path, branch, scope_id) }
-
-      when TypeGuessr::Core::IR::OrNode
-        location_index.add(file_path, node, scope_id)
-        index_node_recursively(location_index, method_registry, file_path, node.lhs, scope_id)
-        index_node_recursively(location_index, method_registry, file_path, node.rhs, scope_id)
-
-      when TypeGuessr::Core::IR::ReturnNode
-        location_index.add(file_path, node, scope_id)
-        index_node_recursively(location_index, method_registry, file_path, node.value, scope_id) if node.value
-
-      when TypeGuessr::Core::IR::ConstantNode
-        location_index.add(file_path, node, scope_id)
-        index_node_recursively(location_index, method_registry, file_path, node.dependency, scope_id) if node.dependency
-
-      when TypeGuessr::Core::IR::LiteralNode
-        location_index.add(file_path, node, scope_id)
-        node.values&.each { |value| index_node_recursively(location_index, method_registry, file_path, value, scope_id) }
-
-      else
-        location_index.add(file_path, node, scope_id)
-      end
-    end
-
-    private def singleton_scope_for(scope, singleton:)
-      return scope unless singleton
-
-      parent_name = scope.split("::").last || "Object"
-      scope.empty? ? "<Class:Object>" : "#{scope}::<Class:#{parent_name}>"
+      [infra, location_index]
     end
 
     private def output_text(result, file_count)
