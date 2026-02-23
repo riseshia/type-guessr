@@ -2179,6 +2179,28 @@ RSpec.describe TypeGuessr::Core::Converter::PrismConverter do
     end
   end
 
+  describe "ParenthesesNode" do
+    it "unwraps parenthesized expression" do
+      source = "(1 + 2)"
+      parsed = Prism.parse(source)
+      context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+      node = converter.convert(parsed.value.statements.body.first, context)
+
+      expect(node).to be_a(TypeGuessr::Core::IR::CallNode)
+      expect(node.method).to eq(:+)
+    end
+
+    it "properly handles assignment from parenthesized expression" do
+      source = "x = (a || b)"
+      parsed = Prism.parse(source)
+      context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+      node = converter.convert(parsed.value.statements.body.first, context)
+
+      expect(node).to be_a(TypeGuessr::Core::IR::LocalWriteNode)
+      expect(node.value).to be_a(TypeGuessr::Core::IR::OrNode)
+    end
+  end
+
   describe "unhandled node types" do
     before { pending "Not yet implemented - these node types need PrismConverter support" }
 
@@ -2307,28 +2329,6 @@ RSpec.describe TypeGuessr::Core::Converter::PrismConverter do
         expect(node).to be_a(TypeGuessr::Core::IR::LocalWriteNode)
         expect(node.value).to be_a(TypeGuessr::Core::IR::LiteralNode)
         expect(node.value.type.name).to eq("Proc")
-      end
-    end
-
-    describe "ParenthesesNode" do
-      it "unwraps parenthesized expression" do
-        source = "(1 + 2)"
-        parsed = Prism.parse(source)
-        context = TypeGuessr::Core::Converter::PrismConverter::Context.new
-        node = converter.convert(parsed.value.statements.body.first, context)
-
-        expect(node).to be_a(TypeGuessr::Core::IR::CallNode)
-        expect(node.method).to eq(:+)
-      end
-
-      it "properly handles assignment from parenthesized expression" do
-        source = "x = (a || b)"
-        parsed = Prism.parse(source)
-        context = TypeGuessr::Core::Converter::PrismConverter::Context.new
-        node = converter.convert(parsed.value.statements.body.first, context)
-
-        expect(node).to be_a(TypeGuessr::Core::IR::LocalWriteNode)
-        expect(node.value).to be_a(TypeGuessr::Core::IR::MergeNode)
       end
     end
 

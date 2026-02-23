@@ -280,6 +280,9 @@ module TypeGuessr
                  when Prism::IndexOrWriteNode
                    convert_index_or_write(prism_node, context)
 
+                 when Prism::ParenthesesNode
+                   convert(prism_node.body, context) if prism_node.body
+
                  when Prism::MultiWriteNode
                    convert_multi_write(prism_node, context)
                  end
