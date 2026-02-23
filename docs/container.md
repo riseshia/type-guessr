@@ -10,7 +10,7 @@ This document is auto-generated from tests tagged with `:doc`.
 
 ```ruby
 nums = [1, 2, 3]
-[n]ums  # Guessed Type: Array[Integer]
+[n]ums  # Guessed Type: [Integer, Integer, Integer]
 ```
 
 ### Mixed array with 2 types
@@ -38,14 +38,14 @@ mixed = [1, "a", :sym, 1.0]
 
 ```ruby
 nested = [[1, 2], [3, 4]]
-[n]ested  # Guessed Type: Array[Array[Integer]]
+[n]ested  # Guessed Type: [[Integer, Integer], [Integer, Integer]]
 ```
 
 ### Deeply nested array
 
 ```ruby
 deep = [[[1]]]
-[d]eep  # Guessed Type: Array[Array[Array[Integer]]]
+[d]eep  # Guessed Type: [[[Integer]]]
 ```
 
 ### array with method chaining
@@ -222,7 +222,7 @@ end
 
 ```ruby
 a = [1]
-[a][0] = "x"  # Guessed Type: Array[Integer | String]
+[a][0] = "x"  # Guessed Type: [Integer, String]
 ```
 
 ## Array << operator
@@ -231,7 +231,14 @@ a = [1]
 
 ```ruby
 a = [1]
-[a] << "x"  # Guessed Type: Array[Integer | String]
+[a] << "x"  # Guessed Type: [Integer, String]
+```
+
+### with empty array
+
+```ruby
+a = []
+[a] << 1  # Guessed Type: [Integer]
 ```
 
 ## Control flow container mutation
@@ -257,7 +264,7 @@ def foo(n)
   when 1 then arr << "a"
   when 2 then arr << :sym
   end
-  [a]rr  # Guessed Type: Array[Integer | String] | Array[Integer | Symbol]
+  [a]rr  # Guessed Type: [Integer, String] | [Integer, Symbol]
 end
 ```
 
@@ -280,7 +287,7 @@ arr = []
 arr << 1
 arr << "str"
 arr << :sym
-[a]rr  # Guessed Type: Array[Integer | String | Symbol]
+[a]rr  # Guessed Type: [Integer, String, Symbol]
 ```
 
 ### mixed Array operations
@@ -289,7 +296,7 @@ arr << :sym
 arr = [1]
 arr[0] = "replaced"
 arr << :added
-[a]rr  # Guessed Type: Array[Integer | String | Symbol]
+[a]rr  # Guessed Type: [Integer, String, Symbol]
 ```
 
 ## TupleType inference
@@ -345,11 +352,11 @@ t = [1, "a"]
 [r] = t.size  # Guessed Type: Integer
 ```
 
-### Homogeneous array stays ArrayType
+### Homogeneous array is TupleType
 
 ```ruby
 nums = [1, 2, 3]
-[n]ums  # Guessed Type: Array[Integer]
+[n]ums  # Guessed Type: [Integer, Integer, Integer]
 ```
 
 ## Container mutation edge cases

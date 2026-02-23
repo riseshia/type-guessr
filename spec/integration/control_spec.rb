@@ -401,8 +401,8 @@ RSpec.describe "Control Flow Type Inference", :doc do
         RUBY
       end
 
-      it "→ Array (RHS used when LHS is unknown)" do
-        expect_hover_type(line: 4, column: 2, expected: "Array[untyped]")
+      it "→ [] (RHS used when LHS is unknown)" do
+        expect_hover_type(line: 4, column: 2, expected: "[]")
       end
     end
 
@@ -494,8 +494,8 @@ RSpec.describe "Control Flow Type Inference", :doc do
         RUBY
       end
 
-      it "→ Array (NilClass removed after guard)" do
-        expect_hover_type(line: 12, column: 4, expected: "Array[Integer]")
+      it "→ [Integer, Integer, Integer] (NilClass removed after guard)" do
+        expect_hover_type(line: 12, column: 4, expected: "[Integer, Integer, Integer]")
       end
     end
 

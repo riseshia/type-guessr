@@ -148,7 +148,7 @@ module TypeGuessr
             case our_type
             when Types::ClassInstance
               our_type.name == class_name
-            when Types::ArrayType
+            when Types::ArrayType, Types::TupleType
               class_name == "Array"
             when Types::HashShape
               class_name == "Hash"

@@ -322,6 +322,8 @@ module TypeGuessr
         end
 
         def type_variable_substitutions
+          return { Elem: Unknown.instance } if @element_types.empty?
+
           unique = @element_types.uniq
           elem = unique.size == 1 ? unique.first : Union.new(unique)
           { Elem: elem }

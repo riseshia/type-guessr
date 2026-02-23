@@ -31,7 +31,7 @@ price = 19.99
 
 ```ruby
 items = []
-[i]tems  # Guessed Type: Array[untyped]
+[i]tems  # Guessed Type: []
 ```
 
 ### Hash literal

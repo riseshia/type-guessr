@@ -874,7 +874,7 @@ module TypeGuessr
 
         # Check if type is array-like
         private def array_like?(type)
-          type.is_a?(Types::ArrayType)
+          type.is_a?(Types::ArrayType) || type.is_a?(Types::TupleType)
         end
 
         # Handle container mutation by creating new LocalWriteNode with merged type
@@ -968,8 +968,13 @@ module TypeGuessr
           return nil unless args.size == 2
 
           value_type = extract_literal_type(args[1])
-          combined = union_types(original_type.element_type, value_type)
-          Types::ArrayType.new(combined)
+          case original_type
+          when Types::TupleType
+            Types::TupleType.new(original_type.element_types + [value_type])
+          else
+            combined = union_types(original_type.element_type, value_type)
+            Types::ArrayType.new(combined)
+          end
         end
 
         # Compute Array type after << operator
@@ -977,8 +982,13 @@ module TypeGuessr
           return nil unless args.size == 1
 
           value_type = extract_literal_type(args[0])
-          combined = union_types(original_type.element_type, value_type)
-          Types::ArrayType.new(combined)
+          case original_type
+          when Types::TupleType
+            Types::TupleType.new(original_type.element_types + [value_type])
+          else
+            combined = union_types(original_type.element_type, value_type)
+            Types::ArrayType.new(combined)
+          end
         end
 
         # Extract IR param nodes from a Prism parameter node
@@ -1647,7 +1657,7 @@ module TypeGuessr
         end
 
         private def array_element_type_for(array_node)
-          return Types::ArrayType.new if array_node.elements.empty?
+          return Types::TupleType.new([]) if array_node.elements.empty?
 
           element_types = array_node.elements.filter_map do |elem|
             literal_type_for(elem) unless elem.nil?
@@ -1655,13 +1665,9 @@ module TypeGuessr
 
           return Types::ArrayType.new if element_types.empty?
 
-          # Deduplicate types
-          unique_types = element_types.uniq
-
-          if unique_types.size == 1
-            Types::ArrayType.new(unique_types.first)
-          elsif element_types.any? { |t| t.is_a?(Types::Unknown) }
+          if element_types.any? { |t| t.is_a?(Types::Unknown) }
             # Splat or unknown elements → widen to ArrayType(Union)
+            unique_types = element_types.uniq
             Types::ArrayType.new(Types::Union.new(unique_types))
           else
             Types::TupleType.new(element_types)

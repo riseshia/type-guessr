@@ -16,8 +16,8 @@ RSpec.describe "Container Type Inference", :doc do
         RUBY
       end
 
-      it "→ Array[Integer]" do
-        expect_hover_type(line: 2, column: 0, expected: "Array[Integer]")
+      it "→ [Integer, Integer, Integer]" do
+        expect_hover_type(line: 2, column: 0, expected: "[Integer, Integer, Integer]")
       end
     end
 
@@ -68,8 +68,8 @@ RSpec.describe "Container Type Inference", :doc do
         RUBY
       end
 
-      it "→ Array[Array[Integer]]" do
-        expect_hover_type(line: 2, column: 0, expected: "Array[Array[Integer]]")
+      it "→ [[Integer, Integer], [Integer, Integer]]" do
+        expect_hover_type(line: 2, column: 0, expected: "[[Integer, Integer], [Integer, Integer]]")
       end
     end
 
@@ -81,8 +81,8 @@ RSpec.describe "Container Type Inference", :doc do
         RUBY
       end
 
-      it "→ Array[Array[Array[Integer]]]" do
-        expect_hover_type(line: 2, column: 0, expected: "Array[Array[Array[Integer]]]")
+      it "→ [[[Integer]]]" do
+        expect_hover_type(line: 2, column: 0, expected: "[[[Integer]]]")
       end
     end
 
@@ -361,8 +361,8 @@ RSpec.describe "Container Type Inference", :doc do
         RUBY
       end
 
-      it "→ Array[Integer | String]" do
-        expect_hover_type(line: 2, column: 0, expected: "Array[Integer | String]")
+      it "→ [Integer, String]" do
+        expect_hover_type(line: 2, column: 0, expected: "[Integer, String]")
       end
     end
   end
@@ -376,8 +376,21 @@ RSpec.describe "Container Type Inference", :doc do
         RUBY
       end
 
-      it "→ Array[Integer | String]" do
-        expect_hover_type(line: 2, column: 0, expected: "Array[Integer | String]")
+      it "→ [Integer, String]" do
+        expect_hover_type(line: 2, column: 0, expected: "[Integer, String]")
+      end
+    end
+
+    context "with empty array" do
+      let(:source) do
+        <<~RUBY
+          a = []
+          a << 1
+        RUBY
+      end
+
+      it "→ [Integer]" do
+        expect_hover_type(line: 2, column: 0, expected: "[Integer]")
       end
     end
   end
@@ -417,8 +430,8 @@ RSpec.describe "Container Type Inference", :doc do
       end
 
       it "→ union of branch array types" do
-        # Each case branch produces different array type
-        expect_hover_type(line: 7, column: 2, expected: "Array[Integer | String] | Array[Integer | Symbol]")
+        # Each case branch produces different tuple type
+        expect_hover_type(line: 7, column: 2, expected: "[Integer, String] | [Integer, Symbol]")
       end
     end
   end
@@ -451,8 +464,8 @@ RSpec.describe "Container Type Inference", :doc do
         RUBY
       end
 
-      it "→ Array[Integer | String | Symbol]" do
-        expect_hover_type(line: 5, column: 0, expected: "Array[Integer | String | Symbol]")
+      it "→ [Integer, String, Symbol]" do
+        expect_hover_type(line: 5, column: 0, expected: "[Integer, String, Symbol]")
       end
     end
 
@@ -466,8 +479,8 @@ RSpec.describe "Container Type Inference", :doc do
         RUBY
       end
 
-      it "→ Array[Integer | String | Symbol]" do
-        expect_hover_type(line: 4, column: 0, expected: "Array[Integer | String | Symbol]")
+      it "→ [Integer, String, Symbol]" do
+        expect_hover_type(line: 4, column: 0, expected: "[Integer, String, Symbol]")
       end
     end
   end
@@ -554,7 +567,7 @@ RSpec.describe "Container Type Inference", :doc do
       end
     end
 
-    context "Homogeneous array stays ArrayType" do
+    context "Homogeneous array is TupleType" do
       let(:source) do
         <<~RUBY
           nums = [1, 2, 3]
@@ -562,8 +575,8 @@ RSpec.describe "Container Type Inference", :doc do
         RUBY
       end
 
-      it "→ Array[Integer]" do
-        expect_hover_type(line: 2, column: 0, expected: "Array[Integer]")
+      it "→ [Integer, Integer, Integer]" do
+        expect_hover_type(line: 2, column: 0, expected: "[Integer, Integer, Integer]")
       end
     end
   end

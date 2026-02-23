@@ -209,7 +209,7 @@ end
 def foo(key)
   h = {}
   keys = h[key] || []
-  [k]eys  # Guessed Type: Array[untyped]
+  [k]eys  # Guessed Type: []
 end
 ```
 
@@ -270,7 +270,7 @@ class Foo
 
   def process
     return nil unless @data
-    [@]data  # Guessed Type: Array[Integer]
+    [@]data  # Guessed Type: [Integer, Integer, Integer]
   end
 end
 ```

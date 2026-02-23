@@ -305,7 +305,7 @@ module RubyLsp
           type.name
         when Types::SingletonType
           type.name
-        when Types::ArrayType
+        when Types::ArrayType, Types::TupleType
           "Array"
         when Types::HashType, Types::HashShape
           "Hash"

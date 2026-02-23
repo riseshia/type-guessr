@@ -32,7 +32,8 @@ RSpec.describe TypeGuessr::Core::Converter::PrismConverter do
       node = converter.convert(parsed.value.statements.body.first)
 
       expect(node).to be_a(TypeGuessr::Core::IR::LiteralNode)
-      expect(node.type).to be_a(TypeGuessr::Core::Types::ArrayType)
+      expect(node.type).to be_a(TypeGuessr::Core::Types::TupleType)
+      expect(node.type.element_types).to eq([])
     end
 
     it "converts hash literals" do
@@ -170,7 +171,7 @@ RSpec.describe TypeGuessr::Core::Converter::PrismConverter do
 
       inner_array = node.values.first
       expect(inner_array).to be_a(TypeGuessr::Core::IR::LiteralNode)
-      expect(inner_array.type).to be_a(TypeGuessr::Core::Types::ArrayType)
+      expect(inner_array.type).to be_a(TypeGuessr::Core::Types::TupleType)
       expect(inner_array.values.size).to eq(3)
     end
 
@@ -1236,7 +1237,7 @@ RSpec.describe TypeGuessr::Core::Converter::PrismConverter do
     end
 
     describe "array mutations" do
-      it "updates ArrayType element type on indexed assignment" do
+      it "updates to TupleType on indexed assignment to empty array" do
         source = <<~RUBY
           arr = []
           arr[0] = "string"
@@ -1248,11 +1249,11 @@ RSpec.describe TypeGuessr::Core::Converter::PrismConverter do
         converter.convert(parsed.value.statements.body[1], context)
 
         arr_var = context.lookup_variable(:arr)
-        expect(arr_var.value.type).to be_a(TypeGuessr::Core::Types::ArrayType)
-        expect(arr_var.value.type.element_type.name).to eq("String")
+        expect(arr_var.value.type).to be_a(TypeGuessr::Core::Types::TupleType)
+        expect(arr_var.value.type.element_types.map(&:to_s)).to eq(["String"])
       end
 
-      it "creates union element types with << operator" do
+      it "creates TupleType with << operator on array literal" do
         source = <<~RUBY
           arr = [1]
           arr << "string"
@@ -1264,8 +1265,41 @@ RSpec.describe TypeGuessr::Core::Converter::PrismConverter do
         converter.convert(parsed.value.statements.body[1], context)
 
         arr_var = context.lookup_variable(:arr)
-        expect(arr_var.value.type).to be_a(TypeGuessr::Core::Types::ArrayType)
-        expect(arr_var.value.type.element_type).to be_a(TypeGuessr::Core::Types::Union)
+        expect(arr_var.value.type).to be_a(TypeGuessr::Core::Types::TupleType)
+        expect(arr_var.value.type.element_types.map(&:to_s)).to eq(%w[Integer String])
+      end
+
+      it "empty array is TupleType" do
+        source = <<~RUBY
+          arr = []
+        RUBY
+        parsed = Prism.parse(source)
+        context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+
+        converter.convert(parsed.value.statements.body[0], context)
+
+        arr_var = context.lookup_variable(:arr)
+        expect(arr_var.value.type).to be_a(TypeGuessr::Core::Types::TupleType)
+        expect(arr_var.value.type.element_types).to eq([])
+      end
+
+      it "accumulates element_types with sequential << operations" do
+        source = <<~RUBY
+          arr = []
+          arr << 1
+          arr << "str"
+          arr << :sym
+        RUBY
+        parsed = Prism.parse(source)
+        context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+
+        parsed.value.statements.body.each do |stmt|
+          converter.convert(stmt, context)
+        end
+
+        arr_var = context.lookup_variable(:arr)
+        expect(arr_var.value.type).to be_a(TypeGuessr::Core::Types::TupleType)
+        expect(arr_var.value.type.element_types.map(&:to_s)).to eq(%w[Integer String Symbol])
       end
     end
   end

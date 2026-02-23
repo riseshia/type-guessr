@@ -55,8 +55,8 @@ RSpec.describe "Literal Type Inference", :doc do
         RUBY
       end
 
-      it "→ Array" do
-        expect_hover_type(line: 2, column: 0, expected: "Array[untyped]")
+      it "→ []" do
+        expect_hover_type(line: 2, column: 0, expected: "[]")
       end
     end
 

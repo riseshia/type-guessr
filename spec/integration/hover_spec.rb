@@ -1105,10 +1105,10 @@ RSpec.describe "Hover Integration" do
         RUBY
       end
 
-      it "→ (Recipe recipe) -> Array" do
+      it "→ (Recipe recipe) -> []" do
         # Hover on method name "process"
-        # Last expression is recipe.steps which returns Array from Recipe#steps
-        expect_hover_method_signature(line: 11, column: 4, expected_signature: "(Recipe recipe) -> Array")
+        # Last expression is recipe.steps which returns [] (empty TupleType) from Recipe#steps
+        expect_hover_method_signature(line: 11, column: 4, expected_signature: "(Recipe recipe) -> []")
       end
     end
   end
@@ -1624,8 +1624,8 @@ RSpec.describe "Hover Integration" do
         RUBY
       end
 
-      it "→ () -> Array" do
-        expect_hover_method_signature(line: 12, column: 9, expected_signature: "() -> Array")
+      it "→ () -> []" do
+        expect_hover_method_signature(line: 12, column: 9, expected_signature: "() -> []")
       end
     end
 
@@ -1892,8 +1892,8 @@ RSpec.describe "Hover Integration" do
       end
 
       it "infers block parameter as Array type" do
-        # Hover on "a" in the block - should be Array[Integer]
-        expect_hover_type(line: 2, column: 14, expected: "Array[Integer]")
+        # Hover on "a" in the block - should be [Integer, Integer, Integer]
+        expect_hover_type(line: 2, column: 14, expected: "[Integer, Integer, Integer]")
       end
     end
 
