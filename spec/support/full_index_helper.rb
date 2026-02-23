@@ -74,6 +74,10 @@ module FullIndexHelper
                                method: "initialize",
                                params: { capabilities: {} }
                              })
+
+      # Track threads before "initialized" triggers perform_initial_indexing in a background thread
+      threads_before = Thread.list
+
       server.process_message({ method: "initialized" })
 
       # Wait for indexing to complete (max 120 seconds)
@@ -81,6 +85,11 @@ module FullIndexHelper
       sleep 0.1 until server.global_state.index.initial_indexing_completed || Time.now > timeout
 
       raise "Indexing timeout: RubyIndexer did not complete initial indexing within 120 seconds" unless server.global_state.index.initial_indexing_completed
+
+      # Wait for the indexing thread to fully finish post-processing (GC.compact, clear_ancestors, etc.)
+      # Without this, Ruby 4.0 raises "can't add a new key into hash during iteration" when tests
+      # call handle_change while the background thread still holds an iteration on @entries.
+      (Thread.list - threads_before).each { |t| t.join(30) }
 
       server
     end
