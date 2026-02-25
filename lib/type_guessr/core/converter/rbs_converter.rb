@@ -56,8 +56,20 @@ module TypeGuessr
             return Types::ArrayType.new(element_type)
           end
 
+          # Handle Hash with key/value type parameters
+          if class_name == "Hash" && rbs_type.args.size == 2
+            key_type = convert(rbs_type.args[0])
+            value_type = convert(rbs_type.args[1])
+            return Types::HashType.new(key_type, value_type)
+          end
+
+          # Handle Range with element type parameter
+          if class_name == "Range" && rbs_type.args.size == 1
+            element_type = convert(rbs_type.args.first)
+            return Types::RangeType.new(element_type)
+          end
+
           # For other generic types, return ClassInstance (ignore type args for now)
-          # TODO: Add HashType with key/value types in the future
           Types::ClassInstance.for(class_name)
         end
 

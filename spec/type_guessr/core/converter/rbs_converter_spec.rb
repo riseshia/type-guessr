@@ -39,6 +39,63 @@ RSpec.describe TypeGuessr::Core::Converter::RBSConverter do
         expect(result.element_type.name).to eq("String")
       end
 
+      it "converts Hash with key/value types" do
+        key_type = RBS::Types::ClassInstance.new(
+          name: RBS::TypeName.new(name: :String, namespace: RBS::Namespace.root),
+          args: [],
+          location: nil
+        )
+        value_type = RBS::Types::ClassInstance.new(
+          name: RBS::TypeName.new(name: :Integer, namespace: RBS::Namespace.root),
+          args: [],
+          location: nil
+        )
+        rbs_type = RBS::Types::ClassInstance.new(
+          name: RBS::TypeName.new(name: :Hash, namespace: RBS::Namespace.root),
+          args: [key_type, value_type],
+          location: nil
+        )
+
+        result = converter.convert(rbs_type)
+        expect(result).to be_a(TypeGuessr::Core::Types::HashType)
+        expect(result.key_type.name).to eq("String")
+        expect(result.value_type.name).to eq("Integer")
+      end
+
+      it "converts Hash with type variables" do
+        var_k = RBS::Types::Variable.new(name: :K, location: nil)
+        var_v = RBS::Types::Variable.new(name: :V, location: nil)
+        rbs_type = RBS::Types::ClassInstance.new(
+          name: RBS::TypeName.new(name: :Hash, namespace: RBS::Namespace.root),
+          args: [var_k, var_v],
+          location: nil
+        )
+
+        result = converter.convert(rbs_type)
+        expect(result).to be_a(TypeGuessr::Core::Types::HashType)
+        expect(result.key_type).to be_a(TypeGuessr::Core::Types::TypeVariable)
+        expect(result.key_type.name).to eq(:K)
+        expect(result.value_type).to be_a(TypeGuessr::Core::Types::TypeVariable)
+        expect(result.value_type.name).to eq(:V)
+      end
+
+      it "converts Range with element type" do
+        elem_type = RBS::Types::ClassInstance.new(
+          name: RBS::TypeName.new(name: :Integer, namespace: RBS::Namespace.root),
+          args: [],
+          location: nil
+        )
+        rbs_type = RBS::Types::ClassInstance.new(
+          name: RBS::TypeName.new(name: :Range, namespace: RBS::Namespace.root),
+          args: [elem_type],
+          location: nil
+        )
+
+        result = converter.convert(rbs_type)
+        expect(result).to be_a(TypeGuessr::Core::Types::RangeType)
+        expect(result.element_type.name).to eq("Integer")
+      end
+
       it "converts Array with type variable as element" do
         var_type = RBS::Types::Variable.new(name: :Elem, location: nil)
         rbs_type = RBS::Types::ClassInstance.new(
