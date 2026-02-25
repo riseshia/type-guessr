@@ -347,9 +347,9 @@ module TypeGuessr
                 )
               end
 
-              # Substitute self and block return type with receiver type
+              # Substitute self, block return type, and remaining type variables
               substitutions = { self: receiver_type }
-              add_block_return_substitution(substitutions, node)
+              add_method_type_var_substitutions(substitutions, node, receiver_type.name, node.method.to_s, arg_types)
               return_type = return_type.substitute(substitutions)
 
               # Early return: ClassInstance RBS lookup (may be Unknown if not found)
@@ -361,8 +361,7 @@ module TypeGuessr
             when Types::ArrayType
               # Handle Array methods with element type substitution
               substitutions = build_substitutions(receiver_type)
-
-              add_block_return_substitution(substitutions, node)
+              add_method_type_var_substitutions(substitutions, node, "Array", node.method.to_s)
 
               # Get raw return type, then substitute type variables
               raw_return_type = @signature_registry.get_method_return_type("Array", node.method.to_s)
@@ -382,7 +381,7 @@ module TypeGuessr
 
               # Fall back to Array RBS for other methods
               substitutions = build_substitutions(receiver_type)
-              add_block_return_substitution(substitutions, node)
+              add_method_type_var_substitutions(substitutions, node, "Array", node.method.to_s)
               raw_return_type = @signature_registry.get_method_return_type("Array", node.method.to_s)
               return_type = raw_return_type.substitute(substitutions)
               return Result.new(
@@ -400,7 +399,7 @@ module TypeGuessr
 
               # Fall back to Hash RBS for other methods
               substitutions = build_substitutions(receiver_type)
-              add_block_return_substitution(substitutions, node)
+              add_method_type_var_substitutions(substitutions, node, "Hash", node.method.to_s)
               raw_return_type = @signature_registry.get_method_return_type("Hash", node.method.to_s)
               return_type = raw_return_type.substitute(substitutions)
               # Early return: HashShape RBS lookup for non-[] methods
@@ -412,7 +411,7 @@ module TypeGuessr
             when Types::HashType
               # Handle generic HashType
               substitutions = build_substitutions(receiver_type)
-              add_block_return_substitution(substitutions, node)
+              add_method_type_var_substitutions(substitutions, node, "Hash", node.method.to_s)
               raw_return_type = @signature_registry.get_method_return_type("Hash", node.method.to_s)
               return_type = raw_return_type.substitute(substitutions)
               # Early return: HashType RBS lookup with type variable substitution
@@ -448,6 +447,9 @@ module TypeGuessr
                   node.method.to_s,
                   arg_types
                 )
+                substitutions = { self: inferred_receiver }
+                add_method_type_var_substitutions(substitutions, node, inferred_receiver.name, node.method.to_s, arg_types)
+                return_type = return_type.substitute(substitutions)
                 return Result.new(
                   return_type,
                   "#{inferred_receiver.name}##{node.method} (inferred receiver)",
@@ -758,20 +760,31 @@ module TypeGuessr
           Result.new(simplified_type, result.reason, result.source)
         end
 
-        # Add block return type substitution (:U) to substitutions hash
+        # Add block return type substitution to substitutions hash
+        # Uses the actual type variable name from the method signature instead of hardcoding :U.
         # @param substitutions [Hash{Symbol => Type}] Substitutions hash to modify
         # @param node [IR::CallNode] The call node with block info
+        # @param block_return_var [Symbol, nil] The type variable name for block return (e.g., :U, :X)
         # @return [void]
-        private def add_block_return_substitution(substitutions, node)
-          return unless node.has_block
+        private def add_block_return_substitution(substitutions, node, block_return_var)
+          return unless node.has_block && block_return_var
 
           if node.block_body
             block_result = infer(node.block_body)
-            substitutions[:U] = block_result.type unless block_result.type.is_a?(Types::Unknown)
+            substitutions[block_return_var] = block_result.type
           else
             # Empty block returns nil
-            substitutions[:U] = Types::ClassInstance.for("NilClass")
+            substitutions[block_return_var] = Types::ClassInstance.for("NilClass")
           end
+        end
+
+        # Substitute remaining method-level type variables with Unknown
+        # Prevents TypeVariable leakage in inferred types.
+        # @param substitutions [Hash{Symbol => Type}] Substitutions hash to modify
+        # @param type_params [Array<Symbol>] Method-level type parameter names
+        # @return [void]
+        private def substitute_remaining_type_vars(substitutions, type_params)
+          type_params.each { |name| substitutions[name] ||= Types::Unknown.instance }
         end
 
         # Build substitutions hash with type variables and self
@@ -781,6 +794,23 @@ module TypeGuessr
           substitutions = receiver_type.type_variable_substitutions.dup
           substitutions[:self] = receiver_type
           substitutions
+        end
+
+        # Add method-level type variable substitutions from entry
+        # Looks up the MethodEntry and adds block_return_var + remaining type_params substitutions.
+        # @param substitutions [Hash{Symbol => Type}] Substitutions hash to modify
+        # @param node [IR::CallNode] The call node with block info
+        # @param class_name [String] The class to look up
+        # @param method_name [String] The method to look up
+        # @param arg_types [Array<Types::Type>] Argument types for overload matching
+        # @return [void]
+        private def add_method_type_var_substitutions(substitutions, node, class_name, method_name, arg_types = [])
+          entry = @signature_registry.lookup(class_name, method_name)
+          entry ||= @signature_registry.lookup("Object", method_name) if class_name != "Object"
+          return unless entry
+
+          add_block_return_substitution(substitutions, node, entry.block_return_type_var(arg_types))
+          substitute_remaining_type_vars(substitutions, entry.type_params(arg_types))
         end
       end
     end

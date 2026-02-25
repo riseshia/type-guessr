@@ -304,6 +304,67 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
         expect(result.reason).to eq("String#upcase")
       end
 
+      it "substitutes block return type X for Thread::Mutex#synchronize" do
+        receiver_var = TypeGuessr::Core::IR::LocalWriteNode.new(
+          :mutex,
+          TypeGuessr::Core::IR::LiteralNode.new(
+            TypeGuessr::Core::Types::ClassInstance.new("Thread::Mutex"),
+            nil, nil, [], loc
+          ),
+          [],
+          loc
+        )
+        block_body = TypeGuessr::Core::IR::LiteralNode.new(
+          TypeGuessr::Core::Types::ClassInstance.new("String"),
+          nil, nil, [], loc
+        )
+        call = TypeGuessr::Core::IR::CallNode.new(
+          :synchronize,
+          receiver_var,
+          [],
+          [],
+          block_body,
+          true,
+          [],
+          loc
+        )
+
+        result = resolver.infer(call)
+        # Mutex#synchronize returns X, X should be substituted with String (block body type)
+        expect(result.type).to be_a(TypeGuessr::Core::Types::ClassInstance)
+        expect(result.type.name).to eq("String")
+      end
+
+      it "substitutes block return type with Unknown when block body is Unknown" do
+        receiver_var = TypeGuessr::Core::IR::LocalWriteNode.new(
+          :mutex,
+          TypeGuessr::Core::IR::LiteralNode.new(
+            TypeGuessr::Core::Types::ClassInstance.new("Thread::Mutex"),
+            nil, nil, [], loc
+          ),
+          [],
+          loc
+        )
+        block_body = TypeGuessr::Core::IR::LiteralNode.new(
+          TypeGuessr::Core::Types::Unknown.instance,
+          nil, nil, [], loc
+        )
+        call = TypeGuessr::Core::IR::CallNode.new(
+          :synchronize,
+          receiver_var,
+          [],
+          [],
+          block_body,
+          true,
+          [],
+          loc
+        )
+
+        result = resolver.infer(call)
+        # Block body is Unknown → X substituted with Unknown → return type is Unknown
+        expect(result.type).to eq(TypeGuessr::Core::Types::Unknown.instance)
+      end
+
       it "substitutes block return type U for ClassInstance receiver" do
         # Simulate: enumerable.map { |x| x.to_s } where block returns String
         receiver_var = TypeGuessr::Core::IR::LocalWriteNode.new(
