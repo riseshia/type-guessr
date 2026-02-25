@@ -31,8 +31,7 @@ module RubyLsp
       end
 
       module_function def background_indexing?
-        value = load_config.fetch("background_indexing", true)
-        value != false
+        load_config.fetch("background_indexing", false) == true
       end
 
       module_function def debug_server_port
