@@ -285,8 +285,8 @@ RSpec.describe "Hover Integration" do
         RUBY
       end
 
-      it "infers Hash type" do
-        expect_hover_type(line: 2, column: 2, expected: "Hash")
+      it "infers Hash[Symbol, untyped] type" do
+        expect_hover_type(line: 2, column: 2, expected: "Hash[Symbol, untyped]")
       end
     end
 

@@ -419,8 +419,12 @@ module TypeGuessr
         attr_reader :fields
 
         def self.new(fields, max_fields: 15)
-          # Widen to generic Hash when too many fields
-          return ClassInstance.for("Hash") if fields.size > max_fields
+          # Widen to generic HashType when too many fields
+          if fields.size > max_fields
+            value_types = fields.values.uniq
+            value_type = value_types.size == 1 ? value_types.first : Union.new(value_types)
+            return HashType.new(ClassInstance.for("Symbol"), value_type)
+          end
 
           super(fields)
         end

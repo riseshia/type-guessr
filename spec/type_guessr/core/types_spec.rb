@@ -508,13 +508,14 @@ RSpec.describe TypeGuessr::Core::Types do
       expect(hash_shape.to_s).to eq("{ }")
     end
 
-    it "widens to generic Hash when too many fields" do
+    it "widens to HashType when too many fields" do
       fields = (1..20).to_h do |i|
         [:"key#{i}", TypeGuessr::Core::Types::ClassInstance.new("String")]
       end
       hash_shape = TypeGuessr::Core::Types::HashShape.new(fields, max_fields: 10)
-      expect(hash_shape).to be_a(TypeGuessr::Core::Types::ClassInstance)
-      expect(hash_shape.name).to eq("Hash")
+      expect(hash_shape).to be_a(TypeGuessr::Core::Types::HashType)
+      expect(hash_shape.key_type.name).to eq("Symbol")
+      expect(hash_shape.value_type.name).to eq("String")
     end
 
     it "does not widen when fields are within limit" do
@@ -549,7 +550,7 @@ RSpec.describe TypeGuessr::Core::Types do
         expect(merged.fields[:a]).to eq(new_type)
       end
 
-      it "widens to Hash when exceeding max_fields" do
+      it "widens to HashType when exceeding max_fields" do
         fields = (1..14).to_h { |i| [:"key#{i}", TypeGuessr::Core::Types::ClassInstance.new("Integer")] }
         hash_shape = TypeGuessr::Core::Types::HashShape.new(fields)
 
@@ -557,8 +558,8 @@ RSpec.describe TypeGuessr::Core::Types do
         merged = hash_shape.merge_field(:key15, new_type)
         merged2 = merged.merge_field(:key16, new_type) if merged.is_a?(TypeGuessr::Core::Types::HashShape)
 
-        expect(merged2).to be_a(TypeGuessr::Core::Types::ClassInstance)
-        expect(merged2.name).to eq("Hash")
+        expect(merged2).to be_a(TypeGuessr::Core::Types::HashType)
+        expect(merged2.key_type.name).to eq("Symbol")
       end
 
       it "does not modify original HashShape" do

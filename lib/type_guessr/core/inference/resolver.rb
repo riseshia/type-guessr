@@ -229,8 +229,12 @@ module TypeGuessr
             # Early return: *args is always Array
             return Result.new(Types::ArrayType.new, "rest parameter", :inference)
           when :keyword_rest
-            # Early return: **kwargs is always Hash
-            return Result.new(Types::ClassInstance.for("Hash"), "keyword rest parameter", :inference)
+            # Early return: **kwargs is always Hash[Symbol, untyped]
+            return Result.new(
+              Types::HashType.new(Types::ClassInstance.for("Symbol"), Types::Unknown.instance),
+              "keyword rest parameter",
+              :inference
+            )
           when :block
             # Early return: &block is always Proc
             return Result.new(Types::ClassInstance.for("Proc"), "block parameter", :inference)
@@ -406,6 +410,17 @@ module TypeGuessr
               return Result.new(
                 return_type,
                 "HashShape##{node.method}",
+                :stdlib
+              )
+            when Types::RangeType
+              # Handle Range methods with element type substitution
+              substitutions = build_substitutions(receiver_type)
+              add_method_type_var_substitutions(substitutions, node, "Range", node.method.to_s)
+              raw_return_type = @signature_registry.get_method_return_type("Range", node.method.to_s)
+              return_type = raw_return_type.substitute(substitutions)
+              return Result.new(
+                return_type,
+                "Range[#{receiver_type.element_type}]##{node.method}",
                 :stdlib
               )
             when Types::HashType
