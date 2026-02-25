@@ -359,6 +359,24 @@ nums = [1, 2, 3]
 [n]ums  # Guessed Type: [Integer, Integer, Integer]
 ```
 
+## Block container mutation
+
+### block mutates outer array with different type
+
+```ruby
+a = [1]
+3.times { a << "str" }
+[a]  # Guessed Type: Array[Integer | String]
+```
+
+### block mutates empty outer array
+
+```ruby
+a = []
+3.times { a << 1 }
+[a]  # Guessed Type: Array[Integer]
+```
+
 ## Container mutation edge cases
 
 ### container mutation followed by reassignment
