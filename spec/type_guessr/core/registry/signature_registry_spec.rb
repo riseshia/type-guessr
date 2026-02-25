@@ -285,6 +285,22 @@ RSpec.describe TypeGuessr::Core::Registry::SignatureRegistry do
       end
     end
 
+    describe "#type_params" do
+      it "always returns empty array" do
+        entry = described_class.new(return_type)
+
+        expect(entry.type_params).to eq([])
+      end
+    end
+
+    describe "#block_return_type_var" do
+      it "always returns nil" do
+        entry = described_class.new(return_type)
+
+        expect(entry.block_return_type_var).to be_nil
+      end
+    end
+
     describe "#signatures" do
       it "always returns empty array" do
         entry = described_class.new(return_type)
@@ -617,6 +633,48 @@ RSpec.describe TypeGuessr::Core::Registry::SignatureRegistry do
         second_call = array_each_entry.block_param_types
 
         expect(first_call).to be(second_call)
+      end
+    end
+
+    describe "#type_params" do
+      it "returns [:U] for Array#map" do
+        entry = registry.lookup("Array", "map")
+
+        expect(entry.type_params).to eq([:U])
+      end
+
+      it "returns [:X] for Thread::Mutex#synchronize" do
+        entry = registry.lookup("Thread::Mutex", "synchronize")
+
+        expect(entry.type_params).to eq([:X])
+      end
+
+      it "returns [] for String#upcase" do
+        expect(string_upcase_entry.type_params).to eq([])
+      end
+    end
+
+    describe "#block_return_type_var" do
+      it "returns :U for Array#map" do
+        entry = registry.lookup("Array", "map")
+
+        expect(entry.block_return_type_var).to eq(:U)
+      end
+
+      it "returns :X for Thread::Mutex#synchronize" do
+        entry = registry.lookup("Thread::Mutex", "synchronize")
+
+        expect(entry.block_return_type_var).to eq(:X)
+      end
+
+      it "returns nil for String#upcase (no block)" do
+        expect(string_upcase_entry.block_return_type_var).to be_nil
+      end
+
+      it "returns :U for Array#filter_map (union nil | false | U)" do
+        entry = registry.lookup("Array", "filter_map")
+
+        expect(entry.block_return_type_var).to eq(:U)
       end
     end
 

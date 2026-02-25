@@ -41,6 +41,28 @@ module TypeGuessr
             @block_param_types = compute_block_param_types
           end
 
+          # Get method-level type parameter names from the best matching overload
+          # @param arg_types [Array<Types::Type>] argument types for overload matching
+          # @return [Array<Symbol>] type parameter names (e.g., [:U], [:X], [])
+          def type_params(arg_types = [])
+            find_best_overload(arg_types).type_params.map(&:name)
+          end
+
+          # Get the type variable used as the block return type
+          # Returns the method-level type variable that appears in the block's return type,
+          # allowing Resolver to substitute it with the actual block body type.
+          # @param arg_types [Array<Types::Type>] argument types for overload matching
+          # @return [Symbol, nil] type variable name (e.g., :U, :X) or nil if no block/no type var
+          def block_return_type_var(arg_types = [])
+            best = find_best_overload(arg_types)
+            return nil unless best.block
+
+            method_type_param_names = best.type_params.to_set(&:name)
+            return nil if method_type_param_names.empty?
+
+            extract_type_var_from_return(best.block.type.return_type, method_type_param_names)
+          end
+
           # Get raw method signatures for display
           # @return [Array<RBS::MethodType>] raw RBS method types
           def signatures
@@ -74,6 +96,26 @@ module TypeGuessr
               else
                 [@converter.convert(param.type)]
               end
+            end
+          end
+
+          # Extract a method-level type variable from the block return type
+          # Walks the RBS type tree to find a Variable whose name is in the method's type_params.
+          # Handles Union types like `nil | false | U` (filter_map).
+          # @param rbs_type [RBS::Types::t] the block return type from RBS
+          # @param method_type_param_names [Set<Symbol>] method-level type param names
+          # @return [Symbol, nil] the type variable name, or nil if not found
+          private def extract_type_var_from_return(rbs_type, method_type_param_names)
+            case rbs_type
+            when RBS::Types::Variable
+              method_type_param_names.include?(rbs_type.name) ? rbs_type.name : nil
+            when RBS::Types::Union
+              # Search union members for a type variable (e.g., nil | false | U)
+              rbs_type.types.each do |t|
+                found = extract_type_var_from_return(t, method_type_param_names)
+                return found if found
+              end
+              nil
             end
           end
 
@@ -174,6 +216,14 @@ module TypeGuessr
 
           def block_param_types
             []
+          end
+
+          def type_params(_arg_types = [])
+            []
+          end
+
+          def block_return_type_var(_arg_types = [])
+            nil
           end
 
           def signatures
