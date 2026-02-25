@@ -489,5 +489,46 @@ RSpec.describe "Class Instance Type Inference", :doc do
       end
     end
   end
+
+  describe "module_function def" do
+    context "module_function method signature" do
+      let(:source) do
+        <<~RUBY
+          module Config
+            module_function def default_config
+              { "enabled" => true }
+            end
+          end
+        RUBY
+      end
+
+      it "shows signature for module_function method definition" do
+        # Hover on "default_config" in "module_function def default_config"
+        response = expect_hover_response(line: 2, column: 22)
+        expect(response.contents.value).to include("Guessed Signature")
+      end
+    end
+
+    context "internal bare call" do
+      let(:source) do
+        <<~RUBY
+          module Config
+            module_function def default_config
+              { "enabled" => true }
+            end
+
+            def load
+              config = default_config
+              config
+            end
+          end
+        RUBY
+      end
+
+      it "→ Hash[String, true]" do
+        expect_hover_type(line: 8, column: 8, expected: "Hash[String, true]")
+      end
+    end
+  end
 end
 # rubocop:enable RSpec/DescribeClass

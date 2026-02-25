@@ -2543,5 +2543,48 @@ RSpec.describe TypeGuessr::Core::Converter::PrismConverter do
       method_names = class_node.methods.select { |m| m.is_a?(TypeGuessr::Core::IR::DefNode) }.map(&:name)
       expect(method_names).to include(:bar)
     end
+
+    it "includes module_function def in ClassModuleNode methods" do
+      source = <<~RUBY
+        module Config
+          module_function def default_config
+            {}
+          end
+        end
+      RUBY
+      parsed = Prism.parse(source)
+      context = TypeGuessr::Core::Converter::PrismConverter::Context.new
+      module_node = converter.convert(parsed.value.statements.body.first, context)
+
+      def_nodes = module_node.methods.select { |m| m.is_a?(TypeGuessr::Core::IR::DefNode) }
+      expect(def_nodes.map(&:name)).to include(:default_config)
+
+      def_node = def_nodes.find { |m| m.name == :default_config }
+      expect(def_node.singleton).to be false
+      expect(def_node.module_function).to be true
+    end
+
+    it "registers module_function def in both instance and singleton scopes" do
+      source = <<~RUBY
+        module Config
+          module_function def default_config
+            {}
+          end
+        end
+      RUBY
+      parsed = Prism.parse(source)
+      method_registry = TypeGuessr::Core::Registry::MethodRegistry.new
+      context = TypeGuessr::Core::Converter::PrismConverter::Context.new(
+        file_path: "test.rb",
+        location_index: TypeGuessr::Core::Index::LocationIndex.new,
+        method_registry: method_registry
+      )
+      converter.convert(parsed.value.statements.body.first, context)
+
+      # Registered as instance method
+      expect(method_registry.lookup("Config", "default_config")).to be_a(TypeGuessr::Core::IR::DefNode)
+      # Also registered as singleton method
+      expect(method_registry.lookup("Config::<Class:Config>", "default_config")).to be_a(TypeGuessr::Core::IR::DefNode)
+    end
   end
 end

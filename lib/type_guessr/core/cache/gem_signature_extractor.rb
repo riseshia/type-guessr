@@ -19,14 +19,24 @@ module TypeGuessr
 
         # Extract all method signatures from indexed gem files
         # @param gem_files [Array<String>] File paths belonging to this gem
-        # @return [Hash] { instance_methods: { class => { method => serialized } }, class_methods: { ... } }
-        def extract(gem_files)
+        # @param timeout [Float, nil] Max seconds for inference. Returns nil on timeout.
+        # @return [Hash, nil] { instance_methods:, class_methods: } or nil on timeout
+        def extract(gem_files, timeout: nil)
           gem_def_nodes = collect_def_nodes(gem_files)
           instance_methods = {}
           class_methods = {}
+          deadline = timeout ? Process.clock_gettime(Process::CLOCK_MONOTONIC) + timeout : nil
+          check_counter = 0
 
           @method_registry.each_entry do |class_name, method_name, def_node|
             next unless gem_def_nodes.include?(def_node)
+
+            if deadline
+              check_counter += 1
+              if (check_counter % 100).zero? && Process.clock_gettime(Process::CLOCK_MONOTONIC) > deadline
+                return nil
+              end
+            end
 
             sig = @signature_builder.build_from_def_node(def_node)
             serialized = serialize_signature(sig)
@@ -37,6 +47,12 @@ module TypeGuessr
             else
               instance_methods[class_name] ||= {}
               instance_methods[class_name][method_name] = serialized
+            end
+
+            # module_function: also register as class method
+            if def_node.module_function
+              class_methods[class_name] ||= {}
+              class_methods[class_name][method_name] = serialized
             end
           rescue StandardError
             # Skip methods that fail to infer (circular deps, etc.)

@@ -282,3 +282,20 @@ resolved = env.[r]esolve_type_names  # Signature: ) -> untyped
 resolved
 ```
 
+## module_function def
+
+### internal bare call
+
+```ruby
+module Config
+  module_function def default_config
+    { "enabled" => true }
+  end
+
+  def load
+    config = default_config
+    conf[i]g  # Guessed Type: Hash[String, true]
+  end
+end
+```
+

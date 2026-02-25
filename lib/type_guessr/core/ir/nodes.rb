@@ -659,9 +659,11 @@ module TypeGuessr
       class DefNode
         include TreeInspect
 
-        attr_reader :name, :class_name, :params, :return_node, :body_nodes, :called_methods, :loc, :singleton
+        attr_reader :name, :class_name, :params, :return_node, :body_nodes, :called_methods, :loc, :singleton,
+                    :module_function
 
-        def initialize(name, class_name, params, return_node, body_nodes, called_methods, loc, singleton)
+        def initialize(name, class_name, params, return_node, body_nodes, called_methods, loc, singleton,
+                       module_function: false)
           @name = name
           @class_name = class_name
           @params = params
@@ -670,6 +672,7 @@ module TypeGuessr
           @called_methods = called_methods
           @loc = loc
           @singleton = singleton
+          @module_function = module_function
         end
 
         def dependencies

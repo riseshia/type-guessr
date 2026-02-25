@@ -210,7 +210,8 @@ module TypeGuessr
                  when Prism::CallNode
                    # Unwrap visibility modifier: `private def foo` → treat as `def foo`
                    if visibility_modifier_with_def?(prism_node)
-                     convert_def(prism_node.arguments.arguments.first, context)
+                     convert_def(prism_node.arguments.arguments.first, context,
+                                 module_function: prism_node.name == :module_function)
                    else
                      convert_call(prism_node, context)
                    end
@@ -1310,7 +1311,7 @@ module TypeGuessr
           body_nodes
         end
 
-        private def convert_def(prism_node, context)
+        private def convert_def(prism_node, context, module_function: false)
           def_context = context.fork(:method)
           def_context.current_method = prism_node.name.to_s
           def_context.in_singleton_method = prism_node.receiver.is_a?(Prism::SelfNode)
@@ -1408,7 +1409,8 @@ module TypeGuessr
             body_nodes,
             [],
             convert_loc(prism_node.name_loc),
-            prism_node.receiver.is_a?(Prism::SelfNode)
+            prism_node.receiver.is_a?(Prism::SelfNode),
+            module_function: module_function
           )
         end
 
@@ -1827,6 +1829,12 @@ module TypeGuessr
 
             method_scope = singleton_scope_for(class_path, singleton: method.singleton)
             context.method_registry.register(method_scope, method.name.to_s, method)
+
+            # module_function: also register as singleton method
+            if method.module_function
+              singleton_scope = singleton_scope_for(class_path, singleton: true)
+              context.method_registry.register(singleton_scope, method.name.to_s, method)
+            end
           end
         end
 
@@ -1844,7 +1852,7 @@ module TypeGuessr
 
         # Check if a CallNode is a visibility modifier wrapping a def (e.g., `private def foo`)
         private def visibility_modifier_with_def?(prism_node)
-          %i[private protected public].include?(prism_node.name) &&
+          %i[private protected public module_function].include?(prism_node.name) &&
             prism_node.receiver.nil? &&
             prism_node.arguments&.arguments&.size == 1 &&
             prism_node.arguments.arguments.first.is_a?(Prism::DefNode)
