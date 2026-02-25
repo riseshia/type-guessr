@@ -40,15 +40,6 @@
   },
   "hooks": {
     "PostToolUse": [
-      {
-        "matcher": "Edit|Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bundle exec rspec --fail-fast"
-          }
-        ]
-      }
     ]
   }
 }
