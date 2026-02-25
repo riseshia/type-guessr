@@ -1,16 +1,16 @@
 # TypeGuessr Coverage Report
 
-Generated: 2026-02-23 10:34:20
+Generated: 2026-02-25 18:19:43
 
 ## Summary
 
 | Metric | Value |
 |--------|-------|
-| Files Analyzed | 3724 |
-| Node Coverage | 79.4% (1738846/2191312) |
-| Inference Coverage | 37.6% (272363/724829) |
+| Files Analyzed | 3723 |
+| Node Coverage | 79.2% (1755815/2216495) |
+| Inference Coverage | 38.2% (285255/745935) |
 | Signature Score | 0.38 |
-| Project Methods | 42701 |
+| Project Methods | 42704 |
 
 > **Node Coverage** includes trivially-typed nodes (LiteralNode, SelfNode).
 > **Inference Coverage** excludes them to reflect actual type inference capability.
@@ -19,22 +19,22 @@ Generated: 2026-02-23 10:34:20
 
 | Node Type | Coverage | Typed/Total |
 |-----------|----------|-------------|
-| LiteralNode | 100.0% | 1459687/1459687 |
-| CallNode | 31.9% | 89856/282088 |
-| LocalReadNode | 36.6% | 58547/160082 |
-| ParamNode | 20.8% | 14857/71418 |
-| LocalWriteNode | 53.8% | 23466/43600 |
-| ConstantNode | 50.3% | 20576/40874 |
-| MergeNode | 48.6% | 17397/35822 |
-| InstanceVariableReadNode | 78.0% | 18823/24142 |
-| ReturnNode | 82.7% | 14806/17908 |
-| BlockParamSlot | 19.9% | 3300/16577 |
-| InstanceVariableWriteNode | 54.9% | 8837/16111 |
-| ClassModuleNode | 0.0% | 0/13231 |
-| SelfNode | 100.0% | 6796/6796 |
-| OrNode | 62.6% | 1765/2821 |
+| LiteralNode | 100.0% | 1463722/1463722 |
+| CallNode | 32.4% | 95028/292872 |
+| LocalReadNode | 37.0% | 60261/163061 |
+| ParamNode | 21.1% | 15041/71422 |
+| LocalWriteNode | 54.0% | 23606/43711 |
+| ConstantNode | 50.3% | 20758/41307 |
+| MergeNode | 52.8% | 21567/40822 |
+| InstanceVariableReadNode | 77.8% | 19054/24500 |
+| ReturnNode | 82.7% | 14813/17914 |
+| BlockParamSlot | 20.3% | 3374/16581 |
+| InstanceVariableWriteNode | 55.3% | 8931/16151 |
+| ClassModuleNode | 0.0% | 0/13291 |
+| SelfNode | 100.0% | 6838/6838 |
+| OrNode | 64.8% | 2686/4145 |
 | ClassVariableWriteNode | 82.1% | 69/84 |
-| ClassVariableReadNode | 90.1% | 64/71 |
+| ClassVariableReadNode | 90.5% | 67/74 |
 
 ## Metrics Explanation
 
