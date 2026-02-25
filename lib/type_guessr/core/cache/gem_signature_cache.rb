@@ -43,7 +43,7 @@ module TypeGuessr
             "instance_methods" => data["instance_methods"] || {},
             "class_methods" => data["class_methods"] || {},
             "fully_inferred" => data.fetch("fully_inferred", true),
-            "lazy_only" => data.fetch("lazy_only", false)
+            "inference_timeout" => data.fetch("inference_timeout", false)
           }
         rescue JSON::ParserError, Errno::ENOENT
           nil
@@ -57,14 +57,14 @@ module TypeGuessr
         # @param class_methods [Hash] { class_name => { method_name => serialized_entry } }
         # @param fully_inferred [Boolean] Whether types are fully inferred (false = Unguessed placeholders)
         def save(gem_name, gem_version, transitive_deps,
-                 instance_methods:, class_methods:, fully_inferred: true, lazy_only: false)
+                 instance_methods:, class_methods:, fully_inferred: true, inference_timeout: false)
           path = cache_path(gem_name, gem_version, transitive_deps)
           FileUtils.mkdir_p(File.dirname(path))
 
           data = {
             "version" => CACHE_FORMAT_VERSION,
             "fully_inferred" => fully_inferred,
-            "lazy_only" => lazy_only,
+            "inference_timeout" => inference_timeout,
             "instance_methods" => instance_methods,
             "class_methods" => class_methods
           }

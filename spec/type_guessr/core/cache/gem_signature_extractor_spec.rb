@@ -128,6 +128,32 @@ RSpec.describe TypeGuessr::Core::Cache::GemSignatureExtractor do
       expect(result[:class_methods]).to be_empty
     end
 
+    it "returns nil when inference exceeds timeout" do
+      defs = 200.times.map do |i|
+        make_def_node(name: :"method_#{i}", class_name: "SlowClass", loc: 1000 + i)
+      end
+
+      defs.each_with_index do |d, i|
+        register_method("/gems/slow-1.0.0/lib/slow.rb", "SlowClass", "method_#{i}", d, scope_id: "SlowClass")
+        allow(resolver).to receive(:infer).with(d).and_return(infer_result(string_type))
+      end
+
+      result = extractor.extract(["/gems/slow-1.0.0/lib/slow.rb"], timeout: 0.0)
+
+      expect(result).to be_nil
+    end
+
+    it "completes normally when within timeout" do
+      def_node = make_def_node(name: :fast, class_name: "FastClass", loc: 100)
+      register_method("/gems/fast-1.0.0/lib/fast.rb", "FastClass", "fast", def_node, scope_id: "FastClass")
+      allow(resolver).to receive(:infer).with(def_node).and_return(infer_result(string_type))
+
+      result = extractor.extract(["/gems/fast-1.0.0/lib/fast.rb"], timeout: 10.0)
+
+      expect(result).not_to be_nil
+      expect(result[:instance_methods]).to have_key("FastClass")
+    end
+
     it "extracts methods from multiple files" do
       def1 = make_def_node(name: :method_a, class_name: "ClassA", loc: 100)
       def2 = make_def_node(name: :method_b, class_name: "ClassB", loc: 200)

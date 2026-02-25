@@ -56,7 +56,7 @@ RSpec.describe TypeGuessr::Core::Cache::GemSignatureCache do
                                "instance_methods" => instance_methods,
                                "class_methods" => class_methods,
                                "fully_inferred" => true,
-                               "lazy_only" => false
+                               "inference_timeout" => false
                              })
       end
     end
@@ -108,7 +108,7 @@ RSpec.describe TypeGuessr::Core::Cache::GemSignatureCache do
                                "instance_methods" => instance_methods,
                                "class_methods" => class_methods,
                                "fully_inferred" => true,
-                               "lazy_only" => false
+                               "inference_timeout" => false
                              })
       end
     end
@@ -140,20 +140,20 @@ RSpec.describe TypeGuessr::Core::Cache::GemSignatureCache do
       end
     end
 
-    it "saves and loads lazy_only: true" do
+    it "saves and loads inference_timeout: true" do
       Dir.mktmpdir do |dir|
         cache = described_class.new(cache_dir: dir)
         cache.save(gem_name, gem_version, transitive_deps,
                    instance_methods: instance_methods, class_methods: class_methods,
-                   fully_inferred: false, lazy_only: true)
+                   fully_inferred: false, inference_timeout: true)
 
         result = cache.load(gem_name, gem_version, transitive_deps)
 
-        expect(result["lazy_only"]).to be true
+        expect(result["inference_timeout"]).to be true
       end
     end
 
-    it "defaults lazy_only to false when not specified" do
+    it "defaults inference_timeout to false when not specified" do
       Dir.mktmpdir do |dir|
         cache = described_class.new(cache_dir: dir)
         cache.save(gem_name, gem_version, transitive_deps,
@@ -161,26 +161,26 @@ RSpec.describe TypeGuessr::Core::Cache::GemSignatureCache do
 
         result = cache.load(gem_name, gem_version, transitive_deps)
 
-        expect(result["lazy_only"]).to be false
+        expect(result["inference_timeout"]).to be false
       end
     end
 
-    it "treats missing lazy_only field as false for backward compatibility" do
+    it "treats missing inference_timeout field as false for backward compatibility" do
       Dir.mktmpdir do |dir|
         cache = described_class.new(cache_dir: dir)
 
-        # Save a cache file, then strip lazy_only to simulate old format
+        # Save a cache file, then strip inference_timeout to simulate old format
         cache.save(gem_name, gem_version, transitive_deps,
                    instance_methods: instance_methods, class_methods: class_methods)
 
         json_files = Dir.glob(File.join(dir, "*.json"))
         data = JSON.parse(File.read(json_files.first))
-        data.delete("lazy_only")
+        data.delete("inference_timeout")
         File.write(json_files.first, JSON.generate(data))
 
         result = cache.load(gem_name, gem_version, transitive_deps)
 
-        expect(result["lazy_only"]).to be false
+        expect(result["inference_timeout"]).to be false
       end
     end
   end

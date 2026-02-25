@@ -39,8 +39,8 @@ module RubyLsp
         load_config.fetch("debug_server_port", 7010)
       end
 
-      module_function def max_gem_files
-        load_config.fetch("max_gem_files", 500)
+      module_function def gem_inference_timeout
+        load_config.fetch("gem_inference_timeout", 1.0)
       end
 
       module_function def load_config

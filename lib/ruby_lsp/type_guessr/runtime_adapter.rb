@@ -365,40 +365,39 @@ module RubyLsp
         version = gem_info[:version]
         deps = gem_info[:transitive_deps]
         file_count = gem_info[:files].size
-        lazy_only = file_count > Config.max_gem_files
 
-        if lazy_only
-          log_message(
-            "Skipping background inference for #{gem_name}-#{version} " \
-            "(#{file_count} files > #{Config.max_gem_files})"
-          )
-        else
-          log_message("Processing #{gem_name}-#{version} (#{file_count} files)...")
-        end
+        log_message("Processing #{gem_name}-#{version} (#{file_count} files)...")
 
         if cache.cached?(gem_name, version, deps)
-          fully_inferred = load_gem_from_cache(gem_name, version, deps, cache)
-          !fully_inferred && !lazy_only
+          data = load_gem_from_cache(gem_name, version, deps, cache)
+          return false unless data
+
+          # Previously timed out — don't retry background inference
+          return false if data["inference_timeout"]
+
+          !data["fully_inferred"]
         else
-          save_unguessed_cache(gem_name, gem_info, cache, lazy_only: lazy_only)
-          !lazy_only
+          save_unguessed_cache(gem_name, gem_info, cache)
+          true
         end
       end
 
       # Load gem signatures from disk cache into SignatureRegistry
-      # @return [Boolean] Whether cache was fully inferred
+      # @return [Hash, nil] Loaded cache data or nil on failure
       private def load_gem_from_cache(gem_name, version, deps, cache)
         data = cache.load(gem_name, version, deps)
         unless data
           log_message("Cache corrupt for #{gem_name}-#{version}, skipping.")
-          return false
+          return nil
         end
 
         @signature_registry.load_gem_cache(data["instance_methods"], kind: :instance)
         @signature_registry.load_gem_cache(data["class_methods"], kind: :class)
-        fully_inferred = data.fetch("fully_inferred", true)
-        log_message("Loaded cached signatures for #{gem_name}-#{version} (fully_inferred=#{fully_inferred}).")
-        fully_inferred
+        log_message(
+          "Loaded cached signatures for #{gem_name}-#{version} " \
+          "(fully_inferred=#{data["fully_inferred"]}, inference_timeout=#{data["inference_timeout"]})."
+        )
+        data
       end
 
       # Infer gem method signatures using temporary registries, then cache
@@ -442,9 +441,21 @@ module RubyLsp
           method_registry: temp_method_registry,
           location_index: temp_location_index
         )
-        signatures = extractor.extract(files)
+        timeout = Config.gem_inference_timeout
+        signatures = extractor.extract(files, timeout: timeout)
 
         t2 = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+
+        # Inference timed out — save as unguessed with timeout flag
+        unless signatures
+          log_message(
+            "Inference timeout for #{gem_name}-#{version} " \
+            "(#{files.size} files, parse=#{(t1 - t0).round(2)}s, " \
+            "infer>#{timeout}s), deferring to on-demand"
+          )
+          save_unguessed_cache(gem_name, gem_info, cache, inference_timeout: true)
+          return nil
+        end
 
         # Phase C: Disk save
         cache.save(gem_name, version, deps,
@@ -471,7 +482,7 @@ module RubyLsp
 
       # Generate an Unguessed cache from member_index entries (no parse/infer needed).
       # Method names and parameter structure come from RubyIndexer; types are set to Unguessed.
-      private def save_unguessed_cache(gem_name, gem_info, cache, lazy_only: false)
+      private def save_unguessed_cache(gem_name, gem_info, cache, inference_timeout: false)
         version = gem_info[:version]
         files = gem_info[:files]
         deps = gem_info[:transitive_deps]
@@ -503,7 +514,7 @@ module RubyLsp
                    instance_methods: instance_methods,
                    class_methods: class_methods,
                    fully_inferred: false,
-                   lazy_only: lazy_only)
+                   inference_timeout: inference_timeout)
 
         @signature_registry.load_gem_cache(instance_methods, kind: :instance)
         @signature_registry.load_gem_cache(class_methods, kind: :class)

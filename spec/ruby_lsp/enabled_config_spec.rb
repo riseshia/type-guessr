@@ -72,15 +72,15 @@ RSpec.describe RubyLsp::TypeGuessr::Config do
     end
   end
 
-  describe ".max_gem_files" do
-    it "defaults to 500 when not specified" do
-      expect(described_class.max_gem_files).to eq(500)
+  describe ".gem_inference_timeout" do
+    it "defaults to 1.0 when not specified" do
+      expect(described_class.gem_inference_timeout).to eq(1.0)
     end
 
-    it "uses max_gem_files from config when set" do
-      File.write(".type-guessr.yml", "max_gem_files: 1000\n")
+    it "uses gem_inference_timeout from config when set" do
+      File.write(".type-guessr.yml", "gem_inference_timeout: 5.0\n")
       described_class.reset!
-      expect(described_class.max_gem_files).to eq(1000)
+      expect(described_class.gem_inference_timeout).to eq(5.0)
     end
   end
 

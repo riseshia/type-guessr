@@ -33,9 +33,7 @@ module TypeGuessr
 
             if deadline
               check_counter += 1
-              if (check_counter % 100).zero? && Process.clock_gettime(Process::CLOCK_MONOTONIC) > deadline
-                return nil
-              end
+              return nil if (check_counter % 100).zero? && Process.clock_gettime(Process::CLOCK_MONOTONIC) > deadline
             end
 
             sig = @signature_builder.build_from_def_node(def_node)
