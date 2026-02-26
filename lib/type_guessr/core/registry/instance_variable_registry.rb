@@ -13,6 +13,7 @@ module TypeGuessr
         # @param code_index [#ancestors_of, nil] Adapter for inheritance lookup
         def initialize(code_index: nil)
           @variables = {} # { "ClassName" => { :@name => WriteNode } }
+          @file_entries = {} # { file_path => [[class_name, name], ...] }
           @code_index = code_index
         end
 
@@ -20,12 +21,31 @@ module TypeGuessr
         # @param class_name [String] Class name
         # @param name [Symbol] Variable name (e.g., :@recipe)
         # @param write_node [IR::InstanceVariableWriteNode]
-        def register(class_name, name, write_node)
+        # @param file_path [String, nil] Source file path for tracking
+        def register(class_name, name, write_node, file_path: nil)
           return unless class_name
 
           @variables[class_name] ||= {}
-          # First write wins (preserves consistent behavior)
-          @variables[class_name][name] ||= write_node
+          return if @variables[class_name].key?(name) # first write wins
+
+          @variables[class_name][name] = write_node
+
+          return unless file_path
+
+          @file_entries[file_path] ||= []
+          @file_entries[file_path] << [class_name, name]
+        end
+
+        # Remove all entries registered from a specific file
+        # @param file_path [String] Source file path
+        def remove_file(file_path)
+          entries = @file_entries.delete(file_path)
+          return unless entries
+
+          entries.each do |class_name, name|
+            @variables[class_name]&.delete(name)
+            @variables.delete(class_name) if @variables[class_name] && @variables[class_name].empty?
+          end
         end
 
         # Look up an instance variable write (with inheritance chain traversal)
@@ -56,6 +76,7 @@ module TypeGuessr
         # Clear all registered variables
         def clear
           @variables.clear
+          @file_entries.clear
         end
       end
     end

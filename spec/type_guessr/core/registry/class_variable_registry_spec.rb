@@ -48,6 +48,49 @@ RSpec.describe TypeGuessr::Core::Registry::ClassVariableRegistry do
     end
   end
 
+  describe "#remove_file" do
+    it "removes variables registered from a specific file" do
+      node_a = create_cvar_write_node(:@@count, "Counter")
+      node_b = create_cvar_write_node(:@@total, "Counter")
+      registry.register("Counter", :@@count, node_a, file_path: "/app/counter.rb")
+      registry.register("Counter", :@@total, node_b, file_path: "/app/stats.rb")
+
+      registry.remove_file("/app/counter.rb")
+
+      expect(registry.lookup("Counter", :@@count)).to be_nil
+      expect(registry.lookup("Counter", :@@total)).to eq(node_b)
+    end
+
+    it "cleans up empty class entries" do
+      node = create_cvar_write_node(:@@count, "OnlyClass")
+      registry.register("OnlyClass", :@@count, node, file_path: "/app/only.rb")
+
+      registry.remove_file("/app/only.rb")
+
+      expect(registry.lookup("OnlyClass", :@@count)).to be_nil
+    end
+
+    it "is no-op for unknown file" do
+      node = create_cvar_write_node(:@@count, "Counter")
+      registry.register("Counter", :@@count, node, file_path: "/app/counter.rb")
+
+      registry.remove_file("/app/unknown.rb")
+
+      expect(registry.lookup("Counter", :@@count)).to eq(node)
+    end
+
+    it "does not track no-op registrations (first write wins)" do
+      node_a = create_cvar_write_node(:@@count, "Counter")
+      node_b = create_cvar_write_node(:@@count, "Counter")
+      registry.register("Counter", :@@count, node_a, file_path: "/app/a.rb")
+      registry.register("Counter", :@@count, node_b, file_path: "/app/b.rb") # no-op
+
+      registry.remove_file("/app/b.rb") # should have no effect
+
+      expect(registry.lookup("Counter", :@@count)).to eq(node_a)
+    end
+  end
+
   describe "#clear" do
     it "removes all registered variables" do
       registry.register("Counter", :@@count, create_cvar_write_node(:@@count, "Counter"))

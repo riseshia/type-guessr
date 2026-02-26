@@ -182,6 +182,61 @@ RSpec.describe TypeGuessr::Core::Registry::MethodRegistry do
     end
   end
 
+  describe "#remove_file" do
+    it "removes methods registered from a specific file" do
+      node_a = create_def_node("method_a")
+      node_b = create_def_node("method_b")
+      registry.register("User", "method_a", node_a, file_path: "/app/user.rb")
+      registry.register("User", "method_b", node_b, file_path: "/app/admin.rb")
+
+      registry.remove_file("/app/user.rb")
+
+      expect(registry.lookup("User", "method_a")).to be_nil
+      expect(registry.lookup("User", "method_b")).to eq(node_b)
+    end
+
+    it "keeps entry when another file also defines it" do
+      node_a = create_def_node("foo")
+      node_b = create_def_node("foo")
+      registry.register("User", "foo", node_a, file_path: "/app/a.rb")
+      registry.register("User", "foo", node_b, file_path: "/app/b.rb")
+
+      registry.remove_file("/app/a.rb")
+
+      expect(registry.lookup("User", "foo")).to eq(node_b)
+    end
+
+    it "deletes entry when all contributing files are removed" do
+      node_a = create_def_node("foo")
+      node_b = create_def_node("foo")
+      registry.register("User", "foo", node_a, file_path: "/app/a.rb")
+      registry.register("User", "foo", node_b, file_path: "/app/b.rb")
+
+      registry.remove_file("/app/a.rb")
+      registry.remove_file("/app/b.rb")
+
+      expect(registry.lookup("User", "foo")).to be_nil
+    end
+
+    it "cleans up empty class entries" do
+      node = create_def_node("foo")
+      registry.register("OnlyClass", "foo", node, file_path: "/app/only.rb")
+
+      registry.remove_file("/app/only.rb")
+
+      expect(registry.methods_for_class("OnlyClass")).to eq({})
+    end
+
+    it "is no-op for unknown file" do
+      node = create_def_node("foo")
+      registry.register("User", "foo", node, file_path: "/app/user.rb")
+
+      registry.remove_file("/app/unknown.rb")
+
+      expect(registry.lookup("User", "foo")).to eq(node)
+    end
+  end
+
   describe "#code_index=" do
     it "allows setting code_index after initialization" do
       parent_method = create_def_node("parent_method")

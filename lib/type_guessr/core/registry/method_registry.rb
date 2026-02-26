@@ -13,6 +13,8 @@ module TypeGuessr
         # @param code_index [#ancestors_of, nil] Adapter for inheritance lookup
         def initialize(code_index: nil)
           @methods = {} # { "ClassName" => { "method_name" => DefNode } }
+          @file_entries = {} # { file_path => [[class_name, method_name], ...] }
+          @entry_sources = {} # { [class_name, method_name] => Set[file_path, ...] }
           @code_index = code_index
         end
 
@@ -20,9 +22,38 @@ module TypeGuessr
         # @param class_name [String] Class name (empty string for top-level)
         # @param method_name [String] Method name
         # @param def_node [IR::DefNode] Method definition node
-        def register(class_name, method_name, def_node)
+        # @param file_path [String, nil] Source file path for tracking
+        def register(class_name, method_name, def_node, file_path: nil)
           @methods[class_name] ||= {}
           @methods[class_name][method_name] = def_node
+
+          return unless file_path
+
+          @file_entries[file_path] ||= []
+          @file_entries[file_path] << [class_name, method_name]
+          key = [class_name, method_name]
+          @entry_sources[key] ||= Set.new
+          @entry_sources[key] << file_path
+        end
+
+        # Remove all method entries registered from a specific file
+        # @param file_path [String] Source file path
+        def remove_file(file_path)
+          entries = @file_entries.delete(file_path)
+          return unless entries
+
+          entries.each do |class_name, method_name|
+            key = [class_name, method_name]
+            sources = @entry_sources[key]
+            next unless sources
+
+            sources.delete(file_path)
+            next unless sources.empty?
+
+            @entry_sources.delete(key)
+            @methods[class_name]&.delete(method_name)
+            @methods.delete(class_name) if @methods[class_name] && @methods[class_name].empty?
+          end
         end
 
         # Look up a method definition (with inheritance chain traversal)
@@ -84,6 +115,8 @@ module TypeGuessr
         # Clear all registered methods
         def clear
           @methods.clear
+          @file_entries.clear
+          @entry_sources.clear
         end
       end
     end

@@ -130,6 +130,9 @@ module RubyLsp
       def remove_indexed_file(file_path)
         @mutex.synchronize do
           @location_index.remove_file(file_path)
+          @method_registry.remove_file(file_path)
+          @ivar_registry.remove_file(file_path)
+          @cvar_registry.remove_file(file_path)
           @resolver.clear_cache
           @code_index.refresh_member_index!(URI::Generic.from_path(path: file_path))
         end
@@ -556,6 +559,9 @@ module RubyLsp
 
           @mutex.synchronize do
             @location_index.remove_file(file_path)
+            @method_registry.remove_file(file_path)
+            @ivar_registry.remove_file(file_path)
+            @cvar_registry.remove_file(file_path)
 
             context = ::TypeGuessr::Core::Converter::PrismConverter::Context.new(
               file_path: file_path,
@@ -616,6 +622,9 @@ module RubyLsp
         @mutex.synchronize do
           # Clear existing index for this file
           @location_index.remove_file(file_path)
+          @method_registry.remove_file(file_path)
+          @ivar_registry.remove_file(file_path)
+          @cvar_registry.remove_file(file_path)
           @resolver.clear_cache
 
           # Create context with index/registry injection - nodes are registered during conversion

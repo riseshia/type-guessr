@@ -1794,10 +1794,10 @@ module TypeGuessr
             end
           when IR::InstanceVariableWriteNode
             context.location_index.add(context.file_path, node, context.scope_id)
-            context.ivar_registry&.register(node.class_name, node.name, node)
+            context.ivar_registry&.register(node.class_name, node.name, node, file_path: context.file_path)
           when IR::ClassVariableWriteNode
             context.location_index.add(context.file_path, node, context.scope_id)
-            context.cvar_registry&.register(node.class_name, node.name, node)
+            context.cvar_registry&.register(node.class_name, node.name, node, file_path: context.file_path)
           else
             # All other nodes (MergeNode, LiteralNode, etc.)
             context.location_index.add(context.file_path, node, context.scope_id)
@@ -1812,7 +1812,7 @@ module TypeGuessr
           # Only register top-level methods (no class context)
           return unless (context.current_class_name || "").empty?
 
-          context.method_registry.register("", node.name.to_s, node)
+          context.method_registry.register("", node.name.to_s, node, file_path: context.file_path)
         end
 
         # Register methods from a class/module in method_registry
@@ -1828,12 +1828,12 @@ module TypeGuessr
             next if method.is_a?(IR::ClassModuleNode)
 
             method_scope = singleton_scope_for(class_path, singleton: method.singleton)
-            context.method_registry.register(method_scope, method.name.to_s, method)
+            context.method_registry.register(method_scope, method.name.to_s, method, file_path: context.file_path)
 
             # module_function: also register as singleton method
             if method.module_function
               singleton_scope = singleton_scope_for(class_path, singleton: true)
-              context.method_registry.register(singleton_scope, method.name.to_s, method)
+              context.method_registry.register(singleton_scope, method.name.to_s, method, file_path: context.file_path)
             end
           end
         end

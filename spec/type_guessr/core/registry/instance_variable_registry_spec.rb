@@ -97,6 +97,49 @@ RSpec.describe TypeGuessr::Core::Registry::InstanceVariableRegistry do
     end
   end
 
+  describe "#remove_file" do
+    it "removes variables registered from a specific file" do
+      node_a = create_ivar_write_node(:@name, "User")
+      node_b = create_ivar_write_node(:@age, "User")
+      registry.register("User", :@name, node_a, file_path: "/app/user.rb")
+      registry.register("User", :@age, node_b, file_path: "/app/admin.rb")
+
+      registry.remove_file("/app/user.rb")
+
+      expect(registry.lookup("User", :@name)).to be_nil
+      expect(registry.lookup("User", :@age)).to eq(node_b)
+    end
+
+    it "cleans up empty class entries" do
+      node = create_ivar_write_node(:@name, "OnlyClass")
+      registry.register("OnlyClass", :@name, node, file_path: "/app/only.rb")
+
+      registry.remove_file("/app/only.rb")
+
+      expect(registry.lookup("OnlyClass", :@name)).to be_nil
+    end
+
+    it "is no-op for unknown file" do
+      node = create_ivar_write_node(:@name, "User")
+      registry.register("User", :@name, node, file_path: "/app/user.rb")
+
+      registry.remove_file("/app/unknown.rb")
+
+      expect(registry.lookup("User", :@name)).to eq(node)
+    end
+
+    it "does not track no-op registrations (first write wins)" do
+      node_a = create_ivar_write_node(:@name, "User")
+      node_b = create_ivar_write_node(:@name, "User")
+      registry.register("User", :@name, node_a, file_path: "/app/a.rb")
+      registry.register("User", :@name, node_b, file_path: "/app/b.rb") # no-op
+
+      registry.remove_file("/app/b.rb") # should have no effect
+
+      expect(registry.lookup("User", :@name)).to eq(node_a)
+    end
+  end
+
   describe "#code_index=" do
     it "allows setting code_index after initialization" do
       parent_ivar = create_ivar_write_node(:@name, "Parent")
