@@ -276,10 +276,9 @@ env
 ### gem instance method signature
 
 ```ruby
-loader = RBS::EnvironmentLoader.new
-env = RBS::Environment.from_loader(loader)
-resolved = env.[r]esolve_type_names  # Signature: ) -> untyped
-resolved
+name = "hello"
+result = name.up[c]ase  # Signature: () -> ::String
+result
 ```
 
 ## module_function def
