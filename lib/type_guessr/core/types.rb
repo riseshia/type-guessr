@@ -172,7 +172,7 @@ module TypeGuessr
         end
 
         def inspect
-          "#<Union:#{@types.map(&:to_s).join("|")}>"
+          "#<Union:#{@types.join("|")}>"
         end
 
         def substitute(substitutions)
@@ -225,7 +225,7 @@ module TypeGuessr
         private def simplify_if_unknown_present(types)
           return types if types.size <= 1
 
-          has_unknown = types.any? { |t| t.is_a?(Unknown) }
+          has_unknown = types.any?(Unknown)
           has_unknown ? [Unknown.instance] : types
         end
 
@@ -574,7 +574,7 @@ module TypeGuessr
         end
 
         def to_s
-          params_str = @params.map(&:to_s).join(", ")
+          params_str = @params.join(", ")
           "(#{params_str}) -> #{@return_type}"
         end
 

@@ -233,7 +233,7 @@ module TypeGuessr
           # Get formatted signature strings for display
           # @return [Array<String>] human-readable method signatures
           def signature_strings
-            param_str = @params.map(&:to_s).join(", ")
+            param_str = @params.join(", ")
             ["(#{param_str}) -> #{@return_type}"]
           end
         end

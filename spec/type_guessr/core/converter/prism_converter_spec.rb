@@ -2499,7 +2499,7 @@ RSpec.describe TypeGuessr::Core::Converter::PrismConverter do
       context = TypeGuessr::Core::Converter::PrismConverter::Context.new
       class_node = converter.convert(parsed.value.statements.body.first, context)
 
-      method_names = class_node.methods.select { |m| m.is_a?(TypeGuessr::Core::IR::DefNode) }.map(&:name)
+      method_names = class_node.methods.grep(TypeGuessr::Core::IR::DefNode).map(&:name)
       expect(method_names).to include(:bar)
     end
 
@@ -2540,7 +2540,7 @@ RSpec.describe TypeGuessr::Core::Converter::PrismConverter do
       context = TypeGuessr::Core::Converter::PrismConverter::Context.new
       class_node = converter.convert(parsed.value.statements.body.first, context)
 
-      method_names = class_node.methods.select { |m| m.is_a?(TypeGuessr::Core::IR::DefNode) }.map(&:name)
+      method_names = class_node.methods.grep(TypeGuessr::Core::IR::DefNode).map(&:name)
       expect(method_names).to include(:bar)
     end
 
@@ -2556,7 +2556,7 @@ RSpec.describe TypeGuessr::Core::Converter::PrismConverter do
       context = TypeGuessr::Core::Converter::PrismConverter::Context.new
       module_node = converter.convert(parsed.value.statements.body.first, context)
 
-      def_nodes = module_node.methods.select { |m| m.is_a?(TypeGuessr::Core::IR::DefNode) }
+      def_nodes = module_node.methods.grep(TypeGuessr::Core::IR::DefNode)
       expect(def_nodes.map(&:name)).to include(:default_config)
 
       def_node = def_nodes.find { |m| m.name == :default_config }

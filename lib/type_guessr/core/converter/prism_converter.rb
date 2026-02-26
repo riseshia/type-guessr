@@ -1425,7 +1425,7 @@ module TypeGuessr
           explicit_returns = collect_returns(body_nodes)
 
           # The implicit return is the last non-ReturnNode in body
-          implicit_return = body_nodes.reject { |n| n.is_a?(IR::ReturnNode) }.last
+          implicit_return = body_nodes.grep_v(IR::ReturnNode).last
 
           # Determine all return points
           return_points = explicit_returns.dup
@@ -1693,7 +1693,7 @@ module TypeGuessr
 
           return Types::ArrayType.new if element_types.empty?
 
-          if element_types.any? { |t| t.is_a?(Types::Unknown) }
+          if element_types.any?(Types::Unknown)
             # Splat or unknown elements → widen to ArrayType(Union)
             unique_types = element_types.uniq
             Types::ArrayType.new(Types::Union.new(unique_types))

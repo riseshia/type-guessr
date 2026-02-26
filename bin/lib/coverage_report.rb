@@ -31,7 +31,7 @@ module CoverageRunner
     # @return [Array<Hash>] Array of node info hashes with :type, :name, :file, :line, :scope, :reason
     def collect_untyped_nodes(filter: nil, limit: nil)
       nodes = collect_all_nodes
-      nodes = nodes.reject { |n| n.is_a?(IR::DefNode) }
+      nodes = nodes.grep_v(IR::DefNode)
 
       # Filter to untyped nodes only
       untyped = nodes.reject { |node| typed?(node) }
@@ -53,7 +53,7 @@ module CoverageRunner
     # @return [Integer]
     def total_untyped_count
       nodes = collect_all_nodes
-      nodes = nodes.reject { |n| n.is_a?(IR::DefNode) }
+      nodes = nodes.grep_v(IR::DefNode)
       nodes.count { |node| !typed?(node) }
     end
 
@@ -63,7 +63,7 @@ module CoverageRunner
     private def calculate_node_coverage
       nodes = collect_all_nodes
       # Exclude DefNode - it would double-count params and return
-      nodes = nodes.reject { |n| n.is_a?(IR::DefNode) }
+      nodes = nodes.grep_v(IR::DefNode)
 
       breakdown = build_breakdown(nodes)
       total = nodes.size

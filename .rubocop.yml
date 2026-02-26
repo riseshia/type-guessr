@@ -40,6 +40,10 @@ Lint/DuplicateBranch:
 Style/NegatedIf:
   Enabled: false
 
+# bin/ scripts and spec/support helpers legitimately define multiple classes/modules
+Style/OneClassPerFile:
+  Enabled: false
+
 # LiteralNode.values is an Array, not a Hash
 Style/HashEachMethods:
   Enabled: false
