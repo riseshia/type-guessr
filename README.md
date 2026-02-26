@@ -89,7 +89,7 @@ TypeGuessr can run as a standalone [MCP](https://modelcontextprotocol.io/) serve
 Using Claude Code CLI:
 
 ```bash
-claude mcp add type-guessr -- bundle exec ruby /path/to/type-guessr/exe/type-guessr mcp
+claude mcp add type-guessr -- bundle exec type-guessr mcp
 ```
 
 Or add to your project's `.mcp.json` manually:
@@ -99,7 +99,7 @@ Or add to your project's `.mcp.json` manually:
   "mcpServers": {
     "type-guessr": {
       "command": "bundle",
-      "args": ["exec", "ruby", "/path/to/type-guessr/exe/type-guessr", "mcp"]
+      "args": ["exec", "type-guessr", "mcp"]
     }
   }
 }
@@ -108,7 +108,7 @@ Or add to your project's `.mcp.json` manually:
 Or run directly:
 
 ```bash
-bundle exec ruby exe/type-guessr mcp [project_path]
+bundle exec type-guessr mcp [project_path]
 ```
 
 If `project_path` is omitted, the current directory is used.
