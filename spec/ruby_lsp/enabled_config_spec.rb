@@ -24,7 +24,7 @@ RSpec.describe RubyLsp::TypeGuessr::Config do
     # Restore the test-suite config so subsequent tests don't pick up .type-guessr.yml
     described_class.instance_variable_set(
       :@cached_config,
-      { "enabled" => true, "debug" => false, "background_indexing" => false }
+      { "enabled" => true, "debug" => false, "background_gem_indexing" => false }
     )
   end
 

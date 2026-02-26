@@ -251,7 +251,7 @@ module RubyLsp
           @indexing_completed = true
 
           # Background inference: fully infer gems that have Unguessed entries (opt-in)
-          background_infer_gems(result[:unguessed_gems], result[:cache]) if Config.background_indexing? && result && result[:unguessed_gems].any?
+          background_infer_gems(result[:unguessed_gems], result[:cache]) if Config.background_gem_indexing? && result && result[:unguessed_gems].any?
         rescue StandardError => e
           log_message("Error during file indexing: #{e.message}\n#{e.backtrace.first(10).join("\n")}")
           @indexing_completed = true

@@ -153,7 +153,7 @@ RSpec.configure do |config|
     # Disable background gem indexing for all tests — opt in where needed
     RubyLsp::TypeGuessr::Config.instance_variable_set(
       :@cached_config,
-      { "enabled" => true, "debug" => false, "background_indexing" => false }
+      { "enabled" => true, "debug" => false, "background_gem_indexing" => false }
     )
 
     # Only initialize server when ruby_lsp/internal is loaded (integration tests)
