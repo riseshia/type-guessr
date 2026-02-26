@@ -22,6 +22,14 @@ module FullIndexHelper
       @server ||= create_server_with_cached_index
     end
 
+    def addon
+      @addon ||= create_addon
+    end
+
+    def runtime_adapter
+      addon.runtime_adapter
+    end
+
     def global_state
       server.global_state
     end
@@ -35,12 +43,30 @@ module FullIndexHelper
     end
 
     def reset!
+      if @addon
+        @addon.deactivate
+        RubyLsp::Addon.addons.delete(@addon)
+        @addon = nil
+      end
+
       return unless @server
 
       @server.run_shutdown
       @server = nil
     rescue StandardError
+      @addon = nil
       @server = nil
+    end
+
+    private def create_addon
+      addon = RubyLsp::TypeGuessr::Addon.new
+      addon.activate(server.global_state, server.instance_variable_get(:@outgoing_queue))
+      RubyLsp::Addon.addons << addon
+
+      # Wait for start_indexing thread to complete
+      sleep 0.1 until addon.runtime_adapter&.indexing_completed?
+
+      addon
     end
 
     private def create_server_with_cached_index
@@ -156,8 +182,11 @@ RSpec.configure do |config|
       { "enabled" => true, "debug" => false, "background_gem_indexing" => false }
     )
 
-    # Only initialize server when ruby_lsp/internal is loaded (integration tests)
-    FullIndexHelper.server if defined?(RubyLsp::Server)
+    # Only initialize server and addon when ruby_lsp/internal is loaded (integration tests)
+    if defined?(RubyLsp::Server)
+      FullIndexHelper.server
+      FullIndexHelper.addon
+    end
   end
 
   config.after(:suite) do

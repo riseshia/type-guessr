@@ -434,15 +434,15 @@ RSpec.describe "Class Instance Type Inference", :doc do
       end
 
       it "shows Guessed Signature for instance method" do
-        # With full indexing, RBS definitions are available for gem methods
+        # With suite-level addon, gem signatures are fully inferred before tests run.
+        # RBS::Environment#resolve_type_names returns Environment (self type).
         # RBS::Environment#resolve_type_names signature varies by RBS version:
-        #   v3.10.2: (?only: untyped) -> untyped
-        #   v3.10.3+: () -> untyped
-        # Note: This test previously worked via duck typing fallback (MethodRegistry)
+        #   v3.10.2: (?only: untyped) -> Environment
+        #   v3.10.3+: () -> Environment
         expect_hover_method_signature(
           line: 3,
           column: 15,
-          expected_signature: ") -> untyped"
+          expected_signature: ") -> Environment"
         )
       end
     end

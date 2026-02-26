@@ -73,16 +73,14 @@ module TypeGuessrTestHelper
 
   # Shared, fully-indexed server for integration tests. Uses fixed URI (source.rb) so that
   # handle_change properly invalidates RubyIndexer's ancestor cache between tests.
+  # Addon is shared at suite level; test data is cleaned up via remove_indexed_file.
   def with_server_and_addon(source, &block)
     server = FullIndexHelper.server
+    addon = FullIndexHelper.addon
     uri = URI("file://#{Dir.pwd}/source.rb")
+    file_path = "#{Dir.pwd}/source.rb"
 
     server.process_message(did_open_message(uri, source))
-
-    addon = RubyLsp::TypeGuessr::Addon.new
-    addon.activate(server.global_state, server.instance_variable_get(:@outgoing_queue))
-    RubyLsp::Addon.addons << addon
-
     addon.runtime_adapter&.index_source(uri.to_s, source)
     server.global_state.index.handle_change(uri, source)
     addon.runtime_adapter&.build_member_index!
@@ -90,9 +88,8 @@ module TypeGuessrTestHelper
     begin
       block.call(server, uri)
     ensure
-      addon.deactivate
-      RubyLsp::Addon.addons.delete(addon)
       server.process_message(did_close_message(uri))
+      addon.runtime_adapter&.remove_indexed_file(file_path)
     end
   end
 

@@ -101,27 +101,14 @@ RSpec.describe RubyLsp::TypeGuessr::Config do
     File.write(".type-guessr.yml", "enabled: false\n")
     described_class.reset!
 
-    source = <<~RUBY
-      def foo
-        name = "John"
-        name
-      end
-    RUBY
+    server = FullIndexHelper.server
+    addon = RubyLsp::TypeGuessr::Addon.new
+    addon.activate(server.global_state, server.instance_variable_get(:@outgoing_queue))
 
-    response = nil
-
-    with_server_and_addon(source) do |server, uri|
-      server.process_message(
-        id: 1,
-        method: "textDocument/hover",
-        params: { textDocument: { uri: uri }, position: { line: 2, character: 2 } }
-      )
-
-      result = pop_result(server)
-      response = result.response
-    end
-
-    # When disabled, the hover listener registers nothing, so Ruby LSP should return no hover result.
-    expect(response).to be_nil
+    # When disabled, runtime_adapter is nil so hover listener is never created
+    expect(addon.runtime_adapter).to be_nil
+    expect(addon.create_hover_listener(nil, nil, nil)).to be_nil
+  ensure
+    addon&.deactivate
   end
 end
