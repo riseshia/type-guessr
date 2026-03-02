@@ -3,6 +3,7 @@
 require "json"
 require "digest/sha2"
 require "fileutils"
+require_relative "../../version"
 
 module TypeGuessr
   module Core
@@ -79,7 +80,7 @@ module TypeGuessr
 
         private def default_cache_dir
           xdg_cache = ENV.fetch("XDG_CACHE_HOME", File.join(Dir.home, ".cache"))
-          File.join(xdg_cache, "type-guessr", "gem-signatures")
+          File.join(xdg_cache, "type-guessr", "gem-signatures", TypeGuessr::VERSION)
         end
 
         private def cache_path(gem_name, gem_version, transitive_deps)

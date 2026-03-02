@@ -237,6 +237,15 @@ RSpec.describe TypeGuessr::Core::Cache::GemSignatureCache do
     end
   end
 
+  describe "default cache directory" do
+    it "includes TypeGuessr::VERSION in the path" do
+      cache = described_class.new
+      default_dir = cache.send(:default_cache_dir)
+
+      expect(default_dir).to end_with(File.join("type-guessr", "gem-signatures", TypeGuessr::VERSION))
+    end
+  end
+
   describe "#clear!" do
     it "removes all cached files" do
       dir = Dir.mktmpdir
