@@ -304,6 +304,36 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
         expect(result.reason).to eq("String#upcase")
       end
 
+      it "substitutes block return type X for Mutex#synchronize (toplevel alias)" do
+        receiver_var = TypeGuessr::Core::IR::LocalWriteNode.new(
+          :mutex,
+          TypeGuessr::Core::IR::LiteralNode.new(
+            TypeGuessr::Core::Types::ClassInstance.new("Mutex"),
+            nil, nil, [], loc
+          ),
+          [],
+          loc
+        )
+        block_body = TypeGuessr::Core::IR::LiteralNode.new(
+          TypeGuessr::Core::Types::ClassInstance.new("String"),
+          nil, nil, [], loc
+        )
+        call = TypeGuessr::Core::IR::CallNode.new(
+          :synchronize,
+          receiver_var,
+          [],
+          [],
+          block_body,
+          true,
+          [],
+          loc
+        )
+
+        result = resolver.infer(call)
+        expect(result.type).to be_a(TypeGuessr::Core::Types::ClassInstance)
+        expect(result.type.name).to eq("String")
+      end
+
       it "substitutes block return type X for Thread::Mutex#synchronize" do
         receiver_var = TypeGuessr::Core::IR::LocalWriteNode.new(
           :mutex,

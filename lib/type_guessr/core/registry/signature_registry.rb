@@ -450,6 +450,13 @@ module TypeGuessr
           env.class_decls.each_key do |type_name|
             load_class_definitions(type_name, builder)
           end
+
+          env.class_alias_decls.each_value do |entry|
+            alias_name = entry.decl.new_name.to_s.delete_prefix("::")
+            original_name = entry.decl.old_name.to_s.delete_prefix("::")
+            @instance_methods[alias_name] ||= @instance_methods[original_name] if @instance_methods[original_name]
+            @class_methods[alias_name] ||= @class_methods[original_name] if @class_methods[original_name]
+          end
         rescue StandardError => e
           Logger.error("Failed to preload RBS environment", e)
         end

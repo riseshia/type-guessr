@@ -47,6 +47,18 @@ RSpec.describe TypeGuessr::Core::Registry::SignatureRegistry do
 
       expect(entry).to be_nil
     end
+
+    it "resolves toplevel class alias to original class" do
+      entry = registry.lookup("Mutex", "synchronize")
+
+      expect(entry).to be_a(described_class::MethodEntry)
+    end
+
+    it "resolves Queue alias to Thread::Queue" do
+      entry = registry.lookup("Queue", "push")
+
+      expect(entry).to be_a(described_class::MethodEntry)
+    end
   end
 
   describe "#lookup_class_method" do
@@ -60,6 +72,12 @@ RSpec.describe TypeGuessr::Core::Registry::SignatureRegistry do
       entry = registry.lookup_class_method("String", "non_existent")
 
       expect(entry).to be_nil
+    end
+
+    it "resolves toplevel class alias for class methods" do
+      entry = registry.lookup_class_method("Mutex", "new")
+
+      expect(entry).to be_a(described_class::MethodEntry)
     end
   end
 
