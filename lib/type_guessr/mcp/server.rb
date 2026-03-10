@@ -390,7 +390,11 @@ module TypeGuessr
         ::MCP::Tool.define(
           name: "infer_type",
           description: "Infer the type of a variable, expression, or method at a specific location in a Ruby file. " \
-                       "Returns the guessed type based on heuristic analysis.",
+                       "Unlike reading source code directly, this performs cross-file heuristic analysis " \
+                       "(duck typing, method uniqueness, RBS signatures) to determine types that aren't obvious " \
+                       "from the local context alone. Use when you need to understand what type a variable holds " \
+                       "— especially for method parameters, block variables, or receivers whose types depend on " \
+                       "how they're used across the project.",
           input_schema: {
             type: "object",
             properties: {
@@ -411,8 +415,11 @@ module TypeGuessr
 
         ::MCP::Tool.define(
           name: "get_method_signature",
-          description: "Get the inferred signature of a method defined in the project. " \
-                       "Returns parameter types and return type.",
+          description: "Get the full inferred signature (parameter types and return type) of a method. " \
+                       "Unlike reading the method source, this returns types resolved through cross-file " \
+                       "inference — including types inferred from call sites, RBS definitions, and naming " \
+                       "conventions. Use when you need to understand a method's type contract without " \
+                       "tracing callers manually.",
           input_schema: {
             type: "object",
             properties: {
@@ -432,8 +439,12 @@ module TypeGuessr
 
         ::MCP::Tool.define(
           name: "search_methods",
-          description: "Search for method definitions in the project. " \
-                       "Supports patterns like 'User#save', 'save', or 'Admin::*'.",
+          description: "Search for method definitions across the project with type-aware results. " \
+                       "Returns matching methods with their inferred signatures. Unlike grep, results " \
+                       "include class hierarchy context and inferred types. Supports patterns: " \
+                       "'User#save' (specific), 'save' (all classes), 'Admin::*' (namespace). " \
+                       "Use when exploring an unfamiliar codebase or finding which classes implement " \
+                       "a given method.",
           input_schema: {
             type: "object",
             properties: {
