@@ -462,7 +462,7 @@ module TypeGuessr
                   node.method.to_s,
                   arg_types
                 )
-                substitutions = { self: inferred_receiver }
+                substitutions = build_substitutions(inferred_receiver)
                 add_method_type_var_substitutions(substitutions, node, inferred_receiver.name, node.method.to_s, arg_types)
                 return_type = return_type.substitute(substitutions)
                 return Result.new(

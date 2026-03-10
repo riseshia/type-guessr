@@ -55,17 +55,17 @@ module TypeGuessr
         when "ClassInstance"
           type_params = hash["type_params"]&.to_h { |k, v| [k.to_sym, deserialize(v)] }
           Types::ClassInstance.for(hash["name"], type_params)
-        when "SingletonType"    then Types::SingletonType.new(hash["name"])
-        when "ArrayType"        then Types::ArrayType.new(deserialize(hash["element_type"]))
-        when "TupleType"        then Types::TupleType.new(hash["element_types"].map { |t| deserialize(t) })
-        when "HashType"         then Types::HashType.new(deserialize(hash["key_type"]), deserialize(hash["value_type"]))
-        when "RangeType"        then Types::RangeType.new(deserialize(hash["element_type"]))
-        when "HashShape"        then Types::HashShape.new(hash["fields"].to_h { |k, v| [k.to_sym, deserialize(v)] })
-        when "Union"            then Types::Union.new(hash["types"].map { |t| deserialize(t) })
-        when "TypeVariable"     then Types::TypeVariable.new(hash["name"].to_sym)
-        when "SelfType"         then Types::SelfType.instance
-        when "ForwardingArgs"   then Types::ForwardingArgs.instance
-        when "MethodSignature"  then deserialize_method_signature(hash)
+        when "SingletonType" then Types::SingletonType.new(hash["name"])
+        when "ArrayType" then Types::ArrayType.new(deserialize(hash["element_type"]))
+        when "TupleType" then Types::TupleType.new(hash["element_types"].map { |t| deserialize(t) })
+        when "HashType" then Types::HashType.new(deserialize(hash["key_type"]), deserialize(hash["value_type"]))
+        when "RangeType" then Types::RangeType.new(deserialize(hash["element_type"]))
+        when "HashShape" then Types::HashShape.new(hash["fields"].to_h { |k, v| [k.to_sym, deserialize(v)] })
+        when "Union" then Types::Union.new(hash["types"].map { |t| deserialize(t) })
+        when "TypeVariable" then Types::TypeVariable.new(hash["name"].to_sym)
+        when "SelfType" then Types::SelfType.instance
+        when "ForwardingArgs" then Types::ForwardingArgs.instance
+        when "MethodSignature" then deserialize_method_signature(hash)
         else
           raise ArgumentError, "Unknown type: #{hash["_type"]}"
         end
