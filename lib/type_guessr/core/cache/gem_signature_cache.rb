@@ -12,7 +12,7 @@ module TypeGuessr
       # Cache key = gem name + version + hash of transitive dependencies.
       # Files stored at: ~/.cache/type-guessr/gem-signatures/{name}-{version}-{dep_hash}.json
       class GemSignatureCache
-        CACHE_FORMAT_VERSION = 1
+        CACHE_FORMAT_VERSION = 2
 
         # @param cache_dir [String, nil] Override cache directory (for testing)
         def initialize(cache_dir: nil)

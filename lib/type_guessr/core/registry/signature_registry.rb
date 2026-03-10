@@ -447,6 +447,15 @@ module TypeGuessr
           env = RBS::Environment.from_loader(loader).resolve_type_names
           builder = RBS::DefinitionBuilder.new(env: env)
 
+          # Collect type parameter names for generic classes (e.g., "Set" => [:A])
+          # This lets RBSConverter build ClassInstance with named type_params
+          class_type_params = {}
+          env.class_decls.each do |type_name, entry|
+            params = entry.primary.decl.type_params.map(&:name)
+            class_type_params[type_name.to_s.delete_prefix("::")] = params if params.any?
+          end
+          @converter = Converter::RBSConverter.new(class_type_params)
+
           env.class_decls.each_key do |type_name|
             load_class_definitions(type_name, builder)
           end

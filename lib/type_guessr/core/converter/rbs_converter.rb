@@ -12,6 +12,12 @@ module TypeGuessr
       # This class only handles conversion (RBS → internal types).
       # Type variable substitution is handled separately by Type#substitute.
       class RBSConverter
+        # @param class_type_params [Hash{String => Array<Symbol>}] class-level type parameter names
+        #   e.g., { "Set" => [:A], "Enumerator" => [:Elem, :Return] }
+        def initialize(class_type_params = {})
+          @class_type_params = class_type_params
+        end
+
         # Convert RBS type to internal type system
         # @param rbs_type [RBS::Types::t] the RBS type
         # @return [Types::Type] internal type representation (TypeVariables preserved)
@@ -69,7 +75,15 @@ module TypeGuessr
             return Types::RangeType.new(element_type)
           end
 
-          # For other generic types, return ClassInstance (ignore type args for now)
+          # For other generic types, build type_params hash from class definition
+          param_names = @class_type_params[class_name]
+          if param_names && rbs_type.args.any?
+            type_params = param_names.zip(rbs_type.args).to_h do |name, arg|
+              [name, arg ? convert(arg) : Types::Unknown.instance]
+            end
+            return Types::ClassInstance.for(class_name, type_params)
+          end
+
           Types::ClassInstance.for(class_name)
         end
 

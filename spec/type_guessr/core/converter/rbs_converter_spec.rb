@@ -111,6 +111,97 @@ RSpec.describe TypeGuessr::Core::Converter::RBSConverter do
       end
     end
 
+    context "with generic ClassInstance types" do
+      let(:class_type_params) { { "Set" => [:A], "Enumerator" => %i[Elem Return] } }
+      let(:generic_converter) { described_class.new(class_type_params) }
+
+      it "converts Set[String] with type_params" do
+        string_type = RBS::Types::ClassInstance.new(
+          name: RBS::TypeName.new(name: :String, namespace: RBS::Namespace.root),
+          args: [],
+          location: nil
+        )
+        rbs_type = RBS::Types::ClassInstance.new(
+          name: RBS::TypeName.new(name: :Set, namespace: RBS::Namespace.root),
+          args: [string_type],
+          location: nil
+        )
+
+        result = generic_converter.convert(rbs_type)
+        expect(result).to be_a(TypeGuessr::Core::Types::ClassInstance)
+        expect(result.name).to eq("Set")
+        expect(result.type_params).to eq({ A: TypeGuessr::Core::Types::ClassInstance.for("String") })
+        expect(result.to_s).to eq("Set[String]")
+      end
+
+      it "converts Enumerator[Integer, void] with multiple type_params" do
+        integer_type = RBS::Types::ClassInstance.new(
+          name: RBS::TypeName.new(name: :Integer, namespace: RBS::Namespace.root),
+          args: [],
+          location: nil
+        )
+        void_type = RBS::Types::Bases::Void.new(location: nil)
+        rbs_type = RBS::Types::ClassInstance.new(
+          name: RBS::TypeName.new(name: :Enumerator, namespace: RBS::Namespace.root),
+          args: [integer_type, void_type],
+          location: nil
+        )
+
+        result = generic_converter.convert(rbs_type)
+        expect(result).to be_a(TypeGuessr::Core::Types::ClassInstance)
+        expect(result.name).to eq("Enumerator")
+        expect(result.type_params.keys).to eq(%i[Elem Return])
+        expect(result.type_params[:Elem].name).to eq("Integer")
+      end
+
+      it "converts generic type with type variables" do
+        var_type = RBS::Types::Variable.new(name: :A, location: nil)
+        rbs_type = RBS::Types::ClassInstance.new(
+          name: RBS::TypeName.new(name: :Set, namespace: RBS::Namespace.root),
+          args: [var_type],
+          location: nil
+        )
+
+        result = generic_converter.convert(rbs_type)
+        expect(result.type_params[:A]).to be_a(TypeGuessr::Core::Types::TypeVariable)
+        expect(result.type_params[:A].name).to eq(:A)
+      end
+
+      it "falls back to plain ClassInstance for unknown generics" do
+        string_type = RBS::Types::ClassInstance.new(
+          name: RBS::TypeName.new(name: :String, namespace: RBS::Namespace.root),
+          args: [],
+          location: nil
+        )
+        rbs_type = RBS::Types::ClassInstance.new(
+          name: RBS::TypeName.new(name: :UnknownGeneric, namespace: RBS::Namespace.root),
+          args: [string_type],
+          location: nil
+        )
+
+        result = generic_converter.convert(rbs_type)
+        expect(result).to be_a(TypeGuessr::Core::Types::ClassInstance)
+        expect(result.name).to eq("UnknownGeneric")
+        expect(result.type_params).to be_nil
+      end
+
+      it "still converts Array/Hash/Range to dedicated types" do
+        string_type = RBS::Types::ClassInstance.new(
+          name: RBS::TypeName.new(name: :String, namespace: RBS::Namespace.root),
+          args: [],
+          location: nil
+        )
+        rbs_type = RBS::Types::ClassInstance.new(
+          name: RBS::TypeName.new(name: :Array, namespace: RBS::Namespace.root),
+          args: [string_type],
+          location: nil
+        )
+
+        result = generic_converter.convert(rbs_type)
+        expect(result).to be_a(TypeGuessr::Core::Types::ArrayType)
+      end
+    end
+
     context "with ClassSingleton types" do
       it "converts singleton class type" do
         rbs_type = RBS::Types::ClassSingleton.new(

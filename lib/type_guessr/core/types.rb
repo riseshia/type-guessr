@@ -68,42 +68,73 @@ module TypeGuessr
       end
 
       # ClassInstance - instance of a class
+      # @param type_params [Hash{Symbol => Type}, nil] type parameters (e.g., { A: String } for Set[String])
       class ClassInstance < Type
         CACHE = {} # rubocop:disable Style/MutableConstant
+        GENERIC_CACHE = {} # rubocop:disable Style/MutableConstant
 
         # Factory method that caches instances for reuse
         # @param name [String] The class name
+        # @param type_params [Hash{Symbol => Type}, nil] type parameters
         # @return [ClassInstance] Cached or new instance
-        def self.for(name)
-          CACHE[name] ||= new(name).freeze
+        def self.for(name, type_params = nil)
+          if type_params.nil?
+            CACHE[name] ||= new(name).freeze
+          else
+            key = [name, type_params]
+            GENERIC_CACHE[key] ||= new(name, type_params).freeze
+          end
         end
 
-        attr_reader :name
+        attr_reader :name, :type_params
 
-        def initialize(name)
+        def initialize(name, type_params = nil)
           super()
           @name = name
+          @type_params = type_params&.freeze
         end
 
         def eql?(other)
-          super && @name == other.name
+          super && @name == other.name && @type_params == other.type_params
         end
 
         def hash
-          [self.class, @name].hash
+          [self.class, @name, @type_params].hash
         end
 
         def to_s
-          case @name
-          when "NilClass" then "nil"
-          when "TrueClass" then "true"
-          when "FalseClass" then "false"
-          else @name
+          base = case @name
+                 when "NilClass" then "nil"
+                 when "TrueClass" then "true"
+                 when "FalseClass" then "false"
+                 else @name
+                 end
+          if @type_params&.any?
+            "#{base}[#{@type_params.values.join(", ")}]"
+          else
+            base
           end
         end
 
         def inspect
-          "#<ClassInstance:#{@name}>"
+          if @type_params&.any?
+            "#<ClassInstance:#{@name}[#{@type_params.map { |k, v| "#{k}=#{v.inspect}" }.join(", ")}]>"
+          else
+            "#<ClassInstance:#{@name}>"
+          end
+        end
+
+        def type_variable_substitutions
+          @type_params || {}
+        end
+
+        def substitute(substitutions)
+          return self if @type_params.nil? || @type_params.empty?
+
+          new_params = @type_params.transform_values { |t| t.substitute(substitutions) }
+          return self if new_params == @type_params
+
+          ClassInstance.new(@name, new_params)
         end
 
         def rbs_class_name

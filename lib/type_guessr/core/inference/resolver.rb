@@ -351,8 +351,8 @@ module TypeGuessr
                 )
               end
 
-              # Substitute self, block return type, and remaining type variables
-              substitutions = { self: receiver_type }
+              # Substitute class-level type vars, self, block return type, and remaining type variables
+              substitutions = build_substitutions(receiver_type)
               add_method_type_var_substitutions(substitutions, node, receiver_type.name, node.method.to_s, arg_types)
               return_type = return_type.substitute(substitutions)
 

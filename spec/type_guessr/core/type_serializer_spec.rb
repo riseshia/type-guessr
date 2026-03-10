@@ -17,6 +17,16 @@ RSpec.describe TypeGuessr::Core::TypeSerializer do
     it_behaves_like "round-trip", TypeGuessr::Core::Types::Unguessed.instance, "Unguessed"
     it_behaves_like "round-trip", TypeGuessr::Core::Types::Unknown.instance, "Unknown"
     it_behaves_like "round-trip", TypeGuessr::Core::Types::ClassInstance.for("String"), "ClassInstance"
+    it_behaves_like "round-trip",
+                    TypeGuessr::Core::Types::ClassInstance.for("Set", { A: TypeGuessr::Core::Types::ClassInstance.for("String") }),
+                    "ClassInstance with type_params"
+    it_behaves_like "round-trip",
+                    TypeGuessr::Core::Types::ClassInstance.for(
+                      "Enumerator",
+                      { Elem: TypeGuessr::Core::Types::ClassInstance.for("Integer"),
+                        Return: TypeGuessr::Core::Types::ClassInstance.for("void") }
+                    ),
+                    "ClassInstance with multiple type_params"
     it_behaves_like "round-trip", TypeGuessr::Core::Types::SingletonType.new("File"), "SingletonType"
     it_behaves_like "round-trip", TypeGuessr::Core::Types::ArrayType.new(TypeGuessr::Core::Types::ClassInstance.for("Integer")), "ArrayType"
     it_behaves_like "round-trip",

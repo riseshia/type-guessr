@@ -110,6 +110,93 @@ RSpec.describe TypeGuessr::Core::Types do
         type2 = TypeGuessr::Core::Types::ClassInstance.for("Integer")
         expect(type1).not_to be(type2)
       end
+
+      it "caches generic instances with same type_params" do
+        params = { A: TypeGuessr::Core::Types::ClassInstance.for("String") }
+        type1 = TypeGuessr::Core::Types::ClassInstance.for("Set", params)
+        type2 = TypeGuessr::Core::Types::ClassInstance.for("Set", params)
+        expect(type1).to be(type2)
+      end
+
+      it "returns different instances for different type_params" do
+        type1 = TypeGuessr::Core::Types::ClassInstance.for("Set", { A: TypeGuessr::Core::Types::ClassInstance.for("String") })
+        type2 = TypeGuessr::Core::Types::ClassInstance.for("Set", { A: TypeGuessr::Core::Types::ClassInstance.for("Integer") })
+        expect(type1).not_to be(type2)
+      end
+    end
+
+    context "with type_params" do
+      let(:string_type) { TypeGuessr::Core::Types::ClassInstance.for("String") }
+      let(:integer_type) { TypeGuessr::Core::Types::ClassInstance.for("Integer") }
+
+      it "stores type_params" do
+        type = TypeGuessr::Core::Types::ClassInstance.new("Set", { A: string_type })
+        expect(type.type_params).to eq({ A: string_type })
+      end
+
+      it "has nil type_params by default" do
+        type = TypeGuessr::Core::Types::ClassInstance.new("String")
+        expect(type.type_params).to be_nil
+      end
+
+      it "includes type_params in to_s" do
+        type = TypeGuessr::Core::Types::ClassInstance.new("Set", { A: string_type })
+        expect(type.to_s).to eq("Set[String]")
+      end
+
+      it "includes multiple type_params in to_s" do
+        type = TypeGuessr::Core::Types::ClassInstance.new("Enumerator", { Elem: string_type, Return: integer_type })
+        expect(type.to_s).to eq("Enumerator[String, Integer]")
+      end
+
+      it "includes type_params in eql?" do
+        type1 = TypeGuessr::Core::Types::ClassInstance.new("Set", { A: string_type })
+        type2 = TypeGuessr::Core::Types::ClassInstance.new("Set", { A: string_type })
+        type3 = TypeGuessr::Core::Types::ClassInstance.new("Set", { A: integer_type })
+        expect(type1).to eq(type2)
+        expect(type1).not_to eq(type3)
+      end
+
+      it "differentiates parameterized from non-parameterized" do
+        type1 = TypeGuessr::Core::Types::ClassInstance.new("Set")
+        type2 = TypeGuessr::Core::Types::ClassInstance.new("Set", { A: string_type })
+        expect(type1).not_to eq(type2)
+      end
+
+      it "returns type_params as type_variable_substitutions" do
+        type = TypeGuessr::Core::Types::ClassInstance.new("Set", { A: string_type })
+        expect(type.type_variable_substitutions).to eq({ A: string_type })
+      end
+
+      it "returns empty hash for type_variable_substitutions when no type_params" do
+        type = TypeGuessr::Core::Types::ClassInstance.new("String")
+        expect(type.type_variable_substitutions).to eq({})
+      end
+
+      it "substitutes type variables within type_params" do
+        var_type = TypeGuessr::Core::Types::TypeVariable.new(:X)
+        type = TypeGuessr::Core::Types::ClassInstance.new("Set", { A: var_type })
+        result = type.substitute({ X: string_type })
+        expect(result.type_params).to eq({ A: string_type })
+      end
+
+      it "returns self when substitute has no effect" do
+        type = TypeGuessr::Core::Types::ClassInstance.new("Set", { A: string_type })
+        result = type.substitute({ X: integer_type })
+        expect(result).to be(type)
+      end
+
+      it "returns self when type_params is nil" do
+        type = TypeGuessr::Core::Types::ClassInstance.new("String")
+        result = type.substitute({ A: string_type })
+        expect(result).to be(type)
+      end
+
+      it "includes type_params in inspect" do
+        type = TypeGuessr::Core::Types::ClassInstance.new("Set", { A: string_type })
+        expect(type.inspect).to include("Set")
+        expect(type.inspect).to include("A=")
+      end
     end
   end
 

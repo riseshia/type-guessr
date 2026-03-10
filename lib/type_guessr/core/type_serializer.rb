@@ -14,7 +14,9 @@ module TypeGuessr
         when Types::Unknown
           { "_type" => "Unknown" }
         when Types::ClassInstance
-          { "_type" => "ClassInstance", "name" => type.name }
+          h = { "_type" => "ClassInstance", "name" => type.name }
+          h["type_params"] = type.type_params.to_h { |k, v| [k.to_s, serialize(v)] } if type.type_params&.any?
+          h
         when Types::SingletonType
           { "_type" => "SingletonType", "name" => type.name }
         when Types::TupleType
@@ -49,8 +51,10 @@ module TypeGuessr
       module_function def deserialize(hash)
         case hash["_type"]
         when "Unguessed" then Types::Unguessed.instance
-        when "Unknown"          then Types::Unknown.instance
-        when "ClassInstance"    then Types::ClassInstance.for(hash["name"])
+        when "Unknown" then Types::Unknown.instance
+        when "ClassInstance"
+          type_params = hash["type_params"]&.to_h { |k, v| [k.to_sym, deserialize(v)] }
+          Types::ClassInstance.for(hash["name"], type_params)
         when "SingletonType"    then Types::SingletonType.new(hash["name"])
         when "ArrayType"        then Types::ArrayType.new(deserialize(hash["element_type"]))
         when "TupleType"        then Types::TupleType.new(hash["element_types"].map { |t| deserialize(t) })
