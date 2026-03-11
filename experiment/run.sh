@@ -92,6 +92,11 @@ run_claude() {
     extra_args+=(--system-prompt "$system_prompt")
   fi
 
+  # LSP warmup: run external sleep script before the actual task
+  if [[ "$condition" == B_* ]]; then
+    extra_args+=(--append-system-prompt "IMPORTANT: Before doing anything else, you MUST run the warmup script: \`bash ${SCRIPT_DIR}/warmup.sh\`. Wait for it to complete, then proceed with the task.")
+  fi
+
   if $DRY_RUN; then
     echo "[DRY RUN] claude ${extra_args[*]} \"$task_prompt\"" > "$result_file"
     echo '{"type":"result","subtype":"success","is_error":false,"duration_ms":0,"num_turns":0,"result":"dry run","total_cost_usd":0,"usage":{"input_tokens":0,"output_tokens":0,"cache_creation_input_tokens":0,"cache_read_input_tokens":0}}' > "$result_file"
@@ -117,27 +122,15 @@ run_claude() {
   fi
 }
 
-LSP_WARMUP="CRITICAL REQUIREMENT: Your VERY FIRST action MUST be to run exactly \`sleep 60\` using the Bash tool. Do NOT skip this step. Do NOT reduce the sleep time. Execute \`sleep 60\`, wait for it to complete, then proceed with the user's request."
-
 build_system_prompt() {
   local condition="$1"
 
   case "$condition" in
-    A_P0)
+    A_P0|B_P0|C_P0)
       echo "You are analyzing a Ruby codebase. Use the available tools to answer the question."
-      ;;
-    B_P0)
-      echo "${LSP_WARMUP}
-
-You are analyzing a Ruby codebase. Use the available tools to answer the question."
       ;;
     B_P1)
-      echo "${LSP_WARMUP}
-"
       cat "$PROMPTS_DIR/lsp_guided.txt"
-      ;;
-    C_P0)
-      echo "You are analyzing a Ruby codebase. Use the available tools to answer the question."
       ;;
     C_P1)
       cat "$PROMPTS_DIR/mcp_guided.txt"
