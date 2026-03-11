@@ -35,12 +35,12 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Conditions:
-#   A_P0: baseline, no guidance
-#   B_P0: LSP enabled, no guidance
-#   B_P1: LSP enabled, with guidance
-#   C_P0: MCP enabled, no guidance
-#   C_P1: MCP enabled, with guidance
-CONDITIONS=(A_P0 B_P0 B_P1 C_P0 C_P1)
+#   BASE_P0: baseline, no guidance
+#   LSP_P0: LSP enabled, no guidance
+#   LSP_P1: LSP enabled, with guidance
+#   TG_P0: MCP enabled, no guidance
+#   TG_P1: MCP enabled, with guidance
+CONDITIONS=(BASE_P0 LSP_P0 LSP_P1 TG_P0 TG_P1)
 
 mkdir -p "$RESULTS_DIR"
 
@@ -70,12 +70,12 @@ run_claude() {
 
   # Tool restrictions per condition
   case "$condition" in
-    A_P0|A_P1)
+    BASE_P0|BASE_P1)
       # Baseline: only standard tools, no plugins
       extra_args+=(--setting-sources "")
       extra_args+=(--tools "Bash,Read,Grep,Glob,Write,Edit")
       ;;
-    B_P0|B_P1)
+    LSP_P0|LSP_P1)
       # LSP: standard tools + ruby-lsp plugin
       # Use local settings (which has ruby-lsp plugin installed)
       extra_args+=(--tools "default")
@@ -83,7 +83,7 @@ run_claude() {
       extra_args+=(--strict-mcp-config)
       extra_args+=(--mcp-config '{"mcpServers":{}}')
       ;;
-    C_P0|C_P1)
+    TG_P0|TG_P1)
       # MCP: standard tools + type-guessr MCP
       extra_args+=(--tools "Bash,Read,Grep,Glob,Write,Edit")
       extra_args+=(--strict-mcp-config)
@@ -128,13 +128,13 @@ build_system_prompt() {
   local condition="$1"
 
   case "$condition" in
-    A_P0|B_P0|C_P0)
+    BASE_P0|LSP_P0|TG_P0)
       echo "You are analyzing a Ruby codebase. Use the available tools to answer the question."
       ;;
-    B_P1)
+    LSP_P1)
       cat "$PROMPTS_DIR/lsp_guided.txt"
       ;;
-    C_P1)
+    TG_P1)
       cat "$PROMPTS_DIR/mcp_guided.txt"
       ;;
   esac
@@ -310,8 +310,8 @@ for result_file in "$RESULTS_DIR"/*.json; do
   [[ "$basename_noext" == *_warmup ]] && continue
 
   # Parse: task_condition_tN
-  task_id=$(echo "$basename_noext" | sed 's/_[ABC]_P[01]_t[0-9]*$//')
-  condition=$(echo "$basename_noext" | grep -oP '[ABC]_P[01]')
+  task_id=$(echo "$basename_noext" | sed 's/_\(BASE\|LSP\|TG\)_P[01]_t[0-9]*$//')
+  condition=$(echo "$basename_noext" | grep -oP '(BASE|LSP|TG)_P[01]')
   trial=$(echo "$basename_noext" | grep -oP 't\K[0-9]+$')
 
   tools_file="${result_file%.json}_tools.json"

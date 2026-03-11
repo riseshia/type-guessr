@@ -13,7 +13,7 @@ TASK_LABELS = {
   "t2_module_api" => "T2: Module API Listing (small-scale)",
 }.freeze
 
-CONDITIONS = %w[A_P0 B_P0 B_P1 C_P0 C_P1].freeze
+CONDITIONS = %w[BASE_P0 LSP_P0 LSP_P1 TG_P0 TG_P1].freeze
 
 INT_FIELDS = %w[duration_ms duration_api_ms num_turns input_tokens output_tokens cache_read
                 cache_creation result_length total_tool_calls standard_calls lsp_calls mcp_calls].freeze
@@ -60,7 +60,7 @@ def analyze(rows)
     label = TASK_LABELS.fetch(task, task)
     section(label)
 
-    header = format("%-8s %8s %8s %8s %8s %6s %6s %5s %5s %5s %6s %-30s",
+    header = format("%-10s %8s %8s %8s %8s %6s %6s %5s %5s %5s %6s %-30s",
       "Cond", "Wall(s)", "API(s)", "Over(s)", "Cost($)", "Turns", "Tools", "Std", "LSP", "MCP", "MCP%", "1st Tool")
     puts header
     puts "-" * header.size
@@ -84,15 +84,15 @@ def analyze(rows)
       firsts = rs.map { |r| r["first_tool"] }
       first = firsts.tally.max_by(&:last)&.first || ""
 
-      baseline_cost = cost if cond == "A_P0"
+      baseline_cost = cost if cond == "BASE_P0"
 
       delta = ""
-      if baseline_cost && cond != "A_P0" && baseline_cost > 0
+      if baseline_cost && cond != "BASE_P0" && baseline_cost > 0
         pct = ((cost / baseline_cost) - 1) * 100
         delta = format(" (%+.0f%%)", pct)
       end
 
-      puts format("%-8s %8.1f %8.1f %8.1f %7.4f%-7s %6.1f %6.1f %5.1f %5.1f %5.1f %5.0f%% %-30s",
+      puts format("%-10s %8.1f %8.1f %8.1f %7.4f%-7s %6.1f %6.1f %5.1f %5.1f %5.1f %5.0f%% %-30s",
         cond, dur, dur_api, overhead, cost, delta, turns, tools, std, lsp, mcp, mcp_r * 100, shorten(first))
     end
   end
@@ -112,7 +112,7 @@ def analyze(rows)
     mcp_r = avg(rs.map { |r| r["mcp_ratio"] })
     lsp_r = avg(rs.map { |r| r["lsp_ratio"] })
 
-    puts format("  %-8s  cost=$%.4f  wall=%.1fs  api=%.1fs  overhead=%.1fs  tools=%.1f  lsp%%=%.0f%%  mcp%%=%.0f%%",
+    puts format("  %-10s  cost=$%.4f  wall=%.1fs  api=%.1fs  overhead=%.1fs  tools=%.1f  lsp%%=%.0f%%  mcp%%=%.0f%%",
       cond, cost, dur, dur_api, overhead, tools, lsp_r * 100, mcp_r * 100)
   end
 
@@ -120,13 +120,13 @@ def analyze(rows)
   section("Key Comparisons")
 
   comparisons = [
-    %w[A_P0 C_P0], "Baseline vs MCP (natural)",
-    %w[A_P0 C_P1], "Baseline vs MCP (guided)",
-    %w[A_P0 B_P0], "Baseline vs LSP (natural)",
-    %w[B_P0 C_P0], "LSP vs MCP (both natural)",
-    %w[B_P1 C_P1], "LSP vs MCP (both guided)",
-    %w[C_P0 C_P1], "MCP natural vs guided",
-    %w[B_P0 B_P1], "LSP natural vs guided",
+    %w[BASE_P0 TG_P0], "Baseline vs MCP (natural)",
+    %w[BASE_P0 TG_P1], "Baseline vs MCP (guided)",
+    %w[BASE_P0 LSP_P0], "Baseline vs LSP (natural)",
+    %w[LSP_P0 TG_P0], "LSP vs MCP (both natural)",
+    %w[LSP_P1 TG_P1], "LSP vs MCP (both guided)",
+    %w[TG_P0 TG_P1], "MCP natural vs guided",
+    %w[LSP_P0 LSP_P1], "LSP natural vs guided",
   ].each_slice(2) do |(cond_a, cond_b), label|
     rs_a = rows.select { |r| r["condition"] == cond_a }
     rs_b = rows.select { |r| r["condition"] == cond_b }
@@ -152,12 +152,12 @@ def analyze(rows)
   # --- Tool adoption (P0) ---
   section("Tool Adoption (P0 conditions only)")
 
-  %w[B_P0 C_P0].each do |cond|
+  %w[LSP_P0 TG_P0].each do |cond|
     rs = rows.select { |r| r["condition"] == cond }
     next if rs.empty?
 
-    tool_label = cond.start_with?("B") ? "LSP" : "MCP"
-    ratio_key = cond.start_with?("B") ? "lsp_ratio" : "mcp_ratio"
+    tool_label = cond.start_with?("LSP") ? "LSP" : "MCP"
+    ratio_key = cond.start_with?("LSP") ? "lsp_ratio" : "mcp_ratio"
     adoption = avg(rs.map { |r| r[ratio_key] })
 
     puts
