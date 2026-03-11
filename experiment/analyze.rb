@@ -15,8 +15,8 @@ TASK_LABELS = {
 
 CONDITIONS = %w[A_P0 B_P0 B_P1 C_P0 C_P1].freeze
 
-INT_FIELDS = %w[duration_ms num_turns input_tokens output_tokens cache_read cache_creation
-                result_length total_tool_calls standard_calls lsp_calls mcp_calls].freeze
+INT_FIELDS = %w[duration_ms duration_api_ms num_turns input_tokens output_tokens cache_read
+                cache_creation result_length total_tool_calls standard_calls lsp_calls mcp_calls].freeze
 FLOAT_FIELDS = %w[total_cost_usd lsp_ratio mcp_ratio].freeze
 
 def load_results(results_dir)
@@ -60,8 +60,8 @@ def analyze(rows)
     label = TASK_LABELS.fetch(task, task)
     section(label)
 
-    header = format("%-8s %8s %8s %6s %6s %5s %5s %5s %6s %-30s",
-      "Cond", "Time(s)", "Cost($)", "Turns", "Tools", "Std", "LSP", "MCP", "MCP%", "1st Tool")
+    header = format("%-8s %8s %8s %8s %8s %6s %6s %5s %5s %5s %6s %-30s",
+      "Cond", "Wall(s)", "API(s)", "Over(s)", "Cost($)", "Turns", "Tools", "Std", "LSP", "MCP", "MCP%", "1st Tool")
     puts header
     puts "-" * header.size
 
@@ -70,7 +70,9 @@ def analyze(rows)
       rs = grouped[[task, cond]] || []
       next if rs.empty?
 
-      dur   = avg(rs.map { |r| r["duration_ms"] / 1000.0 })
+      dur     = avg(rs.map { |r| r["duration_ms"] / 1000.0 })
+      dur_api = avg(rs.map { |r| r["duration_api_ms"] / 1000.0 })
+      overhead = dur - dur_api
       cost  = avg(rs.map { |r| r["total_cost_usd"] })
       turns = avg(rs.map { |r| r["num_turns"] })
       tools = avg(rs.map { |r| r["total_tool_calls"] })
@@ -90,8 +92,8 @@ def analyze(rows)
         delta = format(" (%+.0f%%)", pct)
       end
 
-      puts format("%-8s %8.1f %7.4f%-7s %6.1f %6.1f %5.1f %5.1f %5.1f %5.0f%% %-30s",
-        cond, dur, cost, delta, turns, tools, std, lsp, mcp, mcp_r * 100, shorten(first))
+      puts format("%-8s %8.1f %8.1f %8.1f %7.4f%-7s %6.1f %6.1f %5.1f %5.1f %5.1f %5.0f%% %-30s",
+        cond, dur, dur_api, overhead, cost, delta, turns, tools, std, lsp, mcp, mcp_r * 100, shorten(first))
     end
   end
 
@@ -102,14 +104,16 @@ def analyze(rows)
     rs = rows.select { |r| r["condition"] == cond }
     next if rs.empty?
 
-    cost  = avg(rs.map { |r| r["total_cost_usd"] })
-    dur   = avg(rs.map { |r| r["duration_ms"] / 1000.0 })
+    cost     = avg(rs.map { |r| r["total_cost_usd"] })
+    dur      = avg(rs.map { |r| r["duration_ms"] / 1000.0 })
+    dur_api  = avg(rs.map { |r| r["duration_api_ms"] / 1000.0 })
+    overhead = dur - dur_api
     tools = avg(rs.map { |r| r["total_tool_calls"] })
     mcp_r = avg(rs.map { |r| r["mcp_ratio"] })
     lsp_r = avg(rs.map { |r| r["lsp_ratio"] })
 
-    puts format("  %-8s  cost=$%.4f  time=%.1fs  tools=%.1f  lsp_ratio=%.0f%%  mcp_ratio=%.0f%%",
-      cond, cost, dur, tools, lsp_r * 100, mcp_r * 100)
+    puts format("  %-8s  cost=$%.4f  wall=%.1fs  api=%.1fs  overhead=%.1fs  tools=%.1f  lsp%%=%.0f%%  mcp%%=%.0f%%",
+      cond, cost, dur, dur_api, overhead, tools, lsp_r * 100, mcp_r * 100)
   end
 
   # --- Key comparisons ---
@@ -132,13 +136,17 @@ def analyze(rows)
     cost_b = avg(rs_b.map { |r| r["total_cost_usd"] })
     dur_a  = avg(rs_a.map { |r| r["duration_ms"] / 1000.0 })
     dur_b  = avg(rs_b.map { |r| r["duration_ms"] / 1000.0 })
+    api_a  = avg(rs_a.map { |r| r["duration_api_ms"] / 1000.0 })
+    api_b  = avg(rs_b.map { |r| r["duration_api_ms"] / 1000.0 })
 
     cost_d = cost_a > 0 ? ((cost_b / cost_a) - 1) * 100 : 0
     dur_d  = dur_a > 0 ? ((dur_b / dur_a) - 1) * 100 : 0
+    api_d  = api_a > 0 ? ((api_b / api_a) - 1) * 100 : 0
 
     puts format("  %s:", label)
-    puts format("    Cost: $%.4f → $%.4f (%+.0f%%)", cost_a, cost_b, cost_d)
-    puts format("    Time: %.1fs → %.1fs (%+.0f%%)", dur_a, dur_b, dur_d)
+    puts format("    Cost:     $%.4f → $%.4f (%+.0f%%)", cost_a, cost_b, cost_d)
+    puts format("    Wall:     %.1fs → %.1fs (%+.0f%%)", dur_a, dur_b, dur_d)
+    puts format("    API time: %.1fs → %.1fs (%+.0f%%)", api_a, api_b, api_d)
   end
 
   # --- Tool adoption (P0) ---

@@ -98,9 +98,30 @@ run_claude() {
     return 0
   fi
 
-  # Run claude and capture session_id for tool usage extraction
   cd "$PROJECT_DIR"
-  env -u CLAUDECODE claude "${extra_args[@]}" "$task_prompt" > "$result_file" 2>/dev/null || true
+
+  # LSP warmup: run a sleep prompt first so LSP has time to initialize,
+  # then resume the same session for the actual task
+  if [[ "$condition" == B_* ]]; then
+    local warmup_file="${result_file%.json}_warmup.json"
+    env -u CLAUDECODE claude "${extra_args[@]}" \
+      "Run: sleep 60. Do nothing else. Just wait." \
+      > "$warmup_file" 2>/dev/null || true
+
+    local warmup_session_id
+    warmup_session_id=$(ruby -rjson -e "puts JSON.parse(File.read('$warmup_file')).fetch('session_id','')" 2>/dev/null || echo "")
+
+    if [[ -n "$warmup_session_id" ]]; then
+      env -u CLAUDECODE claude "${extra_args[@]}" \
+        --resume "$warmup_session_id" \
+        "$task_prompt" > "$result_file" 2>/dev/null || true
+    else
+      # Fallback: run without warmup
+      env -u CLAUDECODE claude "${extra_args[@]}" "$task_prompt" > "$result_file" 2>/dev/null || true
+    fi
+  else
+    env -u CLAUDECODE claude "${extra_args[@]}" "$task_prompt" > "$result_file" 2>/dev/null || true
+  fi
 
   # Extract tool usage from session JSONL
   if [[ -f "$result_file" ]] && ! $DRY_RUN; then
@@ -241,14 +262,15 @@ echo "========================================="
 
 # Generate summary CSV
 SUMMARY_CSV="$RESULTS_DIR/summary.csv"
-echo "task,condition,trial,success,duration_ms,num_turns,total_cost_usd,input_tokens,output_tokens,cache_read,cache_creation,result_length,stop_reason,total_tool_calls,standard_calls,lsp_calls,mcp_calls,lsp_ratio,mcp_ratio,first_tool,tool_sequence" > "$SUMMARY_CSV"
+echo "task,condition,trial,success,duration_ms,duration_api_ms,num_turns,total_cost_usd,input_tokens,output_tokens,cache_read,cache_creation,result_length,stop_reason,total_tool_calls,standard_calls,lsp_calls,mcp_calls,lsp_ratio,mcp_ratio,first_tool,tool_sequence" > "$SUMMARY_CSV"
 
 for result_file in "$RESULTS_DIR"/*.json; do
   [[ -f "$result_file" ]] || continue
   basename_noext=$(basename "$result_file" .json)
 
-  # Skip _tools.json files
+  # Skip _tools.json and _warmup.json files
   [[ "$basename_noext" == *_tools ]] && continue
+  [[ "$basename_noext" == *_warmup ]] && continue
 
   # Parse: task_condition_tN
   task_id=$(echo "$basename_noext" | sed 's/_[ABC]_P[01]_t[0-9]*$//')
@@ -275,6 +297,7 @@ for result_file in "$RESULTS_DIR"/*.json; do
       "'"$task_id"'", "'"$condition"'", "'"$trial"'",
       !d.fetch("is_error", true),
       d.fetch("duration_ms", 0),
+      d.fetch("duration_api_ms", 0),
       d.fetch("num_turns", 0),
       d.fetch("total_cost_usd", 0).round(6),
       fm.fetch("inputTokens", 0),
