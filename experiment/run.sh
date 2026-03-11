@@ -112,7 +112,7 @@ run_claude() {
   # Extract tool usage from session JSONL
   if [[ -f "$result_file" ]] && ! $DRY_RUN; then
     local session_id
-    session_id=$(ruby -rjson -e "puts JSON.parse(File.read('$result_file')).fetch('session_id','')" 2>/dev/null || echo "")
+    session_id=$(ruby -rjson -e "puts JSON.parse(File.read('$result_file', encoding: 'UTF-8')).fetch('session_id','')" 2>/dev/null || echo "")
     if [[ -n "$session_id" ]]; then
       local session_jsonl
       session_jsonl=$(find ~/.claude/projects -name "${session_id}.jsonl" 2>/dev/null | head -1)
@@ -151,7 +151,7 @@ summarize_result() {
 
   # Extract key metrics from JSON
   ruby -rjson -e '
-    d = JSON.parse(File.read("'"$result_file"'"))
+    d = JSON.parse(File.read("'"$result_file"'", encoding: "UTF-8"))
     mu = d["modelUsage"] || {}
     fm = mu.values.first || {}
     puts JSON.pretty_generate({
@@ -232,9 +232,9 @@ report_result() {
   local result_file="$RESULTS_DIR/${task_id}_${condition}_t${trial}.json"
 
   if [[ -f "$result_file" ]]; then
-    cost=$(ruby -rjson -e 'd=JSON.parse(File.read("'"$result_file"'")); printf "$%.4f", d.fetch("total_cost_usd", 0)' 2>/dev/null || echo "?")
-    duration=$(ruby -rjson -e 'd=JSON.parse(File.read("'"$result_file"'")); printf "%.1fs", d.fetch("duration_ms", 0) / 1000.0' 2>/dev/null || echo "?")
-    turns=$(ruby -rjson -e 'd=JSON.parse(File.read("'"$result_file"'")); print d.fetch("num_turns", "?")' 2>/dev/null || echo "?")
+    cost=$(ruby -rjson -e 'd=JSON.parse(File.read("'"$result_file"'", encoding: "UTF-8")); printf "$%.4f", d.fetch("total_cost_usd", 0)' 2>/dev/null || echo "?")
+    duration=$(ruby -rjson -e 'd=JSON.parse(File.read("'"$result_file"'", encoding: "UTF-8")); printf "%.1fs", d.fetch("duration_ms", 0) / 1000.0' 2>/dev/null || echo "?")
+    turns=$(ruby -rjson -e 'd=JSON.parse(File.read("'"$result_file"'", encoding: "UTF-8")); print d.fetch("num_turns", "?")' 2>/dev/null || echo "?")
     echo "  [${condition}] ${task_id} t${trial} ... done ($duration, $cost, ${turns} turns)"
     SUCCESS=$((SUCCESS + 1))
   else
@@ -317,12 +317,12 @@ for result_file in "$RESULTS_DIR"/*.json; do
   tools_file="${result_file%.json}_tools.json"
 
   ruby -rjson -e '
-    d = JSON.parse(File.read("'"$result_file"'"))
+    d = JSON.parse(File.read("'"$result_file"'", encoding: "UTF-8"))
     mu = d["modelUsage"] || {}
     fm = mu.values.first || {}
 
     t = begin
-      JSON.parse(File.read("'"$tools_file"'"))
+      JSON.parse(File.read("'"$tools_file"'", encoding: "UTF-8"))
     rescue
       {}
     end
