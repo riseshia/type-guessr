@@ -105,13 +105,13 @@ run_claude() {
   # Extract tool usage from session JSONL
   if [[ -f "$result_file" ]] && ! $DRY_RUN; then
     local session_id
-    session_id=$(python3 -c "import json; print(json.load(open('$result_file')).get('session_id',''))" 2>/dev/null || echo "")
+    session_id=$(ruby -rjson -e "puts JSON.parse(File.read('$result_file')).fetch('session_id','')" 2>/dev/null || echo "")
     if [[ -n "$session_id" ]]; then
       local session_jsonl
       session_jsonl=$(find ~/.claude/projects -name "${session_id}.jsonl" 2>/dev/null | head -1)
       if [[ -n "$session_jsonl" && -f "$session_jsonl" ]]; then
         # Extract tool usage counts and save alongside result
-        python3 "$SCRIPT_DIR/extract_tools.py" "$session_jsonl" > "${result_file%.json}_tools.json" 2>/dev/null || true
+        ruby "$SCRIPT_DIR/extract_tools.rb" "$session_jsonl" > "${result_file%.json}_tools.json" 2>/dev/null || true
       fi
     fi
   fi
@@ -149,27 +149,23 @@ summarize_result() {
   fi
 
   # Extract key metrics from JSON
-  python3 -c "
-import json, sys
-try:
-    d = json.load(open('$result_file'))
-    mu = d.get('modelUsage', {})
-    first_model = list(mu.values())[0] if mu else {}
-    print(json.dumps({
-        'success': not d.get('is_error', True),
-        'duration_ms': d.get('duration_ms', 0),
-        'num_turns': d.get('num_turns', 0),
-        'total_cost_usd': d.get('total_cost_usd', 0),
-        'input_tokens': first_model.get('inputTokens', 0),
-        'output_tokens': first_model.get('outputTokens', 0),
-        'cache_read': first_model.get('cacheReadInputTokens', 0),
-        'cache_creation': first_model.get('cacheCreationInputTokens', 0),
-        'result_length': len(d.get('result', '')),
-        'stop_reason': d.get('stop_reason', 'unknown'),
-    }, indent=2))
-except Exception as e:
-    print(json.dumps({'error': str(e)}))
-" 2>/dev/null
+  ruby -rjson -e '
+    d = JSON.parse(File.read("'"$result_file"'"))
+    mu = d["modelUsage"] || {}
+    fm = mu.values.first || {}
+    puts JSON.pretty_generate({
+      success: !d.fetch("is_error", true),
+      duration_ms: d.fetch("duration_ms", 0),
+      num_turns: d.fetch("num_turns", 0),
+      total_cost_usd: d.fetch("total_cost_usd", 0),
+      input_tokens: fm.fetch("inputTokens", 0),
+      output_tokens: fm.fetch("outputTokens", 0),
+      cache_read: fm.fetch("cacheReadInputTokens", 0),
+      cache_creation: fm.fetch("cacheCreationInputTokens", 0),
+      result_length: d.fetch("result", "").size,
+      stop_reason: d.fetch("stop_reason", "unknown"),
+    })
+  ' 2>/dev/null
 }
 
 # --- Main loop ---
@@ -224,9 +220,9 @@ for task_file in "${TASK_FILES[@]}"; do
 
       # Quick summary
       if [[ -f "$result_file" ]]; then
-        cost=$(python3 -c "import json; d=json.load(open('$result_file')); print(f\"\${d.get('total_cost_usd', 0):.4f}\")" 2>/dev/null || echo "?")
-        duration=$(python3 -c "import json; d=json.load(open('$result_file')); print(f\"{d.get('duration_ms', 0)/1000:.1f}s\")" 2>/dev/null || echo "?")
-        turns=$(python3 -c "import json; d=json.load(open('$result_file')); print(d.get('num_turns', '?'))" 2>/dev/null || echo "?")
+        cost=$(ruby -rjson -e 'd=JSON.parse(File.read("'"$result_file"'")); printf "$%.4f", d.fetch("total_cost_usd", 0)' 2>/dev/null || echo "?")
+        duration=$(ruby -rjson -e 'd=JSON.parse(File.read("'"$result_file"'")); printf "%.1fs", d.fetch("duration_ms", 0) / 1000.0' 2>/dev/null || echo "?")
+        turns=$(ruby -rjson -e 'd=JSON.parse(File.read("'"$result_file"'")); print d.fetch("num_turns", "?")' 2>/dev/null || echo "?")
         echo "done ($duration, $cost, ${turns} turns)"
         SUCCESS=$((SUCCESS + 1))
       else
@@ -261,49 +257,43 @@ for result_file in "$RESULTS_DIR"/*.json; do
 
   tools_file="${result_file%.json}_tools.json"
 
-  python3 -c "
-import json, sys
-try:
-    d = json.load(open('$result_file'))
-    mu = d.get('modelUsage', {})
-    fm = list(mu.values())[0] if mu else {}
+  ruby -rjson -e '
+    d = JSON.parse(File.read("'"$result_file"'"))
+    mu = d["modelUsage"] || {}
+    fm = mu.values.first || {}
 
-    # Tool usage data
-    t = {}
-    try:
-        t = json.load(open('$tools_file'))
-    except:
-        pass
+    t = begin
+      JSON.parse(File.read("'"$tools_file"'"))
+    rescue
+      {}
+    end
 
-    cats = t.get('categories', {})
-    seq = t.get('tool_sequence', [])
-    seq_str = ';'.join(seq) if seq else ''
+    cats = t["categories"] || {}
+    seq = (t["tool_sequence"] || []).join(";")
 
     fields = [
-        '$task_id', '$condition', '$trial',
-        not d.get('is_error', True),
-        d.get('duration_ms', 0),
-        d.get('num_turns', 0),
-        round(d.get('total_cost_usd', 0), 6),
-        fm.get('inputTokens', 0),
-        fm.get('outputTokens', 0),
-        fm.get('cacheReadInputTokens', 0),
-        fm.get('cacheCreationInputTokens', 0),
-        len(d.get('result', '')),
-        d.get('stop_reason', 'unknown'),
-        t.get('total_tool_calls', 0),
-        cats.get('standard', 0),
-        cats.get('lsp', 0),
-        cats.get('type_guessr', 0),
-        round(t.get('lsp_ratio', 0), 3),
-        round(t.get('mcp_ratio', 0), 3),
-        t.get('first_tool', ''),
-        seq_str,
+      "'"$task_id"'", "'"$condition"'", "'"$trial"'",
+      !d.fetch("is_error", true),
+      d.fetch("duration_ms", 0),
+      d.fetch("num_turns", 0),
+      d.fetch("total_cost_usd", 0).round(6),
+      fm.fetch("inputTokens", 0),
+      fm.fetch("outputTokens", 0),
+      fm.fetch("cacheReadInputTokens", 0),
+      fm.fetch("cacheCreationInputTokens", 0),
+      d.fetch("result", "").size,
+      d.fetch("stop_reason", "unknown"),
+      t.fetch("total_tool_calls", 0),
+      cats.fetch("standard", 0),
+      cats.fetch("lsp", 0),
+      cats.fetch("type_guessr", 0),
+      t.fetch("lsp_ratio", 0).round(3),
+      t.fetch("mcp_ratio", 0).round(3),
+      t.fetch("first_tool", ""),
+      seq,
     ]
-    print(','.join(map(str, fields)))
-except Exception as e:
-    print(f'$task_id,$condition,$trial,False,0,0,0,0,0,0,0,0,error,0,0,0,0,0,0,,')
-" >> "$SUMMARY_CSV" 2>/dev/null
+    puts fields.join(",")
+  ' >> "$SUMMARY_CSV" 2>/dev/null
 done
 
 echo "Summary CSV: $SUMMARY_CSV"
