@@ -18,6 +18,7 @@ FILTER_CONDITION=""
 TRIALS=1
 MAX_BUDGET="0.50"
 MODEL="sonnet"
+PARALLEL=5
 
 # Parse args
 while [[ $# -gt 0 ]]; do
@@ -28,6 +29,7 @@ while [[ $# -gt 0 ]]; do
     --trials) TRIALS="$2"; shift 2 ;;
     --model) MODEL="$2"; shift 2 ;;
     --budget) MAX_BUDGET="$2"; shift 2 ;;
+    --parallel) PARALLEL="$2"; shift 2 ;;
     *) echo "Unknown option: $1"; exit 1 ;;
   esac
 done
@@ -176,6 +178,7 @@ echo "Results dir: $RESULTS_DIR"
 echo "Trials: $TRIALS"
 echo "Model: $MODEL"
 echo "Budget per run: \$$MAX_BUDGET"
+echo "Parallel: $PARALLEL"
 echo "Dry run: $DRY_RUN"
 echo ""
 
@@ -212,37 +215,21 @@ for task_file in "${TASK_FILES[@]}"; do
   done
 done
 
-echo "Total runs: $TOTAL (parallel execution)"
+echo "Total runs: $TOTAL (parallel=$PARALLEL)"
 echo ""
 
-# Run all jobs in parallel
-declare -A PIDS=()
-
-for spec in "${JOB_SPECS[@]}"; do
-  IFS='|' read -r task_id condition trial <<< "$spec"
-  task_file="$TASKS_DIR/${task_id}.txt"
-  task_prompt=$(cat "$task_file")
-  system_prompt=$(build_system_prompt "$condition")
-  result_file="$RESULTS_DIR/${task_id}_${condition}_t${trial}.json"
-
-  echo "  [${condition}] ${task_id} t${trial} ... started"
-
-  (
-    run_claude "$condition" "$task_prompt" "$system_prompt" "$result_file"
-  ) &
-  PIDS["$spec"]=$!
-done
-
-# Wait and report
+# Run jobs with concurrency limit
 SUCCESS=0
 FAILED=0
+RUNNING=0
+declare -A PIDS=()
+declare -a PENDING_SPECS=("${JOB_SPECS[@]}")
+declare -a ACTIVE_SPECS=()
 
-for spec in "${JOB_SPECS[@]}"; do
+report_result() {
+  local spec="$1"
   IFS='|' read -r task_id condition trial <<< "$spec"
-  result_file="$RESULTS_DIR/${task_id}_${condition}_t${trial}.json"
-  pid=${PIDS["$spec"]}
-
-  wait "$pid" 2>/dev/null || true
+  local result_file="$RESULTS_DIR/${task_id}_${condition}_t${trial}.json"
 
   if [[ -f "$result_file" ]]; then
     cost=$(ruby -rjson -e 'd=JSON.parse(File.read("'"$result_file"'")); printf "$%.4f", d.fetch("total_cost_usd", 0)' 2>/dev/null || echo "?")
@@ -253,6 +240,54 @@ for spec in "${JOB_SPECS[@]}"; do
   else
     echo "  [${condition}] ${task_id} t${trial} ... FAILED"
     FAILED=$((FAILED + 1))
+  fi
+}
+
+launch_job() {
+  local spec="$1"
+  IFS='|' read -r task_id condition trial <<< "$spec"
+  local task_file="$TASKS_DIR/${task_id}.txt"
+  local task_prompt
+  task_prompt=$(cat "$task_file")
+  local system_prompt
+  system_prompt=$(build_system_prompt "$condition")
+  local result_file="$RESULTS_DIR/${task_id}_${condition}_t${trial}.json"
+
+  echo "  [${condition}] ${task_id} t${trial} ... started"
+
+  (
+    run_claude "$condition" "$task_prompt" "$system_prompt" "$result_file"
+  ) &
+  PIDS["$spec"]=$!
+  ACTIVE_SPECS+=("$spec")
+}
+
+# Main scheduling loop
+idx=0
+while [[ $idx -lt ${#PENDING_SPECS[@]} || ${#ACTIVE_SPECS[@]} -gt 0 ]]; do
+  # Launch jobs up to PARALLEL limit
+  while [[ $idx -lt ${#PENDING_SPECS[@]} && ${#ACTIVE_SPECS[@]} -lt $PARALLEL ]]; do
+    launch_job "${PENDING_SPECS[$idx]}"
+    idx=$((idx + 1))
+  done
+
+  # Wait for any one job to finish
+  if [[ ${#ACTIVE_SPECS[@]} -gt 0 ]]; then
+    wait -n 2>/dev/null || true
+
+    # Check which jobs finished
+    local_remaining=()
+    for spec in "${ACTIVE_SPECS[@]}"; do
+      pid=${PIDS["$spec"]}
+      if ! kill -0 "$pid" 2>/dev/null; then
+        wait "$pid" 2>/dev/null || true
+        report_result "$spec"
+        unset "PIDS[$spec]"
+      else
+        local_remaining+=("$spec")
+      fi
+    done
+    ACTIVE_SPECS=("${local_remaining[@]}")
   fi
 done
 
