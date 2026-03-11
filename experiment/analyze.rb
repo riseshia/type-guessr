@@ -15,7 +15,7 @@ TASK_LABELS = {
 
 CONDITIONS = %w[BASE_P0 LSP_P0 LSP_P1 TG_P0 TG_P1].freeze
 
-INT_FIELDS = %w[duration_ms duration_api_ms num_turns input_tokens output_tokens cache_read
+INT_FIELDS = %w[wall_ms duration_api_ms num_turns input_tokens output_tokens cache_read
                 cache_creation result_length total_tool_calls standard_calls lsp_calls mcp_calls].freeze
 FLOAT_FIELDS = %w[total_cost_usd lsp_ratio mcp_ratio].freeze
 
@@ -70,7 +70,7 @@ def analyze(rows)
       rs = grouped[[task, cond]] || []
       next if rs.empty?
 
-      dur     = avg(rs.map { |r| r["duration_ms"] / 1000.0 })
+      dur     = avg(rs.map { |r| r["wall_ms"] / 1000.0 })
       dur_api = avg(rs.map { |r| r["duration_api_ms"] / 1000.0 })
       overhead = dur - dur_api
       cost  = avg(rs.map { |r| r["total_cost_usd"] })
@@ -105,7 +105,7 @@ def analyze(rows)
     next if rs.empty?
 
     cost     = avg(rs.map { |r| r["total_cost_usd"] })
-    dur      = avg(rs.map { |r| r["duration_ms"] / 1000.0 })
+    dur      = avg(rs.map { |r| r["wall_ms"] / 1000.0 })
     dur_api  = avg(rs.map { |r| r["duration_api_ms"] / 1000.0 })
     overhead = dur - dur_api
     tools = avg(rs.map { |r| r["total_tool_calls"] })
@@ -134,8 +134,8 @@ def analyze(rows)
 
     cost_a = avg(rs_a.map { |r| r["total_cost_usd"] })
     cost_b = avg(rs_b.map { |r| r["total_cost_usd"] })
-    dur_a  = avg(rs_a.map { |r| r["duration_ms"] / 1000.0 })
-    dur_b  = avg(rs_b.map { |r| r["duration_ms"] / 1000.0 })
+    dur_a  = avg(rs_a.map { |r| r["wall_ms"] / 1000.0 })
+    dur_b  = avg(rs_b.map { |r| r["wall_ms"] / 1000.0 })
     api_a  = avg(rs_a.map { |r| r["duration_api_ms"] / 1000.0 })
     api_b  = avg(rs_b.map { |r| r["duration_api_ms"] / 1000.0 })
 
