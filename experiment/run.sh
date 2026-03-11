@@ -97,7 +97,7 @@ run_claude() {
   fi
 
   # Warmup: all conditions run sleep script for fair comparison (LSP needs indexing time)
-  extra_args+=(--append-system-prompt "IMPORTANT: Before doing anything else, you MUST run the warmup script: \`bash ${SCRIPT_DIR}/warmup.sh\`. Wait for it to complete, then proceed with the task.")
+  extra_args+=(--append-system-prompt "IMPORTANT: Before doing anything else, you MUST run the warmup script: \`bash experiment/warmup.sh\`. Wait for it to complete, then proceed with the task.")
 
   if $DRY_RUN; then
     echo "[DRY RUN] claude ${extra_args[*]} \"$task_prompt\"" > "$result_file"
