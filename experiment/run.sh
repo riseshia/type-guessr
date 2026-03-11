@@ -94,10 +94,8 @@ run_claude() {
     extra_args+=(--system-prompt "$system_prompt")
   fi
 
-  # LSP warmup: run external sleep script before the actual task
-  if [[ "$condition" == B_* ]]; then
-    extra_args+=(--append-system-prompt "IMPORTANT: Before doing anything else, you MUST run the warmup script: \`bash ${SCRIPT_DIR}/warmup.sh\`. Wait for it to complete, then proceed with the task.")
-  fi
+  # Warmup: all conditions run sleep script for fair comparison (LSP needs indexing time)
+  extra_args+=(--append-system-prompt "IMPORTANT: Before doing anything else, you MUST run the warmup script: \`bash ${SCRIPT_DIR}/warmup.sh\`. Wait for it to complete, then proceed with the task.")
 
   if $DRY_RUN; then
     echo "[DRY RUN] claude ${extra_args[*]} \"$task_prompt\"" > "$result_file"
@@ -330,12 +328,9 @@ for result_file in "$RESULTS_DIR"/*.json; do
     cats = t["categories"] || {}
     seq = (t["tool_sequence"] || []).join(";")
 
-    # Subtract warmup sleep (60s) and 1 turn from B conditions
-    is_b = "'"$condition"'".start_with?("B")
-    wall_ms = d.fetch("duration_ms", 0)
-    wall_ms = [wall_ms - 60_000, 0].max if is_b
-    turns = d.fetch("num_turns", 0)
-    turns = [turns - 1, 0].max if is_b
+    # Subtract warmup sleep (60s) and 1 turn from all conditions
+    wall_ms = [d.fetch("duration_ms", 0) - 60_000, 0].max
+    turns = [d.fetch("num_turns", 0) - 1, 0].max
 
     fields = [
       "'"$task_id"'", "'"$condition"'", "'"$trial"'",
