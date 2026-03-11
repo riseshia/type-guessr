@@ -96,9 +96,6 @@ run_claude() {
     extra_args+=(--system-prompt "$system_prompt")
   fi
 
-  # Warmup: all conditions run sleep script for fair comparison (LSP needs indexing time)
-  extra_args+=(--append-system-prompt "IMPORTANT: Before doing anything else, you MUST run the warmup script: \`bash experiment/warmup.sh\`. Wait for it to complete, then proceed with the task.")
-
   if $DRY_RUN; then
     echo "[DRY RUN] claude ${extra_args[*]} \"$task_prompt\"" > "$result_file"
     echo '{"type":"result","subtype":"success","is_error":false,"duration_ms":0,"num_turns":0,"result":"dry run","total_cost_usd":0,"usage":{"input_tokens":0,"output_tokens":0,"cache_creation_input_tokens":0,"cache_read_input_tokens":0}}' > "$result_file"
@@ -233,8 +230,8 @@ report_result() {
 
   if [[ -f "$result_file" ]]; then
     cost=$(ruby -rjson -e 'd=JSON.parse(File.read("'"$result_file"'")); printf "$%.4f", d.fetch("total_cost_usd", 0)' 2>/dev/null || echo "?")
-    duration=$(ruby -rjson -e 'd=JSON.parse(File.read("'"$result_file"'")); printf "%.1fs", [d.fetch("duration_ms", 0) - 60_000, 0].max / 1000.0' 2>/dev/null || echo "?")
-    turns=$(ruby -rjson -e 'd=JSON.parse(File.read("'"$result_file"'")); print [d.fetch("num_turns", 0) - 1, 0].max' 2>/dev/null || echo "?")
+    duration=$(ruby -rjson -e 'd=JSON.parse(File.read("'"$result_file"'")); printf "%.1fs", d.fetch("duration_ms", 0) / 1000.0' 2>/dev/null || echo "?")
+    turns=$(ruby -rjson -e 'd=JSON.parse(File.read("'"$result_file"'")); print d.fetch("num_turns", "?")' 2>/dev/null || echo "?")
     echo "  [${condition}] ${task_id} t${trial} ... done ($duration, $cost, ${turns} turns)"
     SUCCESS=$((SUCCESS + 1))
   else
@@ -330,9 +327,8 @@ for result_file in "$RESULTS_DIR"/*.json; do
     cats = t["categories"] || {}
     seq = (t["tool_sequence"] || []).join(";")
 
-    # Subtract warmup sleep (60s) and 1 turn from all conditions
-    wall_ms = [d.fetch("duration_ms", 0) - 60_000, 0].max
-    turns = [d.fetch("num_turns", 0) - 1, 0].max
+    wall_ms = d.fetch("duration_ms", 0)
+    turns = d.fetch("num_turns", 0)
 
     fields = [
       "'"$task_id"'", "'"$condition"'", "'"$trial"'",
