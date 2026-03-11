@@ -107,7 +107,24 @@ run_claude() {
 
   cd "$PROJECT_DIR"
 
+  # Measure wall clock time ourselves (--print mode's duration_ms is unreliable)
+  local start_epoch_ms
+  start_epoch_ms=$(date +%s%3N)
+
   env -u CLAUDECODE claude "${extra_args[@]}" "$task_prompt" > "$result_file" 2>/dev/null || true
+
+  local end_epoch_ms wall_ms
+  end_epoch_ms=$(date +%s%3N)
+  wall_ms=$((end_epoch_ms - start_epoch_ms))
+
+  # Inject measured wall_ms into result JSON
+  if [[ -f "$result_file" ]]; then
+    ruby -rjson -e '
+      d = JSON.parse(File.read("'"$result_file"'", encoding: "UTF-8"))
+      d["wall_ms"] = '"$wall_ms"'
+      File.write("'"$result_file"'", JSON.pretty_generate(d))
+    ' 2>/dev/null || true
+  fi
 
   # Extract tool usage from session JSONL
   if [[ -f "$result_file" ]] && ! $DRY_RUN; then
@@ -233,7 +250,7 @@ report_result() {
 
   if [[ -f "$result_file" ]]; then
     cost=$(ruby -rjson -e 'd=JSON.parse(File.read("'"$result_file"'", encoding: "UTF-8")); printf "$%.4f", d.fetch("total_cost_usd", 0)' 2>/dev/null || echo "?")
-    duration=$(ruby -rjson -e 'd=JSON.parse(File.read("'"$result_file"'", encoding: "UTF-8")); printf "%.1fs", d.fetch("duration_ms", 0) / 1000.0' 2>/dev/null || echo "?")
+    duration=$(ruby -rjson -e 'd=JSON.parse(File.read("'"$result_file"'", encoding: "UTF-8")); printf "%.1fs", d.fetch("wall_ms", d.fetch("duration_ms", 0)) / 1000.0' 2>/dev/null || echo "?")
     turns=$(ruby -rjson -e 'd=JSON.parse(File.read("'"$result_file"'", encoding: "UTF-8")); print d.fetch("num_turns", "?")' 2>/dev/null || echo "?")
     echo "  [${condition}] ${task_id} t${trial} ... done ($duration, $cost, ${turns} turns)"
     SUCCESS=$((SUCCESS + 1))
@@ -299,7 +316,7 @@ echo "========================================="
 
 # Generate summary CSV
 SUMMARY_CSV="$RESULTS_DIR/summary.csv"
-echo "task,condition,trial,success,duration_ms,duration_api_ms,num_turns,total_cost_usd,input_tokens,output_tokens,cache_read,cache_creation,result_length,stop_reason,total_tool_calls,standard_calls,lsp_calls,mcp_calls,lsp_ratio,mcp_ratio,first_tool,tool_sequence" > "$SUMMARY_CSV"
+echo "task,condition,trial,success,wall_ms,duration_api_ms,num_turns,total_cost_usd,input_tokens,output_tokens,cache_read,cache_creation,result_length,stop_reason,total_tool_calls,standard_calls,lsp_calls,mcp_calls,lsp_ratio,mcp_ratio,first_tool,tool_sequence" > "$SUMMARY_CSV"
 
 for result_file in "$RESULTS_DIR"/*.json; do
   [[ -f "$result_file" ]] || continue
@@ -330,7 +347,7 @@ for result_file in "$RESULTS_DIR"/*.json; do
     cats = t["categories"] || {}
     seq = (t["tool_sequence"] || []).join(";")
 
-    wall_ms = d.fetch("duration_ms", 0)
+    wall_ms = d.fetch("wall_ms", d.fetch("duration_ms", 0))
     turns = d.fetch("num_turns", 0)
 
     fields = [
