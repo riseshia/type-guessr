@@ -96,6 +96,9 @@ run_claude() {
     extra_args+=(--system-prompt "$system_prompt")
   fi
 
+  # Warmup: run sleep script to ensure LSP/MCP indexing completes before task
+  extra_args+=(--append-system-prompt "CRITICAL: You MUST run \`bash experiment/warmup.sh\` as your very first action. This script is required for the tools to function correctly. Without running it first, LSP and MCP tools will return incorrect results. Execute it and wait for completion before proceeding with the task.")
+
   if $DRY_RUN; then
     echo "[DRY RUN] claude ${extra_args[*]} \"$task_prompt\"" > "$result_file"
     echo '{"type":"result","subtype":"success","is_error":false,"duration_ms":0,"num_turns":0,"result":"dry run","total_cost_usd":0,"usage":{"input_tokens":0,"output_tokens":0,"cache_creation_input_tokens":0,"cache_read_input_tokens":0}}' > "$result_file"
