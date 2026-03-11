@@ -35,6 +35,14 @@ def extract_tool_usage(jsonl_path)
       next unless block.is_a?(Hash) && block["type"] == "tool_use"
 
       name = block["name"] || "unknown"
+
+      # Skip the warmup sleep call (LSP init wait)
+      if name == "Bash"
+        input = block["input"] || {}
+        cmd = input["command"].to_s
+        next if cmd.match?(/\Asleep\s+\d+\z/)
+      end
+
       tool_calls << name
       tool_counts[name] += 1
       categories[categorize(name)] += 1

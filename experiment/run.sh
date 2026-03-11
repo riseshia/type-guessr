@@ -100,25 +100,13 @@ run_claude() {
 
   cd "$PROJECT_DIR"
 
-  # LSP warmup: run a sleep prompt first so LSP has time to initialize,
-  # then resume the same session for the actual task
+  # LSP warmup: prepend "sleep 60" to the prompt so LSP finishes initializing
+  # within the same process before the actual task begins
   if [[ "$condition" == B_* ]]; then
-    local warmup_file="${result_file%.json}_warmup.json"
-    env -u CLAUDECODE claude "${extra_args[@]}" \
-      "Run: sleep 60. Do nothing else. Just wait." \
-      > "$warmup_file" 2>/dev/null || true
+    local warmup_prompt="First, run \`sleep 60\` using Bash and wait for it to complete. After that, proceed with the following task:
 
-    local warmup_session_id
-    warmup_session_id=$(ruby -rjson -e "puts JSON.parse(File.read('$warmup_file')).fetch('session_id','')" 2>/dev/null || echo "")
-
-    if [[ -n "$warmup_session_id" ]]; then
-      env -u CLAUDECODE claude "${extra_args[@]}" \
-        --resume "$warmup_session_id" \
-        "$task_prompt" > "$result_file" 2>/dev/null || true
-    else
-      # Fallback: run without warmup
-      env -u CLAUDECODE claude "${extra_args[@]}" "$task_prompt" > "$result_file" 2>/dev/null || true
-    fi
+${task_prompt}"
+    env -u CLAUDECODE claude "${extra_args[@]}" "$warmup_prompt" > "$result_file" 2>/dev/null || true
   else
     env -u CLAUDECODE claude "${extra_args[@]}" "$task_prompt" > "$result_file" 2>/dev/null || true
   fi
@@ -293,12 +281,19 @@ for result_file in "$RESULTS_DIR"/*.json; do
     cats = t["categories"] || {}
     seq = (t["tool_sequence"] || []).join(";")
 
+    # Subtract warmup sleep (60s) and 1 turn from B conditions
+    is_b = "'"$condition"'".start_with?("B")
+    wall_ms = d.fetch("duration_ms", 0)
+    wall_ms = [wall_ms - 60_000, 0].max if is_b
+    turns = d.fetch("num_turns", 0)
+    turns = [turns - 1, 0].max if is_b
+
     fields = [
       "'"$task_id"'", "'"$condition"'", "'"$trial"'",
       !d.fetch("is_error", true),
-      d.fetch("duration_ms", 0),
+      wall_ms,
       d.fetch("duration_api_ms", 0),
-      d.fetch("num_turns", 0),
+      turns,
       d.fetch("total_cost_usd", 0).round(6),
       fm.fetch("inputTokens", 0),
       fm.fetch("outputTokens", 0),
