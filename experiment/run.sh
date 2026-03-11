@@ -16,7 +16,7 @@ DRY_RUN=false
 FILTER_TASK=""
 FILTER_CONDITION=""
 TRIALS=1
-MAX_BUDGET="0.50"
+MAX_BUDGET=""
 MODEL="sonnet"
 PARALLEL=5
 
@@ -59,7 +59,9 @@ run_claude() {
   # Base args
   extra_args+=(--print)
   extra_args+=(--output-format json)
-  extra_args+=(--max-budget-usd "$MAX_BUDGET")
+  if [[ -n "$MAX_BUDGET" ]]; then
+    extra_args+=(--max-budget-usd "$MAX_BUDGET")
+  fi
   extra_args+=(--model "$MODEL")
   extra_args+=(--dangerously-skip-permissions)
 
@@ -175,7 +177,7 @@ echo "========================================="
 echo "Results dir: $RESULTS_DIR"
 echo "Trials: $TRIALS"
 echo "Model: $MODEL"
-echo "Budget per run: \$$MAX_BUDGET"
+echo "Budget per run: ${MAX_BUDGET:+\$${MAX_BUDGET}}${MAX_BUDGET:-unlimited}"
 echo "Parallel: $PARALLEL"
 echo "Dry run: $DRY_RUN"
 echo ""
