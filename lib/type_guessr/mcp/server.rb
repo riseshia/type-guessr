@@ -448,12 +448,13 @@ module TypeGuessr
           input_schema: {
             type: "object",
             properties: {
-              query: { type: "string", description: "Search query (e.g., 'User#save', 'save', 'initialize')" }
+              query: { type: "string", description: "Search query (e.g., 'User#save', 'save', 'initialize')" },
+              include_signatures: { type: "boolean", description: "Include inferred method signatures in results (default: false)" }
             },
             required: %w[query]
           }
-        ) do |query:, **|
-          to_response.call(runtime.search_methods(query))
+        ) do |query:, include_signatures: false, **|
+          to_response.call(runtime.search_methods(query, include_signatures: include_signatures))
         end
       end
 

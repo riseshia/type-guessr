@@ -237,6 +237,40 @@ RSpec.describe TypeGuessr::MCP::StandaloneRuntime do
         expect(results).to eq([])
       end
     end
+
+    it "includes signatures when include_signatures is true" do
+      source = <<~RUBY
+        class Calculator
+          def add(a, b)
+            a + b
+          end
+        end
+      RUBY
+
+      build_runtime_with_source(source) do |runtime, _file_path|
+        results = runtime.search_methods("Calculator#add", include_signatures: true)
+
+        expect(results.length).to eq(1)
+        result = results.first
+        expect(result[:signature]).to be_a(String)
+        expect(result[:signature]).to include("a")
+        expect(result[:signature]).to include("b")
+      end
+    end
+
+    it "does not include signatures by default" do
+      source = <<~RUBY
+        class Greeter
+          def hello; end
+        end
+      RUBY
+
+      build_runtime_with_source(source) do |runtime, _file_path|
+        results = runtime.search_methods("Greeter#hello")
+
+        expect(results.first).not_to have_key(:signature)
+      end
+    end
   end
 
   describe "#index_parsed_file" do

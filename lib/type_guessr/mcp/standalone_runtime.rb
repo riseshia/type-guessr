@@ -161,17 +161,23 @@ module TypeGuessr
 
       # Search for methods matching a query pattern
       # @param query [String] Search query (e.g., "User#save", "save", "initialize")
+      # @param include_signatures [Boolean] When true, include inferred signature for each result
       # @return [Array<Hash>] Array of matching methods with :class_name, :method_name, :full_name, :location
-      def search_methods(query)
+      def search_methods(query, include_signatures: false)
         @mutex.synchronize do
           results = @method_registry.search(query)
           results.map do |class_name, method_name, def_node|
-            {
+            entry = {
               class_name: class_name,
               method_name: method_name,
               full_name: "#{class_name}##{method_name}",
               location: def_node.loc ? { offset: def_node.loc } : nil
             }
+            if include_signatures
+              sig = @signature_builder.build_from_def_node(def_node)
+              entry[:signature] = sig.to_s
+            end
+            entry
           end
         end
       rescue StandardError => e
