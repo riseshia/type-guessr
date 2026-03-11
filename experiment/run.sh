@@ -100,16 +100,7 @@ run_claude() {
 
   cd "$PROJECT_DIR"
 
-  # LSP warmup: prepend "sleep 60" to the prompt so LSP finishes initializing
-  # within the same process before the actual task begins
-  if [[ "$condition" == B_* ]]; then
-    local warmup_prompt="First, run \`sleep 60\` using Bash and wait for it to complete. After that, proceed with the following task:
-
-${task_prompt}"
-    env -u CLAUDECODE claude "${extra_args[@]}" "$warmup_prompt" > "$result_file" 2>/dev/null || true
-  else
-    env -u CLAUDECODE claude "${extra_args[@]}" "$task_prompt" > "$result_file" 2>/dev/null || true
-  fi
+  env -u CLAUDECODE claude "${extra_args[@]}" "$task_prompt" > "$result_file" 2>/dev/null || true
 
   # Extract tool usage from session JSONL
   if [[ -f "$result_file" ]] && ! $DRY_RUN; then
@@ -126,6 +117,8 @@ ${task_prompt}"
   fi
 }
 
+LSP_WARMUP="CRITICAL REQUIREMENT: Your VERY FIRST action MUST be to run exactly \`sleep 60\` using the Bash tool. Do NOT skip this step. Do NOT reduce the sleep time. Execute \`sleep 60\`, wait for it to complete, then proceed with the user's request."
+
 build_system_prompt() {
   local condition="$1"
 
@@ -134,9 +127,13 @@ build_system_prompt() {
       echo "You are analyzing a Ruby codebase. Use the available tools to answer the question."
       ;;
     B_P0)
-      echo "You are analyzing a Ruby codebase. Use the available tools to answer the question."
+      echo "${LSP_WARMUP}
+
+You are analyzing a Ruby codebase. Use the available tools to answer the question."
       ;;
     B_P1)
+      echo "${LSP_WARMUP}
+"
       cat "$PROMPTS_DIR/lsp_guided.txt"
       ;;
     C_P0)
@@ -197,8 +194,9 @@ if [[ ${#TASK_FILES[@]} -eq 0 ]]; then
 fi
 
 TOTAL=0
-SUCCESS=0
-FAILED=0
+
+# Collect all jobs
+declare -a JOB_SPECS=()
 
 for task_file in "${TASK_FILES[@]}"; do
   task_id=$(basename "$task_file" .txt)
@@ -208,38 +206,61 @@ for task_file in "${TASK_FILES[@]}"; do
     continue
   fi
 
-  task_prompt=$(cat "$task_file")
-  echo "--- Task: $task_id ---"
-
   for condition in "${CONDITIONS[@]}"; do
     # Filter
     if [[ -n "$FILTER_CONDITION" && "$condition" != "$FILTER_CONDITION" ]]; then
       continue
     fi
 
-    system_prompt=$(build_system_prompt "$condition")
-
     for trial in $(seq 1 "$TRIALS"); do
-      result_file="$RESULTS_DIR/${task_id}_${condition}_t${trial}.json"
+      JOB_SPECS+=("${task_id}|${condition}|${trial}")
       TOTAL=$((TOTAL + 1))
-
-      echo -n "  [$condition] trial $trial ... "
-
-      run_claude "$condition" "$task_prompt" "$system_prompt" "$result_file"
-
-      # Quick summary
-      if [[ -f "$result_file" ]]; then
-        cost=$(ruby -rjson -e 'd=JSON.parse(File.read("'"$result_file"'")); printf "$%.4f", d.fetch("total_cost_usd", 0)' 2>/dev/null || echo "?")
-        duration=$(ruby -rjson -e 'd=JSON.parse(File.read("'"$result_file"'")); printf "%.1fs", d.fetch("duration_ms", 0) / 1000.0' 2>/dev/null || echo "?")
-        turns=$(ruby -rjson -e 'd=JSON.parse(File.read("'"$result_file"'")); print d.fetch("num_turns", "?")' 2>/dev/null || echo "?")
-        echo "done ($duration, $cost, ${turns} turns)"
-        SUCCESS=$((SUCCESS + 1))
-      else
-        echo "FAILED"
-        FAILED=$((FAILED + 1))
-      fi
     done
   done
+done
+
+echo "Total runs: $TOTAL (parallel execution)"
+echo ""
+
+# Run all jobs in parallel
+declare -A PIDS=()
+
+for spec in "${JOB_SPECS[@]}"; do
+  IFS='|' read -r task_id condition trial <<< "$spec"
+  task_file="$TASKS_DIR/${task_id}.txt"
+  task_prompt=$(cat "$task_file")
+  system_prompt=$(build_system_prompt "$condition")
+  result_file="$RESULTS_DIR/${task_id}_${condition}_t${trial}.json"
+
+  echo "  [${condition}] ${task_id} t${trial} ... started"
+
+  (
+    run_claude "$condition" "$task_prompt" "$system_prompt" "$result_file"
+  ) &
+  PIDS["$spec"]=$!
+done
+
+# Wait and report
+SUCCESS=0
+FAILED=0
+
+for spec in "${JOB_SPECS[@]}"; do
+  IFS='|' read -r task_id condition trial <<< "$spec"
+  result_file="$RESULTS_DIR/${task_id}_${condition}_t${trial}.json"
+  pid=${PIDS["$spec"]}
+
+  wait "$pid" 2>/dev/null || true
+
+  if [[ -f "$result_file" ]]; then
+    cost=$(ruby -rjson -e 'd=JSON.parse(File.read("'"$result_file"'")); printf "$%.4f", d.fetch("total_cost_usd", 0)' 2>/dev/null || echo "?")
+    duration=$(ruby -rjson -e 'd=JSON.parse(File.read("'"$result_file"'")); printf "%.1fs", d.fetch("duration_ms", 0) / 1000.0' 2>/dev/null || echo "?")
+    turns=$(ruby -rjson -e 'd=JSON.parse(File.read("'"$result_file"'")); print d.fetch("num_turns", "?")' 2>/dev/null || echo "?")
+    echo "  [${condition}] ${task_id} t${trial} ... done ($duration, $cost, ${turns} turns)"
+    SUCCESS=$((SUCCESS + 1))
+  else
+    echo "  [${condition}] ${task_id} t${trial} ... FAILED"
+    FAILED=$((FAILED + 1))
+  fi
 done
 
 echo ""
