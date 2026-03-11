@@ -1,0 +1,1 @@
+What does the TypeGuessr::InferenceEngine#infer method do? Trace the complete call flow and list every method it calls, including their classes and return types if you can determine them.
