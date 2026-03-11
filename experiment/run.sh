@@ -233,8 +233,8 @@ report_result() {
 
   if [[ -f "$result_file" ]]; then
     cost=$(ruby -rjson -e 'd=JSON.parse(File.read("'"$result_file"'")); printf "$%.4f", d.fetch("total_cost_usd", 0)' 2>/dev/null || echo "?")
-    duration=$(ruby -rjson -e 'd=JSON.parse(File.read("'"$result_file"'")); printf "%.1fs", d.fetch("duration_ms", 0) / 1000.0' 2>/dev/null || echo "?")
-    turns=$(ruby -rjson -e 'd=JSON.parse(File.read("'"$result_file"'")); print d.fetch("num_turns", "?")' 2>/dev/null || echo "?")
+    duration=$(ruby -rjson -e 'd=JSON.parse(File.read("'"$result_file"'")); printf "%.1fs", [d.fetch("duration_ms", 0) - 60_000, 0].max / 1000.0' 2>/dev/null || echo "?")
+    turns=$(ruby -rjson -e 'd=JSON.parse(File.read("'"$result_file"'")); print [d.fetch("num_turns", 0) - 1, 0].max' 2>/dev/null || echo "?")
     echo "  [${condition}] ${task_id} t${trial} ... done ($duration, $cost, ${turns} turns)"
     SUCCESS=$((SUCCESS + 1))
   else
