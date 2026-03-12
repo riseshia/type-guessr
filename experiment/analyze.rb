@@ -9,8 +9,10 @@
 require "csv"
 
 TASK_LABELS = {
-  "t1_method_flow" => "T1: Method Flow Tracing (large-scale)",
-  "t2_module_api" => "T2: Module API Listing (small-scale)",
+  "t1_return_type_chain" => "T1: Cross-file Return Type Chain",
+  "t2_bug_localization" => "T2: Bug Localization (||= / OrNode)",
+  "t3_yield_node_plan" => "T3: Implementation Plan (YieldNode)",
+  "t4_api_comparison" => "T4: API Surface Comparison",
 }.freeze
 
 CONDITIONS = %w[BASE_P0 LSP_P0 LSP_P1 TG_P0 TG_P1].freeze

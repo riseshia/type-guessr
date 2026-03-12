@@ -1,0 +1,1 @@
+Trace the type resolution chain when TypeGuessr::Core::Inference::Resolver#infer_node receives a CallNode. Starting from infer_node, identify each method it dispatches to for CallNode handling, what each method returns, and how the final return type is constructed. List the complete chain as: method_name (class) -> return type description.

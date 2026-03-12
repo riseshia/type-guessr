@@ -1,1 +1,0 @@
-List all public methods in the TypeGuessr::MCP::Server class. For each method, describe its purpose, parameters, and return type.
