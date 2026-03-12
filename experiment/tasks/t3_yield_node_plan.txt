@@ -1,0 +1,1 @@
+Create an implementation plan for adding a new YieldNode to TypeGuessr::Core::IR::Nodes. Using the existing CallNode as a reference pattern, list: (1) all files that need modification, (2) what changes each file needs, (3) what test files should be added or modified. Do not write code, only produce the plan.

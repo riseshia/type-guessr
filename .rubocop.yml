@@ -11,6 +11,7 @@ AllCops:
     - "bin/benchmark"
     - "bin/profile"
     - "tmp/**/*"
+    - "experiment/**/*"
 
 Style/StringLiterals:
   EnforcedStyle: double_quotes

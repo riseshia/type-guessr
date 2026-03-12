@@ -1,0 +1,1 @@
+The ||= operator in Ruby (e.g., x ||= value) is handled by PrismConverter and produces an OrNode in the IR. Trace the complete code path: (1) find where PrismConverter handles OrOperatorWriteNode, (2) identify what OrNode does in the IR, (3) explain how Resolver#infer_node resolves an OrNode's type, and (4) list all files and methods involved in this chain.

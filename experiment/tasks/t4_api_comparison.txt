@@ -1,0 +1,1 @@
+Compare the public APIs of TypeGuessr::MCP::StandaloneRuntime and RubyLsp::TypeGuessr::RuntimeAdapter. For each class, list all public methods with their signatures. Then categorize: (1) methods that exist in both with the same purpose, (2) methods unique to one class, (3) methods with the same purpose but different implementation or signature.
