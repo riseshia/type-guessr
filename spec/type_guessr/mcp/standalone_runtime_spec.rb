@@ -146,6 +146,8 @@ RSpec.describe TypeGuessr::MCP::StandaloneRuntime do
         expect(result[:source]).to eq("rbs")
         expect(result[:signatures]).to be_an(Array)
         expect(result[:signatures]).not_to be_empty
+        expect(result[:class_name]).to eq("String")
+        expect(result[:method_name]).to eq("size")
       end
     end
 
@@ -179,6 +181,8 @@ RSpec.describe TypeGuessr::MCP::StandaloneRuntime do
 
         expect(result).to have_key(:error)
         expect(result[:error]).to include("Method not found")
+        expect(result[:class_name]).to eq("NonExistentClass")
+        expect(result[:method_name]).to eq("unknown_method")
       end
     end
   end

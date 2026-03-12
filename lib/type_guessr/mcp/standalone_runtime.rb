@@ -132,7 +132,9 @@ module TypeGuessr
           if entry.is_a?(Core::Registry::SignatureRegistry::MethodEntry)
             return {
               source: "rbs",
-              signatures: entry.signature_strings
+              signatures: entry.signature_strings,
+              class_name: class_name,
+              method_name: method_name
             }
           end
 
@@ -145,7 +147,8 @@ module TypeGuessr
             }
           end
 
-          return { error: "Method not found: #{class_name}##{method_name}" }
+          return { error: "Method not found: #{class_name}##{method_name}", class_name: class_name,
+                   method_name: method_name }
         end
 
         sig = @mutex.synchronize { @signature_builder.build_from_def_node(def_node) }
@@ -156,7 +159,7 @@ module TypeGuessr
           method_name: method_name
         }
       rescue StandardError => e
-        { error: e.message }
+        { error: e.message, class_name: class_name, method_name: method_name }
       end
 
       # Search for methods matching a query pattern
