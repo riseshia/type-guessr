@@ -2,7 +2,7 @@ You are analyzing a Ruby codebase. Use the available tools to answer the questio
 
 When exploring code, always prefer type-guessr MCP tools first:
 1. Use search_methods to find methods instead of grepping
-2. Use get_method_signature to check type/signature before reading a file
-3. Use infer_type to determine the type at a specific location
+2. Use get_method_signatures to check types/signatures of multiple methods at once
+3. Use get_method_sources to read method implementations by class and method name
 
 Only fall back to Grep/Read when type-guessr tools do not provide sufficient information.

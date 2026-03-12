@@ -4,20 +4,22 @@
 
 **File:** `lib/type_guessr/mcp/standalone_runtime.rb`
 
-### Public Methods (9 total)
+### Public Methods (12 total)
 
 | Line | Method | Signature | Description |
 |------|--------|-----------|-------------|
-| 22-34 | `initialize` | `(converter:, location_index:, signature_registry:, method_registry:, ivar_registry:, cvar_registry:, resolver:, signature_builder:, code_index:)` | Constructor with dependency injection. Thread-safe via Mutex. |
-| 39-58 | `index_parsed_file` | `(file_path, prism_result)` | Index a pre-parsed file (Prism::ParseResult) into IR. Thread-safe. |
-| 62-67 | `remove_indexed_file` | `(file_path)` | Remove all indexed data for a file. Thread-safe. |
+| 20-32 | `initialize` | `(converter:, location_index:, signature_registry:, method_registry:, ivar_registry:, cvar_registry:, resolver:, signature_builder:, code_index:)` | Constructor with dependency injection. Thread-safe via Mutex. |
+| 37-57 | `index_parsed_file` | `(file_path, prism_result)` | Index a pre-parsed file (Prism::ParseResult) into IR. Also cleans method_registry. Thread-safe. |
+| 61-67 | `remove_indexed_file` | `(file_path)` | Remove all indexed data for a file. Also cleans method_registry. Thread-safe. |
 | 70-72 | `build_member_index!` | `()` | Delegate member_index build to code_index. |
 | 76-78 | `refresh_member_index!` | `(file_uri)` | Delegate member_index refresh to code_index. |
 | 81-83 | `finalize_index!` | `()` | Finalize location index after indexing. Thread-safe. |
 | 86-88 | `preload_signatures!` | `()` | Preload RBS signatures for inference. |
-| 95-120 | `infer_at` | `(file_path, line, column)` | Infer type at file location (1-based line, 0-based column). Returns Hash with :type, :reason, :node_type or :error. |
-| 126-160 | `method_signature` | `(class_name, method_name)` | Get method signature. Searches project → RBS → gem cache. Returns Hash with :source. |
-| 166-185 | `search_methods` | `(query, include_signatures: false)` | Search methods matching pattern. Returns Array<Hash>. Optional signatures. |
+| 94-131 | `method_signature` | `(class_name, method_name)` | Get method signature. Searches project → RBS → gem cache. Returns Hash with :source. |
+| 136-140 | `method_signatures` | `(methods)` | Batch version of method_signature. Takes Array<Hash{class_name:, method_name:}>. |
+| 146-176 | `method_source` | `(class_name, method_name)` | Get source code of a method. Uses method_registry + Prism re-parse. Returns Hash with :source, :file_path, :line. |
+| 181-185 | `method_sources` | `(methods)` | Batch version of method_source. Takes Array<Hash{class_name:, method_name:}>. |
+| 191-210 | `search_methods` | `(query, include_signatures: false)` | Search methods matching pattern. Returns Array<Hash>. Optional signatures. |
 
 No public `attr_reader` exposed.
 
@@ -61,7 +63,7 @@ Line 25: `attr_reader :signature_registry, :location_index, :resolver, :method_r
 |---------|-------------------|----------------|-----------|
 | Initialize | `initialize(converter:, ...)` 9 kwargs | `initialize(global_state, message_queue=nil)` | SR: dependency injection; RA: creates internally from GlobalState |
 | Index file | `index_parsed_file(file_path, prism_result)` | `index_file(uri, document)` + `index_source(uri_string, source)` | SR: takes pre-parsed Prism; RA: takes ruby-lsp Document or raw source |
-| Remove file | `remove_indexed_file(file_path)` | `remove_indexed_file(file_path)` | RA also refreshes member_index |
+| Remove file | `remove_indexed_file(file_path)` | `remove_indexed_file(file_path)` | Both clean method_registry; RA also refreshes member_index |
 | Build member index | `build_member_index!()` | `build_member_index!()` | Same purpose, same delegation |
 | Search methods | `search_methods(query, include_signatures:)` | `search_project_methods(query)` | SR: optional signatures; RA: returns :node_key, :location |
 | Preload RBS | `preload_signatures!()` | *(done inside start_indexing)* | SR: explicit; RA: implicit in background thread |
@@ -71,8 +73,10 @@ Line 25: `attr_reader :signature_registry, :location_index, :resolver, :method_r
 
 | Method | Purpose |
 |--------|---------|
-| `infer_at(file_path, line, column)` | High-level: parse file → locate node → infer type. All-in-one API for MCP. |
+| `method_source(class_name, method_name)` | Get method source code by name. Re-parses file with Prism to extract def range. |
+| `method_sources(methods)` | Batch version of method_source. |
 | `method_signature(class_name, method_name)` | High-level: look up method signature from class/method names. Searches project → RBS → gem cache. |
+| `method_signatures(methods)` | Batch version of method_signature. |
 | `refresh_member_index!(file_uri)` | Exposed as separate method (RA does it implicitly) |
 
 ### (3) Methods Unique to RuntimeAdapter
@@ -103,9 +107,9 @@ Line 25: `attr_reader :signature_registry, :location_index, :resolver, :method_r
 | Role | Standalone MCP inference engine | ruby-lsp integration layer |
 | Dependency model | Injection (caller builds deps) | Wraps GlobalState (builds internally) |
 | File input | Pre-parsed Prism::ParseResult | URI + Document or source string |
-| Query model | Direct (file → parse → infer) | Indexed lookup (find node → infer) |
+| Query model | Name-based (class+method → source/signature) | Indexed lookup (find node → infer) |
 | Async | None (all synchronous) | Background indexing thread |
 | Gem support | None | Signature caching + on-demand inference |
 | RBS access | Basic lookup | Advanced (owner resolution, instance vs class) |
 | Access pattern | Methods only | Methods + attr_readers |
-| API style | High-level (infer_at, method_signature) | Low-level primitives (find_node_by_key, infer_type) |
+| API style | High-level, name-based (method_source, method_signature, batch variants) | Low-level primitives (find_node_by_key, infer_type) |
