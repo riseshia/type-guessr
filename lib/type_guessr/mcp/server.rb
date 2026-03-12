@@ -380,32 +380,39 @@ module TypeGuessr
       end
 
       private def build_tools
-        [build_infer_type_tool, build_get_method_signatures_tool, build_search_methods_tool]
+        [build_get_method_sources_tool, build_get_method_signatures_tool, build_search_methods_tool]
       end
 
-      private def build_infer_type_tool
+      private def build_get_method_sources_tool
         runtime = @runtime
         to_response = method(:json_response)
 
         ::MCP::Tool.define(
-          name: "infer_type",
-          description: "Infer the type of a variable, expression, or method at a specific location in a Ruby file. " \
-                       "Unlike reading source code directly, this performs cross-file heuristic analysis " \
-                       "(duck typing, method uniqueness, RBS signatures) to determine types that aren't obvious " \
-                       "from the local context alone. Use when you need to understand what type a variable holds " \
-                       "— especially for method parameters, block variables, or receivers whose types depend on " \
-                       "how they're used across the project.",
+          name: "get_method_sources",
+          description: "Get source code of methods by class and method name. " \
+                       "Returns the full method definition with file path and line number. " \
+                       "Use when you need to read a method's implementation without knowing " \
+                       "the exact file location.",
           input_schema: {
             type: "object",
             properties: {
-              file_path: { type: "string", description: "Absolute path to the Ruby file" },
-              line: { type: "integer", description: "Line number (1-based)" },
-              column: { type: "integer", description: "Column number (0-based)" }
+              methods: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    class_name: { type: "string", description: "Fully qualified class name (e.g., 'User', 'Admin::User')" },
+                    method_name: { type: "string", description: "Method name (e.g., 'save', 'initialize')" }
+                  },
+                  required: %w[class_name method_name]
+                },
+                description: "Array of {class_name, method_name} to look up"
+              }
             },
-            required: %w[file_path line column]
+            required: %w[methods]
           }
-        ) do |file_path:, line:, column:, **|
-          to_response.call(runtime.infer_at(file_path, line, column))
+        ) do |methods:, **|
+          to_response.call(runtime.method_sources(methods))
         end
       end
 

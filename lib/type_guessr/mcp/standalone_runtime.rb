@@ -8,8 +8,6 @@ module TypeGuessr
     # Provides type inference, method signature lookup, and method search
     # for use by the MCP server. All public query methods are thread-safe.
     class StandaloneRuntime
-      NodeContextHelper = Core::NodeContextHelper
-
       # @param converter [Core::Converter::PrismConverter]
       # @param location_index [Core::Index::LocationIndex]
       # @param signature_registry [Core::Registry::SignatureRegistry]
@@ -41,6 +39,7 @@ module TypeGuessr
 
         @mutex.synchronize do
           @location_index.remove_file(file_path)
+          @method_registry.remove_file(file_path)
           @resolver.clear_cache
 
           context = Core::Converter::PrismConverter::Context.new(
@@ -62,6 +61,7 @@ module TypeGuessr
       def remove_indexed_file(file_path)
         @mutex.synchronize do
           @location_index.remove_file(file_path)
+          @method_registry.remove_file(file_path)
           @resolver.clear_cache
         end
       end
@@ -85,38 +85,6 @@ module TypeGuessr
       # Preload RBS signatures for inference
       def preload_signatures!
         @signature_registry.preload
-      end
-
-      # Infer type at a specific file location
-      # @param file_path [String] Absolute path to the Ruby file
-      # @param line [Integer] Line number (1-based)
-      # @param column [Integer] Column number (0-based)
-      # @return [Hash] Inference result with :type, :reason, :node_type keys, or :error on failure
-      def infer_at(file_path, line, column)
-        file_path = File.expand_path(file_path)
-
-        source = File.read(file_path)
-        parse_result = Prism.parse_lex(source)
-        return { error: "Failed to parse file" } unless parse_result.value
-
-        ast = parse_result.value.first
-        code_units_cache = parse_result.code_units_cache(Encoding::UTF_8)
-
-        char_position = line_column_to_offset(source, line, column)
-        return { error: "Invalid line/column" } unless char_position
-
-        node_context = RubyLsp::RubyDocument.locate(
-          ast,
-          char_position,
-          code_units_cache: code_units_cache
-        )
-
-        prism_node = node_context.node
-        return { error: "No node found at position" } unless prism_node
-
-        infer_from_prism_node(prism_node, node_context)
-      rescue StandardError => e
-        { error: e.message, backtrace: e.backtrace&.first(3) }
       end
 
       # Get method signature for a class#method
@@ -171,6 +139,51 @@ module TypeGuessr
         end
       end
 
+      # Get source code for a single method
+      # @param class_name [String] Fully qualified class name
+      # @param method_name [String] Method name
+      # @return [Hash] Source result with :source, :file_path, :line keys, or :error on failure
+      def method_source(class_name, method_name)
+        def_node = @mutex.synchronize { @method_registry.lookup(class_name, method_name) }
+        unless def_node
+          return { error: "Method not found: #{class_name}##{method_name}",
+                   class_name: class_name, method_name: method_name }
+        end
+
+        file_path = @mutex.synchronize { @method_registry.source_file_for(class_name, method_name) }
+        unless file_path
+          return { error: "Source file not found: #{class_name}##{method_name}",
+                   class_name: class_name, method_name: method_name }
+        end
+
+        source = File.read(file_path)
+        prism_result = Prism.parse(source)
+        node_context = RubyLsp::RubyDocument.locate(
+          prism_result.value, def_node.loc,
+          code_units_cache: prism_result.code_units_cache(Encoding::UTF_8)
+        )
+        prism_def = node_context.node.is_a?(Prism::DefNode) ? node_context.node : node_context.parent
+
+        {
+          class_name: class_name,
+          method_name: method_name,
+          source: prism_def.slice,
+          file_path: file_path,
+          line: prism_def.location.start_line
+        }
+      rescue StandardError => e
+        { error: e.message, class_name: class_name, method_name: method_name }
+      end
+
+      # Get source code for multiple methods in one call
+      # @param methods [Array<Hash>] Array of { class_name:, method_name: } hashes
+      # @return [Array<Hash>] Array of source results (same format as method_source)
+      def method_sources(methods)
+        methods.map do |entry|
+          method_source(entry[:class_name], entry[:method_name])
+        end
+      end
+
       # Search for methods matching a query pattern
       # @param query [String] Search query (e.g., "User#save", "save", "initialize")
       # @param include_signatures [Boolean] When true, include inferred signature for each result
@@ -194,77 +207,6 @@ module TypeGuessr
         end
       rescue StandardError => e
         { error: e.message }
-      end
-
-      private
-
-      # Resolve a Prism AST node to a type inference result
-      # @param prism_node [Prism::Node] The AST node at the cursor position
-      # @param node_context [RubyLsp::NodeContext] Context from RubyDocument.locate
-      # @return [Hash] Inference result
-      private def infer_from_prism_node(prism_node, node_context)
-        exclude_method = prism_node.is_a?(Prism::DefNode)
-        scope_id = NodeContextHelper.generate_scope_id(node_context, exclude_method: exclude_method)
-        node_hash = NodeContextHelper.generate_node_hash(prism_node, node_context)
-        return { error: "Unsupported node type: #{prism_node.class}" } unless node_hash
-
-        node_key = "#{scope_id}:#{node_hash}"
-
-        ir_node = @mutex.synchronize { @location_index.find_by_key(node_key) }
-        return { error: "Node not indexed", node_key: node_key, node_type: prism_node.class.name } unless ir_node
-
-        infer_from_ir_node(ir_node)
-      end
-
-      # Infer type from an IR node, dispatching by node type
-      # @param ir_node [Core::IR::Node] The indexed IR node
-      # @return [Hash] Inference result
-      private def infer_from_ir_node(ir_node)
-        if ir_node.is_a?(Core::IR::DefNode)
-          sig = @mutex.synchronize { @signature_builder.build_from_def_node(ir_node) }
-          return {
-            type: "method_signature",
-            signature: sig.to_s,
-            node_type: "DefNode"
-          }
-        end
-
-        result = @mutex.synchronize { @resolver.infer(ir_node) }
-
-        if ir_node.is_a?(Core::IR::CallNode)
-          {
-            type: result.type.to_s,
-            method: ir_node.method.to_s,
-            reason: result.reason,
-            node_type: "CallNode"
-          }
-        else
-          {
-            type: result.type.to_s,
-            reason: result.reason,
-            node_type: ir_node.class.name.split("::").last
-          }
-        end
-      end
-
-      # Convert 1-based line / 0-based column to byte offset
-      # @param source [String] Source code
-      # @param line [Integer] Line number (1-based)
-      # @param column [Integer] Column number (0-based)
-      # @return [Integer, nil] Byte offset, or nil if line/column is out of bounds
-      private def line_column_to_offset(source, line, column)
-        current_line = 1
-        current_offset = 0
-
-        source.each_char do |char|
-          return current_offset + column if current_line == line
-
-          current_line += 1 if char == "\n"
-          current_offset += char.bytesize
-        end
-
-        # Last line (no trailing newline)
-        current_offset + column if current_line == line
       end
     end
   end

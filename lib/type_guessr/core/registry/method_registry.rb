@@ -98,6 +98,15 @@ module TypeGuessr
           end
         end
 
+        # Get the source file path for a registered method
+        # @param class_name [String] Class name
+        # @param method_name [String] Method name
+        # @return [String, nil] File path or nil
+        def source_file_for(class_name, method_name)
+          sources = @entry_sources[[class_name, method_name]]
+          sources&.first
+        end
+
         # Search for methods matching a pattern
         # @param pattern [String] Search pattern (partial match on "ClassName#method_name")
         # @return [Array<Array>] Array of [class_name, method_name, def_node]

@@ -56,67 +56,6 @@ RSpec.describe TypeGuessr::MCP::StandaloneRuntime do
     end
   end
 
-  describe "#infer_at" do
-    it "infers type for a string literal" do
-      source = <<~RUBY
-        class Greeter
-          def greet
-            name = "hello"
-          end
-        end
-      RUBY
-
-      build_runtime_with_source(source) do |runtime, file_path|
-        # line 3, column 4 → `name` (local variable assigned to string)
-        result = runtime.infer_at(file_path, 3, 4)
-
-        expect(result).not_to have_key(:error)
-        expect(result[:type]).to include("String")
-      end
-    end
-
-    it "infers method signature for a def node" do
-      source = <<~RUBY
-        class Calculator
-          def add(a, b)
-            a + b
-          end
-        end
-      RUBY
-
-      build_runtime_with_source(source) do |runtime, file_path|
-        # line 2, column 6 → `add` (def node)
-        result = runtime.infer_at(file_path, 2, 6)
-
-        expect(result).not_to have_key(:error)
-        expect(result[:node_type]).to eq("DefNode")
-        expect(result[:type]).to eq("method_signature")
-      end
-    end
-
-    it "returns error for invalid position" do
-      source = <<~RUBY
-        x = 1
-      RUBY
-
-      build_runtime_with_source(source) do |runtime, file_path|
-        result = runtime.infer_at(file_path, 999, 0)
-
-        expect(result).to have_key(:error)
-      end
-    end
-
-    it "returns error for non-existent file" do
-      source = "x = 1"
-
-      build_runtime_with_source(source) do |runtime, _file_path|
-        result = runtime.infer_at("/nonexistent/file.rb", 1, 0)
-
-        expect(result).to have_key(:error)
-      end
-    end
-  end
-
   describe "#method_signature" do
     it "returns project method signature" do
       source = <<~RUBY
@@ -334,6 +273,57 @@ RSpec.describe TypeGuessr::MCP::StandaloneRuntime do
     end
   end
 
+  describe "#method_sources" do
+    it "returns source code for methods" do
+      source = <<~RUBY
+        class Order
+          def cancel
+            @cancelled = true
+          end
+        end
+      RUBY
+
+      build_runtime_with_source(source) do |runtime, file_path|
+        results = runtime.method_sources([
+                                           { class_name: "Order", method_name: "cancel" },
+                                         ])
+
+        expect(results.length).to eq(1)
+        result = results.first
+        expect(result[:class_name]).to eq("Order")
+        expect(result[:method_name]).to eq("cancel")
+        expect(result[:source]).to include("def cancel")
+        expect(result[:source]).to include("@cancelled = true")
+        expect(result[:file_path]).to eq(file_path)
+        expect(result[:line]).to be_a(Integer)
+      end
+    end
+
+    it "returns error for unknown method" do
+      source = "x = 1"
+
+      build_runtime_with_source(source) do |runtime, _file_path|
+        results = runtime.method_sources([
+                                           { class_name: "Order", method_name: "nonexistent" },
+                                         ])
+
+        expect(results.length).to eq(1)
+        expect(results.first).to have_key(:error)
+        expect(results.first[:class_name]).to eq("Order")
+        expect(results.first[:method_name]).to eq("nonexistent")
+      end
+    end
+
+    it "returns empty array for empty input" do
+      source = "x = 1"
+
+      build_runtime_with_source(source) do |runtime, _file_path|
+        results = runtime.method_sources([])
+        expect(results).to eq([])
+      end
+    end
+  end
+
   describe "#index_parsed_file" do
     it "skips files with parse errors gracefully" do
       source = "x = 1"
@@ -346,25 +336,21 @@ RSpec.describe TypeGuessr::MCP::StandaloneRuntime do
       end
     end
 
-    it "reflects updated type after re-indexing a modified file" do
+    it "reflects updated methods after re-indexing a modified file" do
       source = <<~RUBY
         class Updater
-          def value
-            x = "hello"
-          end
+          def value; end
         end
       RUBY
 
       build_runtime_with_source(source) do |runtime, file_path|
-        result = runtime.infer_at(file_path, 3, 4)
-        expect(result[:type]).to include("String")
+        results = runtime.search_methods("Updater#value")
+        expect(results.length).to eq(1)
 
-        # Modify the file: change string to integer
+        # Modify the file: rename method
         new_source = <<~RUBY
           class Updater
-            def value
-              x = 42
-            end
+            def new_value; end
           end
         RUBY
         File.write(file_path, new_source)
@@ -373,14 +359,14 @@ RSpec.describe TypeGuessr::MCP::StandaloneRuntime do
         parsed = Prism.parse(new_source)
         runtime.index_parsed_file(file_path, parsed)
 
-        result = runtime.infer_at(file_path, 3, 4)
-        expect(result[:type]).to include("Integer")
+        expect(runtime.search_methods("Updater#value")).to be_empty
+        expect(runtime.search_methods("Updater#new_value").length).to eq(1)
       end
     end
   end
 
   describe "#remove_indexed_file" do
-    it "removes indexed nodes so queries return error" do
+    it "removes indexed methods so search returns empty" do
       source = <<~RUBY
         class Removable
           def greet
@@ -390,16 +376,14 @@ RSpec.describe TypeGuessr::MCP::StandaloneRuntime do
       RUBY
 
       build_runtime_with_source(source) do |runtime, file_path|
-        # Verify it works before removal
-        result = runtime.infer_at(file_path, 3, 4)
-        expect(result).not_to have_key(:error)
+        # Verify method is searchable before removal
+        expect(runtime.search_methods("Removable#greet").length).to eq(1)
 
         # Remove the file from index
         runtime.remove_indexed_file(file_path)
 
-        # Now queries should return error (node not indexed)
-        result = runtime.infer_at(file_path, 3, 4)
-        expect(result).to have_key(:error)
+        # Now search should return empty
+        expect(runtime.search_methods("Removable#greet")).to be_empty
       end
     end
   end

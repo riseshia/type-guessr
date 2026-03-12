@@ -255,4 +255,24 @@ RSpec.describe TypeGuessr::Core::Registry::MethodRegistry do
       expect(registry.lookup("Child", "parent_method")).to eq(parent_method)
     end
   end
+
+  describe "#source_file_for" do
+    it "returns the file path for a registered method" do
+      def_node = create_def_node("save")
+      registry.register("User", "save", def_node, file_path: "/app/models/user.rb")
+
+      expect(registry.source_file_for("User", "save")).to eq("/app/models/user.rb")
+    end
+
+    it "returns nil for unknown method" do
+      expect(registry.source_file_for("User", "unknown")).to be_nil
+    end
+
+    it "returns nil when registered without file_path" do
+      def_node = create_def_node("save")
+      registry.register("User", "save", def_node)
+
+      expect(registry.source_file_for("User", "save")).to be_nil
+    end
+  end
 end
