@@ -277,6 +277,63 @@ RSpec.describe TypeGuessr::MCP::StandaloneRuntime do
     end
   end
 
+  describe "#method_signatures" do
+    it "returns signatures for multiple methods in one call" do
+      source = <<~RUBY
+        class Order
+          def cancel; end
+          def save; end
+        end
+      RUBY
+
+      build_runtime_with_source(source) do |runtime, _file_path|
+        results = runtime.method_signatures([
+                                              { class_name: "Order", method_name: "cancel" },
+                                              { class_name: "Order", method_name: "save" },
+                                            ])
+
+        expect(results).to be_an(Array)
+        expect(results.length).to eq(2)
+        expect(results[0][:class_name]).to eq("Order")
+        expect(results[0][:method_name]).to eq("cancel")
+        expect(results[0][:source]).to eq("project")
+        expect(results[1][:class_name]).to eq("Order")
+        expect(results[1][:method_name]).to eq("save")
+      end
+    end
+
+    it "returns error entry for missing methods without affecting others" do
+      source = <<~RUBY
+        class Order
+          def cancel; end
+        end
+      RUBY
+
+      build_runtime_with_source(source) do |runtime, _file_path|
+        results = runtime.method_signatures([
+                                              { class_name: "Order", method_name: "cancel" },
+                                              { class_name: "Order", method_name: "nonexistent" },
+                                            ])
+
+        expect(results.length).to eq(2)
+        expect(results[0][:source]).to eq("project")
+        expect(results[1]).to have_key(:error)
+        expect(results[1][:class_name]).to eq("Order")
+        expect(results[1][:method_name]).to eq("nonexistent")
+      end
+    end
+
+    it "returns empty array for empty input" do
+      source = "x = 1"
+
+      build_runtime_with_source(source) do |runtime, _file_path|
+        results = runtime.method_signatures([])
+
+        expect(results).to eq([])
+      end
+    end
+  end
+
   describe "#index_parsed_file" do
     it "skips files with parse errors gracefully" do
       source = "x = 1"

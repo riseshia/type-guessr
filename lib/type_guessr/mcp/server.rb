@@ -380,7 +380,8 @@ module TypeGuessr
       end
 
       private def build_tools
-        [build_infer_type_tool, build_get_method_signature_tool, build_search_methods_tool]
+        [build_infer_type_tool, build_get_method_signature_tool, build_get_method_signatures_tool,
+         build_search_methods_tool]
       end
 
       private def build_infer_type_tool
@@ -430,6 +431,38 @@ module TypeGuessr
           }
         ) do |class_name:, method_name:, **|
           to_response.call(runtime.method_signature(class_name, method_name))
+        end
+      end
+
+      private def build_get_method_signatures_tool
+        runtime = @runtime
+        to_response = method(:json_response)
+
+        ::MCP::Tool.define(
+          name: "get_method_signatures",
+          description: "Get inferred signatures for multiple methods in one call. " \
+                       "More efficient than calling get_method_signature repeatedly " \
+                       "when investigating a class or module.",
+          input_schema: {
+            type: "object",
+            properties: {
+              methods: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    class_name: { type: "string", description: "Fully qualified class name" },
+                    method_name: { type: "string", description: "Method name" }
+                  },
+                  required: %w[class_name method_name]
+                },
+                description: "Array of {class_name, method_name} to look up"
+              }
+            },
+            required: %w[methods]
+          }
+        ) do |methods:, **|
+          to_response.call(runtime.method_signatures(methods))
         end
       end
 

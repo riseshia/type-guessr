@@ -162,6 +162,15 @@ module TypeGuessr
         { error: e.message, class_name: class_name, method_name: method_name }
       end
 
+      # Get signatures for multiple methods in one call
+      # @param methods [Array<Hash>] Array of { class_name:, method_name: } hashes
+      # @return [Array<Hash>] Array of signature results (same format as method_signature)
+      def method_signatures(methods)
+        methods.map do |entry|
+          method_signature(entry[:class_name], entry[:method_name])
+        end
+      end
+
       # Search for methods matching a query pattern
       # @param query [String] Search query (e.g., "User#save", "save", "initialize")
       # @param include_signatures [Boolean] When true, include inferred signature for each result
