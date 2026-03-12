@@ -380,8 +380,7 @@ module TypeGuessr
       end
 
       private def build_tools
-        [build_infer_type_tool, build_get_method_signature_tool, build_get_method_signatures_tool,
-         build_search_methods_tool]
+        [build_infer_type_tool, build_get_method_signatures_tool, build_search_methods_tool]
       end
 
       private def build_infer_type_tool
@@ -407,30 +406,6 @@ module TypeGuessr
           }
         ) do |file_path:, line:, column:, **|
           to_response.call(runtime.infer_at(file_path, line, column))
-        end
-      end
-
-      private def build_get_method_signature_tool
-        runtime = @runtime
-        to_response = method(:json_response)
-
-        ::MCP::Tool.define(
-          name: "get_method_signature",
-          description: "Get the full inferred signature (parameter types and return type) of a method. " \
-                       "Unlike reading the method source, this returns types resolved through cross-file " \
-                       "inference — including types inferred from call sites, RBS definitions, and naming " \
-                       "conventions. Use when you need to understand a method's type contract without " \
-                       "tracing callers manually.",
-          input_schema: {
-            type: "object",
-            properties: {
-              class_name: { type: "string", description: "Fully qualified class name (e.g., 'User', 'Admin::User')" },
-              method_name: { type: "string", description: "Method name (e.g., 'save', 'initialize')" }
-            },
-            required: %w[class_name method_name]
-          }
-        ) do |class_name:, method_name:, **|
-          to_response.call(runtime.method_signature(class_name, method_name))
         end
       end
 
