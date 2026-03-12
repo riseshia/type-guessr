@@ -19,7 +19,7 @@ CONDITIONS = %w[BASE_P0 LSP_P0 LSP_P1 TG_P0 TG_P1].freeze
 
 INT_FIELDS = %w[wall_ms duration_api_ms num_turns input_tokens output_tokens cache_read
                 cache_creation result_length total_tool_calls standard_calls lsp_calls mcp_calls].freeze
-FLOAT_FIELDS = %w[total_cost_usd lsp_ratio mcp_ratio].freeze
+FLOAT_FIELDS = %w[total_cost_usd lsp_ratio mcp_ratio quality_score completeness accuracy specificity].freeze
 
 def load_results(results_dir)
   csv_path = File.join(results_dir, "summary.csv")
@@ -40,6 +40,157 @@ def avg(values)
   return 0.0 if values.empty?
 
   values.sum.to_f / values.size
+end
+
+def stddev(values)
+  return 0.0 if values.size < 2
+
+  mean = avg(values)
+  Math.sqrt(values.map { |v| (v - mean)**2 }.sum / (values.size - 1))
+end
+
+# Welch's t-test for unequal variances
+# Returns [t_statistic, degrees_of_freedom, p_value]
+def welch_t_test(a, b)
+  n_a = a.size.to_f
+  n_b = b.size.to_f
+  return [0.0, 0.0, 1.0] if n_a < 2 || n_b < 2
+
+  mean_a = avg(a)
+  mean_b = avg(b)
+  var_a = a.map { |v| (v - mean_a)**2 }.sum / (n_a - 1)
+  var_b = b.map { |v| (v - mean_b)**2 }.sum / (n_b - 1)
+
+  se = Math.sqrt(var_a / n_a + var_b / n_b)
+  return [0.0, 0.0, 1.0] if se == 0
+
+  t = (mean_a - mean_b) / se
+
+  # Welch-Satterthwaite degrees of freedom
+  num = (var_a / n_a + var_b / n_b)**2
+  den = (var_a / n_a)**2 / (n_a - 1) + (var_b / n_b)**2 / (n_b - 1)
+  df = den > 0 ? num / den : 1.0
+
+  # Approximate two-tailed p-value using Student's t CDF
+  # Uses regularized incomplete beta function approximation
+  p_value = t_distribution_p(t.abs, df)
+
+  [t, df, p_value]
+end
+
+# Approximate two-tailed p-value for Student's t-distribution
+# Uses the approximation: p ≈ 2 * (1 - Φ(|t| * √(df/(df-2+t²))))
+# Good enough for df > 4. For small df, use a more conservative estimate.
+def t_distribution_p(t_abs, df)
+  return 1.0 if t_abs == 0
+
+  # For large df, t ≈ normal
+  if df > 30
+    # Normal approximation
+    z = t_abs
+    return 2.0 * (1.0 - normal_cdf(z))
+  end
+
+  # Approximation via normal CDF with correction
+  x = df / (df + t_abs**2)
+  p = regularized_beta(x, df / 2.0, 0.5)
+  [p, 1.0].min
+end
+
+# Approximate normal CDF using Abramowitz and Stegun formula 7.1.26
+def normal_cdf(x)
+  return 0.5 if x == 0
+  return 1.0 - normal_cdf(-x) if x < 0
+
+  b0 = 0.2316419
+  b1 = 0.319381530
+  b2 = -0.356563782
+  b3 = 1.781477937
+  b4 = -1.821255978
+  b5 = 1.330274429
+
+  t = 1.0 / (1.0 + b0 * x)
+  pdf = Math.exp(-0.5 * x * x) / Math.sqrt(2 * Math::PI)
+  1.0 - pdf * t * (b1 + t * (b2 + t * (b3 + t * (b4 + t * b5))))
+end
+
+# Regularized incomplete beta function (rough approximation)
+# Good enough for t-test p-value estimation
+def regularized_beta(x, a, b)
+  return 0.0 if x <= 0
+  return 1.0 if x >= 1
+
+  # Use continued fraction approximation (Lentz's algorithm, simplified)
+  # For our use case (a=df/2, b=0.5), this converges quickly
+  max_iter = 100
+  eps = 1e-10
+
+  # Beta function via log-gamma
+  lbeta = Math.lgamma(a)[0] + Math.lgamma(b)[0] - Math.lgamma(a + b)[0]
+  prefix = Math.exp(a * Math.log(x) + b * Math.log(1 - x) - lbeta) / a
+
+  # Continued fraction
+  am = 1.0
+  bm = 1.0
+  az = 1.0
+  bz = 1.0 - (a + b) * x / (a + 1)
+
+  m = 1
+  while m < max_iter
+    em = m
+    d = em * (b - em) * x / ((a + 2 * em - 1) * (a + 2 * em))
+    ap = az + d * am
+    bp = bz + d * bm
+    d = -(a + em) * (a + b + em) * x / ((a + 2 * em) * (a + 2 * em + 1))
+    am = ap + d * az
+    bm = bp + d * bz
+    az = ap + d * ap
+    bz = bp + d * bp
+
+    if bz.abs > 0
+      old = az / bz
+      az /= bz
+      am /= bz
+      bm /= bz
+      bz = 1.0
+      break if (az - old).abs < eps * az.abs
+    end
+
+    m += 1
+  end
+
+  result = prefix * az
+  result.clamp(0.0, 1.0)
+end
+
+# Format significance level
+def significance(p)
+  if p < 0.001
+    "***"
+  elsif p < 0.01
+    "**"
+  elsif p < 0.05
+    "*"
+  else
+    ""
+  end
+end
+
+# Cohen's d effect size
+def cohens_d(a, b)
+  n_a = a.size.to_f
+  n_b = b.size.to_f
+  return 0.0 if n_a < 2 || n_b < 2
+
+  mean_a = avg(a)
+  mean_b = avg(b)
+  var_a = a.map { |v| (v - mean_a)**2 }.sum / (n_a - 1)
+  var_b = b.map { |v| (v - mean_b)**2 }.sum / (n_b - 1)
+
+  pooled_sd = Math.sqrt(((n_a - 1) * var_a + (n_b - 1) * var_b) / (n_a + n_b - 2))
+  return 0.0 if pooled_sd == 0
+
+  (mean_a - mean_b) / pooled_sd
 end
 
 def section(title)
@@ -188,6 +339,82 @@ def analyze(rows)
         puts format("    %s t%s: %s", cond, r["trial"], seq)
       end
     end
+  end
+
+  # --- Statistical comparisons ---
+  section("Statistical Comparisons (Welch's t-test)")
+
+  comparisons = [
+    %w[BASE_P0 TG_P0], "Baseline vs MCP (natural)",
+    %w[BASE_P0 TG_P1], "Baseline vs MCP (guided)",
+    %w[BASE_P0 LSP_P0], "Baseline vs LSP (natural)",
+    %w[LSP_P0 TG_P0], "LSP vs MCP (both natural)",
+    %w[LSP_P1 TG_P1], "LSP vs MCP (both guided)",
+    %w[TG_P0 TG_P1], "MCP natural vs guided",
+    %w[LSP_P0 LSP_P1], "LSP natural vs guided",
+  ]
+
+  metrics = [
+    ["total_cost_usd", "Cost ($)"],
+    ["wall_ms", "Wall (ms)"],
+    ["total_tool_calls", "Tools"],
+  ]
+
+  # Check for quality scores
+  has_quality = rows.any? { |r| r["quality_score"] && r["quality_score"].to_f > 0 }
+  metrics << ["quality_score", "Quality"] if has_quality
+
+  comparisons.each_slice(2) do |(cond_a, cond_b), label|
+    rs_a = rows.select { |r| r["condition"] == cond_a }
+    rs_b = rows.select { |r| r["condition"] == cond_b }
+    next if rs_a.empty? || rs_b.empty?
+
+    puts
+    puts format("  %s (n=%d vs n=%d):", label, rs_a.size, rs_b.size)
+
+    metrics.each do |field, field_label|
+      vals_a = rs_a.map { |r| r[field].to_f }
+      vals_b = rs_b.map { |r| r[field].to_f }
+
+      mean_a = avg(vals_a)
+      mean_b = avg(vals_b)
+      sd_a = stddev(vals_a)
+      sd_b = stddev(vals_b)
+      t, df, p = welch_t_test(vals_a, vals_b)
+      d = cohens_d(vals_a, vals_b)
+      sig = significance(p)
+
+      diff_pct = mean_a > 0 ? ((mean_b / mean_a) - 1) * 100 : 0
+
+      puts format("    %-10s  %.3f±%.3f vs %.3f±%.3f  Δ=%+.0f%%  t=%.2f  p=%.4f%s  d=%.2f",
+        field_label, mean_a, sd_a, mean_b, sd_b, diff_pct, t, p, sig, d)
+    end
+  end
+
+  # --- Per-condition descriptive stats ---
+  section("Descriptive Statistics (mean ± stddev)")
+
+  puts format("  %-10s %16s %16s %16s %16s",
+    "Condition", "Cost ($)", "Wall (s)", "Tools", has_quality ? "Quality" : "")
+  puts "  " + "-" * 78
+
+  CONDITIONS.each do |cond|
+    rs = rows.select { |r| r["condition"] == cond }
+    next if rs.empty?
+
+    costs = rs.map { |r| r["total_cost_usd"] }
+    walls = rs.map { |r| r["wall_ms"] / 1000.0 }
+    tools = rs.map { |r| r["total_tool_calls"].to_f }
+
+    line = format("  %-10s %6.4f ± %.4f %6.1f ± %5.1f %5.1f ± %4.1f",
+      cond, avg(costs), stddev(costs), avg(walls), stddev(walls), avg(tools), stddev(tools))
+
+    if has_quality
+      quals = rs.map { |r| r["quality_score"].to_f }
+      line += format(" %5.1f ± %4.1f", avg(quals), stddev(quals))
+    end
+
+    puts line
   end
 end
 
