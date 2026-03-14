@@ -87,7 +87,8 @@ module TypeGuessr
 
       private def build_runtime(ruby_index)
         code_index = RubyLsp::TypeGuessr::CodeIndexAdapter.new(ruby_index)
-        signature_registry = Core::Registry::SignatureRegistry.instance
+        signature_registry = Core::Registry::SignatureRegistry.new(code_index: code_index)
+        Core::Registry::SignatureRegistry.instance = signature_registry
 
         method_registry = Core::Registry::MethodRegistry.new(code_index: code_index)
         ivar_registry = Core::Registry::InstanceVariableRegistry.new(code_index: code_index)

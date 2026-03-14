@@ -29,13 +29,16 @@ module RubyLsp
         @message_queue = message_queue
         @converter = ::TypeGuessr::Core::Converter::PrismConverter.new
         @location_index = ::TypeGuessr::Core::Index::LocationIndex.new
-        @signature_registry = ::TypeGuessr::Core::Registry::SignatureRegistry.instance
         @indexing_completed = false
         @mutex = Mutex.new
         @original_type_inferrer = nil
 
         # Create CodeIndexAdapter wrapping RubyIndexer
         @code_index = CodeIndexAdapter.new(global_state&.index)
+
+        # Create SignatureRegistry with code_index for ancestor chain traversal
+        @signature_registry = ::TypeGuessr::Core::Registry::SignatureRegistry.new(code_index: @code_index)
+        ::TypeGuessr::Core::Registry::SignatureRegistry.instance = @signature_registry
 
         # Create method registry with code_index for inheritance lookup
         @method_registry = ::TypeGuessr::Core::Registry::MethodRegistry.new(

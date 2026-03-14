@@ -624,6 +624,69 @@ RSpec.describe TypeGuessr::Core::Registry::SignatureRegistry do
     end
   end
 
+  describe "ancestor chain traversal" do
+    let(:code_index) { instance_double(RubyLsp::TypeGuessr::CodeIndexAdapter) }
+    let(:registry_with_index) do
+      r = described_class.new(code_index: code_index)
+      r.preload
+      r
+    end
+
+    context "when subclass inherits from stdlib class" do
+      before do
+        allow(code_index).to receive(:ancestors_of)
+          .with("Hoge")
+          .and_return(%w[Hoge String Object Kernel BasicObject])
+      end
+
+      it "finds inherited instance method via ancestor chain" do
+        entry = registry_with_index.lookup("Hoge", "upcase")
+
+        expect(entry).to be_a(described_class::MethodEntry)
+        expect(entry.return_type.name).to eq("String")
+      end
+
+      it "finds inherited class method via ancestor chain" do
+        entry = registry_with_index.lookup_class_method("Hoge", "try_convert")
+
+        expect(entry).to be_a(described_class::MethodEntry)
+      end
+    end
+
+    context "when code_index is not set" do
+      let(:registry_without_index) do
+        described_class.new.tap(&:preload)
+      end
+
+      it "only performs direct lookup" do
+        entry = registry_without_index.lookup("Hoge", "upcase")
+
+        expect(entry).to be_nil
+      end
+    end
+
+    context "when subclass has its own definition" do
+      before do
+        allow(code_index).to receive(:ancestors_of)
+          .with("Hoge")
+          .and_return(%w[Hoge String Object Kernel BasicObject])
+
+        # Register Hoge's own upcase
+        registry_with_index.register_gem_method(
+          "Hoge", "upcase",
+          TypeGuessr::Core::Types::ClassInstance.new("Integer")
+        )
+      end
+
+      it "returns the direct definition, not the inherited one" do
+        entry = registry_with_index.lookup("Hoge", "upcase")
+
+        expect(entry).to be_a(described_class::GemMethodEntry)
+        expect(entry.return_type.name).to eq("Integer")
+      end
+    end
+  end
+
   describe described_class::MethodEntry do
     # Get entry via lookup instead of direct instantiation
     let(:string_upcase_entry) { registry.lookup("String", "upcase") }

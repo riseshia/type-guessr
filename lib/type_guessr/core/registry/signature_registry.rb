@@ -1,6 +1,5 @@
 # frozen_string_literal: true
 
-require "singleton"
 require "rbs"
 require_relative "../types"
 require_relative "../logger"
@@ -13,7 +12,9 @@ module TypeGuessr
       # Preloads stdlib RBS signatures and provides O(1) hash lookup
       # Singleton to ensure RBS is loaded only once across all usages
       class SignatureRegistry
-        include Singleton
+        class << self
+          attr_accessor :instance
+        end
 
         # Represents a method signature entry from RBS
         # Handles overload resolution and type conversion
@@ -238,9 +239,11 @@ module TypeGuessr
           end
         end
 
+        attr_accessor :code_index
         attr_writer :on_demand_inferrer # ->(class_name, method_name, kind) { ... }
 
-        def initialize
+        def initialize(code_index: nil)
+          @code_index = code_index
           @instance_methods = {} # { "String" => { "upcase" => MethodEntry } }
           @class_methods = {}    # { "File" => { "read" => MethodEntry } }
           @converter = Converter::RBSConverter.new
@@ -265,19 +268,41 @@ module TypeGuessr
         end
 
         # Look up instance method entry
+        # Falls back to ancestor chain traversal when code_index is available
         # @param class_name [String] the class name
         # @param method_name [String] the method name
         # @return [MethodEntry, nil] method entry or nil if not found
         def lookup(class_name, method_name)
-          @instance_methods.dig(class_name, method_name)
+          result = @instance_methods.dig(class_name, method_name)
+          return result if result
+          return nil unless @code_index
+
+          @code_index.ancestors_of(class_name).each do |ancestor|
+            next if ancestor == class_name
+
+            result = @instance_methods.dig(ancestor, method_name)
+            return result if result
+          end
+          nil
         end
 
         # Look up class method entry
+        # Falls back to ancestor chain traversal when code_index is available
         # @param class_name [String] the class name
         # @param method_name [String] the method name
         # @return [MethodEntry, nil] method entry or nil if not found
         def lookup_class_method(class_name, method_name)
-          @class_methods.dig(class_name, method_name)
+          result = @class_methods.dig(class_name, method_name)
+          return result if result
+          return nil unless @code_index
+
+          @code_index.ancestors_of(class_name).each do |ancestor|
+            next if ancestor == class_name
+
+            result = @class_methods.dig(ancestor, method_name)
+            return result if result
+          end
+          nil
         end
 
         # Get method return type (convenience method matching old SignatureProvider API)

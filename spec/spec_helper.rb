@@ -13,7 +13,9 @@ Dir[File.join(__dir__, "support", "**", "*.rb")].each { |f| require f }
 RSpec.configure do |config|
   # Preload RBS signatures once before all tests
   config.before(:suite) do
-    TypeGuessr::Core::Registry::SignatureRegistry.instance.preload
+    registry = TypeGuessr::Core::Registry::SignatureRegistry.new
+    registry.preload
+    TypeGuessr::Core::Registry::SignatureRegistry.instance = registry
 
     # Start E2E server if E2E tests are being run
     SharedLspServer.instance if config.filter.rules[:e2e] || ARGV.any? { |arg| arg.include?("e2e") }

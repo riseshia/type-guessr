@@ -39,7 +39,10 @@ module ToolSetup
   # @param code_index [RubyLsp::TypeGuessr::CodeIndexAdapter]
   # @return [Infrastructure]
   def self.build_infrastructure(code_index)
-    signature_registry = TypeGuessr::Core::Registry::SignatureRegistry.instance.preload
+    signature_registry = TypeGuessr::Core::Registry::SignatureRegistry.instance ||
+                         TypeGuessr::Core::Registry::SignatureRegistry.new(code_index: code_index)
+    signature_registry.preload
+    TypeGuessr::Core::Registry::SignatureRegistry.instance ||= signature_registry
     method_registry = TypeGuessr::Core::Registry::MethodRegistry.new(code_index: code_index)
     ivar_registry = TypeGuessr::Core::Registry::InstanceVariableRegistry.new(code_index: code_index)
     cvar_registry = TypeGuessr::Core::Registry::ClassVariableRegistry.new
