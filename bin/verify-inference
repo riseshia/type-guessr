@@ -164,10 +164,14 @@ class InferenceVerifier
     #   "User.find(1)"        -> col of 'f' in 'find'
     #   "user.posts.build"    -> col of 'b' in 'build'
     #   "user.name_changed?"  -> col of 'n' in 'name_changed?'
+    #
+    # Note: Uses \.method or ::method patterns only.
+    # Single : (Ruby symbol like :name) is excluded to avoid
+    # hovering over symbol arguments instead of method calls.
 
     last_pos = nil
     pos = 0
-    while (m = code.match(/[.:](\w+[?!]?)/, pos))
+    while (m = code.match(/(?:\.|::)(\w+[?!]?)/, pos))
       last_pos = m.begin(1)
       pos = m.end(0)
     end
