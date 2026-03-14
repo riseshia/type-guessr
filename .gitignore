@@ -15,6 +15,7 @@ a.rb
 .rspec_status
 
 todo.md
+refactor_todo.md
 CLAUDE.local.md
 brain.md
 *.gem
