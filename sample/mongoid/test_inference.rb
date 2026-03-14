@@ -233,7 +233,6 @@ Article.empty?                     # => bool
 
 # D-2. Collection queries (return Criteria)
 Article.where(published: true)     # => Mongoid::Criteria[Article]
-Article.where(:view_count.gt => 10) # => Mongoid::Criteria[Article]
 Article.order_by(title: 1)        # => Mongoid::Criteria[Article]
 Article.order_by(title: -1)       # => Mongoid::Criteria[Article]
 Article.limit(10)                  # => Mongoid::Criteria[Article]
@@ -353,7 +352,6 @@ article.destroyed?                # => bool
 ###############################################################################
 
 article.inc(view_count: 1)        # => Article
-article.inc(view_count: 1, rating: 0.5) # => Article (multi-field)
 article.set(title: "Updated")     # => Article
 article.set(title: "x", body: "y") # => Article (multi-field)
 article.unset(:body)              # => Article
