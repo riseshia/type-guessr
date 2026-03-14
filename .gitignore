@@ -19,3 +19,8 @@ refactor_todo.md
 CLAUDE.local.md
 brain.md
 *.gem
+
+# Sample project artifacts
+sample/**/storage/
+sample/**/log/
+sample/**/tmp/
