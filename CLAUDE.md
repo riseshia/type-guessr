@@ -106,6 +106,29 @@ bin/hover-repl lib/ruby_lsp/type_guessr/config.rb 40 11 --json
 
 Use this to verify hover results match what users see in their editors.
 
+### Verifying DSL Type Inference
+```bash
+bin/verify-inference sample/activerecord
+bin/verify-inference sample/mongoid
+bin/verify-inference sample/activerecord --verbose
+```
+
+Automated type inference verification against sample Rails/Mongoid projects.
+Parses `test_inference.rb` lines with `# => ExpectedType` comments, starts
+ruby-lsp with TypeGuessr addon, hovers over each method call, and checks
+if the hover result contains the expected type string.
+
+Output shows PASS/FAIL/SKIP for each line with a summary at the end.
+Use `--verbose` to see TypeGuessr server logs.
+
+**Adding new test cases:** Add a line to `test_inference.rb` with `# => Type`:
+```ruby
+user.name              # => String?
+User.where(active: true) # => ActiveRecord::Relation[User]
+```
+
+The hover target is auto-detected as the last `.method_name` on the line.
+
 ## TDD Development Workflow
 
 This project follows strict Test-Driven Development (TDD) practices.
