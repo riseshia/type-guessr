@@ -22,23 +22,23 @@ tagging = Tagging.new
 user.name              # => String?
 user.email             # => String?
 user.age               # => Integer?
-user.active            # => Boolean? (TrueClass | FalseClass)
+user.active            # => bool
 user.score             # => Float?
 user.balance           # => BigDecimal?
 user.bio               # => String?
 user.born_on           # => Date?
-user.login_at          # => DateTime?
+user.login_at          # => ActiveSupport::TimeWithZone?
 user.password_digest   # => String?
-user.role              # => String? (enum stored as integer, read as string)
+user.role              # => String?
 user.created_at        # => ActiveSupport::TimeWithZone?
 user.updated_at        # => ActiveSupport::TimeWithZone?
 user.id                # => Integer?
 
 post.title             # => String?
 post.body              # => String?
-post.published         # => Boolean?
-post.published_at      # => DateTime?
-post.status            # => String? (enum)
+post.published         # => bool
+post.published_at      # => ActiveSupport::TimeWithZone?
+post.status            # => String?
 
 comment.body           # => String?
 
@@ -58,7 +58,7 @@ user.login_at = Time.now
 # A-3. Predicates (attribute?)
 user.name?             # => bool
 user.email?            # => bool
-user.age?              # => bool (true if non-zero)
+user.age?              # => bool
 user.active?           # => bool
 user.bio?              # => bool
 
@@ -185,7 +185,7 @@ User.not_admin                  # => ActiveRecord::Relation[User]
 
 # C-4. Post enum
 post.draft?                     # => bool
-post.published?                 # => bool (NOTE: conflicts with scope name)
+post.published?                 # => bool
 post.archived?                  # => bool
 post.draft!
 post.published!

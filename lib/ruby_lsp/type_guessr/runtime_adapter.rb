@@ -215,6 +215,18 @@ module RubyLsp
         end
       end
 
+      # Check if a method was registered by a DSL adapter (e.g., AR column accessor).
+      # Only matches entries explicitly marked as DSL (dsl: true), not regular gem entries.
+      def dsl_registered_method?(class_name, method_name)
+        entry = @signature_registry.lookup(class_name, method_name)
+        entry.is_a?(::TypeGuessr::Core::Registry::SignatureRegistry::GemMethodEntry) && entry.dsl?
+      end
+
+      def dsl_registered_class_method?(class_name, method_name)
+        entry = @signature_registry.lookup_class_method(class_name, method_name)
+        entry.is_a?(::TypeGuessr::Core::Registry::SignatureRegistry::GemMethodEntry) && entry.dsl?
+      end
+
       # Start background indexing of all project files
       def start_indexing
         Thread.new do

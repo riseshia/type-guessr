@@ -206,10 +206,13 @@ module TypeGuessr
         class GemMethodEntry
           attr_reader :params
 
-          def initialize(return_type, params = [])
+          def initialize(return_type, params = [], dsl: false)
             @return_type = return_type
             @params = params
+            @dsl = dsl
           end
+
+          def dsl? = @dsl
 
           def return_type(_arg_types = [])
             @return_type
@@ -395,7 +398,7 @@ module TypeGuessr
             return unless force
           end
 
-          @instance_methods[class_name][method_name] = GemMethodEntry.new(return_type, params)
+          @instance_methods[class_name][method_name] = GemMethodEntry.new(return_type, params, dsl: force)
         end
 
         # Register a single gem class method
@@ -410,7 +413,7 @@ module TypeGuessr
             return unless force
           end
 
-          @class_methods[class_name][method_name] = GemMethodEntry.new(return_type, params)
+          @class_methods[class_name][method_name] = GemMethodEntry.new(return_type, params, dsl: force)
         end
 
         # Bulk load gem cache data into the registry

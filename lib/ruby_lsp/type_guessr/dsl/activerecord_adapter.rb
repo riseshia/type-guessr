@@ -223,6 +223,7 @@ module RubyLsp
             methods["#{col_name}_was"] = { "kind" => "column", "type" => col_type.to_s, "nullable" => true }
             methods["#{col_name}_in_database"] = { "kind" => "column", "type" => col_type.to_s, "nullable" => true }
             methods["#{col_name}_before_last_save"] = { "kind" => "column", "type" => col_type.to_s, "nullable" => true }
+            methods["#{col_name}_will_change!"] = { "kind" => "column_predicate" }
           end
         end
 
@@ -234,6 +235,7 @@ module RubyLsp
               methods["#{value_name}?"] = { "kind" => "enum_predicate" }
               methods["#{value_name}!"] = { "kind" => "enum_bang" }
               methods["scope:#{value_name}"] = { "kind" => "enum_scope", "class_name" => class_name }
+              methods["scope:not_#{value_name}"] = { "kind" => "enum_scope", "class_name" => class_name }
             end
           end
         end
@@ -246,6 +248,12 @@ module RubyLsp
 
             # Reader: user.posts / user.profile
             methods[name] = { "kind" => "association", "macro" => macro, "target" => target }
+
+            # has_many: post_ids → Array
+            if %w[has_many has_and_belongs_to_many].include?(macro)
+              singular = name.end_with?("s") ? name[0..-2] : name
+              methods["#{singular}_ids"] = { "kind" => "association_ids" }
+            end
 
             # Derived methods for singular associations (has_one, belongs_to)
             next unless %w[has_one belongs_to].include?(macro)
@@ -292,6 +300,9 @@ module RubyLsp
               when "association_builder"
                 target_type = ::TypeGuessr::Core::Types::ClassInstance.for(info["target"])
                 register_instance_method(class_name, method_name, target_type, signature_registry, code_index)
+              when "association_ids"
+                array_type = ::TypeGuessr::Core::Types::ClassInstance.for("Array")
+                register_instance_method(class_name, method_name, array_type, signature_registry, code_index)
               when "scope"
                 scope_name = method_name.delete_prefix("scope:")
                 register_class_scope(info["class_name"], scope_name, signature_registry)

@@ -700,8 +700,9 @@ module TypeGuessr
             arg_types
           )
 
-          # Early return: RBS class method found
+          # Early return: RBS class method found — substitute SelfType with actual class
           unless return_type.is_a?(Types::Unknown)
+            return_type = return_type.substitute(self: Types::ClassInstance.for(class_name))
             return Result.new(
               return_type,
               "#{class_name}.#{node.method} (RBS)",

@@ -121,49 +121,55 @@ module RubyLsp
           class_name = extract_class_name(receiver_type)
 
           if class_name
-            # Try to find DefNode first (for project methods)
-            # Use the same inference logic as DefNode hover
-            unless receiver_type.is_a?(Types::SingletonType)
-              def_node = @runtime_adapter.lookup_method(class_name, call_node.method.to_s)
-              if def_node
-                add_def_node_hover(def_node)
-                return
-              end
-            end
+            method_name_str = call_node.method.to_s
+            dsl = if receiver_type.is_a?(Types::SingletonType)
+                    @runtime_adapter.dsl_registered_class_method?(class_name, method_name_str)
+                  else
+                    @runtime_adapter.dsl_registered_method?(class_name, method_name_str)
+                  end
 
-            # Fall back to RBS signature lookup (for stdlib/gems)
-            # Use class method lookup for SingletonType (e.g., RBS::Environment.from_loader)
-            # RuntimeAdapter resolves the actual method owner (e.g., Object for #tap)
-            rbs_result = if receiver_type.is_a?(Types::SingletonType)
-                           @runtime_adapter.get_rbs_class_method_signatures(
-                             class_name, call_node.method.to_s
-                           )
-                         else
-                           @runtime_adapter.get_rbs_method_signatures(
-                             class_name, call_node.method.to_s
-                           )
-                         end
-
-            signatures = rbs_result[:signatures]
-            owner = rbs_result[:owner]
-
-            if signatures.any?
-              # Format the signature(s)
-              sig_strs = signatures.map { |sig| sig.method_type.to_s }
-              content = "**Guessed Signature:** `#{sig_strs.first}`"
-
-              if debug_enabled?
-                content += "\n\n**[TypeGuessr Debug]**"
-                content += "\n\n**Receiver:** `#{receiver_type}`"
-                content += "\n\n**Defined in:** `#{owner}`" if owner != class_name
-                if sig_strs.size > 1
-                  content += "\n\n**Overloads:**\n"
-                  sig_strs.each { |s| content += "- `#{s}`\n" }
+            # DSL-registered methods skip DefNode + RBS → go straight to fallback (resolver)
+            unless dsl
+              # Try to find DefNode first (for project methods)
+              unless receiver_type.is_a?(Types::SingletonType)
+                def_node = @runtime_adapter.lookup_method(class_name, method_name_str)
+                if def_node
+                  add_def_node_hover(def_node)
+                  return
                 end
               end
 
-              @response_builder.push(content, category: :documentation)
-              return
+              # Fall back to RBS signature lookup (for stdlib/gems)
+              rbs_result = if receiver_type.is_a?(Types::SingletonType)
+                             @runtime_adapter.get_rbs_class_method_signatures(
+                               class_name, method_name_str
+                             )
+                           else
+                             @runtime_adapter.get_rbs_method_signatures(
+                               class_name, method_name_str
+                             )
+                           end
+
+              signatures = rbs_result[:signatures]
+              owner = rbs_result[:owner]
+
+              if signatures.any?
+                sig_strs = signatures.map { |sig| sig.method_type.to_s }
+                content = "**Guessed Signature:** `#{sig_strs.first}`"
+
+                if debug_enabled?
+                  content += "\n\n**[TypeGuessr Debug]**"
+                  content += "\n\n**Receiver:** `#{receiver_type}`"
+                  content += "\n\n**Defined in:** `#{owner}`" if owner != class_name
+                  if sig_strs.size > 1
+                    content += "\n\n**Overloads:**\n"
+                    sig_strs.each { |s| content += "- `#{s}`\n" }
+                  end
+                end
+
+                @response_builder.push(content, category: :documentation)
+                return
+              end
             end
           end
         end
