@@ -11,6 +11,7 @@ AllCops:
     - "bin/benchmark"
     - "bin/profile"
     - "tmp/**/*"
+    - "sample/**/*"
 
 Style/StringLiterals:
   EnforcedStyle: double_quotes
@@ -43,6 +44,11 @@ Style/NegatedIf:
 # bin/ scripts and spec/support helpers legitimately define multiple classes/modules
 Style/OneClassPerFile:
   Enabled: false
+
+# bin/ scripts don't need top-level documentation
+Style/Documentation:
+  Exclude:
+    - "bin/**/*"
 
 # LiteralNode.values is an Array, not a Hash
 Style/HashEachMethods:

@@ -67,9 +67,7 @@ class LspClient
     end
   end
 
-  private
-
-  def read_message
+  private def read_message
     header = ""
     loop do
       line = @stdout.gets
@@ -86,7 +84,7 @@ class LspClient
     JSON.parse(body)
   end
 
-  def write_message(message)
+  private def write_message(message)
     json = JSON.generate(message)
     @stdin.write("Content-Length: #{json.bytesize}\r\n\r\n#{json}")
     @stdin.flush
@@ -94,8 +92,8 @@ class LspClient
 end
 
 class InferenceVerifier
-  Expectation = Struct.new(:line, :col, :code, :expected, keyword_init: true)
-  Result = Struct.new(:expectation, :actual, :status, keyword_init: true) # :pass, :fail, :no_hover
+  Expectation = Struct.new(:line, :col, :code, :expected)
+  Result = Struct.new(:expectation, :actual, :status) # :pass, :fail, :no_hover
 
   def initialize(project_dir, verbose: false)
     @project_dir = File.expand_path(project_dir)
@@ -120,11 +118,7 @@ class InferenceVerifier
     shutdown_server
   end
 
-  private
-
-  # --- Parsing ---
-
-  def parse_expectations
+  private def parse_expectations
     lines = File.readlines(@test_file)
     expectations = []
 
@@ -153,7 +147,7 @@ class InferenceVerifier
     expectations
   end
 
-  def find_hover_column(code)
+  private def find_hover_column(code)
     # Find the last .method_name or ::method_name pattern in the code.
     # Returns the 1-indexed column of the method name start.
     #
@@ -179,7 +173,7 @@ class InferenceVerifier
 
   # --- LSP Server ---
 
-  def start_server
+  private def start_server
     puts "Starting ruby-lsp server in #{@project_dir}..."
     @stdin, @stdout, @stderr, @wait_thr = Open3.popen3(
       "bundle", "exec", "ruby-lsp",
@@ -200,7 +194,7 @@ class InferenceVerifier
     initialize_lsp
   end
 
-  def initialize_lsp
+  private def initialize_lsp
     root_uri = "file://#{@project_dir}"
     response = @client.send_request("initialize", {
                                       processId: Process.pid,
@@ -228,7 +222,7 @@ class InferenceVerifier
     puts
   end
 
-  def handle_notification(msg)
+  private def handle_notification(msg)
     return unless msg["method"] == "window/logMessage"
 
     message = msg.dig("params", "message") || ""
@@ -238,7 +232,7 @@ class InferenceVerifier
     @indexing_complete = true if message.include?("File indexing completed")
   end
 
-  def shutdown_server
+  private def shutdown_server
     return unless @client
 
     @client.send_request("shutdown", nil)
@@ -251,7 +245,7 @@ class InferenceVerifier
 
   # --- Verification ---
 
-  def verify(exp)
+  private def verify(exp)
     uri = "file://#{@test_file}"
 
     unless @opened_files[uri]
@@ -283,7 +277,7 @@ class InferenceVerifier
     print_result(result)
   end
 
-  def extract_hover_content(response)
+  private def extract_hover_content(response)
     return nil if response&.dig("error")
 
     result = response&.dig("result")
@@ -299,7 +293,7 @@ class InferenceVerifier
     end
   end
 
-  def type_matches?(actual, expected)
+  private def type_matches?(actual, expected)
     # Normalize for comparison:
     # - "bool" matches "TrueClass | FalseClass", "Boolean", "bool"
     # - "void" matches "void", "nil"
@@ -322,16 +316,13 @@ class InferenceVerifier
 
   # --- Reporting ---
 
-  def print_result(result)
+  private def print_result(result)
     exp = result.expectation
     code = exp.code.length > 40 ? "#{exp.code[0, 37]}..." : exp.code
-    label = case result.status
-            when :pass then "\e[32mPASS\e[0m"
-            when :fail then "\e[31mFAIL\e[0m"
-            when :no_hover then "\e[33mSKIP\e[0m"
-            end
+    labels = { pass: "\e[32mPASS\e[0m", fail: "\e[31mFAIL\e[0m", no_hover: "\e[33mSKIP\e[0m" }
+    label = labels[result.status]
 
-    line_info = "L%-3d" % exp.line
+    line_info = format("L%-3d", exp.line)
     print format("  #{line_info} %-42s expected: %-25s #{label}", code, exp.expected)
 
     if result.status == :fail
@@ -344,7 +335,7 @@ class InferenceVerifier
     puts
   end
 
-  def print_report
+  private def print_report
     puts
     pass = @results.count { |r| r.status == :pass }
     fail_count = @results.count { |r| r.status == :fail }
@@ -387,5 +378,5 @@ project_dir = ARGV[0]
 
 abort "Error: #{project_dir} is not a directory" unless File.directory?(project_dir)
 
-verifier = InferenceVerifier.new(project_dir, verbose: !!verbose)
+verifier = InferenceVerifier.new(project_dir, verbose: !verbose.nil?)
 verifier.run
