@@ -19,8 +19,6 @@ module TypeGuessr
       # @param msg [String] the error message
       # @param exception [Exception, nil] optional exception for backtrace
       module_function def error(msg, exception = nil)
-        return unless debug_enabled?
-
         warn "[TypeGuessr:ERROR] #{msg}"
         return unless exception
 
