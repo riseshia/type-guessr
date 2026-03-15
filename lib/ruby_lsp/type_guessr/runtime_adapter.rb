@@ -8,6 +8,7 @@ require_relative "../../type_guessr/core/registry/instance_variable_registry"
 require_relative "../../type_guessr/core/registry/class_variable_registry"
 require_relative "../../type_guessr/core/registry/signature_registry"
 require_relative "../../type_guessr/core/inference/resolver"
+require_relative "dsl_type_registrar"
 require_relative "../../type_guessr/core/signature_builder"
 require_relative "../../type_guessr/core/type_simplifier"
 require_relative "../../type_guessr/core/node_context_helper"
@@ -251,7 +252,13 @@ module RubyLsp
           # Connect on-demand inference callback for Unguessed gem methods
           @signature_registry.on_demand_inferrer = method(:infer_gem_file_on_demand)
 
+          # Register DSL types (AR column accessors, enums, associations, scopes)
+          register_dsl_types
+
           @indexing_completed = true
+
+          # Start schema watch loop for auto-refresh
+          start_schema_watch_loop
 
           # Background inference: fully infer gems that have Unguessed entries (opt-in)
           background_infer_gems(result[:unguessed_gems], result[:cache]) if Config.background_gem_indexing? && result && result[:unguessed_gems].any?
@@ -755,6 +762,66 @@ module RubyLsp
         end
 
         log_message("Index stabilized at #{previous_count} entries.")
+      end
+
+      private def discover_runner_client
+        rails_addon = ::RubyLsp::Addon.get("Ruby LSP Rails", ">= 0.4.0", "< 0.5.0")
+        rails_addon.rails_runner_client
+      rescue ::RubyLsp::Addon::AddonNotFoundError, ::RubyLsp::Addon::IncompatibleApiError
+        nil
+      rescue StandardError => e
+        log_message("Failed to discover RunnerClient: #{e.message}")
+        nil
+      end
+
+      private def register_dsl_types
+        workspace_path = @global_state.workspace_path
+        return unless workspace_path
+
+        @dsl_registrar = DslTypeRegistrar.new(
+          signature_registry: @signature_registry,
+          code_index: @code_index,
+          project_root: workspace_path
+        )
+        @dsl_registrar.on_log { |msg| log_message("[DSL] #{msg}") }
+
+        runner_client = wait_for_runner_client
+        @dsl_registrar.register_all(runner_client: runner_client)
+      rescue StandardError => e
+        log_message("DSL type registration failed: #{e.message}\n#{e.backtrace.first(3).join("\n")}")
+      end
+
+      # Wait for ruby-lsp-rails RunnerClient to transition from NullClient.
+      # 3s interval × max 10 attempts = max 30s.
+      private def wait_for_runner_client
+        log_message("[DSL] Waiting for RunnerClient...")
+        max_attempts = 10
+
+        max_attempts.times do |_i|
+          client = discover_runner_client
+          if client.respond_to?(:connected?) && client.connected?
+            log_message("[DSL] RunnerClient ready (#{client.class})")
+            return client
+          end
+
+          sleep(3)
+        end
+
+        log_message("[DSL] RunnerClient timeout after #{max_attempts} attempts")
+        nil
+      end
+
+      private def start_schema_watch_loop
+        return unless @dsl_registrar
+
+        Thread.new do
+          loop do
+            sleep(45)
+            @dsl_registrar.check_and_refresh(runner_client: discover_runner_client)
+          rescue StandardError => e
+            log_message("Schema watch error: #{e.message}")
+          end
+        end
       end
 
       private def log_message(message)
