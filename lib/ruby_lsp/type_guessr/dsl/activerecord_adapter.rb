@@ -44,27 +44,69 @@ module RubyLsp
                                                                  self_type,
                                                                  ::TypeGuessr::Core::Types::ClassInstance.for("NilClass"),
                                                                ])
+          int_type = ::TypeGuessr::Core::Types::ClassInstance.for("Integer")
+          bool_type = BOOL_TYPE
+          array_of_self = ::TypeGuessr::Core::Types::ClassInstance.for("Array")
 
-          # Class methods returning Relation[self]
+          # --- Class methods ---
+
+          # Returning Relation[self]
           %w[
             where all order limit offset select distinct group having reorder reverse_order
             none unscoped reselect extending joins left_joins left_outer_joins
             includes eager_load preload references readonly lock create_with rewhere
+            or and not invert_where merge
           ].each do |m|
             signature_registry.register_gem_class_method(base, m, relation_of_self, force: true)
           end
 
-          # Class methods returning self?
+          # Returning self?
           %w[first last second third forty_two take find_by find_sole_by].each do |m|
             signature_registry.register_gem_class_method(base, m, nullable_self, force: true)
           end
 
-          # Class methods returning self
-          %w[first! last! take! sole find_by!].each do |m|
+          # Returning self
+          %w[
+            first! last! take! sole find_by! find
+            create create! new
+            find_or_create_by find_or_create_by! find_or_initialize_by
+            create_or_find_by create_or_find_by!
+          ].each do |m|
             signature_registry.register_gem_class_method(base, m, self_type, force: true)
           end
 
-          log("Registered AR::Base common class methods (SelfType)")
+          # Returning Integer
+          %w[count update_all delete_all].each do |m|
+            signature_registry.register_gem_class_method(base, m, int_type, force: true)
+          end
+
+          # Returning Array
+          %w[ids pluck destroy_all].each do |m|
+            signature_registry.register_gem_class_method(base, m, array_of_self, force: true)
+          end
+
+          # Returning bool
+          %w[exists? any? many? none? empty?].each do |m|
+            signature_registry.register_gem_class_method(base, m, bool_type, force: true)
+          end
+
+          # --- Instance methods ---
+
+          # Returning bool
+          %w[
+            save save! update update! toggle! touch
+            new_record? persisted? destroyed? changed? previously_new_record? frozen?
+            has_changes_to_save? saved_changes? valid? invalid?
+          ].each do |m|
+            signature_registry.register_gem_method(base, m, bool_type, force: true)
+          end
+
+          # Returning self
+          %w[destroy destroy! reload toggle increment decrement increment! decrement!].each do |m|
+            signature_registry.register_gem_method(base, m, self_type, force: true)
+          end
+
+          log("Registered AR::Base common methods (SelfType)")
         end
 
         # Cache check → cache hit: restore, cache miss + runner_client: fetch → register → save.
@@ -164,8 +206,23 @@ module RubyLsp
         private def build_column_methods(methods, columns)
           columns.each do |col|
             col_name, col_type, nullable = col
+            col_name = col_name.to_s
             nullable = true if nullable.nil?
-            methods[col_name.to_s] = { "kind" => "column", "type" => col_type.to_s, "nullable" => nullable }
+
+            # Reader: user.name → String?
+            methods[col_name] = { "kind" => "column", "type" => col_type.to_s, "nullable" => nullable }
+
+            # Predicate: user.name? → bool
+            methods["#{col_name}?"] = { "kind" => "column_predicate" }
+
+            # Dirty tracking
+            methods["#{col_name}_changed?"] = { "kind" => "column_predicate" }
+            methods["#{col_name}_previously_changed?"] = { "kind" => "column_predicate" }
+            methods["saved_change_to_#{col_name}?"] = { "kind" => "column_predicate" }
+            methods["will_save_change_to_#{col_name}?"] = { "kind" => "column_predicate" }
+            methods["#{col_name}_was"] = { "kind" => "column", "type" => col_type.to_s, "nullable" => true }
+            methods["#{col_name}_in_database"] = { "kind" => "column", "type" => col_type.to_s, "nullable" => true }
+            methods["#{col_name}_before_last_save"] = { "kind" => "column", "type" => col_type.to_s, "nullable" => true }
           end
         end
 
@@ -186,7 +243,17 @@ module RubyLsp
             name = (assoc[:name] || assoc["name"]).to_s
             macro = (assoc[:macro] || assoc["macro"]).to_s
             target = assoc[:class_name] || assoc["class_name"]
+
+            # Reader: user.posts / user.profile
             methods[name] = { "kind" => "association", "macro" => macro, "target" => target }
+
+            # Derived methods for singular associations (has_one, belongs_to)
+            next unless %w[has_one belongs_to].include?(macro)
+
+            methods["build_#{name}"] = { "kind" => "association_builder", "target" => target }
+            methods["create_#{name}"] = { "kind" => "association_builder", "target" => target }
+            methods["create_#{name}!"] = { "kind" => "association_builder", "target" => target }
+            methods["reload_#{name}"] = { "kind" => "association", "macro" => macro, "target" => target }
           end
         end
 
@@ -206,6 +273,8 @@ module RubyLsp
               when "enum_reader"
                 return_type = ArTypeMapper.map("string", nullable: true)
                 register_instance_method(class_name, method_name, return_type, signature_registry, code_index)
+              when "column_predicate"
+                register_instance_method(class_name, method_name, BOOL_TYPE, signature_registry, code_index)
               when "enum_predicate"
                 register_instance_method(class_name, method_name, BOOL_TYPE, signature_registry, code_index)
               when "enum_bang"
@@ -220,6 +289,9 @@ module RubyLsp
               when "association"
                 register_association(class_name, method_name, info["macro"], info["target"],
                                      signature_registry, code_index)
+              when "association_builder"
+                target_type = ::TypeGuessr::Core::Types::ClassInstance.for(info["target"])
+                register_instance_method(class_name, method_name, target_type, signature_registry, code_index)
               when "scope"
                 scope_name = method_name.delete_prefix("scope:")
                 register_class_scope(info["class_name"], scope_name, signature_registry)
@@ -269,3 +341,4 @@ module RubyLsp
     end
   end
 end
+# rubocop:enable Metrics/AbcSize, Metrics/MethodLength
