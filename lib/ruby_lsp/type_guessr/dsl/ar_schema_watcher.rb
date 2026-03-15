@@ -64,7 +64,7 @@ module RubyLsp
         end
 
         def save_cache(models_data)
-          FileUtils.mkdir_p(@cache_dir)
+          FileUtils.mkdir_p(File.dirname(cache_path))
 
           hash = current_hash
           data = {
@@ -82,12 +82,13 @@ module RubyLsp
         end
 
         private def cache_path
-          project_hash = Digest::SHA256.hexdigest(@project_root)[0, 16]
-          File.join(@cache_dir, "dsl-ar-#{project_hash}.json")
+          project_dir = @project_root.gsub(%r{[/\\]}, "-").gsub(/\A-/, "")
+          File.join(@cache_dir, project_dir, "cache.json")
         end
 
         private def default_cache_dir
-          File.join(Dir.home, ".cache", "type-guessr", "dsl-cache")
+          xdg_cache = ENV.fetch("XDG_CACHE_HOME", File.join(Dir.home, ".cache"))
+          File.join(xdg_cache, "type-guessr", "dsl-cache")
         end
       end
     end
