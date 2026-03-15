@@ -383,19 +383,31 @@ module TypeGuessr
         end
 
         # Register a single gem instance method
-        # Skips if RBS entry already exists (RBS takes priority)
-        def register_gem_method(class_name, method_name, return_type, params = [])
+        # Skips if RBS entry already exists (RBS takes priority).
+        # force: true overwrites existing GemMethodEntry (but never MethodEntry/RBS).
+        def register_gem_method(class_name, method_name, return_type, params = [], force: false)
           @instance_methods[class_name] ||= {}
-          return if @instance_methods[class_name].key?(method_name)
+
+          existing = @instance_methods[class_name][method_name]
+          if existing
+            return if existing.is_a?(MethodEntry)
+            return unless force
+          end
 
           @instance_methods[class_name][method_name] = GemMethodEntry.new(return_type, params)
         end
 
         # Register a single gem class method
-        # Skips if RBS entry already exists (RBS takes priority)
-        def register_gem_class_method(class_name, method_name, return_type, params = [])
+        # Skips if RBS entry already exists (RBS takes priority).
+        # force: true overwrites existing GemMethodEntry (but never MethodEntry/RBS).
+        def register_gem_class_method(class_name, method_name, return_type, params = [], force: false)
           @class_methods[class_name] ||= {}
-          return if @class_methods[class_name].key?(method_name)
+
+          existing = @class_methods[class_name][method_name]
+          if existing
+            return if existing.is_a?(MethodEntry)
+            return unless force
+          end
 
           @class_methods[class_name][method_name] = GemMethodEntry.new(return_type, params)
         end

@@ -247,6 +247,23 @@ module RubyLsp
         nil
       end
 
+      # Inject a custom method into the duck-typing reverse index.
+      # Used by DSL adapters to register framework-generated methods (e.g., AR column accessors).
+      def register_method_class(class_name, method_name)
+        return unless @method_classes
+
+        @method_classes[method_name] ||= Set.new
+        @method_classes[method_name] << class_name
+      end
+
+      # Remove all entries for a class from the duck-typing reverse index.
+      # Used when purging DSL registrations (e.g., schema change).
+      def unregister_method_classes(class_name)
+        return unless @method_classes
+
+        @method_classes.each_value { |set| set.delete(class_name) }
+      end
+
       # Rebuild @method_classes from current @member_index state.
       private def rebuild_method_classes!
         owner_methods = {}
