@@ -107,9 +107,7 @@ class InferenceVerifier
   end
 
   def run
-    unless File.exist?(@test_file)
-      abort "Error: #{@test_file} not found"
-    end
+    abort "Error: #{@test_file} not found" unless File.exist?(@test_file)
 
     expectations = parse_expectations
     puts "Parsed #{expectations.size} expectations from test_inference.rb"
@@ -205,18 +203,16 @@ class InferenceVerifier
   def initialize_lsp
     root_uri = "file://#{@project_dir}"
     response = @client.send_request("initialize", {
-      processId: Process.pid,
-      rootUri: root_uri,
-      capabilities: {
-        textDocument: { hover: { contentFormat: %w[markdown plaintext] } },
-        window: { workDoneProgress: true },
-      },
-      initializationOptions: {},
-    })
+                                      processId: Process.pid,
+                                      rootUri: root_uri,
+                                      capabilities: {
+                                        textDocument: { hover: { contentFormat: %w[markdown plaintext] } },
+                                        window: { workDoneProgress: true }
+                                      },
+                                      initializationOptions: {}
+                                    })
 
-    if response&.dig("error")
-      abort "Initialize error: #{response["error"]}"
-    end
+    abort "Initialize error: #{response["error"]}" if response&.dig("error")
 
     @client.send_notification("initialized", {})
     puts "Waiting for indexing..."
@@ -261,16 +257,16 @@ class InferenceVerifier
     unless @opened_files[uri]
       source = File.read(@test_file)
       @client.send_notification("textDocument/didOpen", {
-        textDocument: { uri: uri, languageId: "ruby", version: 1, text: source },
-      })
+                                  textDocument: { uri: uri, languageId: "ruby", version: 1, text: source }
+                                })
       @opened_files[uri] = true
       sleep 1 # Give server time to process
     end
 
     response = @client.send_request("textDocument/hover", {
-      textDocument: { uri: uri },
-      position: { line: exp.line - 1, character: exp.col - 1 },
-    })
+                                      textDocument: { uri: uri },
+                                      position: { line: exp.line - 1, character: exp.col - 1 }
+                                    })
 
     actual = extract_hover_content(response)
 
@@ -336,7 +332,7 @@ class InferenceVerifier
             end
 
     line_info = "L%-3d" % exp.line
-    print "  #{line_info} %-42s expected: %-25s #{label}" % [code, exp.expected]
+    print format("  #{line_info} %-42s expected: %-25s #{label}", code, exp.expected)
 
     if result.status == :fail
       # Show first line of actual for debugging
@@ -389,9 +385,7 @@ end
 verbose = ARGV.delete("--verbose") || ARGV.delete("-v")
 project_dir = ARGV[0]
 
-unless File.directory?(project_dir)
-  abort "Error: #{project_dir} is not a directory"
-end
+abort "Error: #{project_dir} is not a directory" unless File.directory?(project_dir)
 
 verifier = InferenceVerifier.new(project_dir, verbose: !!verbose)
 verifier.run
