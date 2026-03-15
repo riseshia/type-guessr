@@ -118,12 +118,13 @@ RSpec.describe TypeGuessr::Core::Logger do
         allow(described_class).to receive(:debug_enabled?).and_return(false)
       end
 
-      it "does not output anything" do
+      it "still outputs error messages" do
         exception = StandardError.new("Test error")
         output = capture_stderr do
           described_class.error("Something went wrong", exception)
         end
-        expect(output).to be_empty
+        expect(output).to include("[TypeGuessr:ERROR] Something went wrong")
+        expect(output).to include("StandardError: Test error")
       end
     end
   end
