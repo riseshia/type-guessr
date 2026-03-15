@@ -334,8 +334,11 @@ module TypeGuessr
                 )
               end
 
-              # 2. Fall back to RBS signature provider
+              # 2. Fall back to SignatureRegistry (DSL or RBS)
               arg_types = node.args.map { |arg| infer(arg).type }
+              entry = @signature_registry.lookup(receiver_type.name, node.method.to_s)
+              source = entry.is_a?(Registry::SignatureRegistry::GemMethodEntry) && entry.dsl? ? :dsl : :stdlib
+
               return_type = @signature_registry.get_method_return_type(
                 receiver_type.name,
                 node.method.to_s,
@@ -349,6 +352,7 @@ module TypeGuessr
                   node.method.to_s,
                   arg_types
                 )
+                source = :stdlib
               end
 
               # Substitute class-level type vars, self, block return type, and remaining type variables
@@ -356,11 +360,11 @@ module TypeGuessr
               add_method_type_var_substitutions(substitutions, node, receiver_type.name, node.method.to_s, arg_types)
               return_type = return_type.substitute(substitutions)
 
-              # Early return: ClassInstance RBS lookup (may be Unknown if not found)
+              # Early return: ClassInstance lookup (may be Unknown if not found)
               return Result.new(
                 return_type,
                 "#{receiver_type.name}##{node.method}",
-                :stdlib
+                source
               )
             when Types::ArrayType
               # Handle Array methods with element type substitution
@@ -692,21 +696,24 @@ module TypeGuessr
             end
           end
 
-          # Fall back to RBS signature provider
+          # Fall back to SignatureRegistry (DSL or RBS)
           arg_types = node.args.map { |arg| infer(arg).type }
+          class_entry = @signature_registry.lookup_class_method(class_name, node.method.to_s)
+          class_source = class_entry.is_a?(Registry::SignatureRegistry::GemMethodEntry) && class_entry.dsl? ? :dsl : :rbs
+
           return_type = @signature_registry.get_class_method_return_type(
             class_name,
             node.method.to_s,
             arg_types
           )
 
-          # Early return: RBS class method found — substitute SelfType with actual class
+          # Early return: class method found — substitute SelfType with actual class
           unless return_type.is_a?(Types::Unknown)
             return_type = return_type.substitute(self: Types::ClassInstance.for(class_name))
             return Result.new(
               return_type,
-              "#{class_name}.#{node.method} (RBS)",
-              :rbs
+              "#{class_name}.#{node.method}",
+              class_source
             )
           end
 
