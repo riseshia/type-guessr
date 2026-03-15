@@ -275,6 +275,7 @@ module TypeGuessr
         def lookup(class_name, method_name)
           result = @instance_methods.dig(class_name, method_name)
           return result if result
+
           return nil unless @code_index
 
           @code_index.ancestors_of(class_name).each do |ancestor|

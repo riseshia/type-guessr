@@ -215,13 +215,6 @@ module RubyLsp
         end
       end
 
-      # Check if a method was registered by a DSL adapter (e.g., AR column accessor).
-      # Used by hover to skip DefNode lookup for DSL-generated methods.
-      def dsl_registered_method?(class_name, method_name)
-        entry = @signature_registry.lookup(class_name, method_name)
-        entry.is_a?(::TypeGuessr::Core::Registry::SignatureRegistry::GemMethodEntry)
-      end
-
       # Start background indexing of all project files
       def start_indexing
         Thread.new do

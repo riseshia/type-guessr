@@ -122,8 +122,8 @@ module RubyLsp
 
           if class_name
             # Try to find DefNode first (for project methods)
-            # Skip if DSL-registered (e.g., AR column accessors) — let fallback handle it
-            if !receiver_type.is_a?(Types::SingletonType) && !@runtime_adapter.dsl_registered_method?(class_name, call_node.method.to_s)
+            # Use the same inference logic as DefNode hover
+            unless receiver_type.is_a?(Types::SingletonType)
               def_node = @runtime_adapter.lookup_method(class_name, call_node.method.to_s)
               if def_node
                 add_def_node_hover(def_node)
