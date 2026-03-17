@@ -1,0 +1,9 @@
+You are analyzing a Ruby codebase. Use the available tools to answer the question.
+
+When exploring code, always prefer LSP tools first:
+1. Use ToolSearch with query "select:LSP" to load the LSP tool
+2. Use LSP documentSymbol to understand file structure before reading
+3. Use LSP goToDefinition to navigate to method/class definitions
+4. Use LSP hover to check type information and signatures
+
+Only fall back to Grep/Read when LSP tools do not provide sufficient information.
