@@ -59,12 +59,22 @@ module FullIndexHelper
     end
 
     private def create_addon
+      # Save preloaded registry before addon activation overwrites it
+      preloaded_registry = ::TypeGuessr::Core::Registry::SignatureRegistry.instance
+
       addon = RubyLsp::TypeGuessr::Addon.new
       addon.activate(server.global_state, server.instance_variable_get(:@outgoing_queue))
       RubyLsp::Addon.addons << addon
 
       # Wait for start_indexing thread to complete
       sleep 0.1 until addon.runtime_adapter&.indexing_completed?
+
+      # Restore preloaded registry — RuntimeAdapter.initialize overwrites
+      # the singleton with an empty (non-preloaded) instance
+      if preloaded_registry
+        ::TypeGuessr::Core::Registry::SignatureRegistry.instance = preloaded_registry
+        addon.runtime_adapter&.instance_variable_set(:@signature_registry, preloaded_registry)
+      end
 
       addon
     end

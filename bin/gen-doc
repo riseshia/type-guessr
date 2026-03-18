@@ -2,7 +2,7 @@
 set -euo pipefail
 
 echo "Generating type inference documentation..."
-GENERATE_DOCS=1 bundle exec rspec spec/integration/ --format progress
+GENERATE_DOCS=1 bundle exec rspec spec/inference/ spec/integration/ --format progress --order defined
 
 # Check if any docs were generated (excluding hover_spec)
 if ls docs/*.md 1> /dev/null 2>&1; then

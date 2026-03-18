@@ -52,6 +52,8 @@ module DocCollector
         next if spec_file.include?("hover_spec.rb")
 
         doc_name = File.basename(spec_file, "_spec.rb")
+        # Normalize inference spec names: "literal_inference" → "literal"
+        doc_name = doc_name.sub(/_inference\z/, "")
         output_file = "docs/#{doc_name}.md"
 
         markdown = build_markdown_for_file(file_entries, doc_name)

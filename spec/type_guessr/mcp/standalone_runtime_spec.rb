@@ -10,10 +10,13 @@ RSpec.describe TypeGuessr::MCP::StandaloneRuntime do
 
   # Build a StandaloneRuntime by indexing source through the full pipeline.
   # Writes source to a temp file so that #infer_at can read it back.
+  # Yields runtime, file_path, and signature_registry to avoid singleton dependency.
   def build_runtime_with_source(source)
     with_server_and_addon(source) do |server, _uri|
       code_index = RubyLsp::TypeGuessr::CodeIndexAdapter.new(server.global_state.index)
-      signature_registry = TypeGuessr::Core::Registry::SignatureRegistry.instance
+      # Build own preloaded registry to avoid singleton pollution from test ordering
+      signature_registry = TypeGuessr::Core::Registry::SignatureRegistry.new(code_index: code_index)
+      signature_registry.preload
 
       method_registry = TypeGuessr::Core::Registry::MethodRegistry.new(code_index: code_index)
       ivar_registry = TypeGuessr::Core::Registry::InstanceVariableRegistry.new(code_index: code_index)
@@ -51,7 +54,7 @@ RSpec.describe TypeGuessr::MCP::StandaloneRuntime do
         runtime.index_parsed_file(file_path, parsed)
         runtime.finalize_index!
 
-        yield runtime, file_path
+        yield runtime, file_path, signature_registry
       end
     end
   end
@@ -66,7 +69,7 @@ RSpec.describe TypeGuessr::MCP::StandaloneRuntime do
         end
       RUBY
 
-      build_runtime_with_source(source) do |runtime, _file_path|
+      build_runtime_with_source(source) do |runtime, _file_path, _registry|
         result = runtime.method_signature("User", "save")
 
         expect(result[:source]).to eq("project")
@@ -79,7 +82,7 @@ RSpec.describe TypeGuessr::MCP::StandaloneRuntime do
     it "falls back to RBS for stdlib methods" do
       source = "x = 1"
 
-      build_runtime_with_source(source) do |runtime, _file_path|
+      build_runtime_with_source(source) do |runtime, _file_path, _registry|
         result = runtime.method_signature("String", "size")
 
         expect(result[:source]).to eq("rbs")
@@ -93,15 +96,14 @@ RSpec.describe TypeGuessr::MCP::StandaloneRuntime do
     it "returns gem cache method signature" do
       source = "x = 1"
 
-      build_runtime_with_source(source) do |runtime, _file_path|
-        # Register a gem method directly
+      build_runtime_with_source(source) do |runtime, _file_path, registry|
+        # Register a gem method on the runtime's own registry
         return_type = TypeGuessr::Core::Types::ClassInstance.new("String")
         params = [
           TypeGuessr::Core::Types::ParamSignature.new(
             name: :key, kind: :required, type: TypeGuessr::Core::Types::ClassInstance.new("Symbol")
           ),
         ]
-        registry = TypeGuessr::Core::Registry::SignatureRegistry.instance
         registry.register_gem_method("MyGem::Config", "fetch", return_type, params)
 
         result = runtime.method_signature("MyGem::Config", "fetch")
@@ -115,7 +117,7 @@ RSpec.describe TypeGuessr::MCP::StandaloneRuntime do
     it "returns error for unknown method" do
       source = "x = 1"
 
-      build_runtime_with_source(source) do |runtime, _file_path|
+      build_runtime_with_source(source) do |runtime, _file_path, _registry|
         result = runtime.method_signature("NonExistentClass", "unknown_method")
 
         expect(result).to have_key(:error)
@@ -142,7 +144,7 @@ RSpec.describe TypeGuessr::MCP::StandaloneRuntime do
         end
       RUBY
 
-      build_runtime_with_source(source) do |runtime, _file_path|
+      build_runtime_with_source(source) do |runtime, _file_path, _registry|
         results = runtime.search_methods("speak")
 
         expect(results).to be_an(Array)
@@ -162,7 +164,7 @@ RSpec.describe TypeGuessr::MCP::StandaloneRuntime do
         end
       RUBY
 
-      build_runtime_with_source(source) do |runtime, _file_path|
+      build_runtime_with_source(source) do |runtime, _file_path, _registry|
         results = runtime.search_methods("Foo#bar")
 
         expect(results).to be_an(Array)
@@ -174,7 +176,7 @@ RSpec.describe TypeGuessr::MCP::StandaloneRuntime do
     it "returns empty array for no matches" do
       source = "x = 1"
 
-      build_runtime_with_source(source) do |runtime, _file_path|
+      build_runtime_with_source(source) do |runtime, _file_path, _registry|
         results = runtime.search_methods("zzz_nonexistent_method_zzz")
 
         expect(results).to eq([])
@@ -190,7 +192,7 @@ RSpec.describe TypeGuessr::MCP::StandaloneRuntime do
         end
       RUBY
 
-      build_runtime_with_source(source) do |runtime, _file_path|
+      build_runtime_with_source(source) do |runtime, _file_path, _registry|
         results = runtime.search_methods("Calculator#add", include_signatures: true)
 
         expect(results.length).to eq(1)
@@ -208,7 +210,7 @@ RSpec.describe TypeGuessr::MCP::StandaloneRuntime do
         end
       RUBY
 
-      build_runtime_with_source(source) do |runtime, _file_path|
+      build_runtime_with_source(source) do |runtime, _file_path, _registry|
         results = runtime.search_methods("Greeter#hello")
 
         expect(results.first).not_to have_key(:signature)
@@ -225,7 +227,7 @@ RSpec.describe TypeGuessr::MCP::StandaloneRuntime do
         end
       RUBY
 
-      build_runtime_with_source(source) do |runtime, _file_path|
+      build_runtime_with_source(source) do |runtime, _file_path, _registry|
         results = runtime.method_signatures([
                                               { class_name: "Order", method_name: "cancel" },
                                               { class_name: "Order", method_name: "save" },
@@ -248,7 +250,7 @@ RSpec.describe TypeGuessr::MCP::StandaloneRuntime do
         end
       RUBY
 
-      build_runtime_with_source(source) do |runtime, _file_path|
+      build_runtime_with_source(source) do |runtime, _file_path, _registry|
         results = runtime.method_signatures([
                                               { class_name: "Order", method_name: "cancel" },
                                               { class_name: "Order", method_name: "nonexistent" },
@@ -265,7 +267,7 @@ RSpec.describe TypeGuessr::MCP::StandaloneRuntime do
     it "returns empty array for empty input" do
       source = "x = 1"
 
-      build_runtime_with_source(source) do |runtime, _file_path|
+      build_runtime_with_source(source) do |runtime, _file_path, _registry|
         results = runtime.method_signatures([])
 
         expect(results).to eq([])
@@ -283,7 +285,7 @@ RSpec.describe TypeGuessr::MCP::StandaloneRuntime do
         end
       RUBY
 
-      build_runtime_with_source(source) do |runtime, file_path|
+      build_runtime_with_source(source) do |runtime, file_path, _registry|
         results = runtime.method_sources([
                                            { class_name: "Order", method_name: "cancel" },
                                          ])
@@ -302,7 +304,7 @@ RSpec.describe TypeGuessr::MCP::StandaloneRuntime do
     it "returns error for unknown method" do
       source = "x = 1"
 
-      build_runtime_with_source(source) do |runtime, _file_path|
+      build_runtime_with_source(source) do |runtime, _file_path, _registry|
         results = runtime.method_sources([
                                            { class_name: "Order", method_name: "nonexistent" },
                                          ])
@@ -317,7 +319,7 @@ RSpec.describe TypeGuessr::MCP::StandaloneRuntime do
     it "returns empty array for empty input" do
       source = "x = 1"
 
-      build_runtime_with_source(source) do |runtime, _file_path|
+      build_runtime_with_source(source) do |runtime, _file_path, _registry|
         results = runtime.method_sources([])
         expect(results).to eq([])
       end
@@ -328,7 +330,7 @@ RSpec.describe TypeGuessr::MCP::StandaloneRuntime do
     it "skips files with parse errors gracefully" do
       source = "x = 1"
 
-      build_runtime_with_source(source) do |runtime, _file_path|
+      build_runtime_with_source(source) do |runtime, _file_path, _registry|
         bad_result = Prism.parse("def foo(")
 
         # Should not raise
@@ -343,7 +345,7 @@ RSpec.describe TypeGuessr::MCP::StandaloneRuntime do
         end
       RUBY
 
-      build_runtime_with_source(source) do |runtime, file_path|
+      build_runtime_with_source(source) do |runtime, file_path, _registry|
         results = runtime.search_methods("Updater#value")
         expect(results.length).to eq(1)
 
@@ -375,7 +377,7 @@ RSpec.describe TypeGuessr::MCP::StandaloneRuntime do
         end
       RUBY
 
-      build_runtime_with_source(source) do |runtime, file_path|
+      build_runtime_with_source(source) do |runtime, file_path, _registry|
         # Verify method is searchable before removal
         expect(runtime.search_methods("Removable#greet").length).to eq(1)
 
