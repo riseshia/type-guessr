@@ -10,19 +10,19 @@ RSpec.describe RubyLsp::TypeGuessr::Dsl::ArTypeMapper do
     end
 
     it "maps string to nullable String" do
-      expect(map("string").to_s).to eq("?String")
+      expect(map("string").to_s).to eq("String?")
     end
 
     it "maps text to nullable String" do
-      expect(map("text").to_s).to eq("?String")
+      expect(map("text").to_s).to eq("String?")
     end
 
     it "maps integer to nullable Integer" do
-      expect(map("integer").to_s).to eq("?Integer")
+      expect(map("integer").to_s).to eq("Integer?")
     end
 
     it "maps bigint to nullable Integer" do
-      expect(map("bigint").to_s).to eq("?Integer")
+      expect(map("bigint").to_s).to eq("Integer?")
     end
 
     it "maps boolean to nullable bool (TrueClass | FalseClass | NilClass)" do
@@ -33,31 +33,31 @@ RSpec.describe RubyLsp::TypeGuessr::Dsl::ArTypeMapper do
     end
 
     it "maps float to nullable Float" do
-      expect(map("float").to_s).to eq("?Float")
+      expect(map("float").to_s).to eq("Float?")
     end
 
     it "maps decimal to nullable BigDecimal" do
-      expect(map("decimal").to_s).to eq("?BigDecimal")
+      expect(map("decimal").to_s).to eq("BigDecimal?")
     end
 
     it "maps date to nullable Date" do
-      expect(map("date").to_s).to eq("?Date")
+      expect(map("date").to_s).to eq("Date?")
     end
 
     it "maps datetime to nullable ActiveSupport::TimeWithZone" do
-      expect(map("datetime").to_s).to eq("?ActiveSupport::TimeWithZone")
+      expect(map("datetime").to_s).to eq("ActiveSupport::TimeWithZone?")
     end
 
     it "maps timestamp to nullable ActiveSupport::TimeWithZone" do
-      expect(map("timestamp").to_s).to eq("?ActiveSupport::TimeWithZone")
+      expect(map("timestamp").to_s).to eq("ActiveSupport::TimeWithZone?")
     end
 
     it "maps json to nullable Hash" do
-      expect(map("json").to_s).to eq("?Hash")
+      expect(map("json").to_s).to eq("Hash?")
     end
 
     it "maps jsonb to nullable Hash" do
-      expect(map("jsonb").to_s).to eq("?Hash")
+      expect(map("jsonb").to_s).to eq("Hash?")
     end
 
     it "maps unknown type to Unknown" do

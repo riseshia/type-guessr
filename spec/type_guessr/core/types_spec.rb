@@ -290,18 +290,18 @@ RSpec.describe TypeGuessr::Core::Types do
       expect(union.to_s).to match(/String \| Integer|Integer \| String/)
     end
 
-    it "formats optional type as ?Type" do
+    it "formats optional type as Type?" do
       type = TypeGuessr::Core::Types::ClassInstance.new("String")
       nil_type = TypeGuessr::Core::Types::ClassInstance.new("NilClass")
       union = TypeGuessr::Core::Types::Union.new([type, nil_type])
-      expect(union.to_s).to eq("?String")
+      expect(union.to_s).to eq("String?")
     end
 
     it "formats optional type regardless of order" do
       type = TypeGuessr::Core::Types::ClassInstance.new("Integer")
       nil_type = TypeGuessr::Core::Types::ClassInstance.new("NilClass")
       union = TypeGuessr::Core::Types::Union.new([nil_type, type])
-      expect(union.to_s).to eq("?Integer")
+      expect(union.to_s).to eq("Integer?")
     end
 
     it "does not use optional format for more than 2 types" do
@@ -309,7 +309,7 @@ RSpec.describe TypeGuessr::Core::Types do
       type2 = TypeGuessr::Core::Types::ClassInstance.new("Integer")
       nil_type = TypeGuessr::Core::Types::ClassInstance.new("NilClass")
       union = TypeGuessr::Core::Types::Union.new([type1, type2, nil_type])
-      expect(union.to_s).not_to start_with("?")
+      expect(union.to_s).not_to end_with("?")
     end
 
     it "formats TrueClass | FalseClass as bool" do

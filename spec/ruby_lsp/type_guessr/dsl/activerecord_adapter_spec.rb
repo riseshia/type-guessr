@@ -84,8 +84,8 @@ RSpec.describe RubyLsp::TypeGuessr::Dsl::ActiveRecordAdapter do
           code_index: code_index
         )
 
-        expect(signature_registry.get_method_return_type("User", "name").to_s).to eq("?String")
-        expect(signature_registry.get_method_return_type("User", "age").to_s).to eq("?Integer")
+        expect(signature_registry.get_method_return_type("User", "name").to_s).to eq("String?")
+        expect(signature_registry.get_method_return_type("User", "age").to_s).to eq("Integer?")
       end
 
       it "registers enum methods" do
@@ -101,7 +101,7 @@ RSpec.describe RubyLsp::TypeGuessr::Dsl::ActiveRecordAdapter do
         )
 
         role_type = signature_registry.get_method_return_type("User", "role")
-        expect(role_type.to_s).to eq("?String")
+        expect(role_type.to_s).to eq("String?")
 
         admin_type = signature_registry.get_method_return_type("User", "admin?")
         expect(admin_type.to_s).to eq("bool")
@@ -125,7 +125,7 @@ RSpec.describe RubyLsp::TypeGuessr::Dsl::ActiveRecordAdapter do
         expect(posts_type.to_s).to eq("ActiveRecord::Associations::CollectionProxy[Post]")
 
         profile_type = signature_registry.get_method_return_type("User", "profile")
-        expect(profile_type.to_s).to eq("?Profile")
+        expect(profile_type.to_s).to eq("Profile?")
       end
 
       it "registers scope as class method" do
@@ -207,7 +207,7 @@ RSpec.describe RubyLsp::TypeGuessr::Dsl::ActiveRecordAdapter do
           code_index: code_index
         )
 
-        expect(signature_registry.get_method_return_type("User", "email").to_s).to eq("?String")
+        expect(signature_registry.get_method_return_type("User", "email").to_s).to eq("String?")
       end
     end
   end
@@ -248,7 +248,7 @@ RSpec.describe RubyLsp::TypeGuessr::Dsl::ActiveRecordAdapter do
       )
 
       expect(code_index).to have_received(:unregister_method_classes).with("User")
-      expect(signature_registry.get_method_return_type("User", "email").to_s).to eq("?String")
+      expect(signature_registry.get_method_return_type("User", "email").to_s).to eq("String?")
     end
   end
 

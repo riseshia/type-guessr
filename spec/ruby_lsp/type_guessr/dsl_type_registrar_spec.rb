@@ -69,7 +69,7 @@ RSpec.describe RubyLsp::TypeGuessr::DslTypeRegistrar do
       expect(where_type.to_s).to include("ActiveRecord::Relation")
 
       # Model methods registered
-      expect(signature_registry.get_method_return_type("User", "name").to_s).to eq("?String")
+      expect(signature_registry.get_method_return_type("User", "name").to_s).to eq("String?")
     end
 
     it "registers base methods only once" do
@@ -103,7 +103,7 @@ RSpec.describe RubyLsp::TypeGuessr::DslTypeRegistrar do
       registrar.check_and_refresh(runner_client: runner_client)
 
       expect(code_index).to have_received(:unregister_method_classes).with("User")
-      expect(signature_registry.get_method_return_type("User", "email").to_s).to eq("?String")
+      expect(signature_registry.get_method_return_type("User", "email").to_s).to eq("String?")
     end
   end
 end

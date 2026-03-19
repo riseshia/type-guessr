@@ -196,7 +196,7 @@ module TypeGuessr
           if bool_type?
             "bool"
           elsif optional_type?
-            "?#{non_nil_type}"
+            "#{non_nil_type}?"
           else
             @types.map(&:to_s).sort.join(" | ")
           end

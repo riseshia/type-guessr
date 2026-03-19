@@ -49,7 +49,7 @@ RSpec.describe "Control Flow Type Inference", :doc do
       end
 
       it "→ ?Integer" do
-        expect_inferred_type(line: 4, column: 0, expected: "?Integer")
+        expect_inferred_type(line: 4, column: 0, expected: "Integer?")
       end
     end
 
@@ -151,7 +151,7 @@ RSpec.describe "Control Flow Type Inference", :doc do
       end
 
       it "→ ?Integer" do
-        expect_inferred_type(line: 7, column: 0, expected: "?Integer")
+        expect_inferred_type(line: 7, column: 0, expected: "Integer?")
       end
     end
   end
