@@ -22,7 +22,7 @@ tagging = Tagging.new
 user.name              # => String?
 user.email             # => String?
 user.age               # => Integer?
-user.active            # => bool
+user.active            # => bool?
 user.score             # => Float?
 user.balance           # => BigDecimal?
 user.bio               # => String?
@@ -36,7 +36,7 @@ user.id                # => Integer?
 
 post.title             # => String?
 post.body              # => String?
-post.published         # => bool
+post.published         # => bool?
 post.published_at      # => ActiveSupport::TimeWithZone?
 post.status            # => String?
 
