@@ -63,6 +63,45 @@ RSpec.describe RubyLsp::TypeGuessr::Dsl::ActiveRecordAdapter do
       expect(first_type.to_s).not_to eq("unknown")
     end
 
+    it "registers Relation instance methods with Elem type variable" do
+      adapter.register_base_methods(signature_registry: signature_registry)
+
+      rel = "ActiveRecord::Relation"
+
+      # Returning Relation[Elem]
+      %w[where or and not merge rewhere readonly lock load reload].each do |method|
+        return_type = signature_registry.get_method_return_type(rel, method)
+        expect(return_type).to be_a(TypeGuessr::Core::Types::ClassInstance)
+        expect(return_type.name).to eq("ActiveRecord::Relation")
+      end
+
+      # Returning Elem?
+      %w[first last second take].each do |method|
+        return_type = signature_registry.get_method_return_type(rel, method)
+        expect(return_type).to be_a(TypeGuessr::Core::Types::Union)
+      end
+
+      # Returning Integer
+      %w[size length count].each do |method|
+        return_type = signature_registry.get_method_return_type(rel, method)
+        expect(return_type).to be_a(TypeGuessr::Core::Types::ClassInstance)
+        expect(return_type.name).to eq("Integer")
+      end
+
+      # Returning bool
+      %w[empty? any? many? none?].each do |method|
+        return_type = signature_registry.get_method_return_type(rel, method)
+        expect(return_type).to be_a(TypeGuessr::Core::Types::Union)
+        expect(return_type.to_s).to eq("bool")
+      end
+
+      # Returning Array[Elem]
+      %w[to_a to_ary].each do |method|
+        return_type = signature_registry.get_method_return_type(rel, method)
+        expect(return_type).to be_a(TypeGuessr::Core::Types::ArrayType)
+      end
+    end
+
     it "registers CollectionProxy build/create/new as Elem" do
       adapter.register_base_methods(signature_registry: signature_registry)
 

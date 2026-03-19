@@ -106,6 +106,45 @@ module RubyLsp
             signature_registry.register_gem_method(base, m, self_type, force: true)
           end
 
+          # --- Relation instance methods ---
+          rel = "ActiveRecord::Relation"
+          elem = ::TypeGuessr::Core::Types::TypeVariable.new(:Elem)
+          nullable_elem = ::TypeGuessr::Core::Types::Union.new([
+                                                                 elem,
+                                                                 ::TypeGuessr::Core::Types::ClassInstance.for("NilClass"),
+                                                               ])
+          relation_of_elem = ::TypeGuessr::Core::Types::ClassInstance.for(
+            "ActiveRecord::Relation", { Elem: elem }
+          )
+          array_of_elem = ::TypeGuessr::Core::Types::ArrayType.new(elem)
+
+          # Returning Relation[Elem]
+          %w[
+            where or and not invert_where merge rewhere readonly lock create_with load reload
+          ].each do |m|
+            signature_registry.register_gem_method(rel, m, relation_of_elem, force: true)
+          end
+
+          # Returning Elem?
+          %w[first last second take].each do |m|
+            signature_registry.register_gem_method(rel, m, nullable_elem, force: true)
+          end
+
+          # Returning Integer
+          %w[size length count].each do |m|
+            signature_registry.register_gem_method(rel, m, int_type, force: true)
+          end
+
+          # Returning bool
+          %w[empty? any? many? none?].each do |m|
+            signature_registry.register_gem_method(rel, m, bool_type, force: true)
+          end
+
+          # Returning Array[Elem]
+          %w[to_a to_ary].each do |m|
+            signature_registry.register_gem_method(rel, m, array_of_elem, force: true)
+          end
+
           # --- CollectionProxy instance methods ---
           cp = "ActiveRecord::Associations::CollectionProxy"
           elem_type = ::TypeGuessr::Core::Types::TypeVariable.new(:Elem)
