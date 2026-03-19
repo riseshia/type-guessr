@@ -195,6 +195,8 @@ module TypeGuessr
         def to_s
           if bool_type?
             "bool"
+          elsif nullable_bool_type?
+            "bool?"
           elsif optional_type?
             "#{non_nil_type}?"
           else
@@ -219,6 +221,15 @@ module TypeGuessr
           has_true = @types.any? { |t| t.is_a?(ClassInstance) && t.name == "TrueClass" }
           has_false = @types.any? { |t| t.is_a?(ClassInstance) && t.name == "FalseClass" }
           has_true && has_false
+        end
+
+        private def nullable_bool_type?
+          return false unless @types.size == 3
+
+          has_true = @types.any? { |t| t.is_a?(ClassInstance) && t.name == "TrueClass" }
+          has_false = @types.any? { |t| t.is_a?(ClassInstance) && t.name == "FalseClass" }
+          has_nil = @types.any? { |t| nil_type?(t) }
+          has_true && has_false && has_nil
         end
 
         private def optional_type?

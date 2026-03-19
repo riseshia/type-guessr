@@ -326,6 +326,14 @@ RSpec.describe TypeGuessr::Core::Types do
       expect(union.to_s).to eq("bool")
     end
 
+    it "formats TrueClass | FalseClass | NilClass as bool?" do
+      true_type = TypeGuessr::Core::Types::ClassInstance.new("TrueClass")
+      false_type = TypeGuessr::Core::Types::ClassInstance.new("FalseClass")
+      nil_type = TypeGuessr::Core::Types::ClassInstance.new("NilClass")
+      union = TypeGuessr::Core::Types::Union.new([true_type, false_type, nil_type])
+      expect(union.to_s).to eq("bool?")
+    end
+
     it "equals another Union with the same types" do
       type1 = TypeGuessr::Core::Types::ClassInstance.new("String")
       type2 = TypeGuessr::Core::Types::ClassInstance.new("Integer")
