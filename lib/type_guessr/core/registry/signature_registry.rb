@@ -492,7 +492,7 @@ module TypeGuessr
           # This lets RBSConverter build ClassInstance with named type_params
           class_type_params = {}
           env.class_decls.each do |type_name, entry|
-            params = entry.primary.decl.type_params.map(&:name)
+            params = entry.type_params.map(&:name)
             class_type_params[type_name.to_s.delete_prefix("::")] = params if params.any?
           end
           @converter = Converter::RBSConverter.new(class_type_params)

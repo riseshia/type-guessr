@@ -6,7 +6,11 @@
 module InferenceHelper
   class << self
     def shared_signature_registry
-      @shared_signature_registry ||= TypeGuessr::Core::Registry::SignatureRegistry.instance
+      @shared_signature_registry ||= begin
+        registry = TypeGuessr::Core::Registry::SignatureRegistry.new
+        registry.preload
+        registry
+      end
     end
   end
 
