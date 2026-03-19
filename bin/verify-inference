@@ -128,7 +128,7 @@ class InferenceVerifier
       next unless match
 
       code = match[1].rstrip
-      expected = match[2].strip
+      expected = match[2].strip.sub(/\s*\(.*\)\s*$/, "")
 
       # Skip if code part is blank or comment-only
       next if code.strip.empty?
