@@ -62,6 +62,17 @@ RSpec.describe RubyLsp::TypeGuessr::Dsl::ActiveRecordAdapter do
       first_type = signature_registry.get_class_method_return_type("ActiveRecord::Base", "first")
       expect(first_type.to_s).not_to eq("unknown")
     end
+
+    it "registers CollectionProxy build/create/new as Elem" do
+      adapter.register_base_methods(signature_registry: signature_registry)
+
+      cp = "ActiveRecord::Associations::CollectionProxy"
+      %w[build create create! new].each do |method|
+        return_type = signature_registry.get_method_return_type(cp, method)
+        expect(return_type).to be_a(TypeGuessr::Core::Types::TypeVariable)
+        expect(return_type.name).to eq(:Elem)
+      end
+    end
   end
 
   describe "#register_models" do

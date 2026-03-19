@@ -106,6 +106,14 @@ module RubyLsp
             signature_registry.register_gem_method(base, m, self_type, force: true)
           end
 
+          # --- CollectionProxy instance methods ---
+          cp = "ActiveRecord::Associations::CollectionProxy"
+          elem_type = ::TypeGuessr::Core::Types::TypeVariable.new(:Elem)
+
+          %w[build create create! new].each do |m|
+            signature_registry.register_gem_method(cp, m, elem_type, force: true)
+          end
+
           log("Registered AR::Base common methods (SelfType)")
         end
 
