@@ -249,7 +249,7 @@ module RubyLsp
             # Reader: user.posts / user.profile
             methods[name] = { "kind" => "association", "macro" => macro, "target" => target }
 
-            # has_many: post_ids → Array
+            # has_many: post_ids → Array[Integer]
             if %w[has_many has_and_belongs_to_many].include?(macro)
               singular = name.end_with?("s") ? name[0..-2] : name
               methods["#{singular}_ids"] = { "kind" => "association_ids" }
@@ -301,7 +301,9 @@ module RubyLsp
                 target_type = ::TypeGuessr::Core::Types::ClassInstance.for(info["target"])
                 register_instance_method(class_name, method_name, target_type, signature_registry, code_index)
               when "association_ids"
-                array_type = ::TypeGuessr::Core::Types::ClassInstance.for("Array")
+                array_type = ::TypeGuessr::Core::Types::ArrayType.new(
+                  ::TypeGuessr::Core::Types::ClassInstance.for("Integer")
+                )
                 register_instance_method(class_name, method_name, array_type, signature_registry, code_index)
               when "scope"
                 scope_name = method_name.delete_prefix("scope:")

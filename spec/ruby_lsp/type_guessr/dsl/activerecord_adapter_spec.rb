@@ -128,6 +128,23 @@ RSpec.describe RubyLsp::TypeGuessr::Dsl::ActiveRecordAdapter do
         expect(profile_type.to_s).to eq("Profile?")
       end
 
+      it "registers has_many _ids method as Array[Integer]" do
+        stub_runner_client(runner_client, "User" => metadata_response(
+          associations: [
+            { name: "posts", macro: "has_many", class_name: "Post" },
+          ]
+        ))
+
+        adapter.register_models(
+          runner_client: runner_client,
+          signature_registry: signature_registry,
+          code_index: code_index
+        )
+
+        ids_type = signature_registry.get_method_return_type("User", "post_ids")
+        expect(ids_type.to_s).to eq("Array[Integer]")
+      end
+
       it "registers scope as class method" do
         stub_runner_client(runner_client, "User" => metadata_response(
           scopes: %w[active adults]
