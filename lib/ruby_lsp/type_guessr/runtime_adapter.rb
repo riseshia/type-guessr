@@ -262,7 +262,10 @@ module RubyLsp
           start_schema_watch_loop
 
           # Background inference: fully infer gems that have Unguessed entries (opt-in)
-          background_infer_gems(result[:unguessed_gems], result[:cache]) if Config.background_gem_indexing? && result && result[:unguessed_gems].any?
+          if ::TypeGuessr::Core::Config.background_gem_indexing? && result && result[:unguessed_gems].any?
+            background_infer_gems(result[:unguessed_gems],
+                                  result[:cache])
+          end
         rescue StandardError => e
           log_message("Error during file indexing: #{e.message}\n#{e.backtrace.first(10).join("\n")}")
           @indexing_completed = true
@@ -455,7 +458,7 @@ module RubyLsp
           method_registry: temp_method_registry,
           location_index: temp_location_index
         )
-        timeout = Config.gem_inference_timeout
+        timeout = ::TypeGuessr::Core::Config.gem_inference_timeout
         signatures = extractor.extract(files, timeout: timeout)
 
         t2 = Process.clock_gettime(Process::CLOCK_MONOTONIC)

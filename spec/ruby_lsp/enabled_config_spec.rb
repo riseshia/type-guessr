@@ -4,7 +4,7 @@ require "spec_helper"
 require "ruby_lsp/internal"
 require "tmpdir"
 
-RSpec.describe RubyLsp::TypeGuessr::Config do
+RSpec.describe TypeGuessr::Core::Config do
   include TypeGuessrTestHelper
 
   around do |example|

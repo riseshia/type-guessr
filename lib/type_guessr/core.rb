@@ -1,5 +1,8 @@
 # frozen_string_literal: true
 
+# Configuration
+require_relative "core/config"
+
 # Core type system
 require_relative "core/types"
 

@@ -16,10 +16,10 @@ RSpec.describe TypeGuessr::Core::Logger do
 
   describe ".debug_enabled?" do
     it "delegates to Config.debug?" do
-      allow(RubyLsp::TypeGuessr::Config).to receive(:debug?).and_return(true)
+      allow(TypeGuessr::Core::Config).to receive(:debug?).and_return(true)
       expect(described_class.debug_enabled?).to be true
 
-      allow(RubyLsp::TypeGuessr::Config).to receive(:debug?).and_return(false)
+      allow(TypeGuessr::Core::Config).to receive(:debug?).and_return(false)
       expect(described_class.debug_enabled?).to be false
     end
   end

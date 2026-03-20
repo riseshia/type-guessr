@@ -27,7 +27,7 @@ RSpec.configure do |config|
 
   # Disable debug logging and server for all tests
   config.before do
-    allow(RubyLsp::TypeGuessr::Config).to receive_messages(
+    allow(TypeGuessr::Core::Config).to receive_messages(
       debug?: false,
       debug_server_enabled?: false,
       debug_server_port: 7010

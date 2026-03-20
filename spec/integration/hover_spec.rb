@@ -53,7 +53,7 @@ RSpec.describe "Hover Integration (Smoke)" do
 
   describe "Debug Mode" do
     before do
-      allow(RubyLsp::TypeGuessr::Config).to receive(:debug?).and_return(true)
+      allow(TypeGuessr::Core::Config).to receive(:debug?).and_return(true)
     end
 
     context "debug info display" do

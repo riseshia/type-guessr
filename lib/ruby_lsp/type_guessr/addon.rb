@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 require "ruby_lsp/addon"
-require_relative "config"
 require_relative "constants"
 require_relative "runtime_adapter"
 require_relative "hover"
@@ -19,7 +18,7 @@ module RubyLsp
       end
 
       def activate(global_state, message_queue)
-        unless Config.enabled?
+        unless ::TypeGuessr::Core::Config.enabled?
           message_queue << RubyLsp::Notification.window_log_message(
             "[TypeGuessr] Disabled via config",
             type: RubyLsp::Constant::MessageType::LOG
@@ -42,9 +41,9 @@ module RubyLsp
         @runtime_adapter.swap_type_inferrer
 
         # Start debug server if enabled
-        start_debug_server if Config.debug_server_enabled?
+        start_debug_server if ::TypeGuessr::Core::Config.debug_server_enabled?
 
-        debug_status = Config.debug? ? " (debug mode enabled)" : ""
+        debug_status = ::TypeGuessr::Core::Config.debug? ? " (debug mode enabled)" : ""
         message_queue << RubyLsp::Notification.window_log_message(
           "[TypeGuessr] Activated#{debug_status}",
           type: RubyLsp::Constant::MessageType::LOG
@@ -100,7 +99,7 @@ module RubyLsp
       end
 
       private def start_debug_server
-        port = Config.debug_server_port
+        port = ::TypeGuessr::Core::Config.debug_server_port
         warn("[TypeGuessr] Starting debug server on port #{port}...")
         @debug_server = DebugServer.new(@global_state, @runtime_adapter, port: port)
         @debug_server.start

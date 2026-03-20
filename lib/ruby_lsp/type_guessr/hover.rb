@@ -360,7 +360,7 @@ module RubyLsp
       end
 
       private def debug_enabled?
-        Config.debug?
+        ::TypeGuessr::Core::Config.debug?
       end
 
       private def build_debug_info(result, ir_node = nil)

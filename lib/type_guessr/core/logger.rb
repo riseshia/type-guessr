@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require_relative "../../ruby_lsp/type_guessr/config"
+require_relative "config"
 
 module TypeGuessr
   module Core
@@ -29,7 +29,7 @@ module TypeGuessr
       # Check if debug mode is enabled
       # @return [Boolean] true if Config.debug? returns true
       module_function def debug_enabled?
-        RubyLsp::TypeGuessr::Config.debug?
+        TypeGuessr::Core::Config.debug?
       end
     end
   end

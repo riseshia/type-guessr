@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
-module RubyLsp
-  module TypeGuessr
+module TypeGuessr
+  module Core
     # Loads TypeGuessr settings from .type-guessr.yml in the current working directory.
     #
     # Defaults:

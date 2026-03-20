@@ -230,9 +230,9 @@ module RubyLsp
 
       # Serialize a node to hash format
       private def serialize_node(node, node_key)
-        warn("[GraphBuilder] serialize_node: #{node_key}") if Config.debug?
+        warn("[GraphBuilder] serialize_node: #{node_key}") if ::TypeGuessr::Core::Config.debug?
         result = @runtime_adapter.infer_type(node)
-        warn("[GraphBuilder] infer_type done for: #{node_key}") if Config.debug?
+        warn("[GraphBuilder] infer_type done for: #{node_key}") if ::TypeGuessr::Core::Config.debug?
 
         {
           key: node_key,

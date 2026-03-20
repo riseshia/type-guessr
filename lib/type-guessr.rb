@@ -14,7 +14,6 @@ require_relative "type_guessr/core"
 # Load Ruby LSP integration
 # NOTE: addon.rb is NOT required here - it's auto-discovered by Ruby LSP
 # Requiring it here would cause double activation
-require_relative "ruby_lsp/type_guessr/config"
 require_relative "ruby_lsp/type_guessr/constants"
 require_relative "ruby_lsp/type_guessr/runtime_adapter"
 require_relative "ruby_lsp/type_guessr/hover"
