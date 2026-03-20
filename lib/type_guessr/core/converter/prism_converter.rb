@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 require "prism"
-require_relative "../ir/nodes"
+require_relative "../ir"
 require_relative "../types"
 
 module TypeGuessr

@@ -1,20 +1,8 @@
 # frozen_string_literal: true
 
 require "prism"
-require_relative "../../type_guessr/core/converter/prism_converter"
-require_relative "../../type_guessr/core/index/location_index"
-require_relative "../../type_guessr/core/registry/method_registry"
-require_relative "../../type_guessr/core/registry/instance_variable_registry"
-require_relative "../../type_guessr/core/registry/class_variable_registry"
-require_relative "../../type_guessr/core/registry/signature_registry"
-require_relative "../../type_guessr/core/inference/resolver"
+require_relative "../../type_guessr/core"
 require_relative "dsl_type_registrar"
-require_relative "../../type_guessr/core/signature_builder"
-require_relative "../../type_guessr/core/type_simplifier"
-require_relative "../../type_guessr/core/node_context_helper"
-require_relative "../../type_guessr/core/cache/gem_signature_cache"
-require_relative "../../type_guessr/core/cache/gem_dependency_resolver"
-require_relative "../../type_guessr/core/cache/gem_signature_extractor"
 require_relative "code_index_adapter"
 require_relative "type_inferrer"
 

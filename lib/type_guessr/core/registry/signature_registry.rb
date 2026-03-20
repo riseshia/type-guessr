@@ -3,7 +3,7 @@
 require "rbs"
 require_relative "../types"
 require_relative "../logger"
-require_relative "../converter/rbs_converter"
+require_relative "../converter"
 require_relative "../type_serializer"
 
 module TypeGuessr

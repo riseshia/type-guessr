@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require_relative "dsl/activerecord_adapter"
+require_relative "dsl"
 
 module RubyLsp
   module TypeGuessr

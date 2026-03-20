@@ -1,12 +1,9 @@
 # frozen_string_literal: true
 
-require_relative "../ir/nodes"
+require_relative "../ir"
 require_relative "../types"
 require_relative "../type_simplifier"
-require_relative "../registry/method_registry"
-require_relative "../registry/instance_variable_registry"
-require_relative "../registry/class_variable_registry"
-require_relative "../registry/signature_registry"
+require_relative "../registry"
 require_relative "result"
 
 module TypeGuessr

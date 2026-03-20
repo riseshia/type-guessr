@@ -8,18 +8,8 @@ end
 # Load version
 require_relative "type_guessr/version"
 
-# Load core components (IR-based architecture)
-require_relative "type_guessr/core/types"
-require_relative "type_guessr/core/node_key_generator"
-require_relative "type_guessr/core/node_context_helper"
-require_relative "type_guessr/core/ir/nodes"
-require_relative "type_guessr/core/index/location_index"
-require_relative "type_guessr/core/converter/prism_converter"
-require_relative "type_guessr/core/converter/rbs_converter"
-require_relative "type_guessr/core/inference/result"
-require_relative "type_guessr/core/inference/resolver"
-require_relative "type_guessr/core/registry/signature_registry"
-require_relative "type_guessr/core/logger"
+# Load core components
+require_relative "type_guessr/core"
 
 # Load Ruby LSP integration
 # NOTE: addon.rb is NOT required here - it's auto-discovered by Ruby LSP
