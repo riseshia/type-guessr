@@ -337,7 +337,7 @@ module TypeGuessr
               # 2. Fall back to SignatureRegistry (DSL or RBS)
               arg_types = node.args.map { |arg| infer(arg).type }
               entry = @signature_registry.lookup(receiver_type.name, node.method.to_s)
-              source = entry.is_a?(Registry::SignatureRegistry::GemMethodEntry) && entry.dsl? ? :dsl : :stdlib
+              source = entry.is_a?(Registry::SignatureRegistry::GemMethodEntry) && entry.skip_stdlib_rbs? ? :dsl : :stdlib
 
               return_type = @signature_registry.get_method_return_type(
                 receiver_type.name,
@@ -699,7 +699,7 @@ module TypeGuessr
           # Fall back to SignatureRegistry (DSL or RBS)
           arg_types = node.args.map { |arg| infer(arg).type }
           class_entry = @signature_registry.lookup_class_method(class_name, node.method.to_s)
-          class_source = class_entry.is_a?(Registry::SignatureRegistry::GemMethodEntry) && class_entry.dsl? ? :dsl : :rbs
+          class_source = class_entry.is_a?(Registry::SignatureRegistry::GemMethodEntry) && class_entry.skip_stdlib_rbs? ? :dsl : :rbs
 
           return_type = @signature_registry.get_class_method_return_type(
             class_name,

@@ -122,14 +122,14 @@ module RubyLsp
 
           if class_name
             method_name_str = call_node.method.to_s
-            dsl = if receiver_type.is_a?(Types::SingletonType)
-                    @runtime_adapter.dsl_registered_class_method?(class_name, method_name_str)
-                  else
-                    @runtime_adapter.dsl_registered_method?(class_name, method_name_str)
-                  end
+            skip_stdlib_rbs = if receiver_type.is_a?(Types::SingletonType)
+                                @runtime_adapter.skip_stdlib_rbs_class_method?(class_name, method_name_str)
+                              else
+                                @runtime_adapter.skip_stdlib_rbs_method?(class_name, method_name_str)
+                              end
 
-            # DSL-registered methods skip DefNode + RBS → go straight to fallback (resolver)
-            unless dsl
+            # Methods marked skip_stdlib_rbs skip DefNode + RBS → go straight to fallback (resolver)
+            unless skip_stdlib_rbs
               # Try to find DefNode first (for project methods)
               unless receiver_type.is_a?(Types::SingletonType)
                 def_node = @runtime_adapter.lookup_method(class_name, method_name_str)
