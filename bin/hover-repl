@@ -5,12 +5,12 @@
 # Usage:
 #   Interactive mode:
 #     bin/hover-repl
-#     > lib/ruby_lsp/type_guessr/config.rb 40 6
+#     > lib/type_guessr/core/config.rb 40 6
 #     > exit
 #
 #   Non-interactive mode (single query):
-#     bin/hover-repl lib/ruby_lsp/type_guessr/config.rb 40 6
-#     bin/hover-repl lib/ruby_lsp/type_guessr/config.rb 40 6 --json
+#     bin/hover-repl lib/type_guessr/core/config.rb 40 6
+#     bin/hover-repl lib/type_guessr/core/config.rb 40 6 --json
 
 require "open3"
 require "json"
@@ -150,7 +150,7 @@ class HoverRepl
     return unless interactive
 
     puts "Ready! Type '<file> <line> <column>' or 'exit'"
-    puts "Example: lib/ruby_lsp/type_guessr/config.rb 40 6"
+    puts "Example: lib/type_guessr/core/config.rb 40 6"
   end
 
   def handle_notification(msg)

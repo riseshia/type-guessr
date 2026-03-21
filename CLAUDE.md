@@ -89,7 +89,7 @@ REPL-style tool that spawns actual ruby-lsp server with TypeGuessr addon.
 Waits for full project indexing (~20 seconds), then allows multiple hover queries:
 
 ```
-> lib/ruby_lsp/type_guessr/config.rb 40 11
+> lib/type_guessr/core/config.rb 40 11
 **Method Signature:** `() -> ?Hash[String, true | false]`
 ...
 > exit
@@ -98,10 +98,10 @@ Waits for full project indexing (~20 seconds), then allows multiple hover querie
 **Non-interactive mode** (for Claude Code debugging):
 ```bash
 # Single query - outputs hover result and exits
-bin/hover-repl lib/ruby_lsp/type_guessr/config.rb 40 11
+bin/hover-repl lib/type_guessr/core/config.rb 40 11
 
 # JSON output for programmatic use
-bin/hover-repl lib/ruby_lsp/type_guessr/config.rb 40 11 --json
+bin/hover-repl lib/type_guessr/core/config.rb 40 11 --json
 ```
 
 Use this to verify hover results match what users see in their editors.
