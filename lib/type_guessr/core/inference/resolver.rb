@@ -107,16 +107,12 @@ module TypeGuessr
           case node
           when IR::LiteralNode
             infer_literal(node)
-          when IR::LocalWriteNode
-            infer_local_write(node)
+          when IR::LocalWriteNode, IR::InstanceVariableWriteNode, IR::ClassVariableWriteNode
+            infer_variable_write(node)
           when IR::LocalReadNode
             infer_local_read(node)
-          when IR::InstanceVariableWriteNode
-            infer_instance_variable_write(node)
           when IR::InstanceVariableReadNode
             infer_instance_variable_read(node)
-          when IR::ClassVariableWriteNode
-            infer_class_variable_write(node)
           when IR::ClassVariableReadNode
             infer_class_variable_read(node)
           when IR::ParamNode
@@ -148,8 +144,7 @@ module TypeGuessr
           Result.new(node.type, "literal", :literal)
         end
 
-        private def infer_local_write(node)
-          # Early return: variable declared but no value assigned (shouldn't happen in valid Ruby)
+        private def infer_variable_write(node)
           return Result.new(Types::Unknown.instance, "unassigned variable", :unknown) unless node.value
 
           dep_result = infer(node.value)
@@ -179,14 +174,6 @@ module TypeGuessr
           write_result
         end
 
-        private def infer_instance_variable_write(node)
-          # Early return: @var declared but no value assigned (shouldn't happen in valid Ruby)
-          return Result.new(Types::Unknown.instance, "unassigned instance variable", :unknown) unless node.value
-
-          dep_result = infer(node.value)
-          Result.new(dep_result.type, "assigned from #{dep_result.reason}", dep_result.source)
-        end
-
         private def infer_instance_variable_read(node)
           write_node = node.write_node
 
@@ -197,14 +184,6 @@ module TypeGuessr
           return Result.new(Types::Unknown.instance, "unassigned instance variable", :unknown) unless write_node
 
           infer(write_node)
-        end
-
-        private def infer_class_variable_write(node)
-          # Early return: @@var declared but no value assigned (shouldn't happen in valid Ruby)
-          return Result.new(Types::Unknown.instance, "unassigned class variable", :unknown) unless node.value
-
-          dep_result = infer(node.value)
-          Result.new(dep_result.type, "assigned from #{dep_result.reason}", dep_result.source)
         end
 
         private def infer_class_variable_read(node)
