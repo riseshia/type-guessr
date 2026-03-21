@@ -293,206 +293,220 @@ module TypeGuessr
         end
 
         private def infer_call(node)
-          # Special case: Class method calls (ClassName.method)
-          if node.receiver.is_a?(IR::ConstantNode)
-            # Resolve constant first (handles aliases like RecipeAlias = Recipe)
-            receiver_result = infer(node.receiver)
-            class_name = case receiver_result.type
-                         when Types::SingletonType then receiver_result.type.name
-                         else node.receiver.name
-                         end
+          return infer_constant_receiver_call(node) if node.receiver.is_a?(IR::ConstantNode)
+          return infer_no_receiver_call(node) unless node.receiver
 
-            result = infer_class_method_call(class_name, node)
-            # Early return: ClassName.method resolved successfully
+          receiver_type = infer(node.receiver).type
+
+          case receiver_type
+          when Types::SingletonType
+            result = infer_class_method_call(receiver_type.name, node)
             return result if result
+          when Types::ClassInstance then return infer_class_instance_call(node, receiver_type)
+          when Types::ArrayType    then return infer_array_call(node, receiver_type)
+          when Types::TupleType    then return infer_tuple_call(node, receiver_type)
+          when Types::HashShape    then return infer_hash_shape_call(node, receiver_type)
+          when Types::RangeType    then return infer_range_call(node, receiver_type)
+          when Types::HashType     then return infer_hash_type_call(node, receiver_type)
+          when Types::Unknown      then return infer_unknown_receiver_call(node, receiver_type)
           end
 
-          # Infer receiver type first
-          if node.receiver
-            receiver_result = infer(node.receiver)
-            receiver_type = receiver_result.type
+          infer_fallback_call(node, receiver_type)
+        end
 
-            # Query for method return type: project first, then RBS
-            case receiver_type
-            when Types::SingletonType
-              result = infer_class_method_call(receiver_type.name, node)
-              # Early return: singleton.method resolved successfully
-              return result if result
-            when Types::ClassInstance
-              # 1. Try project methods first
-              def_node = @method_registry.lookup(receiver_type.name, node.method.to_s)
-              # Early return: project method found - use project inference
-              if def_node
-                return_result = infer(def_node)
-                return Result.new(
-                  return_result.type,
-                  "#{receiver_type.name}##{node.method} (project)",
-                  :project
-                )
-              end
+        # ClassName.method — resolve constant alias, then class method lookup
+        private def infer_constant_receiver_call(node)
+          receiver_result = infer(node.receiver)
+          class_name = case receiver_result.type
+                       when Types::SingletonType then receiver_result.type.name
+                       else node.receiver.name
+                       end
 
-              # 2. Fall back to SignatureRegistry (DSL or RBS)
-              arg_types = node.args.map { |arg| infer(arg).type }
-              entry = @signature_registry.lookup(receiver_type.name, node.method.to_s)
-              source = entry.is_a?(Registry::SignatureRegistry::GemMethodEntry) && entry.skip_stdlib_rbs? ? :dsl : :stdlib
+          result = infer_class_method_call(class_name, node)
+          return result if result
 
-              return_type = @signature_registry.get_method_return_type(
-                receiver_type.name,
-                node.method.to_s,
-                arg_types
-              )
+          # Constant receiver but class method not found — fall through to no-receiver fallback
+          infer_no_receiver_call(node)
+        end
 
-              # Fall back to Object if class-specific lookup returns Unknown
-              if return_type.is_a?(Types::Unknown) && receiver_type.name != "Object"
-                return_type = @signature_registry.get_method_return_type(
-                  "Object",
-                  node.method.to_s,
-                  arg_types
-                )
-                source = :stdlib
-              end
+        # receiver.method where receiver is a ClassInstance — project method → DSL/RBS → Object fallback
+        private def infer_class_instance_call(node, receiver_type)
+          # 1. Try project methods first
+          def_node = @method_registry.lookup(receiver_type.name, node.method.to_s)
+          if def_node
+            return_result = infer(def_node)
+            return Result.new(
+              return_result.type,
+              "#{receiver_type.name}##{node.method} (project)",
+              :project
+            )
+          end
 
-              # Substitute class-level type vars, self, block return type, and remaining type variables
-              substitutions = build_substitutions(receiver_type)
-              add_method_type_var_substitutions(substitutions, node, receiver_type.name, node.method.to_s, arg_types)
-              return_type = return_type.substitute(substitutions)
+          # 2. Fall back to SignatureRegistry (DSL or RBS)
+          arg_types = node.args.map { |arg| infer(arg).type }
+          entry = @signature_registry.lookup(receiver_type.name, node.method.to_s)
+          source = entry.is_a?(Registry::SignatureRegistry::GemMethodEntry) && entry.skip_stdlib_rbs? ? :dsl : :stdlib
 
-              # Early return: ClassInstance lookup (may be Unknown if not found)
+          return_type = @signature_registry.get_method_return_type(
+            receiver_type.name,
+            node.method.to_s,
+            arg_types
+          )
+
+          # Fall back to Object if class-specific lookup returns Unknown
+          if return_type.is_a?(Types::Unknown) && receiver_type.name != "Object"
+            return_type = @signature_registry.get_method_return_type(
+              "Object",
+              node.method.to_s,
+              arg_types
+            )
+            source = :stdlib
+          end
+
+          # Substitute class-level type vars, self, block return type, and remaining type variables
+          substitutions = build_substitutions(receiver_type)
+          add_method_type_var_substitutions(substitutions, node, receiver_type.name, node.method.to_s, arg_types)
+          return_type = return_type.substitute(substitutions)
+
+          Result.new(
+            return_type,
+            "#{receiver_type.name}##{node.method}",
+            source
+          )
+        end
+
+        # Unknown receiver — infer receiver type from method uniqueness, then retry
+        private def infer_unknown_receiver_call(node, receiver_type)
+          cm = IR::CalledMethod.new(name: node.method, positional_count: nil, keywords: [])
+          inferred_receiver = resolve_called_methods([cm])
+
+          if inferred_receiver.is_a?(Types::ClassInstance)
+            # Try project methods with inferred receiver type
+            def_node = @method_registry.lookup(inferred_receiver.name, node.method.to_s)
+            if def_node
+              return_result = infer(def_node)
               return Result.new(
-                return_type,
-                "#{receiver_type.name}##{node.method}",
-                source
-              )
-            when Types::ArrayType
-              # Handle Array methods with element type substitution
-              substitutions = build_substitutions(receiver_type)
-              add_method_type_var_substitutions(substitutions, node, "Array", node.method.to_s)
-
-              # Get raw return type, then substitute type variables
-              raw_return_type = @signature_registry.get_method_return_type("Array", node.method.to_s)
-              return_type = raw_return_type.substitute(substitutions)
-              # Early return: ArrayType RBS lookup with type variable substitution
-              return Result.new(
-                return_type,
-                "Array[#{receiver_type.element_type || "untyped"}]##{node.method}",
-                :stdlib
-              )
-            when Types::TupleType
-              # Handle indexed access with integer literal
-              if node.method == :[] && node.args.size == 1
-                tuple_result = infer_tuple_access(receiver_type, node.args.first)
-                return tuple_result if tuple_result
-              end
-
-              # Fall back to Array RBS for other methods
-              substitutions = build_substitutions(receiver_type)
-              add_method_type_var_substitutions(substitutions, node, "Array", node.method.to_s)
-              raw_return_type = @signature_registry.get_method_return_type("Array", node.method.to_s)
-              return_type = raw_return_type.substitute(substitutions)
-              return Result.new(
-                return_type,
-                "[#{receiver_type.element_types.join(", ")}]##{node.method}",
-                :stdlib
-              )
-            when Types::HashShape
-              # Handle HashShape field access with [] method
-              if node.method == :[] && node.args.size == 1
-                key_result = infer_hash_shape_access(receiver_type, node.args.first)
-                # Early return: hash[:key] with known symbol key resolved to field type
-                return key_result if key_result
-              end
-
-              # Fall back to Hash RBS for other methods
-              substitutions = build_substitutions(receiver_type)
-              add_method_type_var_substitutions(substitutions, node, "Hash", node.method.to_s)
-              raw_return_type = @signature_registry.get_method_return_type("Hash", node.method.to_s)
-              return_type = raw_return_type.substitute(substitutions)
-              # Early return: HashShape RBS lookup for non-[] methods
-              return Result.new(
-                return_type,
-                "HashShape##{node.method}",
-                :stdlib
-              )
-            when Types::RangeType
-              # Handle Range methods with element type substitution
-              substitutions = build_substitutions(receiver_type)
-              add_method_type_var_substitutions(substitutions, node, "Range", node.method.to_s)
-              raw_return_type = @signature_registry.get_method_return_type("Range", node.method.to_s)
-              return_type = raw_return_type.substitute(substitutions)
-              return Result.new(
-                return_type,
-                "Range[#{receiver_type.element_type}]##{node.method}",
-                :stdlib
-              )
-            when Types::HashType
-              # Handle generic HashType
-              substitutions = build_substitutions(receiver_type)
-              add_method_type_var_substitutions(substitutions, node, "Hash", node.method.to_s)
-              raw_return_type = @signature_registry.get_method_return_type("Hash", node.method.to_s)
-              return_type = raw_return_type.substitute(substitutions)
-              # Early return: HashType RBS lookup with type variable substitution
-              return Result.new(
-                return_type,
-                "Hash[#{receiver_type.key_type}, #{receiver_type.value_type}]##{node.method}",
-                :stdlib
+                return_result.type,
+                "#{inferred_receiver.name}##{node.method} (inferred receiver)",
+                :project
               )
             end
 
-            # Fallback: try to infer Unknown receiver type from method uniqueness
-            if receiver_type.is_a?(Types::Unknown)
-              # Create CalledMethod with nil positional_count to skip signature matching
-              cm = IR::CalledMethod.new(name: node.method, positional_count: nil, keywords: [])
-              inferred_receiver = resolve_called_methods([cm])
-              if inferred_receiver.is_a?(Types::ClassInstance)
-                # Try project methods with inferred receiver type
-                def_node = @method_registry.lookup(inferred_receiver.name, node.method.to_s)
-                # Early return: inferred receiver → project method found
-                if def_node
-                  return_result = infer(def_node)
-                  return Result.new(
-                    return_result.type,
-                    "#{inferred_receiver.name}##{node.method} (inferred receiver)",
-                    :project
-                  )
-                end
-
-                # Early return: inferred receiver → RBS lookup
-                arg_types = node.args.map { |arg| infer(arg).type }
-                return_type = @signature_registry.get_method_return_type(
-                  inferred_receiver.name,
-                  node.method.to_s,
-                  arg_types
-                )
-                substitutions = build_substitutions(inferred_receiver)
-                add_method_type_var_substitutions(substitutions, node, inferred_receiver.name, node.method.to_s, arg_types)
-                return_type = return_type.substitute(substitutions)
-                return Result.new(
-                  return_type,
-                  "#{inferred_receiver.name}##{node.method} (inferred receiver)",
-                  :stdlib
-                )
-              end
-            end
+            # RBS lookup with inferred receiver
+            arg_types = node.args.map { |arg| infer(arg).type }
+            return_type = @signature_registry.get_method_return_type(
+              inferred_receiver.name,
+              node.method.to_s,
+              arg_types
+            )
+            substitutions = build_substitutions(inferred_receiver)
+            add_method_type_var_substitutions(substitutions, node, inferred_receiver.name, node.method.to_s, arg_types)
+            return_type = return_type.substitute(substitutions)
+            return Result.new(
+              return_type,
+              "#{inferred_receiver.name}##{node.method} (inferred receiver)",
+              :stdlib
+            )
           end
 
-          # Fallback: method call without receiver or unknown receiver type
-          # First, try to lookup top-level method
+          infer_fallback_call(node, receiver_type)
+        end
+
+        # No receiver — top-level method → Object RBS → Unknown
+        private def infer_no_receiver_call(node)
+          infer_fallback_call(node, nil)
+        end
+
+        # Shared fallback: top-level method → Object RBS → Unknown
+        private def infer_fallback_call(node, receiver_type)
+          # Try top-level method first
           def_node = @method_registry.lookup("", node.method.to_s)
-          # Early return: top-level project method found
           if def_node
             return_type = infer(def_node.return_node)
             return Result.new(return_type.type, "top-level method #{node.method}", :project)
           end
 
-          # Fallback to Object to query RBS for common methods (==, to_s, etc.)
+          # Object RBS for common methods (==, to_s, etc.)
           arg_types = node.args.map { |arg| infer(arg).type }
           return_type = @signature_registry.get_method_return_type("Object", node.method.to_s, arg_types)
-          # Substitute self with receiver type if available (e.g., Object#dup returns self)
           return_type = return_type.substitute({ self: receiver_type }) if receiver_type
-          # Early return: Object common method found in RBS
           return Result.new(return_type, "Object##{node.method}", :stdlib) unless return_type.is_a?(Types::Unknown)
 
           Result.new(Types::Unknown.instance, "call #{node.method} on unknown receiver", :unknown)
+        end
+
+        private def infer_array_call(node, receiver_type)
+          substitutions = build_substitutions(receiver_type)
+          add_method_type_var_substitutions(substitutions, node, "Array", node.method.to_s)
+          raw_return_type = @signature_registry.get_method_return_type("Array", node.method.to_s)
+          return_type = raw_return_type.substitute(substitutions)
+          Result.new(
+            return_type,
+            "Array[#{receiver_type.element_type || "untyped"}]##{node.method}",
+            :stdlib
+          )
+        end
+
+        private def infer_tuple_call(node, receiver_type)
+          # Handle indexed access with integer literal
+          if node.method == :[] && node.args.size == 1
+            tuple_result = infer_tuple_access(receiver_type, node.args.first)
+            return tuple_result if tuple_result
+          end
+
+          # Fall back to Array RBS for other methods
+          substitutions = build_substitutions(receiver_type)
+          add_method_type_var_substitutions(substitutions, node, "Array", node.method.to_s)
+          raw_return_type = @signature_registry.get_method_return_type("Array", node.method.to_s)
+          return_type = raw_return_type.substitute(substitutions)
+          Result.new(
+            return_type,
+            "[#{receiver_type.element_types.join(", ")}]##{node.method}",
+            :stdlib
+          )
+        end
+
+        private def infer_hash_shape_call(node, receiver_type)
+          # Handle HashShape field access with [] method
+          if node.method == :[] && node.args.size == 1
+            key_result = infer_hash_shape_access(receiver_type, node.args.first)
+            return key_result if key_result
+          end
+
+          # Fall back to Hash RBS for other methods
+          substitutions = build_substitutions(receiver_type)
+          add_method_type_var_substitutions(substitutions, node, "Hash", node.method.to_s)
+          raw_return_type = @signature_registry.get_method_return_type("Hash", node.method.to_s)
+          return_type = raw_return_type.substitute(substitutions)
+          Result.new(
+            return_type,
+            "HashShape##{node.method}",
+            :stdlib
+          )
+        end
+
+        private def infer_range_call(node, receiver_type)
+          substitutions = build_substitutions(receiver_type)
+          add_method_type_var_substitutions(substitutions, node, "Range", node.method.to_s)
+          raw_return_type = @signature_registry.get_method_return_type("Range", node.method.to_s)
+          return_type = raw_return_type.substitute(substitutions)
+          Result.new(
+            return_type,
+            "Range[#{receiver_type.element_type}]##{node.method}",
+            :stdlib
+          )
+        end
+
+        private def infer_hash_type_call(node, receiver_type)
+          substitutions = build_substitutions(receiver_type)
+          add_method_type_var_substitutions(substitutions, node, "Hash", node.method.to_s)
+          raw_return_type = @signature_registry.get_method_return_type("Hash", node.method.to_s)
+          return_type = raw_return_type.substitute(substitutions)
+          Result.new(
+            return_type,
+            "Hash[#{receiver_type.key_type}, #{receiver_type.value_type}]##{node.method}",
+            :stdlib
+          )
         end
 
         private def infer_block_param_slot(node)
