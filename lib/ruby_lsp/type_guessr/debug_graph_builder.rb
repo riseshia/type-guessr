@@ -4,7 +4,7 @@ module RubyLsp
   module TypeGuessr
     # Builds graph data from IR nodes for visualization
     # Uses body_nodes structure with value/receiver/args edges
-    class GraphBuilder
+    class DebugGraphBuilder
       def initialize(runtime_adapter)
         @runtime_adapter = runtime_adapter
       end
@@ -230,9 +230,9 @@ module RubyLsp
 
       # Serialize a node to hash format
       private def serialize_node(node, node_key)
-        warn("[GraphBuilder] serialize_node: #{node_key}") if ::TypeGuessr::Core::Config.debug?
+        warn("[DebugGraphBuilder] serialize_node: #{node_key}") if ::TypeGuessr::Core::Config.debug?
         result = @runtime_adapter.infer_type(node)
-        warn("[GraphBuilder] infer_type done for: #{node_key}") if ::TypeGuessr::Core::Config.debug?
+        warn("[DebugGraphBuilder] infer_type done for: #{node_key}") if ::TypeGuessr::Core::Config.debug?
 
         {
           key: node_key,

@@ -3,7 +3,7 @@
 require "socket"
 require "json"
 require "cgi"
-require_relative "graph_builder"
+require_relative "debug_graph_builder"
 
 module RubyLsp
   module TypeGuessr
@@ -16,7 +16,7 @@ module RubyLsp
       def initialize(global_state, runtime_adapter, port: DEFAULT_PORT)
         @global_state = global_state
         @runtime_adapter = runtime_adapter
-        @graph_builder = GraphBuilder.new(runtime_adapter)
+        @graph_builder = DebugGraphBuilder.new(runtime_adapter)
         @port = port
         @server = nil
         @thread = nil

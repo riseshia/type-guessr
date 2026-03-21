@@ -1,9 +1,9 @@
 # frozen_string_literal: true
 
 require "spec_helper"
-require "ruby_lsp/type_guessr/graph_builder"
+require "ruby_lsp/type_guessr/debug_graph_builder"
 
-RSpec.describe RubyLsp::TypeGuessr::GraphBuilder do
+RSpec.describe RubyLsp::TypeGuessr::DebugGraphBuilder do
   let(:loc) { 100 }
   let(:nodes) { {} }
 
