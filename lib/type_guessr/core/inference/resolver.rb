@@ -804,7 +804,7 @@ module TypeGuessr
         # @param receiver_type [Type] The receiver type
         # @return [Hash{Symbol => Type}] Substitutions including :self
         private def build_substitutions(receiver_type)
-          substitutions = receiver_type.type_variable_substitutions.dup
+          substitutions = receiver_type.type_parameter_bindings.dup
           substitutions[:self] = receiver_type
           substitutions
         end

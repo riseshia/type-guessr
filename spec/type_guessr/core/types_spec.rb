@@ -163,14 +163,14 @@ RSpec.describe TypeGuessr::Core::Types do
         expect(type1).not_to eq(type2)
       end
 
-      it "returns type_params as type_variable_substitutions" do
+      it "returns type_params as type_parameter_bindings" do
         type = TypeGuessr::Core::Types::ClassInstance.new("Set", { A: string_type })
-        expect(type.type_variable_substitutions).to eq({ A: string_type })
+        expect(type.type_parameter_bindings).to eq({ A: string_type })
       end
 
-      it "returns empty hash for type_variable_substitutions when no type_params" do
+      it "returns empty hash for type_parameter_bindings when no type_params" do
         type = TypeGuessr::Core::Types::ClassInstance.new("String")
-        expect(type.type_variable_substitutions).to eq({})
+        expect(type.type_parameter_bindings).to eq({})
       end
 
       it "substitutes type variables within type_params" do
@@ -446,16 +446,16 @@ RSpec.describe TypeGuessr::Core::Types do
       expect(tuple.rbs_class_name).to eq("Array")
     end
 
-    describe "#type_variable_substitutions" do
+    describe "#type_parameter_bindings" do
       it "returns single element type for Elem when all types are the same" do
         tuple = described_class::TupleType.new([integer_type, integer_type])
-        subs = tuple.type_variable_substitutions
+        subs = tuple.type_parameter_bindings
         expect(subs[:Elem]).to eq(integer_type)
       end
 
       it "returns Union for Elem when element types differ" do
         tuple = described_class::TupleType.new([integer_type, string_type])
-        subs = tuple.type_variable_substitutions
+        subs = tuple.type_parameter_bindings
         expect(subs[:Elem]).to be_a(described_class::Union)
         expect(subs[:Elem].types).to contain_exactly(integer_type, string_type)
       end
@@ -789,53 +789,53 @@ RSpec.describe TypeGuessr::Core::Types do
     end
   end
 
-  describe "#type_variable_substitutions" do
+  describe "#type_parameter_bindings" do
     let(:integer_type) { described_class::ClassInstance.new("Integer") }
     let(:string_type) { described_class::ClassInstance.new("String") }
 
     describe "Type (base class)" do
       it "returns empty hash by default" do
         unknown = described_class::Unknown.instance
-        expect(unknown.type_variable_substitutions).to eq({})
+        expect(unknown.type_parameter_bindings).to eq({})
       end
     end
 
     describe "ClassInstance" do
       it "returns empty hash" do
         type = described_class::ClassInstance.new("String")
-        expect(type.type_variable_substitutions).to eq({})
+        expect(type.type_parameter_bindings).to eq({})
       end
     end
 
     describe "SingletonType" do
       it "returns empty hash" do
         type = described_class::SingletonType.new("User")
-        expect(type.type_variable_substitutions).to eq({})
+        expect(type.type_parameter_bindings).to eq({})
       end
     end
 
     describe "ArrayType" do
       it "returns Elem substitution" do
         array_type = described_class::ArrayType.new(integer_type)
-        expect(array_type.type_variable_substitutions).to eq({ Elem: integer_type })
+        expect(array_type.type_parameter_bindings).to eq({ Elem: integer_type })
       end
 
       it "returns Unknown for Elem when element_type is Unknown" do
         array_type = described_class::ArrayType.new
-        expect(array_type.type_variable_substitutions).to eq({ Elem: described_class::Unknown.instance })
+        expect(array_type.type_parameter_bindings).to eq({ Elem: described_class::Unknown.instance })
       end
     end
 
     describe "TupleType" do
       it "returns single element type for Elem when all types are the same" do
         tuple = described_class::TupleType.new([integer_type, integer_type])
-        subs = tuple.type_variable_substitutions
+        subs = tuple.type_parameter_bindings
         expect(subs[:Elem]).to eq(integer_type)
       end
 
       it "returns Union for Elem when element types differ" do
         tuple = described_class::TupleType.new([integer_type, string_type])
-        subs = tuple.type_variable_substitutions
+        subs = tuple.type_parameter_bindings
         expect(subs[:Elem]).to be_a(described_class::Union)
         expect(subs[:Elem].types).to contain_exactly(integer_type, string_type)
       end
@@ -845,12 +845,12 @@ RSpec.describe TypeGuessr::Core::Types do
       it "returns K and V substitutions" do
         symbol_type = described_class::ClassInstance.new("Symbol")
         hash_type = described_class::HashType.new(symbol_type, integer_type)
-        expect(hash_type.type_variable_substitutions).to eq({ K: symbol_type, V: integer_type })
+        expect(hash_type.type_parameter_bindings).to eq({ K: symbol_type, V: integer_type })
       end
 
       it "returns Unknown for K and V when types are Unknown" do
         hash_type = described_class::HashType.new
-        expect(hash_type.type_variable_substitutions).to eq({
+        expect(hash_type.type_parameter_bindings).to eq({
                                                               K: described_class::Unknown.instance,
                                                               V: described_class::Unknown.instance
                                                             })
@@ -860,7 +860,7 @@ RSpec.describe TypeGuessr::Core::Types do
     describe "HashShape" do
       it "returns Symbol for K and value type for V with single field type" do
         hash_shape = described_class::HashShape.new({ a: integer_type, b: integer_type })
-        subs = hash_shape.type_variable_substitutions
+        subs = hash_shape.type_parameter_bindings
 
         expect(subs[:K]).to eq(described_class::ClassInstance.new("Symbol"))
         expect(subs[:V]).to eq(integer_type)
@@ -868,7 +868,7 @@ RSpec.describe TypeGuessr::Core::Types do
 
       it "returns Union for V with multiple field types" do
         hash_shape = described_class::HashShape.new({ a: integer_type, b: string_type })
-        subs = hash_shape.type_variable_substitutions
+        subs = hash_shape.type_parameter_bindings
 
         expect(subs[:K]).to eq(described_class::ClassInstance.new("Symbol"))
         expect(subs[:V]).to be_a(described_class::Union)
@@ -877,7 +877,7 @@ RSpec.describe TypeGuessr::Core::Types do
 
       it "returns Unknown for V with empty hash shape" do
         hash_shape = described_class::HashShape.new({})
-        subs = hash_shape.type_variable_substitutions
+        subs = hash_shape.type_parameter_bindings
 
         expect(subs[:K]).to eq(described_class::ClassInstance.new("Symbol"))
         expect(subs[:V]).to eq(described_class::Unknown.instance)
@@ -887,14 +887,14 @@ RSpec.describe TypeGuessr::Core::Types do
     describe "Union" do
       it "returns empty hash" do
         union = described_class::Union.new([integer_type, string_type])
-        expect(union.type_variable_substitutions).to eq({})
+        expect(union.type_parameter_bindings).to eq({})
       end
     end
 
     describe "ForwardingArgs" do
       it "returns empty hash" do
         forwarding = described_class::ForwardingArgs.instance
-        expect(forwarding.type_variable_substitutions).to eq({})
+        expect(forwarding.type_parameter_bindings).to eq({})
       end
     end
   end

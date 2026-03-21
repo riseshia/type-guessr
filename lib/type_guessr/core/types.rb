@@ -36,7 +36,7 @@ module TypeGuessr
         # Get type variable substitutions for this type
         # Used for substituting type variables in block parameters
         # @return [Hash{Symbol => Type}] type variable substitutions (e.g., { Elem: Integer, K: Symbol, V: String })
-        def type_variable_substitutions
+        def type_parameter_bindings
           {}
         end
 
@@ -124,7 +124,7 @@ module TypeGuessr
           end
         end
 
-        def type_variable_substitutions
+        def type_parameter_bindings
           @type_params || {}
         end
 
@@ -312,7 +312,7 @@ module TypeGuessr
           "Array"
         end
 
-        def type_variable_substitutions
+        def type_parameter_bindings
           { Elem: @element_type }
         end
       end
@@ -363,7 +363,7 @@ module TypeGuessr
           "Array"
         end
 
-        def type_variable_substitutions
+        def type_parameter_bindings
           return { Elem: Unknown.instance } if @element_types.empty?
 
           unique = @element_types.uniq
@@ -410,7 +410,7 @@ module TypeGuessr
           "Hash"
         end
 
-        def type_variable_substitutions
+        def type_parameter_bindings
           { K: @key_type, V: @value_type }
         end
       end
@@ -451,7 +451,7 @@ module TypeGuessr
           "Range"
         end
 
-        def type_variable_substitutions
+        def type_parameter_bindings
           { Elem: @element_type }
         end
       end
@@ -511,7 +511,7 @@ module TypeGuessr
           "Hash"
         end
 
-        def type_variable_substitutions
+        def type_parameter_bindings
           key_type = ClassInstance.for("Symbol")
           value_types = @fields.values.uniq
           value_type = if value_types.empty?
