@@ -33,8 +33,8 @@ module TypeGuessr
         # 1. Single element: unwrap
         return types.first if types.size == 1
 
-        # 2. Filter to most general types (remove children when parent is present)
-        types = filter_to_most_general_types(types) if @code_index
+        # 2. Remove subclass types when parent class is also present
+        types = remove_subclass_types(types) if @code_index
 
         # 3. Check again after filtering
         return types.first if types.size == 1
@@ -45,10 +45,10 @@ module TypeGuessr
         Types::Union.new(types)
       end
 
-      # Filter out types whose ancestor is also in the list
+      # Remove types whose ancestor is also in the list (e.g., remove Integer when Numeric is present)
       # @param types [Array<Types::Type>] List of types
-      # @return [Array<Types::Type>] Filtered list with only the most general types
-      private def filter_to_most_general_types(types)
+      # @return [Array<Types::Type>] Filtered list with subclass types removed
+      private def remove_subclass_types(types)
         # Extract class names from ClassInstance types
         class_names = types.filter_map do |t|
           t.name if t.is_a?(Types::ClassInstance)
