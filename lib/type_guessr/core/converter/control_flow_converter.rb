@@ -358,9 +358,6 @@ module TypeGuessr
 
           # Create MergeNode for each modified variable
           all_modified_vars.each do |var_name|
-            # Collect values from all branches
-            branch_contexts.map { |ctx| ctx&.variables&.[](var_name) }
-
             # Get original value from parent context
             original_val = parent_context.lookup_variable(var_name)
 
