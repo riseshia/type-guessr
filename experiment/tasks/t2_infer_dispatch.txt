@@ -1,0 +1,1 @@
+List all infer_* private methods in TypeGuessr::Core::Inference::Resolver. For each method, state: (1) what IR node type it handles, (2) the method's line range in the source file, and (3) a brief description of the return type logic. Present the results as a table.
