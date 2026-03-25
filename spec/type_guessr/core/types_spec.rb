@@ -851,9 +851,9 @@ RSpec.describe TypeGuessr::Core::Types do
       it "returns Unknown for K and V when types are Unknown" do
         hash_type = described_class::HashType.new
         expect(hash_type.type_parameter_bindings).to eq({
-                                                              K: described_class::Unknown.instance,
-                                                              V: described_class::Unknown.instance
-                                                            })
+                                                          K: described_class::Unknown.instance,
+                                                          V: described_class::Unknown.instance
+                                                        })
       end
     end
 
