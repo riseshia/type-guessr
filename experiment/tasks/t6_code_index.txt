@@ -1,0 +1,1 @@
+Find all usages of code_index across the TypeGuessr codebase. For each usage, document: (1) the file and method where it is used, (2) which code_index method is called, and (3) what purpose the call serves. Also document the CodeIndex class itself — its public methods and what data structures it maintains.

@@ -1,0 +1,1 @@
+Catalog all type classes defined under TypeGuessr::Core::Types. For each type class, document: (1) its name and attributes, (2) key methods it implements (especially substitute and type_variable_substitutions), and (3) which Resolver methods produce this type. Present as a structured reference.

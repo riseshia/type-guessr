@@ -1,0 +1,1 @@
+Map the registry architecture of TypeGuessr. Find all registry classes in the codebase, and for each one document: (1) its full class name and file path, (2) all public methods with their parameters, (3) what data it stores internally, and (4) how Resolver uses it during type inference. Explain how the registries work together.

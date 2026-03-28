@@ -12,6 +12,7 @@ AllCops:
     - "bin/profile"
     - "tmp/**/*"
     - "sample/**/*"
+    - "experiment/**/*"
 
 Style/StringLiterals:
   EnforcedStyle: double_quotes

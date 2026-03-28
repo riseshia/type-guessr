@@ -1,0 +1,1 @@
+List all IR node classes defined in TypeGuessr::Core::IR (inside nodes.rb). For each node class, document: (1) its attributes (attr_reader fields), (2) what its dependencies method returns, and (3) its purpose in the type inference pipeline. Present the results as a structured catalog.

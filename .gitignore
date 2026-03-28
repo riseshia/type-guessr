@@ -22,6 +22,10 @@ CLAUDE.local.md
 brain.md
 *.gem
 
+# Experiment results (large, generated)
+experiment/results/runs/
+experiment/results/accumulated/
+
 # Sample project artifacts
 sample/**/storage/
 sample/**/log/
