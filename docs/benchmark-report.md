@@ -1,11 +1,11 @@
 # TypeGuessr Benchmark Report
 
-Generated: 2026-03-15 21:54:25
+Generated: 2026-04-19 08:17:00
 
 ## Configuration
 
 - **Target:** all
-- **Files:** 3796
+- **Files:** 3559
 - **Warmup:** 2s
 - **Benchmark time:** 5s
 - **Inference samples:** 2000
@@ -16,16 +16,16 @@ Generated: 2026-03-15 21:54:25
 
 | Metric | Value |
 |--------|-------|
-| Files indexed | 3796 |
-| Total nodes | 2144376 |
+| Files indexed | 3559 |
+| Total nodes | 2049833 |
 | Iterations | 3 |
-| Avg time | 15.296 sec |
-| Min/Max time | 14.306 / 17.263 sec |
-| Throughput (nodes) | 140189 nodes/sec |
-| Throughput (files) | 248.2 files/sec |
-| Avg memory delta | +543389 KB |
-| Avg time per file | 4.03 ms |
-| Avg nodes per file | 564 |
+| Avg time | 11.585 sec |
+| Min/Max time | 10.229 / 12.950 sec |
+| Throughput (nodes) | 176945 nodes/sec |
+| Throughput (files) | 307.2 files/sec |
+| Avg memory delta | +516741 KB |
+| Avg time per file | 3.26 ms |
+| Avg nodes per file | 575 |
 
 
 ## Inference Results
@@ -35,12 +35,12 @@ Generated: 2026-03-15 21:54:25
 | Metric | Value |
 |--------|-------|
 | Files measured | 1 |
-| Min | 0.182 ms |
-| Max | 0.182 ms |
-| Avg | 0.182 ms |
-| Median (p50) | 0.182 ms |
-| p95 | 0.182 ms |
-| p99 | 0.182 ms |
+| Min | 0.479 ms |
+| Max | 0.479 ms |
+| Avg | 0.479 ms |
+| Median (p50) | 0.479 ms |
+| p95 | 0.479 ms |
+| p99 | 0.479 ms |
 
 ### Warm (subsequent inferences)
 
@@ -48,20 +48,20 @@ Generated: 2026-03-15 21:54:25
 |--------|-------|
 | Nodes sampled | 2000 |
 | Total inferred | 2000 |
-| Total time | 3.640 sec |
-| Throughput | 549 inferences/sec |
+| Total time | 3.527 sec |
+| Throughput | 567 inferences/sec |
 | Min | 0.001 ms |
-| Max | 135.117 ms |
-| Avg | 1.821 ms |
+| Max | 185.004 ms |
+| Avg | 1.764 ms |
 | Median (p50) | 0.051 ms |
-| p95 | 7.181 ms |
-| p99 | 31.886 ms |
+| p95 | 5.993 ms |
+| p99 | 36.005 ms |
 
 
 ## Performance Summary
 
-- **Indexing**: 140189 nodes/sec (248.2 files/sec)
-- **Inference**: 549 inferences/sec (1.820 ms/inference)
+- **Indexing**: 176945 nodes/sec (307.2 files/sec)
+- **Inference**: 567 inferences/sec (1.764 ms/inference)
 
 ---
 
