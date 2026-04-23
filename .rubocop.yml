@@ -46,6 +46,12 @@ Style/Documentation:
   Exclude:
     - "bin/**/*"
 
+# bin/ scripts and spec helpers bundle supporting classes with the main entry
+Style/OneClassPerFile:
+  Exclude:
+    - "bin/**/*"
+    - "spec/support/**/*"
+
 # LiteralNode.values is an Array, not a Hash
 Style/HashEachMethods:
   Enabled: false
