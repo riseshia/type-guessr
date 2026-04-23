@@ -1156,5 +1156,51 @@ RSpec.describe "Hover Inference" do
       end
     end
   end
+
+  describe "attr_reader / attr_accessor", :doc do
+    context "attr_reader exposes @ivar type as method return type" do
+      let(:source) do
+        <<~RUBY
+          class Recipe
+            attr_reader :name
+
+            def initialize
+              @name = "Makaron"
+            end
+          end
+
+          recipe = Recipe.new
+          name = recipe.name
+          name
+        RUBY
+      end
+
+      it "→ String" do
+        expect_inferred_type(line: 11, column: 0, expected: "String")
+      end
+    end
+
+    context "attr_accessor reader resolves to @ivar type" do
+      let(:source) do
+        <<~RUBY
+          class Recipe
+            attr_accessor :count
+
+            def initialize
+              @count = 0
+            end
+          end
+
+          recipe = Recipe.new
+          total = recipe.count
+          total
+        RUBY
+      end
+
+      it "→ Integer" do
+        expect_inferred_type(line: 11, column: 0, expected: "Integer")
+      end
+    end
+  end
 end
 # rubocop:enable RSpec/DescribeClass

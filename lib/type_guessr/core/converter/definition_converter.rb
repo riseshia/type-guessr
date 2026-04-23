@@ -202,6 +202,12 @@ module TypeGuessr
           nested_classes = []
           if prism_node.body.is_a?(Prism::StatementsNode)
             prism_node.body.body.each do |stmt|
+              if attr_accessor_call?(stmt)
+                # attr_reader/attr_accessor/attr_writer DSL → 合成DefNodeを生成
+                methods.concat(synthesize_attr_defs(stmt, class_context))
+                next
+              end
+
               node = convert(stmt, class_context)
               if node.is_a?(IR::DefNode)
                 methods << node
@@ -215,6 +221,66 @@ module TypeGuessr
           methods.concat(nested_classes)
 
           IR::ClassModuleNode.new(name, methods, [], convert_loc(prism_node.constant_path&.location || prism_node.location))
+        end
+
+        ATTR_DSL_NAMES = %i[attr_reader attr_writer attr_accessor].freeze
+        private_constant :ATTR_DSL_NAMES
+
+        private def attr_accessor_call?(prism_node)
+          return false unless prism_node.is_a?(Prism::CallNode)
+          return false unless prism_node.receiver.nil?
+
+          ATTR_DSL_NAMES.include?(prism_node.name)
+        end
+
+        # attr_reader/attr_writer/attr_accessor呼び出しから合成DefNodeを生成する
+        # @return [Array<IR::DefNode>]
+        private def synthesize_attr_defs(prism_node, context)
+          dsl_name = prism_node.name
+          args = prism_node.arguments&.arguments || []
+
+          args.flat_map do |arg|
+            attr_name = extract_attr_name(arg)
+            next [] unless attr_name
+
+            loc = convert_loc(arg.location)
+            case dsl_name
+            when :attr_reader
+              [build_reader_def(attr_name, context.current_class_name, loc)]
+            when :attr_writer
+              [build_writer_def(attr_name, context.current_class_name, loc)]
+            when :attr_accessor
+              [
+                build_reader_def(attr_name, context.current_class_name, loc),
+                build_writer_def(attr_name, context.current_class_name, loc),
+              ]
+            end
+          end
+        end
+
+        # 記号/文字列リテラル引数から属性名を取り出す
+        # @return [Symbol, nil] シンボルで返す。リテラルでない場合はnil
+        private def extract_attr_name(arg)
+          case arg
+          when Prism::SymbolNode
+            arg.value&.to_sym
+          when Prism::StringNode
+            arg.unescaped.to_sym
+          end
+        end
+
+        # attr_readerに対応する合成DefNode (引数なし、@ivarを返す)
+        private def build_reader_def(attr_name, class_name, loc)
+          ivar_name = :"@#{attr_name}"
+          ivar_read = IR::InstanceVariableReadNode.new(ivar_name, class_name, nil, [], loc)
+          IR::DefNode.new(attr_name, class_name, [], ivar_read, [ivar_read], [], loc, false)
+        end
+
+        # attr_writerに対応する合成DefNode (name= :引数を返す)
+        private def build_writer_def(attr_name, class_name, loc)
+          setter_name = :"#{attr_name}="
+          param = IR::ParamNode.new(:value, :required, nil, [], loc)
+          IR::DefNode.new(setter_name, class_name, [param], param, [param], [], loc, false)
         end
 
         private def convert_singleton_class(prism_node, context)
