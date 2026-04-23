@@ -119,7 +119,7 @@ module RubyLsp
                        entries = if @member_index
                                    @member_index[pivot.name.to_s] || []
                                  else
-                                   @index.fuzzy_search(pivot.name.to_s) do |entry|
+                                   @index.fuzzy_search(pivot.name.to_s).select do |entry|
                                      entry.is_a?(RubyIndexer::Entry::Member) && entry.name == pivot.name.to_s
                                    end
                                  end
