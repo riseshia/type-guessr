@@ -669,12 +669,25 @@ module TypeGuessr
             )
           end
 
-          # Try project class methods first (includes extended module methods)
-          # Use code_index adapter to find method owner
-          owner_name = @code_index&.class_method_owner(class_name, node.method.to_s)
+          # ConstantName.method is always a class method or module function, so the
+          # method's owner must be the receiver's singleton class. Look up the registry
+          # directly to avoid depending on ruby-lsp's indexer state for methods we
+          # ourselves registered.
+          singleton_scope = "#{class_name}::<Class:#{IR.extract_last_name(class_name)}>"
+          def_node = @method_registry.lookup(singleton_scope, node.method.to_s)
+          if def_node
+            return_result = infer(def_node)
+            return Result.new(
+              return_result.type,
+              "#{class_name}.#{node.method} (project)",
+              :project
+            )
+          end
 
-          # Early return: project class method found
-          if owner_name
+          # Fall back to code_index for inherited class methods (the method is defined
+          # on an ancestor, so its singleton scope differs from the receiver's).
+          owner_name = @code_index&.class_method_owner(class_name, node.method.to_s)
+          if owner_name && owner_name != singleton_scope
             def_node = @method_registry.lookup(owner_name, node.method.to_s)
             if def_node
               return_result = infer(def_node)

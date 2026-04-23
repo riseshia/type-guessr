@@ -465,6 +465,50 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
         expect(result.type).to be_a(TypeGuessr::Core::Types::ArrayType)
         expect(result.type.element_type.name).to eq("Integer")
       end
+
+      # ConstantName.method can only be a class method or a module function by
+      # definition. The resolver builds the singleton scope directly from the
+      # receiver's class_name and looks it up in method_registry, so in-project
+      # registrations are found without going through code_index.
+      # As a side effect, edge cases where the ruby-lsp indexer misses the
+      # singleton entry (e.g. single-line `module_function def foo`) also
+      # resolve correctly.
+      it "resolves ClassName.method via method_registry singleton scope directly" do
+        allow(code_index).to receive(:constant_kind).with("MyModule").and_return(:module)
+        allow(code_index).to receive(:class_method_owner).with("MyModule", "do_work").and_return(nil)
+
+        return_node = TypeGuessr::Core::IR::LiteralNode.new(
+          TypeGuessr::Core::Types::ClassInstance.new("Integer"),
+          42,
+          nil,
+          [],
+          loc
+        )
+        def_node = create_def_node(
+          name: :do_work,
+          class_name: "MyModule",
+          return_node: return_node,
+          body_nodes: [return_node]
+        )
+        method_registry.register("MyModule::<Class:MyModule>", "do_work", def_node)
+
+        const = TypeGuessr::Core::IR::ConstantNode.new("MyModule", nil, [], loc)
+        call = TypeGuessr::Core::IR::CallNode.new(
+          :do_work,
+          const,
+          [],
+          [],
+          nil,
+          false,
+          [],
+          loc
+        )
+
+        result = resolver.infer(call)
+        expect(result.type).to be_a(TypeGuessr::Core::Types::ClassInstance)
+        expect(result.type.name).to eq("Integer")
+        expect(result.source).to eq(:project)
+      end
     end
 
     context "with BlockParamSlot" do
