@@ -1,16 +1,16 @@
 # TypeGuessr Coverage Report
 
-Generated: 2026-04-19 08:17:44
+Generated: 2026-04-23 14:09:37
 
 ## Summary
 
 | Metric | Value |
 |--------|-------|
-| Files Analyzed | 3559 |
-| Node Coverage | 79.8% (1705763/2136430) |
-| Inference Coverage | 37.5% (258181/688848) |
+| Files Analyzed | 3804 |
+| Node Coverage | 79.7% (1765878/2215532) |
+| Inference Coverage | 39.9% (298833/748487) |
 | Signature Score | 0.38 |
-| Project Methods | 42315 |
+| Project Methods | 47574 |
 
 > **Node Coverage** includes trivially-typed nodes (LiteralNode, SelfNode).
 > **Inference Coverage** excludes them to reflect actual type inference capability.
@@ -19,22 +19,22 @@ Generated: 2026-04-19 08:17:44
 
 | Node Type | Coverage | Typed/Total |
 |-----------|----------|-------------|
-| LiteralNode | 100.0% | 1441048/1441048 |
-| CallNode | 31.7% | 86181/271943 |
-| LocalReadNode | 35.4% | 53554/151397 |
-| ParamNode | 20.3% | 13922/68468 |
-| LocalWriteNode | 55.0% | 21388/38868 |
-| MergeNode | 54.0% | 20211/37415 |
-| ConstantNode | 51.4% | 18539/36099 |
-| InstanceVariableReadNode | 78.6% | 16811/21384 |
-| ReturnNode | 86.8% | 14512/16713 |
-| BlockParamSlot | 18.6% | 2896/15542 |
-| InstanceVariableWriteNode | 53.7% | 7601/14150 |
-| ClassModuleNode | 0.0% | 0/12823 |
-| SelfNode | 100.0% | 6534/6534 |
-| OrNode | 62.6% | 2445/3904 |
-| ClassVariableWriteNode | 81.3% | 61/75 |
-| ClassVariableReadNode | 89.6% | 60/67 |
+| LiteralNode | 100.0% | 1459922/1459922 |
+| CallNode | 36.9% | 107688/291619 |
+| LocalReadNode | 36.7% | 60744/165604 |
+| ParamNode | 21.0% | 15056/71824 |
+| LocalWriteNode | 53.9% | 23610/43802 |
+| ConstantNode | 50.2% | 20905/41628 |
+| MergeNode | 53.4% | 21802/40843 |
+| InstanceVariableReadNode | 78.1% | 19199/24576 |
+| ReturnNode | 82.7% | 14748/17841 |
+| BlockParamSlot | 19.7% | 3342/16952 |
+| InstanceVariableWriteNode | 55.2% | 8921/16147 |
+| ClassModuleNode | 0.0% | 0/13352 |
+| SelfNode | 100.0% | 7123/7123 |
+| OrNode | 64.7% | 2676/4136 |
+| ClassVariableWriteNode | 84.1% | 74/88 |
+| ClassVariableReadNode | 90.7% | 68/75 |
 
 ## Metrics Explanation
 
