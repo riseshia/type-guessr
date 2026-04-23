@@ -40,7 +40,7 @@ RSpec.describe TypeGuessr::Core::Converter::PrismConverter do
       RUBY
       node = convert_class(source)
 
-      def_names = node.methods.select { |m| m.is_a?(TypeGuessr::Core::IR::DefNode) }.map(&:name)
+      def_names = node.methods.grep(TypeGuessr::Core::IR::DefNode).map(&:name)
       expect(def_names).to contain_exactly(:name, :age)
     end
 
@@ -67,7 +67,7 @@ RSpec.describe TypeGuessr::Core::Converter::PrismConverter do
       RUBY
       node = convert_class(source)
 
-      defs = node.methods.select { |m| m.is_a?(TypeGuessr::Core::IR::DefNode) }
+      defs = node.methods.grep(TypeGuessr::Core::IR::DefNode)
       expect(defs).to be_empty
     end
 
@@ -114,7 +114,7 @@ RSpec.describe TypeGuessr::Core::Converter::PrismConverter do
       RUBY
       node = convert_class(source)
 
-      def_names = node.methods.select { |m| m.is_a?(TypeGuessr::Core::IR::DefNode) }.map(&:name)
+      def_names = node.methods.grep(TypeGuessr::Core::IR::DefNode).map(&:name)
       expect(def_names).to contain_exactly(:name, :name=)
     end
 
@@ -126,7 +126,7 @@ RSpec.describe TypeGuessr::Core::Converter::PrismConverter do
       RUBY
       node = convert_class(source)
 
-      def_names = node.methods.select { |m| m.is_a?(TypeGuessr::Core::IR::DefNode) }.map(&:name)
+      def_names = node.methods.grep(TypeGuessr::Core::IR::DefNode).map(&:name)
       expect(def_names).to contain_exactly(:name, :name=, :age, :age=)
     end
   end
