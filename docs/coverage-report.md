@@ -1,16 +1,16 @@
 # TypeGuessr Coverage Report
 
-Generated: 2026-04-23 14:09:37
+Generated: 2026-04-24 07:30:11
 
 ## Summary
 
 | Metric | Value |
 |--------|-------|
-| Files Analyzed | 3804 |
-| Node Coverage | 79.7% (1765878/2215532) |
-| Inference Coverage | 39.9% (298833/748487) |
-| Signature Score | 0.38 |
-| Project Methods | 47574 |
+| Files Analyzed | 3832 |
+| Node Coverage | 79.6% (1770909/2223899) |
+| Inference Coverage | 40.1% (303594/756584) |
+| Signature Score | 0.39 |
+| Project Methods | 48449 |
 
 > **Node Coverage** includes trivially-typed nodes (LiteralNode, SelfNode).
 > **Inference Coverage** excludes them to reflect actual type inference capability.
@@ -19,20 +19,20 @@ Generated: 2026-04-23 14:09:37
 
 | Node Type | Coverage | Typed/Total |
 |-----------|----------|-------------|
-| LiteralNode | 100.0% | 1459922/1459922 |
-| CallNode | 36.9% | 107688/291619 |
-| LocalReadNode | 36.7% | 60744/165604 |
-| ParamNode | 21.0% | 15056/71824 |
-| LocalWriteNode | 53.9% | 23610/43802 |
-| ConstantNode | 50.2% | 20905/41628 |
-| MergeNode | 53.4% | 21802/40843 |
-| InstanceVariableReadNode | 78.1% | 19199/24576 |
-| ReturnNode | 82.7% | 14748/17841 |
-| BlockParamSlot | 19.7% | 3342/16952 |
-| InstanceVariableWriteNode | 55.2% | 8921/16147 |
-| ClassModuleNode | 0.0% | 0/13352 |
-| SelfNode | 100.0% | 7123/7123 |
-| OrNode | 64.7% | 2676/4136 |
+| LiteralNode | 100.0% | 1460148/1460148 |
+| CallNode | 37.4% | 109623/293237 |
+| LocalReadNode | 36.6% | 61309/167678 |
+| ParamNode | 20.8% | 15194/72893 |
+| LocalWriteNode | 54.5% | 24055/44123 |
+| MergeNode | 53.5% | 22494/42042 |
+| ConstantNode | 50.3% | 21030/41841 |
+| InstanceVariableReadNode | 78.0% | 18989/24349 |
+| ReturnNode | 83.2% | 15591/18733 |
+| BlockParamSlot | 19.3% | 3334/17261 |
+| InstanceVariableWriteNode | 55.3% | 9063/16401 |
+| ClassModuleNode | 0.0% | 0/13542 |
+| SelfNode | 100.0% | 7167/7167 |
+| OrNode | 64.1% | 2770/4321 |
 | ClassVariableWriteNode | 84.1% | 74/88 |
 | ClassVariableReadNode | 90.7% | 68/75 |
 
