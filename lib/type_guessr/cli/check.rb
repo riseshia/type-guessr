@@ -3,14 +3,14 @@
 require "optparse"
 require "json"
 require_relative "../runtime/client"
-require_relative "../runtime/method_call_collector"
+require_relative "../runtime/index_adapter"
 
 module TypeGuessr
   module CLI
-    # Zero-candidate checker: finds variables/parameters where no class
-    # defines ALL called methods (potential NoMethodError sites).
+    # Checks project source files for potential type errors.
     #
-    # Uses RuntimeClient (ObjectSpace) for method index — no ruby-lsp dependency.
+    # Default mode: full inference engine (PrismConverter → IR → Resolver).
+    # --fast mode: lightweight method-set intersection (MethodCallCollector).
     module Check
       def self.run(argv)
         options = parse_options(argv)
@@ -18,6 +18,7 @@ module TypeGuessr
 
         log(options, "=== type-guessr check ===")
         log(options, "Project: #{project_root}")
+        log(options, "Mode: #{options[:fast] ? "fast (method-set intersection)" : "full (inference engine)"}")
 
         boot = detect_boot(project_root, options[:boot])
         case boot[:mode]
@@ -50,7 +51,26 @@ module TypeGuessr
         log(options, "Runtime: #{client.module_count} modules, #{client.method_count} methods")
         log(options, "")
 
-        log(options, "Analyzing source files...")
+        findings = if options[:fast]
+                     run_fast_mode(client, project_files, project_root, options)
+                   else
+                     run_full_mode(client, project_files, project_root, options)
+                   end
+
+        client.shutdown
+
+        if options[:json]
+          output_json(findings, project_root)
+        else
+          output_text(findings, project_files.size, fast: options[:fast])
+        end
+      end
+
+      # Fast mode: lightweight MethodCallCollector + runtime Set intersection.
+      def self.run_fast_mode(client, project_files, project_root, options)
+        require_relative "../runtime/method_call_collector"
+
+        log(options, "Analyzing source files (fast)...")
         collector = Runtime::MethodCallCollector.new
         all_findings = []
         project_files.each do |file_path|
@@ -63,23 +83,45 @@ module TypeGuessr
         log(options, "")
 
         log(options, "Checking against runtime index...")
-        zero_candidates = find_zero_candidates(client, all_findings, project_root)
-        client.shutdown
+        find_zero_candidates(client, all_findings, project_root)
+      end
 
-        if options[:json]
-          output_json(zero_candidates, project_root)
-        else
-          output_text(zero_candidates, project_files.size)
+      # Full mode: PrismConverter → IR → Resolver per file.
+      def self.run_full_mode(client, project_files, project_root, options)
+        require_relative "analyzer"
+
+        code_index = Runtime::IndexAdapter.new(client)
+
+        log(options, "Analyzing source files (full inference)...")
+        findings = Analyzer.analyze(
+          project_files,
+          code_index: code_index,
+          on_error: ->(file, e) { log(options, "  Error: #{file}: #{e.message}") }
+        )
+        log(options, "Found #{findings.size} unresolved node(s)")
+        log(options, "")
+
+        # Convert Analyzer::Finding to output hash
+        findings.map do |f|
+          rel_path = f.file.delete_prefix("#{project_root}/")
+          {
+            file: rel_path,
+            line: f.line,
+            node_type: f.node_type,
+            name: f.name,
+            reason: f.reason
+          }
         end
       end
 
       def self.parse_options(argv)
-        options = { boot: nil, json: false }
+        options = { boot: nil, json: false, fast: false }
 
         OptionParser.new do |opts|
           opts.banner = "Usage: type-guessr check [options]"
 
           opts.on("--boot=FILE", "Entrypoint file to load (e.g., config/environment.rb)") { |v| options[:boot] = v }
+          opts.on("--fast", "Fast mode: method-set intersection (less precise)") { options[:fast] = true }
           opts.on("--json", "Output in JSON format") { options[:json] = true }
           opts.on("-h", "--help", "Show this help") do
             puts opts
@@ -141,19 +183,25 @@ module TypeGuessr
         zero_candidates
       end
 
-      def self.output_text(findings, file_count)
+      def self.output_text(findings, file_count, fast: false)
         if findings.empty?
-          puts "No zero-candidate nodes found in #{file_count} project files."
+          puts "No issues found in #{file_count} project files."
           return
         end
 
-        puts "Found #{findings.size} zero-candidate node(s) in #{file_count} project files:"
+        label = fast ? "zero-candidate node" : "unresolved node"
+        puts "Found #{findings.size} #{label}(s) in #{file_count} project files:"
         puts
 
         findings.group_by { |f| f[:file] }.each do |file, file_findings|
           puts "#{file}:"
           file_findings.each do |f|
-            puts "  L#{f[:line]}  #{f[:node_type]}  #{f[:name]}  [#{f[:called_methods].join(", ")}]"
+            detail = if fast
+                       "[#{f[:called_methods].join(", ")}]"
+                     else
+                       "(#{f[:reason]})"
+                     end
+            puts "  L#{f[:line]}  #{f[:node_type]}  #{f[:name]}  #{detail}"
           end
           puts
         end
@@ -172,7 +220,8 @@ module TypeGuessr
       end
 
       private_class_method :parse_options, :detect_boot, :collect_project_files,
-                           :find_zero_candidates, :output_text, :output_json, :log
+                           :find_zero_candidates, :output_text, :output_json, :log,
+                           :run_fast_mode, :run_full_mode
     end
   end
 end
