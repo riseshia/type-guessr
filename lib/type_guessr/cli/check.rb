@@ -20,7 +20,12 @@ module TypeGuessr
         log(options, "Project: #{project_root}")
 
         boot_file = options[:boot] || detect_boot_file(project_root)
-        log(options, "Boot: #{boot_file || "(bundler/setup only)"}")
+        if boot_file
+          log(options, "Boot: #{boot_file}")
+        else
+          log(options, "Boot: (none — only gem classes available)")
+          log(options, "  Hint: create .type-guessr-boot.rb to load your app code")
+        end
         log(options, "")
 
         project_files = collect_project_files(project_root)
@@ -73,9 +78,17 @@ module TypeGuessr
         options
       end
 
+      # Boot file resolution order:
+      # 1. .type-guessr-boot.rb (project-specific boot script)
+      # 2. config/environment.rb (Rails convention)
       def self.detect_boot_file(project_root)
+        custom_boot = File.join(project_root, ".type-guessr-boot.rb")
+        return custom_boot if File.exist?(custom_boot)
+
         rails_env = File.join(project_root, "config", "environment.rb")
-        File.exist?(rails_env) ? rails_env : nil
+        return rails_env if File.exist?(rails_env)
+
+        nil
       end
 
       def self.collect_project_files(project_root)

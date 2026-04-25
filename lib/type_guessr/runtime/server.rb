@@ -31,24 +31,11 @@ boot_file = ARGV[0]
 require "bundler/setup"
 
 if boot_file
-  $stderr.puts "[runtime-server] Booting: #{boot_file}"
-  if File.exist?(boot_file)
-    require_relative boot_file
-  else
-    require boot_file
-  end
+  boot_path = File.expand_path(boot_file)
+  $stderr.puts "[runtime-server] Booting: #{boot_path}"
+  require boot_path
 else
-  lib_dir = File.join(Dir.pwd, "lib")
-  if Dir.exist?(lib_dir)
-    $stderr.puts "[runtime-server] Auto-loading lib/**/*.rb"
-    Dir.glob(File.join(lib_dir, "**", "*.rb")).sort.each do |f|
-      require f
-    rescue LoadError, StandardError => e
-      $stderr.puts "[runtime-server]   skip: #{f} (#{e.message})"
-    end
-  else
-    $stderr.puts "[runtime-server] No boot file and no lib/ directory"
-  end
+  $stderr.puts "[runtime-server] No boot file — only bundler/setup loaded"
 end
 
 # --- Build index ---
