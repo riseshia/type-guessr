@@ -625,7 +625,7 @@ RSpec.describe TypeGuessr::Core::Registry::SignatureRegistry do
   end
 
   describe "ancestor chain traversal" do
-    let(:code_index) { instance_double(RubyLsp::TypeGuessr::CodeIndexAdapter) }
+    let(:code_index) { instance_double(InferenceHelper::StubIndexAdapter) }
     let(:registry_with_index) do
       r = described_class.new(code_index: code_index)
       r.preload

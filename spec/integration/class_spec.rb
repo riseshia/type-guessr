@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 require "spec_helper"
-require "ruby_lsp/internal"
 
 # Hover rendering smoke tests — verifies LSP protocol interaction only.
 # Full type inference coverage is in spec/inference/class_inference_spec.rb.

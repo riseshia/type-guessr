@@ -8,7 +8,7 @@ require "type_guessr/core/type_simplifier"
 RSpec.describe TypeGuessr::Core::Inference::Resolver do
   let(:signature_registry) { TypeGuessr::Core::Registry::SignatureRegistry.instance.preload }
   let(:type_simplifier) { TypeGuessr::Core::TypeSimplifier.new }
-  let(:code_index) { RubyLsp::TypeGuessr::CodeIndexAdapter.new(nil) }
+  let(:code_index) { InferenceHelper::StubIndexAdapter.new }
   let(:method_registry) { TypeGuessr::Core::Registry::MethodRegistry.new }
   let(:ivar_registry) { TypeGuessr::Core::Registry::InstanceVariableRegistry.new }
   let(:cvar_registry) { TypeGuessr::Core::Registry::ClassVariableRegistry.new }
