@@ -10,25 +10,28 @@ module TypeGuessr
     # reports variables/params where type resolves to Unknown.
     module Analyzer
       Finding = Data.define(:file, :line, :name, :node_type, :inferred_type, :reason)
+      Result = Data.define(:findings, :skipped_unknown_receiver)
 
       # Analyze project files using the full inference engine.
       # @param files [Array<String>] absolute paths to .rb files
       # @param code_index [Object] CodeIndexAdapter-compatible object
-      # @return [Array<Finding>]
+      # @return [Result]
       def self.analyze(files, code_index:, on_error: nil)
         signature_registry = Core::Registry::SignatureRegistry.new
         signature_registry.preload
 
         findings = []
+        skipped_unknown_receiver = 0
 
         files.each do |file_path|
-          file_findings = analyze_file(file_path, code_index: code_index, signature_registry: signature_registry)
-          findings.concat(file_findings)
+          file_result = analyze_file(file_path, code_index: code_index, signature_registry: signature_registry)
+          findings.concat(file_result[:findings])
+          skipped_unknown_receiver += file_result[:skipped]
         rescue StandardError => e
           on_error&.call(file_path, e)
         end
 
-        findings
+        Result.new(findings: findings, skipped_unknown_receiver: skipped_unknown_receiver)
       end
 
       # Analyze a single file.
@@ -67,9 +70,12 @@ module TypeGuessr
         collect_unknown_nodes(location_index, resolver, file_path, source)
       end
 
+      SKIP_REASONS = ["parameter without type info", "unknown receiver"].freeze
+
       # Collect nodes that resolve to Unknown type.
       def self.collect_unknown_nodes(location_index, resolver, file_path, source)
         findings = []
+        skipped = 0
         lines = source.lines
 
         location_index.each_node do |node, _scope_id|
@@ -77,8 +83,12 @@ module TypeGuessr
 
           result = resolver.infer(node)
           next unless result.type.is_a?(Core::Types::Unknown)
-          # Skip ivar assignments from untyped params — expected without RBS.
-          next if result.reason.include?("parameter without type info")
+
+          # Skip expected unknowns (param assignments, unknown receiver calls).
+          if SKIP_REASONS.any? { |r| result.reason.include?(r) }
+            skipped += 1
+            next
+          end
 
           line = offset_to_line(node.loc, lines)
           findings << Finding.new(
@@ -93,7 +103,7 @@ module TypeGuessr
           # Skip nodes that cause inference errors
         end
 
-        findings
+        { findings: findings, skipped: skipped }
       end
 
       # Only check write nodes — the assignment target where type is determined.

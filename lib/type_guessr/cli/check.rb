@@ -93,16 +93,17 @@ module TypeGuessr
         code_index = Runtime::IndexAdapter.new(client)
 
         log(options, "Analyzing source files (full inference)...")
-        findings = Analyzer.analyze(
+        result = Analyzer.analyze(
           project_files,
           code_index: code_index,
           on_error: ->(file, e) { log(options, "  Error: #{file}: #{e.message}") }
         )
-        log(options, "Found #{findings.size} unresolved node(s)")
+        log(options, "Found #{result.findings.size} unresolved node(s)")
+        log(options, "  (#{result.skipped_unknown_receiver} skipped: unknown receiver / untyped params)")
         log(options, "")
 
         # Convert Analyzer::Finding to output hash
-        findings.map do |f|
+        result.findings.map do |f|
           rel_path = f.file.delete_prefix("#{project_root}/")
           {
             file: rel_path,
