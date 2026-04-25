@@ -64,7 +64,7 @@ ObjectSpace.each_object(Module) do |mod|
 
   CLASS_MAP[mod_name] = mod
 
-  mod.instance_methods(true).each do |m|
+  mod.public_instance_methods(true).each do |m|
     METHOD_INDEX[m] << mod_name
   end
 rescue StandardError
