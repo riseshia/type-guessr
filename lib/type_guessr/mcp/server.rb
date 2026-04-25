@@ -30,8 +30,12 @@ module TypeGuessr
       attr_reader :runtime
 
       # @param project_path [String] Path to the Ruby project to analyze
-      def initialize(project_path:)
+      # @param use_runtime [Boolean] Use RuntimeIndexAdapter instead of CodeIndexAdapter
+      # @param boot_file [String, nil] Boot file for runtime server (e.g., config/environment.rb)
+      def initialize(project_path:, use_runtime: false, boot_file: nil)
         @project_path = File.expand_path(project_path)
+        @use_runtime = use_runtime
+        @boot_file = boot_file
         @runtime = nil
       end
 
@@ -39,8 +43,13 @@ module TypeGuessr
       def start
         warn "[type-guessr] Initializing for project: #{@project_path}"
 
-        index = build_ruby_index
-        @runtime = build_runtime(index)
+        if @use_runtime
+          require_relative "../runtime/index_adapter"
+          @runtime = build_runtime_based
+        else
+          index = build_ruby_index
+          @runtime = build_runtime(index)
+        end
         index_project_files
         start_file_watcher
 
@@ -68,6 +77,43 @@ module TypeGuessr
 
       private def build_runtime(ruby_index)
         code_index = RubyLsp::TypeGuessr::CodeIndexAdapter.new(ruby_index)
+        signature_registry = Core::Registry::SignatureRegistry.new(code_index: code_index)
+        Core::Registry::SignatureRegistry.instance = signature_registry
+
+        method_registry = Core::Registry::MethodRegistry.new(code_index: code_index)
+        ivar_registry = Core::Registry::InstanceVariableRegistry.new(code_index: code_index)
+        cvar_registry = Core::Registry::ClassVariableRegistry.new
+        type_simplifier = Core::TypeSimplifier.new(code_index: code_index)
+
+        resolver = Core::Inference::Resolver.new(
+          signature_registry,
+          code_index: code_index,
+          method_registry: method_registry,
+          ivar_registry: ivar_registry,
+          cvar_registry: cvar_registry,
+          type_simplifier: type_simplifier
+        )
+
+        StandaloneRuntime.new(
+          converter: Core::Converter::PrismConverter.new,
+          location_index: Core::Index::LocationIndex.new,
+          signature_registry: signature_registry,
+          method_registry: method_registry,
+          ivar_registry: ivar_registry,
+          cvar_registry: cvar_registry,
+          resolver: resolver,
+          signature_builder: Core::SignatureBuilder.new(resolver),
+          code_index: code_index
+        )
+      end
+
+      private def build_runtime_based
+        warn "[type-guessr] Starting runtime server..."
+        client = Runtime::Client.new(project_path: @project_path, boot_file: @boot_file)
+        client.start
+        warn "[type-guessr] Runtime: #{client.module_count} modules, #{client.method_count} methods"
+
+        code_index = Runtime::IndexAdapter.new(client)
         signature_registry = Core::Registry::SignatureRegistry.new(code_index: code_index)
         Core::Registry::SignatureRegistry.instance = signature_registry
 
