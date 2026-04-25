@@ -55,6 +55,7 @@ end
 
 $stderr.puts "[runtime-client] Building runtime index..."
 
+OBJECT_METHODS = Object.public_instance_methods(true).to_set
 METHOD_INDEX = Hash.new { |h, k| h[k] = Set.new } # method_name (Symbol) → Set[class_name]
 CLASS_MAP = {} # class_name (String) → Module
 
@@ -65,7 +66,7 @@ ObjectSpace.each_object(Module) do |mod|
   CLASS_MAP[mod_name] = mod
 
   mod.public_instance_methods(true).each do |m|
-    METHOD_INDEX[m] << mod_name
+    METHOD_INDEX[m] << mod_name unless OBJECT_METHODS.include?(m)
   end
 rescue StandardError
   # Skip modules that cause issues (e.g., overridden .name)
@@ -75,8 +76,6 @@ $stderr.puts "[runtime-client] Ready: #{CLASS_MAP.size} modules, #{METHOD_INDEX.
 
 $stdout.puts JSON.generate({ "status" => "ready", "modules" => CLASS_MAP.size, "methods" => METHOD_INDEX.size })
 $stdout.flush
-
-OBJECT_METHODS = Object.instance_methods(true).to_set
 
 $stdin.each_line do |line|
   request = JSON.parse(line.strip)
