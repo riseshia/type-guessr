@@ -38,7 +38,6 @@ if boot_file
     require boot_file
   end
 else
-  # Auto-detect: try loading lib/**/*.rb if no boot file specified
   lib_dir = File.join(Dir.pwd, "lib")
   if Dir.exist?(lib_dir)
     $stderr.puts "[runtime-client] Auto-loading lib/**/*.rb"
@@ -56,11 +55,8 @@ end
 
 $stderr.puts "[runtime-client] Building runtime index..."
 
-# Reverse index: method_name (Symbol) → Set[class_name (String)]
-METHOD_INDEX = Hash.new { |h, k| h[k] = Set.new }
-
-# Class name → Class object for lookups
-CLASS_MAP = {}
+METHOD_INDEX = Hash.new { |h, k| h[k] = Set.new } # method_name (Symbol) → Set[class_name]
+CLASS_MAP = {} # class_name (String) → Module
 
 ObjectSpace.each_object(Module) do |mod|
   mod_name = Module.instance_method(:name).bind_call(mod)
@@ -77,11 +73,8 @@ end
 
 $stderr.puts "[runtime-client] Ready: #{CLASS_MAP.size} modules, #{METHOD_INDEX.size} methods"
 
-# Signal ready
 $stdout.puts JSON.generate({ "status" => "ready", "modules" => CLASS_MAP.size, "methods" => METHOD_INDEX.size })
 $stdout.flush
-
-# --- Query loop ---
 
 OBJECT_METHODS = Object.instance_methods(true).to_set
 
@@ -96,14 +89,15 @@ $stdin.each_line do |line|
     meaningful = methods.reject { |m| OBJECT_METHODS.include?(m) }
 
     if meaningful.empty?
-      # All methods are Object methods — not a real zero-candidate
       { "result" => [], "filtered" => "all_object_methods" }
     else
-      # Set intersection
-      candidates = meaningful.map { |m| METHOD_INDEX[m] || Set.new }
-      result = candidates.reduce(:&).to_a
+      candidates = meaningful.filter_map { |m| METHOD_INDEX.key?(m) ? METHOD_INDEX[m] : nil }
+      result = if candidates.size < meaningful.size
+                 [] # Some methods not found in any class
+               else
+                 candidates.reduce(:&).to_a
+               end
 
-      # Filter out singleton classes
       result = result.grep_v(/::<Class:[^>]+>\z/)
 
       { "result" => result }

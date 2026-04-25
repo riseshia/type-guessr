@@ -74,22 +74,13 @@ module ZeroCandidatesRT
 
     private
 
-    def walk(node, var_methods, var_locations, param_names, scope_params: Set.new)
+    def walk(node, var_methods, var_locations, param_names)
       case node
-
-      # Method definition — new scope
       when Prism::DefNode
         new_params = Set.new
-        if node.parameters
-          collect_param_names(node.parameters, new_params)
-        end
+        collect_param_names(node.parameters, new_params) if node.parameters
+        walk(node.body, var_methods, var_locations, param_names | new_params) if node.body
 
-        # Walk body with new param scope
-        if node.body
-          walk(node.body, var_methods, var_locations, param_names | new_params, scope_params: new_params)
-        end
-
-      # Block/lambda — collect block params
       when Prism::BlockNode, Prism::LambdaNode
         block_params = Set.new
         if node.parameters
@@ -99,29 +90,25 @@ module ZeroCandidatesRT
         end
 
         node.body&.child_nodes&.compact&.each do |child|
-          walk(child, var_methods, var_locations, param_names | block_params, scope_params: scope_params | block_params)
+          walk(child, var_methods, var_locations, param_names | block_params)
         end
 
-      # Method call on a local variable: `foo.bar(args)`
       when Prism::CallNode
         if node.receiver.is_a?(Prism::LocalVariableReadNode)
           var_name = node.receiver.name
-          method_name = node.name
-          var_methods[var_name] << method_name
+          var_methods[var_name] << node.name
           var_locations[var_name] ||= node.receiver.location.start_line
         end
 
-        # Also walk receiver, arguments, block for nested calls
-        walk(node.receiver, var_methods, var_locations, param_names, scope_params: scope_params) if node.receiver
+        walk(node.receiver, var_methods, var_locations, param_names) if node.receiver
         node.arguments&.arguments&.each do |arg|
-          walk(arg, var_methods, var_locations, param_names, scope_params: scope_params)
+          walk(arg, var_methods, var_locations, param_names)
         end
-        walk(node.block, var_methods, var_locations, param_names, scope_params: scope_params) if node.block
+        walk(node.block, var_methods, var_locations, param_names) if node.block
 
-      # Walk children for container nodes
       else
         node.child_nodes.compact.each do |child|
-          walk(child, var_methods, var_locations, param_names, scope_params: scope_params)
+          walk(child, var_methods, var_locations, param_names)
         end
       end
     end
@@ -133,7 +120,7 @@ module ZeroCandidatesRT
       params_node.optionals.each { |p| set << p.name if p.respond_to?(:name) }
       params_node.keywords.each { |p| set << p.name if p.respond_to?(:name) }
       set << params_node.rest.name if params_node.rest&.respond_to?(:name) && params_node.rest.name
-      set << params_node.keyword_rest.name if params_node.keyword_rest&.respond_to?(:name) && params_node.keyword_rest.respond_to?(:name) && params_node.keyword_rest.name
+      set << params_node.keyword_rest.name if params_node.keyword_rest.respond_to?(:name) && params_node.keyword_rest.name
     end
   end
 
@@ -205,7 +192,6 @@ module ZeroCandidatesRT
 
   class Runner
     def initialize(path:, boot:, json:)
-      @path = path
       @boot = boot
       @json = json
       @project_root = File.expand_path(path || Dir.pwd)
@@ -219,18 +205,15 @@ module ZeroCandidatesRT
       log "Boot: #{boot_file || "(bundler/setup only)"}"
       log
 
-      # Collect project .rb files
       project_files = collect_project_files
       log "Project files: #{project_files.size}"
       log
 
-      # Start RuntimeClient
       log "Starting RuntimeClient..."
       client = RuntimeClient.new(project_path: @project_root, boot_file: boot_file)
       client.start
       log
 
-      # Collect method calls from source
       log "Analyzing source files..."
       collector = MethodCallCollector.new
       all_findings = []
@@ -243,10 +226,8 @@ module ZeroCandidatesRT
       log "Found #{all_findings.size} variables/params with method calls"
       log
 
-      # Query RuntimeClient for each unique method set
       log "Checking against runtime index..."
       zero_candidates = []
-      # Deduplicate queries by method set
       cache = {}
 
       all_findings.each do |finding|
@@ -256,7 +237,6 @@ module ZeroCandidatesRT
         end
 
         response = cache[key]
-        # Skip if all methods were Object methods (not a real zero-candidate)
         next if response["filtered"] == "all_object_methods"
 
         classes = response["result"] || []
