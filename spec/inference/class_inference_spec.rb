@@ -3,7 +3,6 @@
 require "spec_helper"
 require "prism"
 
-# rubocop:disable RSpec/DescribeClass
 RSpec.describe "Class Instance Type Inference", :doc do
   describe ".new Call Type Inference" do
     context "Simple class" do

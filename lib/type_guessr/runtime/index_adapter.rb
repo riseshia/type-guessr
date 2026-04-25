@@ -93,7 +93,7 @@ module TypeGuessr
       end
 
       # Not available in runtime mode.
-      def method_definition_file_path(_class_name, _method_name, singleton: false)
+      def method_definition_file_path(_class_name, _method_name, singleton: false) # rubocop:disable Lint/UnusedMethodArgument
         nil
       end
 

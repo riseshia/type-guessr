@@ -43,14 +43,16 @@ module TypeGuessr
 
         ready_line = @stdout.gets
         unless ready_line
-          err_output = @stderr.read_nonblock(4096) rescue ""
+          err_output = begin
+            @stderr.read_nonblock(4096)
+          rescue StandardError
+            ""
+          end
           raise "Runtime server failed to start (no output).\nstderr: #{err_output}"
         end
 
         ready = JSON.parse(ready_line)
-        unless ready["status"] == "ready"
-          raise "Runtime server failed to start: #{ready_line}"
-        end
+        raise "Runtime server failed to start: #{ready_line}" unless ready["status"] == "ready"
 
         @module_count = ready["modules"]
         @method_count = ready["methods"]
@@ -112,9 +114,7 @@ module TypeGuessr
         # ignore
       end
 
-      private
-
-      def query_raw(method, args = {})
+      private def query_raw(method, args = {})
         request = { "method" => method, "args" => args }
         @stdin.puts JSON.generate(request)
         @stdin.flush
@@ -125,7 +125,7 @@ module TypeGuessr
         JSON.parse(response_line)
       end
 
-      def query(method, args = {})
+      private def query(method, args = {})
         query_raw(method, args)["result"]
       end
     end

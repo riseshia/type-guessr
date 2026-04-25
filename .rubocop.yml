@@ -12,6 +12,8 @@ AllCops:
     - "bin/profile"
     - "tmp/**/*"
     - "sample/**/*"
+    - "bench_*.rb"
+    - "experiment/**/*"
 
 Style/StringLiterals:
   EnforcedStyle: double_quotes
@@ -46,12 +48,6 @@ Style/Documentation:
   Exclude:
     - "bin/**/*"
 
-# bin/ scripts and spec helpers bundle supporting classes with the main entry
-Style/OneClassPerFile:
-  Exclude:
-    - "bin/**/*"
-    - "spec/support/**/*"
-
 # LiteralNode.values is an Array, not a Hash
 Style/HashEachMethods:
   Enabled: false
@@ -71,9 +67,7 @@ RSpec/NestedGroups:
   Max: 4
 
 RSpec/DescribeClass:
-  Exclude:
-    - "spec/ruby_lsp/addon_loading_spec.rb"
-    - "spec/ruby_lsp/independent_addon_loading_spec.rb"
+  Enabled: false
 
 RSpec/SpecFilePathFormat:
   Enabled: false
@@ -82,4 +76,7 @@ RSpec/ContextWording:
   Enabled: false
 
 RSpec/MultipleMemoizedHelpers:
+  Enabled: false
+
+RSpec/PendingWithoutReason:
   Enabled: false

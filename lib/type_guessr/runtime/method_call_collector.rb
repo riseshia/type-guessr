@@ -38,9 +38,7 @@ module TypeGuessr
         end
       end
 
-      private
-
-      def walk(node, var_methods, var_locations, param_names)
+      private def walk(node, var_methods, var_locations, param_names)
         case node
         when Prism::DefNode
           new_params = Set.new
@@ -55,7 +53,7 @@ module TypeGuessr
             collect_param_names(params_node, block_params) if params_node
           end
 
-          node.body&.child_nodes&.compact&.each do |child|
+          node.body&.child_nodes&.compact&.each do |child| # rubocop:disable Style/SafeNavigationChainLength
             walk(child, var_methods, var_locations, param_names | block_params)
           end
 
@@ -75,13 +73,13 @@ module TypeGuessr
         end
       end
 
-      def collect_param_names(params_node, set)
+      private def collect_param_names(params_node, set)
         return unless params_node.is_a?(Prism::ParametersNode)
 
         params_node.requireds.each { |p| set << p.name if p.respond_to?(:name) }
         params_node.optionals.each { |p| set << p.name if p.respond_to?(:name) }
         params_node.keywords.each { |p| set << p.name if p.respond_to?(:name) }
-        set << params_node.rest.name if params_node.rest&.respond_to?(:name) && params_node.rest.name
+        set << params_node.rest.name if params_node.rest.respond_to?(:name) && params_node.rest.name
         set << params_node.keyword_rest.name if params_node.keyword_rest.respond_to?(:name) && params_node.keyword_rest.name
       end
     end

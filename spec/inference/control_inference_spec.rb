@@ -3,7 +3,6 @@
 require "spec_helper"
 require "prism"
 
-# rubocop:disable RSpec/DescribeClass
 RSpec.describe "Control Flow Type Inference", :doc do
   describe "If-else branches" do
     context "ternary operator with different types" do

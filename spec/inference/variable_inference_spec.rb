@@ -3,7 +3,6 @@
 require "spec_helper"
 require "prism"
 
-# rubocop:disable RSpec/DescribeClass
 RSpec.describe "Variable Type Inference", :doc do
   describe "Instance variables" do
     context "instance variable in same class" do

@@ -26,12 +26,12 @@ module TypeGuessr
         when :boot_file
           log(options, "Boot: #{boot[:file]}")
         else
-          $stderr.puts "Error: No boot method found."
-          $stderr.puts ""
-          $stderr.puts "type-guessr needs to load your app code. Use one of:"
-          $stderr.puts "  1. Create .type-guessr-boot.rb in project root"
-          $stderr.puts "  2. Use --boot=FILE to specify an entrypoint"
-          $stderr.puts "  3. Rails projects are auto-detected via bin/rails"
+          warn "Error: No boot method found."
+          warn ""
+          warn "type-guessr needs to load your app code. Use one of:"
+          warn "  1. Create .type-guessr-boot.rb in project root"
+          warn "  2. Use --boot=FILE to specify an entrypoint"
+          warn "  3. Rails projects are auto-detected via bin/rails"
           exit 1
         end
         log(options, "")
@@ -44,7 +44,7 @@ module TypeGuessr
         client = Runtime::Client.new(
           project_path: project_root,
           boot_file: boot[:file],
-          rails: boot[:mode] == :rails,
+          rails: boot[:mode] == :rails
         )
         client.start
         log(options, "Runtime: #{client.module_count} modules, #{client.method_count} methods")
@@ -96,19 +96,13 @@ module TypeGuessr
       # 3. bin/rails runner (Rails project)
       # Returns :none if nothing found (caller should abort).
       def self.detect_boot(project_root, explicit_boot)
-        if explicit_boot
-          return { mode: :boot_file, file: File.expand_path(explicit_boot, project_root) }
-        end
+        return { mode: :boot_file, file: File.expand_path(explicit_boot, project_root) } if explicit_boot
 
         custom_boot = File.join(project_root, ".type-guessr-boot.rb")
-        if File.exist?(custom_boot)
-          return { mode: :boot_file, file: custom_boot }
-        end
+        return { mode: :boot_file, file: custom_boot } if File.exist?(custom_boot)
 
         rails_bin = File.join(project_root, "bin", "rails")
-        if File.exist?(rails_bin)
-          return { mode: :rails, file: nil }
-        end
+        return { mode: :rails, file: nil } if File.exist?(rails_bin)
 
         { mode: :none, file: nil }
       end
@@ -140,7 +134,7 @@ module TypeGuessr
             line: finding.line,
             node_type: finding.node_type,
             name: finding.name,
-            called_methods: finding.called_methods,
+            called_methods: finding.called_methods
           }
         end
 
@@ -167,14 +161,14 @@ module TypeGuessr
 
       def self.output_json(findings, project_root)
         puts JSON.pretty_generate({
-          project: project_root,
-          total: findings.size,
-          findings: findings,
-        })
+                                    project: project_root,
+                                    total: findings.size,
+                                    findings: findings
+                                  })
       end
 
       def self.log(options, msg = "")
-        $stderr.puts msg unless options[:json]
+        warn msg unless options[:json]
       end
 
       private_class_method :parse_options, :detect_boot, :collect_project_files,

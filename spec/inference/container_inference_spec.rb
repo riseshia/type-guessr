@@ -3,7 +3,6 @@
 require "spec_helper"
 require "prism"
 
-# rubocop:disable RSpec/DescribeClass
 RSpec.describe "Container Type Inference", :doc do
   describe "Array type inference" do
     context "Homogeneous integer array" do

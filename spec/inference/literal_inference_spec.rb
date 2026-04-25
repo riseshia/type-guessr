@@ -3,7 +3,6 @@
 require "spec_helper"
 require "prism"
 
-# rubocop:disable RSpec/DescribeClass
 RSpec.describe "Literal Type Inference", :doc do
   describe "Basic literals" do
     context "String literal" do

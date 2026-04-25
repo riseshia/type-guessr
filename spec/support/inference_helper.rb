@@ -17,7 +17,7 @@ module InferenceHelper
     def class_method_owner(_class_name, _method_name) = nil
     def instance_method_owner(_class_name, _method_name) = nil
     def resolve_constant_name(_short_name, _nesting) = nil
-    def method_definition_file_path(_class_name, _method_name, singleton: false) = nil
+    def method_definition_file_path(_class_name, _method_name, singleton: false) = nil # rubocop:disable Lint/UnusedMethodArgument
     def register_method_class(_class_name, _method_name) = nil
     def unregister_method_classes(_class_name) = nil
   end

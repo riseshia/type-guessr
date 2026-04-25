@@ -35,18 +35,18 @@ unless defined?(Rails)
 
   if boot_file
     boot_path = File.expand_path(boot_file)
-    $stderr.puts "[runtime-server] Booting: #{boot_path}"
+    warn "[runtime-server] Booting: #{boot_path}"
     require boot_path
   end
 end
 
 # --- Build index ---
 
-$stderr.puts "[runtime-server] Building runtime index..."
+warn "[runtime-server] Building runtime index..."
 
 OBJECT_METHODS = Object.public_instance_methods(true).to_set
 METHOD_INDEX = Hash.new { |h, k| h[k] = Set.new } # method_name (Symbol) → Set[class_name]
-CLASS_MAP = {} # class_name (String) → Module
+CLASS_MAP = {} # rubocop:disable Style/MutableConstant -- populated below
 
 ObjectSpace.each_object(Module) do |mod|
   mod_name = Module.instance_method(:name).bind_call(mod)
@@ -61,7 +61,7 @@ rescue StandardError
   # Skip modules that cause issues (e.g., overridden .name)
 end
 
-$stderr.puts "[runtime-server] Ready: #{CLASS_MAP.size} modules, #{METHOD_INDEX.size} methods"
+warn "[runtime-server] Ready: #{CLASS_MAP.size} modules, #{METHOD_INDEX.size} methods"
 
 $stdout.puts JSON.generate({ "status" => "ready", "modules" => CLASS_MAP.size, "methods" => METHOD_INDEX.size })
 $stdout.flush
@@ -72,79 +72,75 @@ $stdin.each_line do |line|
   request = JSON.parse(line.strip)
 
   response = case request["method"]
-  when "find_classes"
-    methods = (request.dig("args", "methods") || []).map(&:to_sym)
+             when "find_classes"
+               methods = (request.dig("args", "methods") || []).map(&:to_sym)
 
-    meaningful = methods.reject { |m| OBJECT_METHODS.include?(m) }
+               meaningful = methods.reject { |m| OBJECT_METHODS.include?(m) }
 
-    if meaningful.empty?
-      { "result" => [], "filtered" => "all_object_methods" }
-    else
-      candidates = meaningful.filter_map { |m| METHOD_INDEX.key?(m) ? METHOD_INDEX[m] : nil }
-      result = if candidates.size < meaningful.size
-                 []
+               if meaningful.empty?
+                 { "result" => [], "filtered" => "all_object_methods" }
                else
-                 candidates.reduce(:&).to_a
+                 candidates = meaningful.filter_map { |m| METHOD_INDEX.key?(m) ? METHOD_INDEX[m] : nil }
+                 result = if candidates.size < meaningful.size
+                            []
+                          else
+                            candidates.reduce(:&).to_a
+                          end
+
+                 result = result.grep_v(/::<Class:[^>]+>\z/)
+
+                 { "result" => result }
                end
 
-      result = result.grep_v(/::<Class:[^>]+>\z/)
+             when "ancestors"
+               class_name = request.dig("args", "class_name")
+               klass = CLASS_MAP[class_name]
+               if klass
+                 { "result" => klass.ancestors.filter_map(&:name) }
+               else
+                 { "result" => [] }
+               end
 
-      { "result" => result }
-    end
+             when "constant_kind"
+               name = request.dig("args", "name")
+               mod = CLASS_MAP[name]
+               kind = if mod.nil?
+                        nil
+                      elsif mod.is_a?(Class)
+                        "class"
+                      else
+                        "module"
+                      end
+               { "result" => kind }
 
-  when "ancestors"
-    class_name = request.dig("args", "class_name")
-    klass = CLASS_MAP[class_name]
-    if klass
-      { "result" => klass.ancestors.filter_map(&:name) }
-    else
-      { "result" => [] }
-    end
+             when "method_defined?"
+               class_name = request.dig("args", "class_name")
+               method_name = request.dig("args", "method_name")
+               klass = CLASS_MAP[class_name]
+               { "result" => klass&.method_defined?(method_name.to_sym) || false }
 
-  when "constant_kind"
-    name = request.dig("args", "name")
-    mod = CLASS_MAP[name]
-    kind = if mod.nil?
-             nil
-           elsif mod.is_a?(Class)
-             "class"
-           else
-             "module"
-           end
-    { "result" => kind }
+             when "class_method_owner"
+               class_name = request.dig("args", "class_name")
+               method_name = request.dig("args", "method_name")
+               klass = CLASS_MAP[class_name]
+               owner = (klass.method(method_name.to_sym).owner.name if klass.respond_to?(method_name.to_sym))
+               { "result" => owner }
 
-  when "method_defined?"
-    class_name = request.dig("args", "class_name")
-    method_name = request.dig("args", "method_name")
-    klass = CLASS_MAP[class_name]
-    { "result" => klass&.method_defined?(method_name.to_sym) || false }
+             when "instance_method_owner"
+               class_name = request.dig("args", "class_name")
+               method_name = request.dig("args", "method_name")
+               klass = CLASS_MAP[class_name]
+               owner = (klass.instance_method(method_name.to_sym).owner.name if klass&.method_defined?(method_name.to_sym))
+               { "result" => owner }
 
-  when "class_method_owner"
-    class_name = request.dig("args", "class_name")
-    method_name = request.dig("args", "method_name")
-    klass = CLASS_MAP[class_name]
-    owner = if klass&.respond_to?(method_name.to_sym)
-              klass.method(method_name.to_sym).owner.name
-            end
-    { "result" => owner }
+             when "shutdown"
+               $stdout.puts JSON.generate({ "result" => "bye" })
+               $stdout.flush
+               exit 0
 
-  when "instance_method_owner"
-    class_name = request.dig("args", "class_name")
-    method_name = request.dig("args", "method_name")
-    klass = CLASS_MAP[class_name]
-    owner = if klass&.method_defined?(method_name.to_sym)
-              klass.instance_method(method_name.to_sym).owner.name
-            end
-    { "result" => owner }
-
-  when "shutdown"
-    $stdout.puts JSON.generate({ "result" => "bye" })
-    $stdout.flush
-    exit 0
-
-  else
-    { "error" => "unknown method: #{request["method"]}" }
-  end
+             else
+               { "error" => "unknown method: #{request["method"]}" }
+             end
 
   $stdout.puts JSON.generate(response)
   $stdout.flush
