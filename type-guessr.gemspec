@@ -8,8 +8,8 @@ Gem::Specification.new do |spec|
   spec.authors = ["riseshia"]
   spec.email = [""]
 
-  spec.summary = "A heuristic type inference tool for Ruby"
-  spec.description = "TypeGuessr provides heuristic type inference"
+  spec.summary = "A heuristic type inference CLI for Ruby"
+  spec.description = "TypeGuessr detects potential NoMethodError sites via duck-type inference"
   spec.homepage = "https://github.com/riseshia/type-guessr"
   spec.required_ruby_version = ">= 3.3.0"
 
@@ -32,8 +32,7 @@ Gem::Specification.new do |spec|
   spec.executables = spec.files.grep(%r{\Aexe/}) { |f| File.basename(f) }
   spec.require_paths = ["lib"]
 
-  spec.add_dependency "mcp", "~> 0.6"
-  spec.add_dependency "ruby-lsp", "~> 0.22"
+  spec.add_dependency "prism"
 
   # For more information and examples about making a new gem, check out our
   # guide at: https://bundler.io/guides/creating_gem.html
