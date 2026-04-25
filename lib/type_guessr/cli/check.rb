@@ -15,15 +15,17 @@ module TypeGuessr
       def self.run(argv)
         options = parse_options(argv)
         project_root = File.expand_path(options[:path] || Dir.pwd)
+        scan_path = File.expand_path(options[:scan] || project_root)
 
         log(options, "=== type-guessr check ===")
         log(options, "Project: #{project_root}")
+        log(options, "Scan: #{scan_path}") if scan_path != project_root
 
         boot_file = options[:boot] || detect_boot_file(project_root)
         log(options, "Boot: #{boot_file || "(bundler/setup only)"}")
         log(options, "")
 
-        project_files = collect_project_files(project_root)
+        project_files = collect_project_files(scan_path)
         log(options, "Project files: #{project_files.size}")
         log(options, "")
 
@@ -57,12 +59,13 @@ module TypeGuessr
       end
 
       def self.parse_options(argv)
-        options = { path: nil, boot: nil, json: false }
+        options = { path: nil, scan: nil, boot: nil, json: false }
 
         OptionParser.new do |opts|
           opts.banner = "Usage: type-guessr check [options]"
 
-          opts.on("--path=PATH", "Project directory to analyze") { |v| options[:path] = v }
+          opts.on("--path=PATH", "Project root (where Gemfile is)") { |v| options[:path] = v }
+          opts.on("--scan=DIR", "Directory to scan (default: project root)") { |v| options[:scan] = v }
           opts.on("--boot=FILE", "Boot file for runtime server") { |v| options[:boot] = v }
           opts.on("--json", "Output in JSON format") { options[:json] = true }
           opts.on("-h", "--help", "Show this help") do
