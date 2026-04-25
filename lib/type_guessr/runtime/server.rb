@@ -37,8 +37,6 @@ unless defined?(Rails)
     boot_path = File.expand_path(boot_file)
     $stderr.puts "[runtime-server] Booting: #{boot_path}"
     require boot_path
-  else
-    $stderr.puts "[runtime-server] No boot file — only bundler/setup loaded"
   end
 end
 

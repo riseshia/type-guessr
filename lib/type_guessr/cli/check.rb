@@ -26,8 +26,13 @@ module TypeGuessr
         when :boot_file
           log(options, "Boot: #{boot[:file]}")
         else
-          log(options, "Boot: (none — only gem classes available)")
-          log(options, "  Hint: create .type-guessr-boot.rb to load your app code")
+          $stderr.puts "Error: No boot method found."
+          $stderr.puts ""
+          $stderr.puts "type-guessr needs to load your app code. Use one of:"
+          $stderr.puts "  1. Create .type-guessr-boot.rb in project root"
+          $stderr.puts "  2. Use --boot=FILE to specify an entrypoint"
+          $stderr.puts "  3. Rails projects are auto-detected via bin/rails"
+          exit 1
         end
         log(options, "")
 
@@ -89,7 +94,7 @@ module TypeGuessr
       # 1. --boot flag (explicit boot file)
       # 2. .type-guessr-boot.rb (project-specific boot script)
       # 3. bin/rails runner (Rails project)
-      # 4. bundler/setup only (no app code)
+      # Returns :none if nothing found (caller should abort).
       def self.detect_boot(project_root, explicit_boot)
         if explicit_boot
           return { mode: :boot_file, file: File.expand_path(explicit_boot, project_root) }
