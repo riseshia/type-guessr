@@ -1,0 +1,364 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Zero-Candidate Finder (Runtime PoC)
+#
+# Uses RuntimeClient subprocess for method index (no ruby-lsp dependency).
+# Prism for static analysis only.
+#
+# Usage:
+#   bin/zero-candidates-rt [options]
+#
+# Options:
+#   --path=PATH    Project directory to analyze (default: current)
+#   --boot=FILE    Boot file for RuntimeClient (default: auto-detect)
+#   --json         Output in JSON format
+#
+# Examples:
+#   bin/zero-candidates-rt                                      # Analyze current project
+#   bin/zero-candidates-rt --path=/path/to/project              # Another project
+#   bin/zero-candidates-rt --boot=config/environment.rb         # Rails project
+#   bin/zero-candidates-rt --json                               # Machine-readable
+
+require "bundler/setup"
+require "prism"
+require "optparse"
+require "json"
+require "open3"
+
+module ZeroCandidatesRT
+  # Simple Prism walker to extract called methods per variable/parameter.
+  # No IR, no Resolver — just Prism AST walking to find:
+  #   1. Method parameters
+  #   2. Local variables
+  # and the methods called on them.
+  class MethodCallCollector
+    Finding = Data.define(:file, :line, :name, :node_type, :called_methods)
+
+    def initialize
+      @findings = []
+    end
+
+    # Collect variable/parameter method calls from a file
+    # @param file_path [String]
+    # @param source [String]
+    # @return [Array<Finding>]
+    def collect(file_path, source)
+      parsed = Prism.parse(source)
+      return [] unless parsed.value
+
+      # Track: variable_name → Set[method_names called on it]
+      var_methods = Hash.new { |h, k| h[k] = Set.new }
+      # Track: variable_name → first location (line)
+      var_locations = {}
+      # Track: parameter names from method defs
+      param_names = Set.new
+
+      walk(parsed.value, var_methods, var_locations, param_names)
+
+      findings = []
+      var_methods.each do |var_name, methods|
+        next if methods.empty?
+
+        findings << Finding.new(
+          file: file_path,
+          line: var_locations[var_name],
+          name: var_name.to_s,
+          node_type: param_names.include?(var_name) ? "ParamNode" : "LocalVariable",
+          called_methods: methods.to_a.map(&:to_s)
+        )
+      end
+
+      findings
+    end
+
+    private
+
+    def walk(node, var_methods, var_locations, param_names, scope_params: Set.new)
+      case node
+
+      # Method definition — new scope
+      when Prism::DefNode
+        new_params = Set.new
+        if node.parameters
+          collect_param_names(node.parameters, new_params)
+        end
+
+        # Walk body with new param scope
+        if node.body
+          walk(node.body, var_methods, var_locations, param_names | new_params, scope_params: new_params)
+        end
+
+      # Block/lambda — collect block params
+      when Prism::BlockNode, Prism::LambdaNode
+        block_params = Set.new
+        if node.parameters
+          params_node = node.parameters
+          params_node = params_node.parameters if params_node.is_a?(Prism::BlockParametersNode)
+          collect_param_names(params_node, block_params) if params_node
+        end
+
+        node.body&.child_nodes&.compact&.each do |child|
+          walk(child, var_methods, var_locations, param_names | block_params, scope_params: scope_params | block_params)
+        end
+
+      # Method call on a local variable: `foo.bar(args)`
+      when Prism::CallNode
+        if node.receiver.is_a?(Prism::LocalVariableReadNode)
+          var_name = node.receiver.name
+          method_name = node.name
+          var_methods[var_name] << method_name
+          var_locations[var_name] ||= node.receiver.location.start_line
+        end
+
+        # Also walk receiver, arguments, block for nested calls
+        walk(node.receiver, var_methods, var_locations, param_names, scope_params: scope_params) if node.receiver
+        node.arguments&.arguments&.each do |arg|
+          walk(arg, var_methods, var_locations, param_names, scope_params: scope_params)
+        end
+        walk(node.block, var_methods, var_locations, param_names, scope_params: scope_params) if node.block
+
+      # Walk children for container nodes
+      else
+        node.child_nodes.compact.each do |child|
+          walk(child, var_methods, var_locations, param_names, scope_params: scope_params)
+        end
+      end
+    end
+
+    def collect_param_names(params_node, set)
+      return unless params_node.is_a?(Prism::ParametersNode)
+
+      params_node.requireds.each { |p| set << p.name if p.respond_to?(:name) }
+      params_node.optionals.each { |p| set << p.name if p.respond_to?(:name) }
+      params_node.keywords.each { |p| set << p.name if p.respond_to?(:name) }
+      set << params_node.rest.name if params_node.rest&.respond_to?(:name) && params_node.rest.name
+      set << params_node.keyword_rest.name if params_node.keyword_rest&.respond_to?(:name) && params_node.keyword_rest.respond_to?(:name) && params_node.keyword_rest.name
+    end
+  end
+
+  # Client that communicates with RuntimeClient subprocess
+  class RuntimeClient
+    def initialize(project_path:, boot_file:)
+      @project_path = project_path
+      @boot_file = boot_file
+    end
+
+    def start
+      client_path = File.expand_path("../runtime-client", __FILE__)
+
+      cmd = ["bundle", "exec", "ruby", client_path]
+      cmd << @boot_file if @boot_file
+
+      env = ENV.to_h.reject { |k, _| k.start_with?("BUNDLE_", "RUBYGEMS_", "GEM_") }
+      env["BUNDLE_GEMFILE"] = File.join(@project_path, "Gemfile")
+
+      @stdin, @stdout, @stderr, @wait_thread = Open3.popen3(env, *cmd, chdir: @project_path)
+
+      # Wait for ready signal
+      ready_line = @stdout.gets
+      unless ready_line
+        err_output = @stderr.read_nonblock(4096) rescue ""
+        raise "RuntimeClient failed to start (no output).\nstderr: #{err_output}"
+      end
+
+      ready = JSON.parse(ready_line)
+      unless ready["status"] == "ready"
+        raise "RuntimeClient failed to start: #{ready_line}"
+      end
+
+      $stderr.puts "[zero-candidates-rt] RuntimeClient: #{ready["modules"]} modules, #{ready["methods"]} methods"
+    end
+
+    # @return [Hash] { "result" => [...], "filtered" => nil|"all_object_methods" }
+    def find_classes(methods)
+      query_raw("find_classes", { "methods" => methods })
+    end
+
+    def shutdown
+      query("shutdown")
+      @stdin.close
+      @stdout.close
+      @stderr.close
+      @wait_thread.join
+    rescue StandardError
+      # ignore
+    end
+
+    private
+
+    def query_raw(method, args = {})
+      request = { "method" => method, "args" => args }
+      @stdin.puts JSON.generate(request)
+      @stdin.flush
+
+      response_line = @stdout.gets
+      return {} unless response_line
+
+      JSON.parse(response_line)
+    end
+
+    def query(method, args = {})
+      query_raw(method, args)["result"]
+    end
+  end
+
+  class Runner
+    def initialize(path:, boot:, json:)
+      @path = path
+      @boot = boot
+      @json = json
+      @project_root = File.expand_path(path || Dir.pwd)
+    end
+
+    def run
+      log "=== Zero-Candidate Finder (Runtime) ==="
+      log "Project: #{@project_root}"
+
+      boot_file = detect_boot_file
+      log "Boot: #{boot_file || "(bundler/setup only)"}"
+      log
+
+      # Collect project .rb files
+      project_files = collect_project_files
+      log "Project files: #{project_files.size}"
+      log
+
+      # Start RuntimeClient
+      log "Starting RuntimeClient..."
+      client = RuntimeClient.new(project_path: @project_root, boot_file: boot_file)
+      client.start
+      log
+
+      # Collect method calls from source
+      log "Analyzing source files..."
+      collector = MethodCallCollector.new
+      all_findings = []
+      project_files.each do |file_path|
+        source = File.read(file_path)
+        all_findings.concat(collector.collect(file_path, source))
+      rescue StandardError => e
+        log "  Error: #{file_path}: #{e.message}"
+      end
+      log "Found #{all_findings.size} variables/params with method calls"
+      log
+
+      # Query RuntimeClient for each unique method set
+      log "Checking against runtime index..."
+      zero_candidates = []
+      # Deduplicate queries by method set
+      cache = {}
+
+      all_findings.each do |finding|
+        key = finding.called_methods.sort
+        unless cache.key?(key)
+          cache[key] = client.find_classes(finding.called_methods)
+        end
+
+        response = cache[key]
+        # Skip if all methods were Object methods (not a real zero-candidate)
+        next if response["filtered"] == "all_object_methods"
+
+        classes = response["result"] || []
+        if classes.empty?
+          rel_path = finding.file.delete_prefix("#{@project_root}/")
+          zero_candidates << {
+            file: rel_path,
+            line: finding.line,
+            node_type: finding.node_type,
+            name: finding.name,
+            called_methods: finding.called_methods,
+          }
+        end
+      end
+
+      client.shutdown
+
+      if @json
+        output_json(zero_candidates)
+      else
+        output_text(zero_candidates, project_files.size)
+      end
+    end
+
+    private
+
+    def log(msg = "")
+      $stderr.puts msg unless @json
+    end
+
+    def detect_boot_file
+      return @boot if @boot
+
+      # Auto-detect Rails
+      rails_env = File.join(@project_root, "config", "environment.rb")
+      return rails_env if File.exist?(rails_env)
+
+      nil
+    end
+
+    def collect_project_files
+      Dir.glob(File.join(@project_root, "**", "*.rb"))
+         .reject { |f| f.include?("/vendor/") || f.include?("/node_modules/") }
+         .reject { |f| f.include?("/spec/") || f.include?("/test/") }
+         .sort
+    end
+
+    def output_text(findings, file_count)
+      if findings.empty?
+        puts "No zero-candidate nodes found in #{file_count} project files."
+        return
+      end
+
+      puts "Found #{findings.size} zero-candidate node(s) in #{file_count} project files:"
+      puts
+
+      findings.group_by { |f| f[:file] }.each do |file, file_findings|
+        puts "#{file}:"
+        file_findings.each do |f|
+          puts "  L#{f[:line]}  #{f[:node_type]}  #{f[:name]}  [#{f[:called_methods].join(", ")}]"
+        end
+        puts
+      end
+    end
+
+    def output_json(findings)
+      puts JSON.pretty_generate({
+        project: @project_root,
+        total: findings.size,
+        findings: findings,
+      })
+    end
+  end
+end
+
+# --- CLI ---
+
+options = { path: nil, boot: nil, json: false }
+
+OptionParser.new do |opts|
+  opts.banner = "Usage: #{$PROGRAM_NAME} [options]"
+
+  opts.on("--path=PATH", "Project directory to analyze") do |v|
+    options[:path] = File.expand_path(v)
+  end
+
+  opts.on("--boot=FILE", "Boot file for RuntimeClient (e.g. config/environment.rb)") do |v|
+    options[:boot] = v
+  end
+
+  opts.on("--json", "Output in JSON format") do
+    options[:json] = true
+  end
+
+  opts.on("-h", "--help", "Show this help") do
+    puts opts
+    exit
+  end
+end.parse!
+
+ZeroCandidatesRT::Runner.new(
+  path: options[:path],
+  boot: options[:boot],
+  json: options[:json]
+).run
