@@ -6,25 +6,6 @@ require "bundler/setup"
 command = ARGV[0]
 
 case command
-when "mcp"
-  mcp_args = ARGV[1..]
-  use_runtime = mcp_args.delete("--runtime")
-  boot_file = nil
-  mcp_args.reject! do |arg|
-    if arg.start_with?("--boot=")
-      boot_file = arg.delete_prefix("--boot=")
-      true
-    end
-  end
-  project_path = mcp_args.first || Dir.pwd
-
-  require_relative "../lib/type_guessr/mcp/server"
-  server = TypeGuessr::MCP::Server.new(
-    project_path: project_path,
-    use_runtime: !!use_runtime,
-    boot_file: boot_file
-  )
-  server.start
 when "check"
   require_relative "../lib/type_guessr/cli/check"
   TypeGuessr::CLI::Check.run(ARGV[1..])
@@ -37,7 +18,6 @@ when "help", "--help", "-h", nil
 
     Commands:
       check [options]      Find zero-candidate nodes (potential NoMethodError sites)
-      mcp [project_path]   Start MCP server for the given project (default: current directory)
       version              Show version
       help                 Show this help
 
@@ -45,10 +25,6 @@ when "help", "--help", "-h", nil
       --path=PATH          Project directory to analyze (default: current)
       --boot=FILE          Boot file for runtime server (e.g., config/environment.rb)
       --json               Output in JSON format
-
-    MCP options:
-      --runtime            Use runtime index (ObjectSpace) instead of RubyIndexer
-      --boot=FILE          Boot file for runtime server (with --runtime)
   USAGE
 else
   warn "Unknown command: #{command}"
