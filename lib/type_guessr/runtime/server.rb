@@ -26,16 +26,20 @@ require "json"
 
 # --- Boot ---
 
-boot_file = ARGV[0]
+# When launched via `rails runner`, the app is already loaded.
+# Otherwise, require bundler/setup and optionally a boot file.
+unless defined?(Rails)
+  boot_file = ARGV[0]
 
-require "bundler/setup"
+  require "bundler/setup"
 
-if boot_file
-  boot_path = File.expand_path(boot_file)
-  $stderr.puts "[runtime-server] Booting: #{boot_path}"
-  require boot_path
-else
-  $stderr.puts "[runtime-server] No boot file — only bundler/setup loaded"
+  if boot_file
+    boot_path = File.expand_path(boot_file)
+    $stderr.puts "[runtime-server] Booting: #{boot_path}"
+    require boot_path
+  else
+    $stderr.puts "[runtime-server] No boot file — only bundler/setup loaded"
+  end
 end
 
 # --- Build index ---

@@ -19,9 +19,12 @@ module TypeGuessr
         log(options, "=== type-guessr check ===")
         log(options, "Project: #{project_root}")
 
-        boot_file = options[:boot] || detect_boot_file(project_root)
-        if boot_file
-          log(options, "Boot: #{boot_file}")
+        boot = detect_boot(project_root, options[:boot])
+        case boot[:mode]
+        when :rails
+          log(options, "Boot: bin/rails runner")
+        when :boot_file
+          log(options, "Boot: #{boot[:file]}")
         else
           log(options, "Boot: (none — only gem classes available)")
           log(options, "  Hint: create .type-guessr-boot.rb to load your app code")
@@ -33,7 +36,11 @@ module TypeGuessr
         log(options, "")
 
         log(options, "Starting runtime server...")
-        client = Runtime::Client.new(project_path: project_root, boot_file: boot_file)
+        client = Runtime::Client.new(
+          project_path: project_root,
+          boot_file: boot[:file],
+          rails: boot[:mode] == :rails,
+        )
         client.start
         log(options, "Runtime: #{client.module_count} modules, #{client.method_count} methods")
         log(options, "")
@@ -78,17 +85,27 @@ module TypeGuessr
         options
       end
 
-      # Boot file resolution order:
-      # 1. .type-guessr-boot.rb (project-specific boot script)
-      # 2. config/environment.rb (Rails convention)
-      def self.detect_boot_file(project_root)
+      # Boot resolution order:
+      # 1. --boot flag (explicit boot file)
+      # 2. .type-guessr-boot.rb (project-specific boot script)
+      # 3. bin/rails runner (Rails project)
+      # 4. bundler/setup only (no app code)
+      def self.detect_boot(project_root, explicit_boot)
+        if explicit_boot
+          return { mode: :boot_file, file: File.expand_path(explicit_boot, project_root) }
+        end
+
         custom_boot = File.join(project_root, ".type-guessr-boot.rb")
-        return custom_boot if File.exist?(custom_boot)
+        if File.exist?(custom_boot)
+          return { mode: :boot_file, file: custom_boot }
+        end
 
-        rails_env = File.join(project_root, "config", "environment.rb")
-        return rails_env if File.exist?(rails_env)
+        rails_bin = File.join(project_root, "bin", "rails")
+        if File.exist?(rails_bin)
+          return { mode: :rails, file: nil }
+        end
 
-        nil
+        { mode: :none, file: nil }
       end
 
       def self.collect_project_files(project_root)
@@ -155,7 +172,7 @@ module TypeGuessr
         $stderr.puts msg unless options[:json]
       end
 
-      private_class_method :parse_options, :detect_boot_file, :collect_project_files,
+      private_class_method :parse_options, :detect_boot, :collect_project_files,
                            :find_zero_candidates, :output_text, :output_json, :log
     end
   end

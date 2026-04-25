@@ -14,10 +14,12 @@ module TypeGuessr
       attr_reader :module_count, :method_count
 
       # @param project_path [String] Absolute path to the target project
-      # @param boot_file [String, nil] Boot file for the server (e.g., config/environment.rb)
-      def initialize(project_path:, boot_file: nil)
+      # @param boot_file [String, nil] Boot file for the server
+      # @param rails [Boolean] Use `bin/rails runner` to launch the server
+      def initialize(project_path:, boot_file: nil, rails: false)
         @project_path = project_path
         @boot_file = boot_file
+        @rails = rails
         @module_count = 0
         @method_count = 0
       end
@@ -27,8 +29,12 @@ module TypeGuessr
       def start
         server_path = File.expand_path("server.rb", __dir__)
 
-        cmd = ["bundle", "exec", "ruby", server_path]
-        cmd << @boot_file if @boot_file
+        if @rails
+          cmd = ["bin/rails", "runner", server_path]
+        else
+          cmd = ["bundle", "exec", "ruby", server_path]
+          cmd << @boot_file if @boot_file
+        end
 
         env = ENV.to_h.reject { |k, _| k.start_with?("BUNDLE_", "RUBYGEMS_", "GEM_") }
         env["BUNDLE_GEMFILE"] = File.join(@project_path, "Gemfile")
