@@ -6,11 +6,9 @@ require "bundler/setup"
 command = ARGV[0]
 
 case command
-when "mcp"
-  project_path = ARGV[1] || Dir.pwd
-  require_relative "../lib/type_guessr/mcp/server"
-  server = TypeGuessr::MCP::Server.new(project_path: project_path)
-  server.start
+when "check"
+  require_relative "../lib/type_guessr/cli/check"
+  TypeGuessr::CLI::Check.run(ARGV[1..])
 when "version", "--version", "-v"
   require_relative "../lib/type_guessr/version"
   puts "type-guessr #{TypeGuessr::VERSION}"
@@ -19,9 +17,14 @@ when "help", "--help", "-h", nil
     Usage: type-guessr <command> [options]
 
     Commands:
-      mcp [project_path]   Start MCP server for the given project (default: current directory)
+      check [options]      Find zero-candidate nodes (potential NoMethodError sites)
       version              Show version
       help                 Show this help
+
+    Check options:
+      --path=PATH          Project directory to analyze (default: current)
+      --boot=FILE          Boot file for runtime server (e.g., config/environment.rb)
+      --json               Output in JSON format
   USAGE
 else
   warn "Unknown command: #{command}"

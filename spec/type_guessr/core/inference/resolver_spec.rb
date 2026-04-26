@@ -8,7 +8,7 @@ require "type_guessr/core/type_simplifier"
 RSpec.describe TypeGuessr::Core::Inference::Resolver do
   let(:signature_registry) { TypeGuessr::Core::Registry::SignatureRegistry.instance.preload }
   let(:type_simplifier) { TypeGuessr::Core::TypeSimplifier.new }
-  let(:code_index) { RubyLsp::TypeGuessr::CodeIndexAdapter.new(nil) }
+  let(:code_index) { InferenceHelper::StubIndexAdapter.new }
   let(:method_registry) { TypeGuessr::Core::Registry::MethodRegistry.new }
   let(:ivar_registry) { TypeGuessr::Core::Registry::InstanceVariableRegistry.new }
   let(:cvar_registry) { TypeGuessr::Core::Registry::ClassVariableRegistry.new }
@@ -182,7 +182,7 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
         expect(result.reason).to eq("parameter without type info")
       end
 
-      it "returns Unknown when called methods cannot be resolved" do
+      it "returns Never when called methods have zero candidates" do
         called = [
           TypeGuessr::Core::IR::CalledMethod.new(name: :comments, positional_count: nil, keywords: []),
           TypeGuessr::Core::IR::CalledMethod.new(name: :title, positional_count: nil, keywords: []),
@@ -196,8 +196,8 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
         )
 
         result = resolver.infer(param)
-        expect(result.type).to be(TypeGuessr::Core::Types::Unknown.instance)
-        expect(result.reason).to include("unresolved methods")
+        expect(result.type).to be(TypeGuessr::Core::Types::Never.instance)
+        expect(result.reason).to include("inferred from")
       end
     end
 
@@ -619,7 +619,7 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
         expect(result.source).to eq(:project)
       end
 
-      it "returns Unknown with unresolved reason when called_methods cannot be resolved" do
+      it "returns Never when called_methods have zero candidates" do
         # No mock on code_index — will return empty by default
         unknown_receiver = TypeGuessr::Core::IR::LocalWriteNode.new(
           :items,
@@ -646,8 +646,8 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
         )
 
         result = resolver.infer(slot)
-        expect(result.type).to be(TypeGuessr::Core::Types::Unknown.instance)
-        expect(result.reason).to include("unresolved methods")
+        expect(result.type).to be(TypeGuessr::Core::Types::Never.instance)
+        expect(result.reason).to include("inferred from")
       end
     end
 
@@ -1197,9 +1197,9 @@ RSpec.describe TypeGuessr::Core::Inference::Resolver do
   end
 
   describe "#classes_to_type" do
-    it "returns Unknown for empty list" do
+    it "returns Never for empty list (zero candidates)" do
       result = resolver.classes_to_type([])
-      expect(result).to eq(TypeGuessr::Core::Types::Unknown.instance)
+      expect(result).to eq(TypeGuessr::Core::Types::Never.instance)
     end
 
     it "returns ClassInstance for single class" do

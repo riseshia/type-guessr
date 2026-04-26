@@ -1,9 +1,27 @@
 # frozen_string_literal: true
 
 # Lightweight type inference helper for tests.
-# Runs the full TypeGuessr pipeline (parse → IR → resolve) WITHOUT an LSP server.
-# Uses a standalone RubyIndexer::Index for duck-typing support.
+# Runs the full TypeGuessr pipeline (parse → IR → resolve) using a
+# stub index adapter (no subprocess needed).
 module InferenceHelper
+  # Minimal stub that satisfies the CodeIndexAdapter interface for tests.
+  # Does not resolve duck-typing or ancestors — tests that need those
+  # should use a RuntimeIndexAdapter with a real subprocess.
+  class StubIndexAdapter
+    def build_member_index!; end
+    def refresh_member_index!(_file_uri = nil); end
+    def member_entries_for_file(_file_path) = []
+    def find_classes_defining_methods(_called_methods) = []
+    def ancestors_of(_class_name) = []
+    def constant_kind(_name) = nil
+    def class_method_owner(_class_name, _method_name) = nil
+    def instance_method_owner(_class_name, _method_name) = nil
+    def resolve_constant_name(_short_name, _nesting) = nil
+    def method_definition_file_path(_class_name, _method_name, singleton: false) = nil # rubocop:disable Lint/UnusedMethodArgument
+    def register_method_class(_class_name, _method_name) = nil
+    def unregister_method_classes(_class_name) = nil
+  end
+
   class << self
     def shared_signature_registry
       @shared_signature_registry ||= begin
@@ -77,12 +95,7 @@ module InferenceHelper
   private def build_pipeline(source)
     file_path = "/tmp/inference_test.rb"
 
-    index = RubyIndexer::Index.new
-    uri = URI::Generic.build(scheme: "file", path: file_path)
-    index.index_single(uri, source)
-
-    code_index = RubyLsp::TypeGuessr::CodeIndexAdapter.new(index)
-    code_index.build_member_index!
+    code_index = StubIndexAdapter.new
 
     converter = TypeGuessr::Core::Converter::PrismConverter.new
     location_index = TypeGuessr::Core::Index::LocationIndex.new
@@ -116,10 +129,8 @@ module InferenceHelper
   end
 
   private def build_call_signature(call_node, pipeline)
-    # Resolve receiver type to find the target method's DefNode
     method_name = call_node.method.to_s
 
-    # For .new calls, look up initialize
     if method_name == "new" && call_node.receiver
       class_result = pipeline[:resolver].infer(call_node.receiver)
       class_name = class_result.type.respond_to?(:name) ? class_result.type.name : class_result.type.to_s
@@ -128,13 +139,11 @@ module InferenceHelper
       sig_builder = TypeGuessr::Core::SignatureBuilder.new(pipeline[:resolver])
       if def_node
         sig = sig_builder.build_from_def_node(def_node)
-        # Replace return type with the class instance type
         return TypeGuessr::Core::Types::MethodSignature.new(
           sig.params, TypeGuessr::Core::Types::ClassInstance.new(class_name)
         )
       end
 
-      # No initialize → () -> ClassName
       return TypeGuessr::Core::Types::MethodSignature.new(
         [], TypeGuessr::Core::Types::ClassInstance.new(class_name)
       )

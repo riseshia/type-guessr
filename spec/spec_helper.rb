@@ -2,9 +2,6 @@
 
 $LOAD_PATH.unshift File.expand_path("../lib", __dir__)
 require "type-guessr"
-# Load addon for integration tests (normally auto-discovered by Ruby LSP)
-require "ruby_lsp/type_guessr/addon"
-require "ruby_lsp/test_helper"
 require "uri"
 
 # Load all support files dynamically
@@ -16,16 +13,9 @@ RSpec.configure do |config|
     registry = TypeGuessr::Core::Registry::SignatureRegistry.new
     registry.preload
     TypeGuessr::Core::Registry::SignatureRegistry.instance = registry
-
-    # Start E2E server if E2E tests are being run
-    SharedLspServer.instance if config.filter.rules[:e2e] || ARGV.any? { |arg| arg.include?("e2e") }
   end
 
-  config.after(:suite) do
-    SharedLspServer.shutdown!
-  end
-
-  # Disable debug logging and server for all tests
+  # Disable debug logging for all tests
   config.before do
     allow(TypeGuessr::Core::Config).to receive_messages(
       debug?: false,
@@ -33,9 +23,6 @@ RSpec.configure do |config|
       debug_server_port: 7010
     )
   end
-
-  # Include E2EHelper for specs tagged with :e2e
-  config.include E2EHelper, :e2e
 
   # Enable flags like --only-failures and --next-failure
   config.example_status_persistence_file_path = ".rspec_status"
@@ -47,67 +34,6 @@ RSpec.configure do |config|
     c.syntax = :expect
   end
 
-  # Run specs in random order to surface order dependencies
-  # But use defined order when generating docs for consistency
   config.order = ENV["GENERATE_DOCS"] ? :defined : :random
-
-  # Seed global randomization in this process using the `--seed` CLI option
   Kernel.srand config.seed
-end
-
-# Test helper module for TypeGuessr addon tests
-module TypeGuessrTestHelper
-  include RubyLsp::TestHelper
-
-  # Helper to perform hover request on source code at given position
-  def hover_on_source(source, position)
-    with_server_and_addon(source) do |server, uri|
-      server.process_message(
-        id: 1,
-        method: "textDocument/hover",
-        params: { textDocument: { uri: uri }, position: position }
-      )
-
-      result = pop_result(server)
-      result.response
-    end
-  end
-
-  # Shared, fully-indexed server for integration tests. Uses fixed URI (source.rb) so that
-  # handle_change properly invalidates RubyIndexer's ancestor cache between tests.
-  # Addon is shared at suite level; test data is cleaned up via remove_indexed_file.
-  def with_server_and_addon(source, &block)
-    server = FullIndexHelper.server
-    addon = FullIndexHelper.addon
-    uri = URI("file://#{Dir.pwd}/source.rb")
-    file_path = "#{Dir.pwd}/source.rb"
-
-    server.process_message(did_open_message(uri, source))
-    addon.runtime_adapter&.index_source(uri.to_s, source)
-    server.global_state.index.handle_change(uri, source)
-    addon.runtime_adapter&.build_member_index!
-
-    begin
-      block.call(server, uri)
-    ensure
-      server.process_message(did_close_message(uri))
-      addon.runtime_adapter&.remove_indexed_file(file_path)
-    end
-  end
-
-  private def did_open_message(uri, source)
-    {
-      method: "textDocument/didOpen",
-      params: {
-        textDocument: { uri: uri, text: source, version: 1, languageId: "ruby" }
-      }
-    }
-  end
-
-  private def did_close_message(uri)
-    {
-      method: "textDocument/didClose",
-      params: { textDocument: { uri: uri } }
-    }
-  end
 end
