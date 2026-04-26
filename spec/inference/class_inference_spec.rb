@@ -320,8 +320,8 @@ RSpec.describe "Class Instance Type Inference", :doc do
         RUBY
       end
 
-      it "→ (untyped a, untyped b) -> untyped" do
-        expect_inferred_signature(line: 2, column: 12, expected_signature: "(untyped a, untyped b)")
+      it "→ (never a, untyped b) -> untyped" do
+        expect_inferred_signature(line: 2, column: 12, expected_signature: "(never a, untyped b)")
       end
     end
   end

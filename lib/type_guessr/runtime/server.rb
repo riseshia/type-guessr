@@ -40,11 +40,19 @@ unless defined?(Rails)
   end
 end
 
+# --- Eager load ---
+
+if defined?(Rails)
+  Rails.application.eager_load!
+  warn "[runtime-server] Eager loaded Rails application"
+end
+
 # --- Build index ---
 
 warn "[runtime-server] Building runtime index..."
 
 OBJECT_METHODS = Object.public_instance_methods(true).to_set
+OBJECT_CLASS_METHODS = Object.singleton_class.public_instance_methods(true).to_set
 METHOD_INDEX = Hash.new { |h, k| h[k] = Set.new } # method_name (Symbol) → Set[class_name]
 CLASS_MAP = {} # rubocop:disable Style/MutableConstant -- populated below
 
@@ -54,8 +62,16 @@ ObjectSpace.each_object(Module) do |mod|
 
   CLASS_MAP[mod_name] = mod
 
+  # Instance methods
   mod.public_instance_methods(true).each do |m|
     METHOD_INDEX[m] << mod_name unless OBJECT_METHODS.include?(m)
+  end
+
+  # Class methods (singleton class) — scopes, class_methods blocks, etc.
+  if mod.is_a?(Class)
+    mod.singleton_class.public_instance_methods(true).each do |m|
+      METHOD_INDEX[m] << mod_name unless OBJECT_CLASS_METHODS.include?(m)
+    end
   end
 rescue StandardError
   # Skip modules that cause issues (e.g., overridden .name)

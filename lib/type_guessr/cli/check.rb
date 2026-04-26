@@ -15,6 +15,7 @@ module TypeGuessr
       def self.run(argv)
         options = parse_options(argv)
         project_root = Dir.pwd
+        t_start = Process.clock_gettime(Process::CLOCK_MONOTONIC)
 
         log(options, "=== type-guessr check ===")
         log(options, "Project: #{project_root}")
@@ -37,9 +38,13 @@ module TypeGuessr
         end
         log(options, "")
 
+        t_boot_detect = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+
         project_files = collect_project_files(project_root)
         log(options, "Project files: #{project_files.size}")
         log(options, "")
+
+        t_collect = Process.clock_gettime(Process::CLOCK_MONOTONIC)
 
         log(options, "Starting runtime server...")
         client = Runtime::Client.new(
@@ -51,19 +56,33 @@ module TypeGuessr
         log(options, "Runtime: #{client.module_count} modules, #{client.method_count} methods")
         log(options, "")
 
+        t_runtime = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+
         findings = if options[:fast]
                      run_fast_mode(client, project_files, project_root, options)
                    else
                      run_full_mode(client, project_files, project_root, options)
                    end
 
+        t_analyze = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+
         client.shutdown
+
+        t_end = Process.clock_gettime(Process::CLOCK_MONOTONIC)
 
         if options[:json]
           output_json(findings, project_root)
         else
           output_text(findings, project_files.size, fast: options[:fast])
         end
+
+        log(options, "--- Timing ---")
+        log(options, "  Boot detect:    #{format("%.3f", t_boot_detect - t_start)}s")
+        log(options, "  File collect:   #{format("%.3f", t_collect - t_boot_detect)}s")
+        log(options, "  Runtime start:  #{format("%.3f", t_runtime - t_collect)}s")
+        log(options, "  Analysis:       #{format("%.3f", t_analyze - t_runtime)}s")
+        log(options, "  Shutdown:       #{format("%.3f", t_end - t_analyze)}s")
+        log(options, "  Total:          #{format("%.3f", t_end - t_start)}s")
       end
 
       # Fast mode: lightweight MethodCallCollector + runtime Set intersection.
@@ -98,8 +117,8 @@ module TypeGuessr
           code_index: code_index,
           on_error: ->(file, e) { log(options, "  Error: #{file}: #{e.message}") }
         )
-        log(options, "Found #{result.findings.size} unresolved node(s)")
-        log(options, "  (#{result.skipped_unknown_receiver} skipped: unknown receiver / untyped params)")
+        log(options, "Found #{result.findings.size} zero-candidate node(s)")
+        log(options, "  (#{result.skipped_count} skipped: Unknown type — inference gap, not an error)")
         log(options, "")
 
         # Convert Analyzer::Finding to output hash
@@ -190,7 +209,7 @@ module TypeGuessr
           return
         end
 
-        label = fast ? "zero-candidate node" : "unresolved node"
+        label = "zero-candidate node"
         puts "Found #{findings.size} #{label}(s) in #{file_count} project files:"
         puts
 

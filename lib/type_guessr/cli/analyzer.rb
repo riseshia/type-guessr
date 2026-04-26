@@ -7,10 +7,11 @@ require_relative "../runtime/index_adapter"
 module TypeGuessr
   module CLI
     # Full inference analyzer: runs PrismConverter → IR → Resolver per file,
-    # reports variables/params where type resolves to Unknown.
+    # reports variables/params where type resolves to Never (zero candidates).
+    # Unknown (type inference gap) is not reported — only Never (no valid type exists).
     module Analyzer
       Finding = Data.define(:file, :line, :name, :node_type, :inferred_type, :reason)
-      Result = Data.define(:findings, :skipped_unknown_receiver)
+      Result = Data.define(:findings, :skipped_count)
 
       # Analyze project files using the full inference engine.
       # @param files [Array<String>] absolute paths to .rb files
@@ -21,17 +22,17 @@ module TypeGuessr
         signature_registry.preload
 
         findings = []
-        skipped_unknown_receiver = 0
+        skipped_count = 0
 
         files.each do |file_path|
           file_result = analyze_file(file_path, code_index: code_index, signature_registry: signature_registry)
           findings.concat(file_result[:findings])
-          skipped_unknown_receiver += file_result[:skipped]
+          skipped_count += file_result[:skipped]
         rescue StandardError => e
           on_error&.call(file_path, e)
         end
 
-        Result.new(findings: findings, skipped_unknown_receiver: skipped_unknown_receiver)
+        Result.new(findings: findings, skipped_count: skipped_count)
       end
 
       # Analyze a single file.
@@ -67,13 +68,12 @@ module TypeGuessr
           type_simplifier: type_simplifier
         )
 
-        collect_unknown_nodes(location_index, resolver, file_path, source)
+        collect_never_nodes(location_index, resolver, file_path, source)
       end
 
-      SKIP_REASONS = ["parameter without type info", "unknown receiver"].freeze
-
-      # Collect nodes that resolve to Unknown type.
-      def self.collect_unknown_nodes(location_index, resolver, file_path, source)
+      # Collect nodes that resolve to Never type (zero candidates).
+      # Unknown (inference gap) is skipped — only Never (no valid type exists) is reported.
+      def self.collect_never_nodes(location_index, resolver, file_path, source)
         findings = []
         skipped = 0
         lines = source.lines
@@ -82,23 +82,20 @@ module TypeGuessr
           next unless target_node?(node)
 
           result = resolver.infer(node)
-          next unless result.type.is_a?(Core::Types::Unknown)
 
-          # Skip expected unknowns (param assignments, unknown receiver calls).
-          if SKIP_REASONS.any? { |r| result.reason.include?(r) }
+          if result.type.is_a?(Core::Types::Never)
+            line = offset_to_line(node.loc, lines)
+            findings << Finding.new(
+              file: file_path,
+              line: line,
+              name: node_name(node),
+              node_type: node_type_label(node),
+              inferred_type: result.type.to_s,
+              reason: result.reason
+            )
+          elsif result.type.is_a?(Core::Types::Unknown)
             skipped += 1
-            next
           end
-
-          line = offset_to_line(node.loc, lines)
-          findings << Finding.new(
-            file: file_path,
-            line: line,
-            name: node_name(node),
-            node_type: node_type_label(node),
-            inferred_type: result.type.to_s,
-            reason: result.reason
-          )
         rescue StandardError
           # Skip nodes that cause inference errors
         end
@@ -107,7 +104,7 @@ module TypeGuessr
       end
 
       # Only check write nodes — the assignment target where type is determined.
-      # Read nodes inherit from writes; params are expected to be Unknown without RBS.
+      # Write nodes now use called_methods fallback, so Never is detected here.
       def self.target_node?(node)
         case node
         when Core::IR::LocalWriteNode, Core::IR::InstanceVariableWriteNode
@@ -141,7 +138,7 @@ module TypeGuessr
         lines.size
       end
 
-      private_class_method :analyze_file, :collect_unknown_nodes, :target_node?,
+      private_class_method :analyze_file, :collect_never_nodes, :target_node?,
                            :node_name, :node_type_label, :offset_to_line
     end
   end

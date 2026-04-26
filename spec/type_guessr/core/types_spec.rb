@@ -54,6 +54,31 @@ RSpec.describe TypeGuessr::Core::Types do
     end
   end
 
+  describe "Never" do
+    it "is a singleton" do
+      never1 = TypeGuessr::Core::Types::Never.instance
+      never2 = TypeGuessr::Core::Types::Never.instance
+      expect(never1).to be(never2)
+    end
+
+    it "equals other Never instances" do
+      never1 = TypeGuessr::Core::Types::Never.instance
+      never2 = TypeGuessr::Core::Types::Never.instance
+      expect(never1).to eq(never2)
+    end
+
+    it "does not equal Unknown" do
+      never = TypeGuessr::Core::Types::Never.instance
+      unknown = TypeGuessr::Core::Types::Unknown.instance
+      expect(never).not_to eq(unknown)
+    end
+
+    it "has a string representation" do
+      never = TypeGuessr::Core::Types::Never.instance
+      expect(never.to_s).to eq("never")
+    end
+  end
+
   describe "ClassInstance" do
     it "stores the class name" do
       type = TypeGuessr::Core::Types::ClassInstance.new("String")

@@ -40,7 +40,8 @@ module TypeGuessr
         method_names = called_methods.map { |cm| cm.name.to_s }
         response = @client.find_classes(method_names)
 
-        return [] if response["filtered"] == "all_object_methods"
+        # All methods are Object-level (to_s, class, etc.) — can't narrow down, not an error
+        return nil if response["filtered"] == "all_object_methods"
 
         result = response["result"] || []
 
