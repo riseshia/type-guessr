@@ -67,6 +67,16 @@ module TypeGuessr
         end
       end
 
+      # Never type - no class satisfies the required method set (zero candidates)
+      # Unlike Unknown ("we don't know"), Never means "no valid type exists".
+      class Never < Type
+        include Singleton
+
+        def to_s
+          "never"
+        end
+      end
+
       # ClassInstance - instance of a class
       # @param type_params [Hash{Symbol => Type}, nil] type parameters (e.g., { A: String } for Set[String])
       class ClassInstance < Type

@@ -13,6 +13,8 @@ module TypeGuessr
           { "_type" => "Unguessed" }
         when Types::Unknown
           { "_type" => "Unknown" }
+        when Types::Never
+          { "_type" => "Never" }
         when Types::ClassInstance
           h = { "_type" => "ClassInstance", "name" => type.name }
           h["type_params"] = type.type_params.to_h { |k, v| [k.to_s, serialize(v)] } if type.type_params&.any?
@@ -52,6 +54,7 @@ module TypeGuessr
         case hash["_type"]
         when "Unguessed" then Types::Unguessed.instance
         when "Unknown" then Types::Unknown.instance
+        when "Never" then Types::Never.instance
         when "ClassInstance"
           type_params = hash["type_params"]&.to_h { |k, v| [k.to_sym, deserialize(v)] }
           Types::ClassInstance.for(hash["name"], type_params)
