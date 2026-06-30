@@ -41,18 +41,32 @@ module TypeGuessr
 
         @stdin, @stdout, @stderr, @wait_thread = Open3.popen3(env, *cmd, chdir: @project_path)
 
-        ready_line = @stdout.gets
-        unless ready_line
+        # The target app may print non-protocol noise to stdout before the
+        # server takes over (e.g. Rails boot logging via `bin/rails runner`).
+        # Skip lines that are not the JSON ready handshake until we find it.
+        ready = nil
+        while (line = @stdout.gets)
+          parsed = begin
+            JSON.parse(line)
+          rescue JSON::ParserError
+            next
+          end
+          next unless parsed.is_a?(Hash) && parsed.key?("status")
+
+          ready = parsed
+          break
+        end
+
+        unless ready
           err_output = begin
             @stderr.read_nonblock(4096)
           rescue StandardError
             ""
           end
-          raise "Runtime server failed to start (no output).\nstderr: #{err_output}"
+          raise "Runtime server failed to start (no ready handshake).\nstderr: #{err_output}"
         end
 
-        ready = JSON.parse(ready_line)
-        raise "Runtime server failed to start: #{ready_line}" unless ready["status"] == "ready"
+        raise "Runtime server failed to start: #{ready.inspect}" unless ready["status"] == "ready"
 
         @module_count = ready["modules"]
         @method_count = ready["methods"]

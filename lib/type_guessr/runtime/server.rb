@@ -24,6 +24,16 @@
 
 require "json"
 
+# --- Protocol channel isolation ---
+
+# Reserve the real stdout for the JSON IPC protocol, then redirect $stdout to
+# stderr. The target app may log to stdout (e.g. Logger "E, [..] ERROR" lines)
+# during boot/eager_load; without this, that output corrupts the protocol
+# stream and the client fails to parse the ready handshake.
+PROTOCOL_OUT = $stdout.dup
+$stdout.reopen($stderr)
+$stdout.sync = true
+
 # --- Boot ---
 
 # When launched via `rails runner`, the app is already loaded.
@@ -79,8 +89,8 @@ end
 
 warn "[runtime-server] Ready: #{CLASS_MAP.size} modules, #{METHOD_INDEX.size} methods"
 
-$stdout.puts JSON.generate({ "status" => "ready", "modules" => CLASS_MAP.size, "methods" => METHOD_INDEX.size })
-$stdout.flush
+PROTOCOL_OUT.puts JSON.generate({ "status" => "ready", "modules" => CLASS_MAP.size, "methods" => METHOD_INDEX.size })
+PROTOCOL_OUT.flush
 
 # --- Query loop ---
 
@@ -150,17 +160,17 @@ $stdin.each_line do |line|
                { "result" => owner }
 
              when "shutdown"
-               $stdout.puts JSON.generate({ "result" => "bye" })
-               $stdout.flush
+               PROTOCOL_OUT.puts JSON.generate({ "result" => "bye" })
+               PROTOCOL_OUT.flush
                exit 0
 
              else
                { "error" => "unknown method: #{request["method"]}" }
              end
 
-  $stdout.puts JSON.generate(response)
-  $stdout.flush
+  PROTOCOL_OUT.puts JSON.generate(response)
+  PROTOCOL_OUT.flush
 rescue JSON::ParserError => e
-  $stdout.puts JSON.generate({ "error" => "parse error: #{e.message}" })
-  $stdout.flush
+  PROTOCOL_OUT.puts JSON.generate({ "error" => "parse error: #{e.message}" })
+  PROTOCOL_OUT.flush
 end
