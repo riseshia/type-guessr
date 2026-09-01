@@ -85,6 +85,8 @@ module TypeGuessr
 
           result = resolver.infer(node)
 
+          dump_surface_site(node, result, file_path, lines)
+
           if result.type.is_a?(Core::Types::Never)
             line = offset_to_line(node.loc, lines)
             findings << Finding.new(
@@ -105,6 +107,29 @@ module TypeGuessr
         end
 
         { findings: findings, skipped: skipped }
+      end
+
+      # Dump sites where the type was resolved via called-methods duck typing
+      # (candidates >= 1) — the exact surface where a call-site mutation can
+      # flip the result to Never. Used by the recall experiment to pick seed
+      # sites; enabled only via TG_SURFACE_DUMP=<path> (JSONL, appended).
+      def self.dump_surface_site(node, result, file_path, lines)
+        dump_path = ENV.fetch("TG_SURFACE_DUMP", nil)
+        return unless dump_path
+        return if result.type.is_a?(Core::Types::Never) || result.type.is_a?(Core::Types::Unknown)
+        return unless result.reason.to_s.include?("inferred from")
+
+        require "json"
+        entry = {
+          file: file_path,
+          line: offset_to_line(node.loc, lines),
+          name: node_name(node),
+          node_type: node_type_label(node),
+          type: result.type.to_s,
+          reason: result.reason,
+          called_methods: (node.called_methods.map { |cm| cm.name.to_s } if node.respond_to?(:called_methods))
+        }
+        File.open(dump_path, "a") { |f| f.puts JSON.generate(entry) }
       end
 
       # Only check write nodes — the assignment target where type is determined.
@@ -143,7 +168,8 @@ module TypeGuessr
       end
 
       private_class_method :analyze_file, :collect_never_nodes, :target_node?,
-                           :node_name, :node_type_label, :offset_to_line
+                           :node_name, :node_type_label, :offset_to_line,
+                           :dump_surface_site
     end
   end
 end
