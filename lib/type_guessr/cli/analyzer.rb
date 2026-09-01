@@ -86,6 +86,7 @@ module TypeGuessr
           result = resolver.infer(node)
 
           dump_surface_site(node, result, file_path, lines)
+          dump_coverage_site(node, result, file_path, lines)
 
           if result.type.is_a?(Core::Types::Never)
             line = offset_to_line(node.loc, lines)
@@ -132,6 +133,37 @@ module TypeGuessr
         File.open(dump_path, "a") { |f| f.puts JSON.generate(entry) }
       end
 
+      # Dump ALL examined write sites with their judgment category, to measure
+      # how much of the surface each outcome covers (coverage experiment).
+      # Categories: never / unknown (no judgment) / duck_typed / direct.
+      # Enabled only via TG_COVERAGE_DUMP=<path> (JSONL, appended).
+      def self.dump_coverage_site(node, result, file_path, lines)
+        dump_path = ENV.fetch("TG_COVERAGE_DUMP", nil)
+        return unless dump_path
+
+        category =
+          if result.type.is_a?(Core::Types::Never) then "never"
+          elsif result.type.is_a?(Core::Types::Unknown) then "unknown"
+          elsif result.reason.to_s.include?("inferred from") then "duck_typed"
+          else
+            "direct"
+          end
+
+        called = node.respond_to?(:called_methods) ? node.called_methods.map { |cm| cm.name.to_s } : []
+
+        require "json"
+        entry = {
+          file: file_path,
+          line: offset_to_line(node.loc, lines),
+          name: node_name(node),
+          node_type: node_type_label(node),
+          category: category,
+          called_methods_count: called.size,
+          called_methods: called
+        }
+        File.open(dump_path, "a") { |f| f.puts JSON.generate(entry) }
+      end
+
       # Only check write nodes — the assignment target where type is determined.
       # Write nodes now use called_methods fallback, so Never is detected here.
       def self.target_node?(node)
@@ -169,7 +201,7 @@ module TypeGuessr
 
       private_class_method :analyze_file, :collect_never_nodes, :target_node?,
                            :node_name, :node_type_label, :offset_to_line,
-                           :dump_surface_site
+                           :dump_surface_site, :dump_coverage_site
     end
   end
 end
