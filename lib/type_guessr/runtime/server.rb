@@ -57,6 +57,23 @@ if defined?(Rails)
   warn "[runtime-server] Eager loaded Rails application"
 end
 
+# --- Materialize lazy-defined methods ---
+
+# ActiveRecord defines column accessors lazily (on first attribute access),
+# so a freshly eager-loaded app has none of them in public_instance_methods.
+# Force definition before building the index; requires a schema connection,
+# so skip models whose connection/table is unavailable.
+if defined?(ActiveRecord::Base)
+  defined_count = 0
+  ActiveRecord::Base.descendants.each do |model|
+    model.define_attribute_methods
+    defined_count += 1
+  rescue StandardError
+    # No connection, missing table, abstract class, etc.
+  end
+  warn "[runtime-server] Defined attribute methods for #{defined_count} ActiveRecord models"
+end
+
 # --- Build index ---
 
 warn "[runtime-server] Building runtime index..."
@@ -66,8 +83,12 @@ OBJECT_CLASS_METHODS = Object.singleton_class.public_instance_methods(true).to_s
 METHOD_INDEX = Hash.new { |h, k| h[k] = Set.new } # method_name (Symbol) → Set[class_name]
 CLASS_MAP = {} # rubocop:disable Style/MutableConstant -- populated below
 
+# Apps may override Module#name (or define a conflicting instance method on a
+# module, e.g. Paperclip::Interpolations); always go through the original.
+MODULE_NAME = Module.instance_method(:name)
+
 ObjectSpace.each_object(Module) do |mod|
-  mod_name = Module.instance_method(:name).bind_call(mod)
+  mod_name = MODULE_NAME.bind_call(mod)
   next unless mod_name
 
   CLASS_MAP[mod_name] = mod
@@ -122,7 +143,7 @@ $stdin.each_line do |line|
                class_name = request.dig("args", "class_name")
                klass = CLASS_MAP[class_name]
                if klass
-                 { "result" => klass.ancestors.filter_map(&:name) }
+                 { "result" => klass.ancestors.filter_map { |m| MODULE_NAME.bind_call(m) } }
                else
                  { "result" => [] }
                end
@@ -170,7 +191,11 @@ $stdin.each_line do |line|
 
   PROTOCOL_OUT.puts JSON.generate(response)
   PROTOCOL_OUT.flush
-rescue JSON::ParserError => e
-  PROTOCOL_OUT.puts JSON.generate({ "error" => "parse error: #{e.message}" })
+rescue SystemExit
+  raise
+rescue StandardError => e
+  # A single bad query (e.g. app code raising from an ancestors walk) must not
+  # kill the server — exactly one response per request keeps the protocol in sync.
+  PROTOCOL_OUT.puts JSON.generate({ "error" => "#{e.class}: #{e.message}" })
   PROTOCOL_OUT.flush
 end

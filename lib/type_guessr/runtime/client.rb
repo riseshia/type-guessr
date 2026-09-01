@@ -11,6 +11,15 @@ module TypeGuessr
     # project code, and builds a method index via ObjectSpace. This client
     # sends JSON queries over stdin/stdout.
     class Client
+      # Raised when the server subprocess dies mid-session. Must abort the
+      # whole analysis — swallowing it would turn every later query into a
+      # fake zero-candidate result.
+      class ServerDiedError < StandardError; end
+
+      # Raised when the server answers a query with an error. Callers must not
+      # interpret it as an empty result — that would fake a zero-candidate.
+      class QueryError < StandardError; end
+
       attr_reader :module_count, :method_count
 
       # @param project_path [String] Absolute path to the target project
@@ -36,10 +45,26 @@ module TypeGuessr
           cmd << @boot_file if @boot_file
         end
 
-        env = ENV.to_h.reject { |k, _| k.start_with?("BUNDLE_", "RUBYGEMS_", "GEM_") }
+        # The analyzer's own bundler/ruby env (BUNDLE_*, GEM_*, RUBYOPT, RUBYLIB)
+        # must not leak into the child, which may run a different Ruby version.
+        # popen3 MERGES the env hash into ENV, so removed keys are still
+        # inherited — unsetting requires an explicit nil value.
+        env = {}
+        ENV.each_key do |k|
+          env[k] = nil if k.start_with?("BUNDLE_", "RUBYGEMS_", "GEM_", "RUBYOPT", "RUBYLIB")
+        end
         env["BUNDLE_GEMFILE"] = File.join(@project_path, "Gemfile")
 
         @stdin, @stdout, @stderr, @wait_thread = Open3.popen3(env, *cmd, chdir: @project_path)
+
+        # Drain stderr continuously: a chatty boot (bundler warnings, SQL logs)
+        # can fill the pipe buffer and deadlock the server if left unread.
+        @stderr_buffer = +""
+        @stderr_thread = Thread.new do
+          @stderr.each_line { |l| @stderr_buffer << l }
+        rescue IOError
+          # Pipe closed during shutdown
+        end
 
         # The target app may print non-protocol noise to stdout before the
         # server takes over (e.g. Rails boot logging via `bin/rails runner`).
@@ -58,12 +83,8 @@ module TypeGuessr
         end
 
         unless ready
-          err_output = begin
-            @stderr.read_nonblock(4096)
-          rescue StandardError
-            ""
-          end
-          raise "Runtime server failed to start (no ready handshake).\nstderr: #{err_output}"
+          sleep 0.2 # Let the drain thread catch up after child exit
+          raise "Runtime server failed to start (no ready handshake).\nstderr (last 4KB): #{@stderr_buffer[-4096..] || @stderr_buffer}"
         end
 
         raise "Runtime server failed to start: #{ready.inspect}" unless ready["status"] == "ready"
@@ -134,9 +155,23 @@ module TypeGuessr
         @stdin.flush
 
         response_line = @stdout.gets
-        return {} unless response_line
+        # EOF means the server process died — an empty response here would be
+        # indistinguishable from a real zero-candidate result downstream.
+        server_died!(request) unless response_line
 
-        JSON.parse(response_line)
+        response = JSON.parse(response_line)
+        raise QueryError, "#{request["method"]} #{request["args"].inspect}: #{response["error"]}" if response.key?("error")
+
+        response
+      rescue Errno::EPIPE
+        server_died!(request)
+      end
+
+      private def server_died!(request)
+        @stderr_thread&.join(0.5)
+        status = @wait_thread.join(2) && @wait_thread.value
+        raise ServerDiedError, "Runtime server died (during #{request["method"]} #{request["args"].inspect}). " \
+                               "exit: #{status.inspect}\nstderr (last 4KB): #{@stderr_buffer[-4096..] || @stderr_buffer}"
       end
 
       private def query(method, args = {})

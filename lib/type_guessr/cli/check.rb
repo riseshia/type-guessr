@@ -115,7 +115,9 @@ module TypeGuessr
         result = Analyzer.analyze(
           project_files,
           code_index: code_index,
-          on_error: ->(file, e) { log(options, "  Error: #{file}: #{e.message}") }
+          # Per-file errors go to stderr unconditionally — in --json mode
+          # log() is silent and analysis failures would be invisible.
+          on_error: ->(file, e) { warn "  Error: #{file}: #{e.message}" }
         )
         log(options, "Found #{result.findings.size} zero-candidate node(s)")
         log(options, "  (#{result.skipped_count} skipped: Unknown type — inference gap, not an error)")

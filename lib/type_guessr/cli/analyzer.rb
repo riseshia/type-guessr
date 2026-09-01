@@ -28,6 +28,8 @@ module TypeGuessr
           file_result = analyze_file(file_path, code_index: code_index, signature_registry: signature_registry)
           findings.concat(file_result[:findings])
           skipped_count += file_result[:skipped]
+        rescue Runtime::Client::ServerDiedError
+          raise
         rescue StandardError => e
           on_error&.call(file_path, e)
         end
@@ -96,6 +98,8 @@ module TypeGuessr
           elsif result.type.is_a?(Core::Types::Unknown)
             skipped += 1
           end
+        rescue Runtime::Client::ServerDiedError
+          raise
         rescue StandardError
           # Skip nodes that cause inference errors
         end
