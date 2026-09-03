@@ -18,6 +18,11 @@ module TypeGuessr
       def initialize(client)
         @client = client
         @extra_method_classes = Hash.new { |h, k| h[k] = Set.new }
+        # The runtime index is frozen once the server boots (no incremental
+        # refresh), so per-signature answers can be memoized across files —
+        # the same `User#email` question would otherwise cross IPC thousands of times.
+        @constant_kind_cache = {}
+        @method_defined_cache = {}
       end
 
       # No-op — runtime index is built during server startup.
@@ -73,8 +78,9 @@ module TypeGuessr
       # @param constant_name [String]
       # @return [Symbol, nil] :class, :module, or nil
       def constant_kind(constant_name)
-        result = @client.constant_kind(constant_name)
-        result&.to_sym
+        return @constant_kind_cache[constant_name] if @constant_kind_cache.key?(constant_name)
+
+        @constant_kind_cache[constant_name] = @client.constant_kind(constant_name)&.to_sym
       end
 
       # Check if a method is callable on a class.
@@ -86,8 +92,12 @@ module TypeGuessr
       # @return [Boolean, String, nil] true (callable), false (absent),
       #   "arity" (exists but the call does not fit), nil (class unknown here)
       def method_defined?(class_name, method_name, singleton: false, positional_count: nil, keywords: [])
-        @client.method_defined?(class_name, method_name, singleton: singleton,
-                                                         positional_count: positional_count, keywords: keywords)
+        key = [class_name, method_name, singleton, positional_count, keywords]
+        return @method_defined_cache[key] if @method_defined_cache.key?(key)
+
+        @method_defined_cache[key] = @client.method_defined?(class_name, method_name, singleton: singleton,
+                                                                                      positional_count: positional_count,
+                                                                                      keywords: keywords)
       end
 
       # Look up owner of a class method.

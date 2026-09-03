@@ -5,6 +5,7 @@ require_relative "../types"
 require_relative "../type_simplifier"
 require_relative "../registry"
 require_relative "result"
+require_relative "call_checker"
 
 module TypeGuessr
   module Core
@@ -35,7 +36,8 @@ module TypeGuessr
         # @param signature_registry [Registry::SignatureRegistry] Registry for stdlib RBS signatures
         # @param type_simplifier [TypeSimplifier] Type simplifier for normalizing union types
         # @param code_index [#find_classes_defining_methods, #ancestors_of, #constant_kind, #class_method_owner]
-        #   Adapter wrapping RubyIndexer
+        #   Adapter wrapping RubyIndexer. When it also answers `#method_defined?`
+        #   (runtime index), writes are checked against the methods called on them.
         # @param method_registry [Registry::MethodRegistry] Registry for project methods
         # @param ivar_registry [Registry::InstanceVariableRegistry] Registry for instance variables
         # @param cvar_registry [Registry::ClassVariableRegistry] Registry for class variables
@@ -47,6 +49,7 @@ module TypeGuessr
           @cvar_registry = cvar_registry
           @cache = {}.compare_by_identity
           @type_simplifier = type_simplifier
+          @call_checker = CallChecker.new(code_index)
           @depth = 0
         end
 
@@ -152,14 +155,25 @@ module TypeGuessr
           # Fallback: value type is Unknown, try called_methods inference
           if dep_result.type.is_a?(Types::Unknown) && node.respond_to?(:called_methods) && node.called_methods.any?
             resolved_type = resolve_called_methods(node.called_methods)
-            return Result.new(
-              resolved_type,
-              "assigned from #{dep_result.reason}, inferred from #{node.called_methods.join(", ")}",
-              :inference
-            )
+            return check_calls(node, Result.new(
+                                       resolved_type,
+                                       "assigned from #{dep_result.reason}, inferred from #{node.called_methods.join(", ")}",
+                                       :inference
+                                     ))
           end
 
-          Result.new(dep_result.type, "assigned from #{dep_result.reason}", dep_result.source)
+          check_calls(node, Result.new(dep_result.type, "assigned from #{dep_result.reason}", dep_result.source))
+        end
+
+        # A write whose type cannot answer the methods called on it is not that
+        # type — the same verdict duck typing gives a receiver with zero candidates.
+        private def check_calls(node, result)
+          return result unless @call_checker.active? && node.respond_to?(:called_methods)
+
+          missing = @call_checker.missing_methods(result.type, node.called_methods)
+          return result if missing.empty?
+
+          Result.new(Types::Never.instance, @call_checker.reason(result.type, missing), :inference)
         end
 
         private def infer_local_read(node)
