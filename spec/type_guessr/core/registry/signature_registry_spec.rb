@@ -268,6 +268,53 @@ RSpec.describe TypeGuessr::Core::Registry::SignatureRegistry do
         expect(type).not_to eq(TypeGuessr::Core::Types::Unknown.instance)
       end
     end
+
+    # rbs core lists the blockless `() -> Enumerator[...]` overload first for
+    # many iterator methods, so block presence must take part in selection.
+    describe "with block presence" do
+      it "picks the block overload for Hash#transform_values when a block is given" do
+        type = registry.get_method_return_type("Hash", "transform_values", [], has_block: true)
+
+        expect(type.to_s).to start_with("Hash[")
+      end
+
+      it "keeps the Enumerator overload for Hash#transform_values without a block" do
+        type = registry.get_method_return_type("Hash", "transform_values", [], has_block: false)
+
+        expect(type.to_s).to start_with("Enumerator[")
+      end
+
+      it "picks the block overload for Object#then when a block is given" do
+        type = registry.get_method_return_type("Object", "then", [], has_block: true)
+
+        expect(type.to_s).not_to start_with("Enumerator[")
+      end
+
+      it "picks the block overload for Enumerable#max_by when a block is given" do
+        type = registry.get_method_return_type("Enumerable", "max_by", [], has_block: true)
+
+        expect(type.to_s).not_to start_with("Enumerator[")
+      end
+
+      it "selects among overloads by arg types when block presence is unknown" do
+        type = registry.get_method_return_type("Hash", "transform_values", [])
+
+        expect(type.to_s).to start_with("Enumerator[")
+      end
+
+      it "picks the block overload for String#gsub when a block is given" do
+        string_type = TypeGuessr::Core::Types::ClassInstance.new("String")
+        type = registry.get_method_return_type("String", "gsub", [string_type], has_block: true)
+
+        expect(type.to_s).to eq("String")
+      end
+
+      it "picks the block overload for class methods" do
+        type = registry.get_class_method_return_type("Array", "new", [], has_block: true)
+
+        expect(type.to_s).to start_with("Array[")
+      end
+    end
   end
 
   describe described_class::GemMethodEntry do

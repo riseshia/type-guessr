@@ -28,9 +28,10 @@ module TypeGuessr
 
           # Get the return type with overload resolution
           # @param arg_types [Array<Types::Type>] argument types for overload matching
+          # @param has_block [Boolean, nil] whether the call passes a block (nil = unknown)
           # @return [Types::Type] the return type
-          def return_type(arg_types = [])
-            best_match = find_best_overload(arg_types)
+          def return_type(arg_types = [], has_block: nil)
+            best_match = find_best_overload(arg_types, has_block: has_block)
             @converter.convert(best_match.type.return_type)
           end
 
@@ -44,18 +45,20 @@ module TypeGuessr
 
           # Get method-level type parameter names from the best matching overload
           # @param arg_types [Array<Types::Type>] argument types for overload matching
+          # @param has_block [Boolean, nil] whether the call passes a block (nil = unknown)
           # @return [Array<Symbol>] type parameter names (e.g., [:U], [:X], [])
-          def type_params(arg_types = [])
-            find_best_overload(arg_types).type_params.map(&:name)
+          def type_params(arg_types = [], has_block: nil)
+            find_best_overload(arg_types, has_block: has_block).type_params.map(&:name)
           end
 
           # Get the type variable used as the block return type
           # Returns the method-level type variable that appears in the block's return type,
           # allowing Resolver to substitute it with the actual block body type.
           # @param arg_types [Array<Types::Type>] argument types for overload matching
+          # @param has_block [Boolean, nil] whether the call passes a block (nil = unknown)
           # @return [Symbol, nil] type variable name (e.g., :U, :X) or nil if no block/no type var
-          def block_return_type_var(arg_types = [])
-            best = find_best_overload(arg_types)
+          def block_return_type_var(arg_types = [], has_block: nil)
+            best = find_best_overload(arg_types, has_block: has_block)
             return nil unless best.block
 
             method_type_param_names = best.type_params.to_set(&:name)
@@ -122,19 +125,36 @@ module TypeGuessr
 
           # Find the best matching overload for given argument types
           # @param arg_types [Array<Types::Type>] argument types
+          # @param has_block [Boolean, nil] whether the call passes a block (nil = unknown)
           # @return [RBS::MethodType] best matching method type (first if no match)
-          private def find_best_overload(arg_types)
-            return @method_types.first if arg_types.empty?
+          private def find_best_overload(arg_types, has_block: nil)
+            candidates = block_compatible_overloads(has_block)
+            return candidates.first if arg_types.empty?
 
             # Score each overload
-            scored = @method_types.map do |method_type|
+            scored = candidates.map do |method_type|
               score = calculate_overload_score(method_type, arg_types)
               [method_type, score]
             end
 
             # Return best scoring overload, or first if all scores are 0
             best = scored.max_by { |_mt, score| score }
-            best[1].positive? ? best[0] : @method_types.first
+            best[1].positive? ? best[0] : candidates.first
+          end
+
+          # Overloads whose block clause fits the call. RBS lists the blockless
+          # `() -> Enumerator` form first for most iterators, so without this
+          # filter a block call would resolve to the Enumerator overload.
+          # Falls back to every overload when none fits, so a signature gap
+          # never yields an empty candidate list.
+          private def block_compatible_overloads(has_block)
+            return @method_types if has_block.nil?
+
+            compatible = @method_types.select do |method_type|
+              block = method_type.block
+              has_block ? !block.nil? : (block.nil? || !block.required)
+            end
+            compatible.empty? ? @method_types : compatible
           end
 
           # Calculate match score for an overload
@@ -214,7 +234,7 @@ module TypeGuessr
 
           def skip_stdlib_rbs? = @skip_stdlib_rbs
 
-          def return_type(_arg_types = [])
+          def return_type(_arg_types = [], has_block: nil) # rubocop:disable Lint/UnusedMethodArgument
             @return_type
           end
 
@@ -222,11 +242,11 @@ module TypeGuessr
             []
           end
 
-          def type_params(_arg_types = [])
+          def type_params(_arg_types = [], has_block: nil) # rubocop:disable Lint/UnusedMethodArgument
             []
           end
 
-          def block_return_type_var(_arg_types = [])
+          def block_return_type_var(_arg_types = [], has_block: nil) # rubocop:disable Lint/UnusedMethodArgument
             nil
           end
 
@@ -314,18 +334,19 @@ module TypeGuessr
         # @param class_name [String] the class name
         # @param method_name [String] the method name
         # @param arg_types [Array<Types::Type>] argument types for overload matching
+        # @param has_block [Boolean, nil] whether the call passes a block (nil = unknown)
         # @return [Types::Type] the return type (Unknown if not found)
-        def get_method_return_type(class_name, method_name, arg_types = [])
+        def get_method_return_type(class_name, method_name, arg_types = [], has_block: nil)
           entry = lookup(class_name, method_name)
           return Types::Unknown.instance unless entry
 
-          result = entry.return_type(arg_types)
+          result = entry.return_type(arg_types, has_block: has_block)
           if result.is_a?(Types::Unguessed)
             try_on_demand_inference(class_name, method_name, :instance)
             entry = lookup(class_name, method_name)
             return Types::Unknown.instance unless entry
 
-            result = entry.return_type(arg_types)
+            result = entry.return_type(arg_types, has_block: has_block)
             return Types::Unknown.instance if result.is_a?(Types::Unguessed)
           end
           result
@@ -336,18 +357,19 @@ module TypeGuessr
         # @param class_name [String] the class name
         # @param method_name [String] the method name
         # @param arg_types [Array<Types::Type>] argument types for overload matching
+        # @param has_block [Boolean, nil] whether the call passes a block (nil = unknown)
         # @return [Types::Type] the return type (Unknown if not found)
-        def get_class_method_return_type(class_name, method_name, arg_types = [])
+        def get_class_method_return_type(class_name, method_name, arg_types = [], has_block: nil)
           entry = lookup_class_method(class_name, method_name)
           return Types::Unknown.instance unless entry
 
-          result = entry.return_type(arg_types)
+          result = entry.return_type(arg_types, has_block: has_block)
           if result.is_a?(Types::Unguessed)
             try_on_demand_inference(class_name, method_name, :class)
             entry = lookup_class_method(class_name, method_name)
             return Types::Unknown.instance unless entry
 
-            result = entry.return_type(arg_types)
+            result = entry.return_type(arg_types, has_block: has_block)
             return Types::Unknown.instance if result.is_a?(Types::Unguessed)
           end
           result

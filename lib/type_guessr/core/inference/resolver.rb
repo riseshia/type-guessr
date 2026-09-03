@@ -331,7 +331,8 @@ module TypeGuessr
           return_type = @signature_registry.get_method_return_type(
             receiver_type.name,
             node.method.to_s,
-            arg_types
+            arg_types,
+            has_block: node.has_block
           )
 
           # Fall back to Object if class-specific lookup returns Unknown
@@ -339,7 +340,8 @@ module TypeGuessr
             return_type = @signature_registry.get_method_return_type(
               "Object",
               node.method.to_s,
-              arg_types
+              arg_types,
+              has_block: node.has_block
             )
             source = :stdlib
           end
@@ -378,7 +380,8 @@ module TypeGuessr
             return_type = @signature_registry.get_method_return_type(
               inferred_receiver.name,
               node.method.to_s,
-              arg_types
+              arg_types,
+              has_block: node.has_block
             )
             substitutions = build_substitutions(inferred_receiver)
             add_method_type_var_substitutions(substitutions, node, inferred_receiver.name, node.method.to_s, arg_types)
@@ -409,7 +412,7 @@ module TypeGuessr
 
           # Object RBS for common methods (==, to_s, etc.)
           arg_types = node.args.map { |arg| infer(arg).type }
-          return_type = @signature_registry.get_method_return_type("Object", node.method.to_s, arg_types)
+          return_type = @signature_registry.get_method_return_type("Object", node.method.to_s, arg_types, has_block: node.has_block)
           return_type = return_type.substitute({ self: receiver_type }) if receiver_type
           return Result.new(return_type, "Object##{node.method}", :stdlib) unless return_type.is_a?(Types::Unknown)
 
@@ -419,7 +422,7 @@ module TypeGuessr
         private def infer_array_call(node, receiver_type)
           substitutions = build_substitutions(receiver_type)
           add_method_type_var_substitutions(substitutions, node, "Array", node.method.to_s)
-          raw_return_type = @signature_registry.get_method_return_type("Array", node.method.to_s)
+          raw_return_type = @signature_registry.get_method_return_type("Array", node.method.to_s, [], has_block: node.has_block)
           return_type = raw_return_type.substitute(substitutions)
           Result.new(
             return_type,
@@ -438,7 +441,7 @@ module TypeGuessr
           # Fall back to Array RBS for other methods
           substitutions = build_substitutions(receiver_type)
           add_method_type_var_substitutions(substitutions, node, "Array", node.method.to_s)
-          raw_return_type = @signature_registry.get_method_return_type("Array", node.method.to_s)
+          raw_return_type = @signature_registry.get_method_return_type("Array", node.method.to_s, [], has_block: node.has_block)
           return_type = raw_return_type.substitute(substitutions)
           Result.new(
             return_type,
@@ -457,7 +460,7 @@ module TypeGuessr
           # Fall back to Hash RBS for other methods
           substitutions = build_substitutions(receiver_type)
           add_method_type_var_substitutions(substitutions, node, "Hash", node.method.to_s)
-          raw_return_type = @signature_registry.get_method_return_type("Hash", node.method.to_s)
+          raw_return_type = @signature_registry.get_method_return_type("Hash", node.method.to_s, [], has_block: node.has_block)
           return_type = raw_return_type.substitute(substitutions)
           Result.new(
             return_type,
@@ -469,7 +472,7 @@ module TypeGuessr
         private def infer_range_call(node, receiver_type)
           substitutions = build_substitutions(receiver_type)
           add_method_type_var_substitutions(substitutions, node, "Range", node.method.to_s)
-          raw_return_type = @signature_registry.get_method_return_type("Range", node.method.to_s)
+          raw_return_type = @signature_registry.get_method_return_type("Range", node.method.to_s, [], has_block: node.has_block)
           return_type = raw_return_type.substitute(substitutions)
           Result.new(
             return_type,
@@ -481,7 +484,7 @@ module TypeGuessr
         private def infer_hash_type_call(node, receiver_type)
           substitutions = build_substitutions(receiver_type)
           add_method_type_var_substitutions(substitutions, node, "Hash", node.method.to_s)
-          raw_return_type = @signature_registry.get_method_return_type("Hash", node.method.to_s)
+          raw_return_type = @signature_registry.get_method_return_type("Hash", node.method.to_s, [], has_block: node.has_block)
           return_type = raw_return_type.substitute(substitutions)
           Result.new(
             return_type,
@@ -701,7 +704,8 @@ module TypeGuessr
           return_type = @signature_registry.get_class_method_return_type(
             class_name,
             node.method.to_s,
-            arg_types
+            arg_types,
+            has_block: node.has_block
           )
 
           # Early return: class method found — substitute SelfType with actual class
@@ -831,8 +835,8 @@ module TypeGuessr
           entry ||= @signature_registry.lookup("Object", method_name) if class_name != "Object"
           return unless entry
 
-          add_block_return_substitution(substitutions, node, entry.block_return_type_var(arg_types))
-          substitute_remaining_type_vars(substitutions, entry.type_params(arg_types))
+          add_block_return_substitution(substitutions, node, entry.block_return_type_var(arg_types, has_block: node.has_block))
+          substitute_remaining_type_vars(substitutions, entry.type_params(arg_types, has_block: node.has_block))
         end
       end
     end

@@ -287,6 +287,7 @@ module TypeGuessr
           name: node_name(node),
           node_type: node_type_label(node),
           category: category,
+          type: result.type.to_s,
           called_methods_count: called.size,
           called_methods: called
         }
