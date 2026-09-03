@@ -2,9 +2,7 @@
 
 require "spec_helper"
 require "prism"
-require "ruby_indexer/ruby_indexer"
 
-# rubocop:disable RSpec/DescribeClass
 RSpec.describe "Container Type Inference", :doc do
   describe "Array type inference" do
     context "Homogeneous integer array" do

@@ -2,9 +2,7 @@
 
 require "spec_helper"
 require "prism"
-require "ruby_indexer/ruby_indexer"
 
-# rubocop:disable RSpec/DescribeClass
 RSpec.describe "Literal Type Inference", :doc do
   describe "Basic literals" do
     context "String literal" do
