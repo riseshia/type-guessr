@@ -95,9 +95,13 @@ module TypeGuessr
 
       # Find classes whose public instance methods include ALL given method names.
       # @param methods [Array<String>] Method names
+      # @param calls [Array<Hash>, nil] call shapes ({"name", "positional_count",
+      #   "keywords"}); when given, candidates are also filtered by call arity
       # @return [Hash] { "result" => [String], "filtered" => String? }
-      def find_classes(methods)
-        query_raw("find_classes", { "methods" => methods })
+      def find_classes(methods, calls: nil)
+        args = { "methods" => methods }
+        args["calls"] = calls if calls
+        query_raw("find_classes", args)
       end
 
       # Get linearized ancestor chain for a class.
@@ -114,12 +118,19 @@ module TypeGuessr
         query("constant_kind", { "name" => name })
       end
 
-      # Check if a class defines an instance method.
+      # Check if a method is callable on a class (instance level by default,
+      # class level with singleton: true).
       # @param class_name [String]
       # @param method_name [String]
-      # @return [Boolean]
-      def method_defined?(class_name, method_name)
-        query("method_defined?", { "class_name" => class_name, "method_name" => method_name }) || false
+      # @param singleton [Boolean] check the class object instead of its instances
+      # @param positional_count [Integer, nil] call-site positional args (nil = splat/unknown)
+      # @param keywords [Array<String>] call-site keyword names
+      # @return [Boolean, String, nil] true (callable), false (absent),
+      #   "arity" (exists but the call does not fit), nil (class unknown here)
+      def method_defined?(class_name, method_name, singleton: false, positional_count: nil, keywords: [])
+        query("method_defined?",
+              { "class_name" => class_name, "method_name" => method_name, "singleton" => singleton,
+                "positional_count" => positional_count, "keywords" => keywords })
       end
 
       # Find the owner of a class method.

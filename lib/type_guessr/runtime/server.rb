@@ -10,19 +10,29 @@
 #   → {"method": "find_classes", "args": {"methods": ["map", "size"]}}
 #   ← {"result": ["Array", "Hash"]}
 #
+#     Optional "calls" narrows candidates by call-site arity and replaces
+#     "methods" when present:
+#     → {"method": "find_classes", "args": {"methods": ["map"],
+#          "calls": [{"name": "map", "positional_count": 0, "keywords": []}]}}
+#
 #   → {"method": "ancestors", "args": {"class_name": "Array"}}
 #   ← {"result": ["Array", "Enumerable", "Object", ...]}
 #
 #   → {"method": "constant_kind", "args": {"name": "Array"}}
 #   ← {"result": "class"}
 #
-#   → {"method": "method_defined?", "args": {"class_name": "Array", "method_name": "map"}}
-#   ← {"result": true}
+#   → {"method": "method_defined?", "args": {"class_name": "Array", "method_name": "map",
+#        "singleton": false, "positional_count": null, "keywords": []}}
+#   ← {"result": true}     callable
+#     {"result": null}     the class is unknown to this runtime
+#     {"result": false}    the method does not exist
+#     {"result": "arity"}  the method exists but the call's arity does not fit
 #
 #   → {"method": "shutdown"}
 #   ← (exits)
 
 require "json"
+require_relative "arity"
 
 # --- Protocol channel isolation ---
 
@@ -110,6 +120,86 @@ end
 
 warn "[runtime-server] Ready: #{CLASS_MAP.size} modules, #{METHOD_INDEX.size} methods"
 
+# --- Method existence ---
+
+# A receiver with its own method_missing (Hashie::Mash, Draper decorators,
+# ActiveRecord::Relation, OpenStruct, ...) answers names that no index can
+# enumerate, so every method must be treated as callable on it.
+#
+# Exceptions: these method_missing implementations only back methods that are
+# already materialized (attribute methods, after define_attribute_methods
+# above) or that respond_to_missing? reports accurately (dynamic finders), so
+# method_defined?/respond_to? stay reliable on them. Without this allowlist
+# every ActiveRecord model would be exempt from the check.
+BENIGN_METHOD_MISSING_OWNERS = %w[
+  ActiveRecord::AttributeMethods
+  ActiveModel::AttributeMethods
+  ActiveRecord::DynamicMatchers
+].freeze
+
+def open_receiver?(klass, singleton)
+  owner = if singleton
+            klass.singleton_class.instance_method(:method_missing).owner
+          else
+            klass.instance_method(:method_missing).owner
+          end
+  owner != BasicObject && !BENIGN_METHOD_MISSING_OWNERS.include?(MODULE_NAME.bind_call(owner))
+rescue StandardError
+  false
+end
+
+# Three-valued answer for a single receiver:
+#   true      callable
+#   false     the method does not exist
+#   "arity"   the method exists but the call's arity does not fit
+def method_status(klass, method_name, singleton, positional_count, keywords)
+  return true if open_receiver?(klass, singleton)
+
+  exists = singleton ? klass.respond_to?(method_name) : klass.method_defined?(method_name)
+  return false unless exists
+  return true if accepts_arity?(klass, method_name, singleton, positional_count, keywords)
+
+  "arity"
+end
+
+# Arity evaluation must never block the protocol — any failure degrades to
+# "accept" so a reflection quirk cannot manufacture a false negative.
+def accepts_arity?(klass, method_name, singleton, positional_count, keywords)
+  TypeGuessr::Runtime::Arity.accepts_arity?(klass, method_name, singleton, positional_count, keywords)
+rescue StandardError
+  true
+end
+
+# Memoized arity check for duck-typing candidates. METHOD_INDEX conflates
+# instance and singleton levels, so a candidate survives when either level
+# defines the name and accepts the call's arity.
+ARITY_CACHE = {} # rubocop:disable Style/MutableConstant -- memo table
+
+def candidate_accepts_arity?(class_name, method_name, positional_count, keywords)
+  return true if positional_count.nil? && keywords.empty?
+
+  key = [class_name, method_name, positional_count, keywords]
+  cached = ARITY_CACHE[key]
+  return cached unless cached.nil?
+
+  ARITY_CACHE[key] = compute_candidate_arity(class_name, method_name, positional_count, keywords)
+end
+
+def compute_candidate_arity(class_name, method_name, positional_count, keywords)
+  klass = CLASS_MAP[class_name]
+  return true unless klass
+
+  instance_side = klass.method_defined?(method_name)
+  singleton_side = klass.respond_to?(method_name)
+  # Neither level reflects the name (private, refinement, ...) — do not block.
+  return true unless instance_side || singleton_side
+
+  (instance_side && accepts_arity?(klass, method_name, false, positional_count, keywords)) ||
+    (singleton_side && accepts_arity?(klass, method_name, true, positional_count, keywords))
+rescue StandardError
+  true
+end
+
 PROTOCOL_OUT.puts JSON.generate({ "status" => "ready", "modules" => CLASS_MAP.size, "methods" => METHOD_INDEX.size })
 PROTOCOL_OUT.flush
 
@@ -120,18 +210,31 @@ $stdin.each_line do |line|
 
   response = case request["method"]
              when "find_classes"
-               methods = (request.dig("args", "methods") || []).map(&:to_sym)
+               calls = request.dig("args", "calls")
+               # [method_name, positional_count, keywords]; a missing "calls"
+               # means name-only matching (positional_count nil, no keywords).
+               specs = if calls
+                         calls.map { |c| [c["name"].to_sym, c["positional_count"], (c["keywords"] || []).map(&:to_sym)] }
+                       else
+                         (request.dig("args", "methods") || []).map { |m| [m.to_sym, nil, []] }
+                       end
 
-               meaningful = methods.reject { |m| OBJECT_METHODS.include?(m) }
+               meaningful = specs.reject { |(m, _, _)| OBJECT_METHODS.include?(m) }
 
                if meaningful.empty?
                  { "result" => [], "filtered" => "all_object_methods" }
                else
-                 candidates = meaningful.filter_map { |m| METHOD_INDEX.key?(m) ? METHOD_INDEX[m] : nil }
+                 candidates = meaningful.filter_map { |(m, _, _)| METHOD_INDEX.key?(m) ? METHOD_INDEX[m] : nil }
                  result = if candidates.size < meaningful.size
                             []
                           else
-                            candidates.reduce(:&).to_a
+                            # Intersect first, then arity-check only the survivors:
+                            # filtering each set separately gives the same answer
+                            # but reflects over far more classes.
+                            survivors = candidates.reduce(:&).to_a
+                            survivors.select do |cn|
+                              meaningful.all? { |(m, pc, kws)| candidate_accepts_arity?(cn, m, pc, kws) }
+                            end
                           end
 
                  result = result.grep_v(/::<Class:[^>]+>\z/)
@@ -163,8 +266,13 @@ $stdin.each_line do |line|
              when "method_defined?"
                class_name = request.dig("args", "class_name")
                method_name = request.dig("args", "method_name")
+               singleton = request.dig("args", "singleton") || false
+               positional_count = request.dig("args", "positional_count")
+               keywords = (request.dig("args", "keywords") || []).map(&:to_sym)
                klass = CLASS_MAP[class_name]
-               { "result" => klass&.method_defined?(method_name.to_sym) || false }
+               # nil (not false) when the class is unknown here — the caller must
+               # not read "we never loaded this class" as "the method is absent".
+               { "result" => klass && method_status(klass, method_name.to_sym, singleton, positional_count, keywords) }
 
              when "class_method_owner"
                class_name = request.dig("args", "class_name")

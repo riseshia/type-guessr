@@ -38,7 +38,12 @@ module TypeGuessr
         return [] if called_methods.empty?
 
         method_names = called_methods.map { |cm| cm.name.to_s }
-        response = @client.find_classes(method_names)
+        calls = called_methods.map do |cm|
+          { "name" => cm.name.to_s,
+            "positional_count" => cm.positional_count,
+            "keywords" => (cm.keywords || []).map(&:to_s) }
+        end
+        response = @client.find_classes(method_names, calls: calls)
 
         # All methods are Object-level (to_s, class, etc.) — can't narrow down, not an error
         return nil if response["filtered"] == "all_object_methods"
@@ -70,6 +75,19 @@ module TypeGuessr
       def constant_kind(constant_name)
         result = @client.constant_kind(constant_name)
         result&.to_sym
+      end
+
+      # Check if a method is callable on a class.
+      # @param class_name [String]
+      # @param method_name [String]
+      # @param singleton [Boolean] check the class object instead of its instances
+      # @param positional_count [Integer, nil] call-site positional args (nil = splat/unknown)
+      # @param keywords [Array<String>] call-site keyword names
+      # @return [Boolean, String, nil] true (callable), false (absent),
+      #   "arity" (exists but the call does not fit), nil (class unknown here)
+      def method_defined?(class_name, method_name, singleton: false, positional_count: nil, keywords: [])
+        @client.method_defined?(class_name, method_name, singleton: singleton,
+                                                         positional_count: positional_count, keywords: keywords)
       end
 
       # Look up owner of a class method.
